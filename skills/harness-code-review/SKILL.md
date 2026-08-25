@@ -21,6 +21,24 @@ We ONLY flag things that actually break production or waste $$$ or risk users.
 
 ## 0. Preconditions — Two modes (PICK EXACTLY ONE)
 
+### 0.1 WORKTREE SESSION BINDING CHECK (engineering-contracts §19, NON-NEGOTIABLE, common to BOTH modes)
+
+Run THIS BEFORE deciding mode or starting any review context gathering.
+
+1. **Read binding file from candidate worktree:**
+   - If user passed `--worktree <path>` (Mode B): Read `<path>/.trae/session_binding.md` if exists.
+   - If Mode A (PR URL + optional local worktree): Read `<worktree>/.trae/session_binding.md` if worktree path was provided.
+2. **Mode B worktree mismatch check (CRITICAL):**
+   - If binding file exists on Mode B worktree but says `SESSION_WORKTREE_ROOT: <DIFFERENT_PATH_THAN_USER_PROVIDED>` → BLOCK.
+   - Ask: "You asked review on worktree X, but binding file says session is bound to Y. Proceed with X anyway? (A = X, override binding; B = Switch to Y first; C = Cancel review)". NEVER silent override.
+3. **Mode A PR URL mode — cross-worktree safety:**
+   - If PR URL says branch `feat/FLO-513` AND a local worktree is provided AND binding file on that worktree says SESSION_WORKTREE_ROOT matches → proceed.
+   - If PR is for a branch that is in worktree B, but user provided --worktree pointing to A → BLOCK. Ask which one is correct.
+4. **Pre-send ref trimmer:**
+   - When outputting final review report, code refs (file links) MUST NOT span ≥2 worktrees, unless user explicitly asked "compare worktree X vs Y". If mixed → trim to a single worktree scope before sending.
+
+---
+
 ### How to decide which mode
 - If user provides **BOTH a GitHub PR URL AND --worktree** → prefer Mode A (PR URL); --worktree becomes optional local path for writing report to disk only.
 - If user provides **--worktree <path> (or equivalent explicit worktree indicator) AND NO GitHub PR URL** → **FORCE Mode B (Local Worktree)**. Do NOT ask for a PR URL.

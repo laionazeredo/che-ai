@@ -35,9 +35,24 @@ If any precondition fails → report exactly which, stop execution, ask user.
    - Read it. Validate it has a field `Status: APPROVED` at the top.
    - Check `gh` extension installed: run `gh extension list 2>/dev/null | grep -i "stack"` silently.
    - If gh-stack extension NOT installed → offer `gh extension install https://github.com/github/gh-stack` to user; wait for confirmation, install, then continue. If user declines → FALLBACK to single-PR mode (Steps 2–5 normal path).
-   - Parse layers table bottom-up (first layer = lowest in stack, merged first; last layer = top of stack). Extract per layer: `Layer ID`, `Branch Name` (slug like `FLO-513-l1-refund-pipeline`), `Scope (files)`, `Depends on`.
+   - Parse layers table bottom-up (first layer = lowest in the stack, merged first; last layer = top of stack). Extract per layer: `Layer ID`, `Branch Name` (slug like `FLO-513-l1-refund-pipeline`), `Scope (files)`, `Depends on`.
    - Set boolean: `GH_STACK_MODE=true`. Record `LAYERS[]` array ordered bottom-up.
 3. If file NOT exists OR status ≠ APPROVED → `GH_STACK_MODE=false`. Proceed with standard single-PR path (Steps 2–5 current).
+
+### 0.7 WORKTREE SESSION BINDING PREFLIGHT (engineering-contracts §19, NON-NEGOTIABLE)
+
+Run BEFORE any `git status / git add / git commit / git push`. This PREVENTS wrong-worktree commits.
+
+1. **Read binding file.** Read `<WORKTREE_ROOT>/.trae/session_binding.md`.
+   - If exists: confirm `SESSION_WORKTREE_ROOT` from file **MUST EQUAL** the `WORKTREE_ROOT` precondition 1.
+   - If MISMATCH → **BLOCK SHIP NOW.** Ask: "Binding file says worktree = X, but ship was invoked on Y. Which one ships? (A = X, B = Y, C = Cancel)". Never silent-continue.
+   - If binding file MISSING → create it NOW (canonical 4-line format). Ask user confirm worktree selection once before creating.
+2. **Scissor check on staging + file ops:**
+   - EVERY file being staged/committed → path MUST start with `SESSION_WORKTREE_ROOT`.
+   - If a file path is outside (symlink, relative trick, etc.) → UNSTAGE immediately, report to user, DO NOT commit.
+3. **Cross-worktree safety during ship loop (gh-stack mode):**
+   - After finishing a layer's commit/push/PR, NEXT layer's file ops → RE-RUN scissor check (2) against SESSION_WORKTREE_ROOT.
+   - Never silently cd into another worktree during multi-layer ship. If a layer says "use worktree B" → STOP. Ask user confirm re-binding per §19.3 (OLD=RELEASED / NEW=BOUND) before switching.
 
 ---
 

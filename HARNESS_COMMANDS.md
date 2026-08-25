@@ -13,7 +13,7 @@ The agent MUST recognize these and react immediately.
 > **Diferença conceitual:** Commands = UX entry point (slash `/harness-X`) ↔ Skills = conteúdo/executor do trabalho.
 > NÃO transformar TODOS os commands em skills. A separação abaixo é intencional (KISS).
 
-### Categoria A — 8 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invocam Skill correspondente:
+### Categoria A — 9 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invocam Skill correspondente:
 | Command | Skill invocada | Por que wrapper separado? |
 |---|---|---|
 | `/harness-prd` | `harness-prd-generator` | Preflight worktree + input (Linear/Jira/scope) + output location ask → then skill faz o trabalho pesado. |
@@ -24,6 +24,7 @@ The agent MUST recognize these and react immediately.
 | `/harness-review` | `harness-code-review` | Preflight `gh auth` + PR URL parseable → skill puxa diff + metadata + 4-category review. |
 | `/harness-pr-comments` | `harness-pr-comments` | Preflight `gh auth` + PR URL → skill baixa comentários + classification + triage. |
 | `/harness-ci-fix` | `harness-ci-fixer` | Preflight `gh auth` + worktree → skill classifica R1-R9 + aplica minimal fix. |
+| `/harness-design` / `/harness-figma` | `harness-social-ui-designer` | Pergunta modo (A Social Media / B UI-UX / C Design System) + path save arquivo → skill usa open-pencil MCP p/ construir tudo localmente. |
 
 ### Categoria B — 5 "light" commands = inline leves (5 linhas ler/escrever markdown) → **NÃO viram skills (KISS)**:
 | Command | Implementação inline | Por que NÃO é skill? |
@@ -270,6 +271,30 @@ Agent action: ask confirmation first.
 
 ---
 
+## `/harness-design` <modo: A|B|C opcional> [--path /abs/path/to/save.pen] [--palette #HEX1,#HEX2] [--tone "Tom de Voz"]
+
+## Alias: `/harness-figma`
+
+**What it does:** Full design harness: 3 modos. (A) Social Media: 6 criativos (Feed/Stories/Reels) + copy profissional + imagens geradas por IA + export PNG 2×. (B) UI/UX Feature: wireframes → high-fidelity → dev-spec (tokens Tailwind exportáveis). (C) Design System atômico: Tailwind tokens ↔ variáveis (Light/Dark mode) + 12 componentes (Button/Card/Input etc.) 4 variants + export CSS/JSON/Tailwind. Uses **local** `mcp_open-pencil` MCP (140+ tools equivalente a Figma desktop).
+**When to invoke:** Você quer designs profissionais prontos para produção direto por aqui: criativos de rede sociais com copy, telas de produto, ou um design system atômico sincronizado com Tailwind.
+**Agent action (PREFLIGHT obrigatório se parâmetros faltarem):**
+1. Invocar **`harness-social-ui-designer`** skill IMEDIATAMENTE.
+2. Preflight pergunta #1 (se `--mode` omitido): "Qual modo? A) Social Media / B) UI-UX / C) Design System" (AskUserQuestion 1 pergunta, 3 opções).
+3. Preflight pergunta #2 (equivalente a "qual projeto figma trabalhar", user-asked): qual caminho ABSOLUTO para salvar o arquivo de design (`.pen` = OpenPencil / Figma-equivalente). Default `/home/laion/.trae/designs/<modo>-<slug>-YYYYMMDD.pen`.
+4. Preflight pergunta #3 (se faltar): paleta / tipografia / tom de voz (copy).
+5. Skill executa o modo selecionado §A/B/C com fail-fast + quality gates WCAG AA.
+6. Entrega final sempre com: arquivos exportados PNG 2× / tokens / source `.pen` + 1 ÚNICA oferta de aprofundar (§18 contracts).
+
+**Syntax examples:**
+```
+/harness-design A                                # Social Media batch completo (2 feed + 2 stories + 2 reels templates + copy + imagens)
+/harness-design B --path /home/laion/designs/dashboard-creator.pen  # UI-UX feature dashboard
+/harness-design C --palette "#6D28D9,#F59E0B,#111827,#F9FAFB" --tone "Luxo minimalista"
+/harness-figma A slug:"lancamento-festival-UK"   # alias igual
+```
+
+---
+
 ## Relationship between commands and skills (UPDATED)
 
 | Command | Primary skill invoked |
@@ -282,6 +307,7 @@ Agent action: ask confirmation first.
 | `/harness-review` | `harness-code-review` (HIGH / CRITICAL + scope only) |
 | `/harness-pr-comments` | `harness-pr-comments` (triage, implementation plan, reply drafts) |
 | `/harness-ci-fix` | `harness-ci-fixer` (classify CI failure + minimal fix) |
+| `/harness-design` | `harness-social-ui-designer` (3 modos: Social Media / UI-UX / Design System — local open-pencil MCP equivalente Figma) |
 | `/harness-status` | Reads `task_graph.md` directly, no skill invocation needed |
 | `/harness-skip` | Updates `decision.log.md` + `task_graph.md`; tells SM to treat gate as passed |
 | `/harness-decisions` | Reads `decision.log.md` |

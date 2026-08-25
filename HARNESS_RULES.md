@@ -127,6 +127,37 @@ Em QUALQUER loop/iterações entre agentes, a regra é:
 
 ---
 
+## 🔴 WORKTREE SCOPED SESSION (Não negocia — 1 sessão = 1 worktree)
+
+> **Contrato corpo completo**: `engineering-contracts` SKILL §19. Aqui só o gate de processo/enforcement do harness.
+
+### Preflight obrigatório (ANTES de qualquer comando, leitura de arquivo, git operation, Glob/Grep):
+
+1. **Ler binding file** `<WORKTREE_ROOT>/.trae/session_binding.md` se existir.
+   - Se existir → usar `SESSION_WORKTREE_ROOT` dele como SCOPE ABSOLUTO desta sessão.
+   - Se NÃO existir → seguir regra §19.2 (ordem de precedência: menção explícita do user → arquivos abertos → env workdirs → AskUserQuestion).
+   - **Pergunta SEMPRE se ambíguo.** ≤2 opções concretas + "outro". NUNCA chutar.
+
+2. **Escrever binding file após primeira aprovação.**
+   - Formato canônico 4 linhas (SESSION_WORKTREE_ROOT, BOUND_AT, TASK_ID, STATUS=BOUND).
+   - Salvar SEMPRE em `<WORKTREE_ROOT>/.trae/session_binding.md`.
+
+3. **Scissor check A CADA OPERAÇÃO de arquivo / git:**
+   - Target path começa com `SESSION_WORKTREE_ROOT`? Se NÃO → BLOQUEAR.
+   - Apenas 2 saídas: (a) user confirma "sim, escrever fora do scope" logado no decision.log, ou (b) perguntar "Switch worktree? A = Switch / B = Cancelar operação".
+   - **Nunca operar cross-worktree silenciosamente** (ler ou escrever).
+
+4. **Trocar worktree (re-bind):**
+   - Só com confirmação EXPLÍCITA do usuário: "Sim, trocar para X agora".
+   - Marcar OLD binding STATUS=RELEASED + NEXT_BINDING.
+   - Criar NEW binding STATUS=BOUND + PREV_BINDING.
+   - Anunciar a troca no próximo 📍 Status output.
+
+5. **Pre-send trimmer de refs:**
+   - Se draft output tem refs clickable em ≥2 worktrees DIFERENTES E usuário NÃO pediu comparação cross-worktree → PARAR. Apagar refs de worktree incorreto. Manter apenas refs do SESSION_WORKTREE_ROOT.
+
+---
+
 ## 🔴 RESPOSTAS ENXUTAS + DEEP-DIVE GATE (Não negocia)
 
 > Corpo completo desta regra (orçamento de palavras, seções permitidas, regra de ≤2 opções) vive SÓ em `engineering-contracts` SKILL §18. Aqui só o processo/gate do harness.

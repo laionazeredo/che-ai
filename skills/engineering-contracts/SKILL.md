@@ -267,6 +267,56 @@ Canonical output:
 
 ---
 
+### 19. 🔴 WORKTREE SESSION BINDING — One Session = One Worktree. Doubt = Ask.
+
+> **This rule controls worktree scoping during a chat session. It is a HARD SCISSORS rule — violating it causes wrong-code commits on wrong worktrees (data loss). Higher precedence than "be helpful / be efficient" defaults. Lower precedence only than safety rules (§2 Security / §6 DbC). It applies to ALL harness skills and direct chat file operations.**
+
+Binding contract:
+
+1. **1 session ↔ 1 WORKTREE_ROOT by default.**
+   - The very first operation of a harness flow (or first file access in a worktree scoped session) MUST produce a binding decision: which absolute worktree path is this session attached to?
+   - Write it ONCE into `<WORKTREE_ROOT>/.trae/session_binding.md` (canonical binding file). Format:
+     ```
+     # Session Worktree Binding
+     SESSION_WORKTREE_ROOT: <absolute path>
+     BOUND_AT: <ISO timestamp>
+     TASK_ID: <slug if available, else "manual">
+     STATUS: BOUND
+     ```
+   - If the binding file already exists from a prior session on the same worktree → READ IT FIRST and use its SESSION_WORKTREE_ROOT as the default.
+
+2. **Initial binding decision rules (order of precedence — STOP at first match):**
+   a. **Explicit user mention:** User said "worktree X" or gave a path → BIND TO X. Confirm once.
+   b. **Open files / context window:** User has 1+ files open that are all inside the same worktree → BIND to that worktree. (If files span 2+ worktrees → fall to c.)
+   c. **Working directories in <env>:** If there is a single most-relevant working directory (check recent session memory / prior messages) → propose it; else GO TO (2e).
+   d. **Binding file exists in a worktree mentioned anywhere in recent messages:** Use that.
+   e. **Ambiguous (≥2 candidates or 0 clear matches):** STOP. Do NOT guess. Use AskUserQuestion with ≤2 concrete options + "other (type path)".
+
+3. **Re-binding (switching worktree in same session):**
+   - Switching is ONLY allowed after EXPLICIT user confirmation: "Yes, switch to worktree X now."
+   - When switching:
+     1. Write a RELEASED entry into OLD binding file: `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_BINDING: <newpath>`
+     2. Create NEW binding file on new worktree with STATUS=BOUND + `PREV_BINDING: <oldpath>`
+     3. Announce the switch in the next Status section output.
+   - Agent-initiated switches (without user saying so) = violation. Never "oh, this code is in worktree B so let me touch it" without asking first.
+
+4. **Per-operation scissor check (MANDATORY before any git/Glob/Grep/file-write):**
+   - Before any file-system write or git command: verify `<target path>` starts with `SESSION_WORKTREE_ROOT` (from binding file).
+   - If target path is OUTSIDE → BLOCK. Two allowed outcomes:
+     a. User confirms "yes, write outside worktree scope for this one file" → log entry in decision.log.
+     b. Otherwise abort that operation and ask: "This target is outside worktree <X>. Switch worktree first? (A = switch, B = cancel op)"
+   - No silent cross-worktree reads without user first being made aware.
+
+5. **Doubt / ambiguity → ask. Never guess.**
+   - "User said `refund feature` — which worktree has that?" if ≥2 have refund branches → list the candidates (≤2 options with short branch name hints) and AskUserQuestion.
+   - If the binding file says X but context hints Y → DO NOT silently switch to Y. Ask: "Binding says X but last 2 messages reference Y. Switch?"
+
+6. **Pre-send self-check for scoping:**
+   - If draft response contains references to files in ≥2 different worktrees (without user explicitly asking cross-worktree comparison): STOP. Trim. Either focus on 1 worktree, or ask which one first.
+   - References (code links) in the output must NOT mix worktree paths unless the user explicitly asked for a cross-worktree diff/comparison.
+
+---
+
 ## Appendix A — Hard Conflict Resolution Table (CANONICAL)
 
 If you face a trade-off where two rules seem to pull opposite directions:
@@ -284,6 +334,7 @@ If you face a trade-off where two rules seem to pull opposite directions:
 | Agile BDD smallest increment (§15) vs "I can add this extra nice-to-have in 2 lines" | BDD smallest (§15 = YAGNI in action) | DO NOT add. Nice-to-have = separate PR. Scope = scope. |
 | Code Review Opt max 2 lines comment (§16) vs trade-off explanation | May do 3+ LINES ONLY with logged exception in decision.log | No log = violation. Usually a more clearly-named function is enough. |
 | Supabase RLS default (§17) vs "table is tiny, public enum only" | RLS default (§17). Skip ONLY with TWO approvals: Non-Goals + decision.log user approval. | See §17 exceptions. |
+| Worktree §19 binding vs "worktree B seems to have the code I want so let me just touch it" | §19 wins. ASK before switching. Never silent cross-worktree file ops. | AskUserQuestion. User confirms → §19.3 re-binding steps. |
 
 ---
 

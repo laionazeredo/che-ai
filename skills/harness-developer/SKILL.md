@@ -26,6 +26,22 @@ If any is missing → **ABORT immediately** and go back to Scrum Master.
 
 ---
 
+## 0.5 WORKTREE SESSION BINDING PREFLIGHT (engineering-contracts §19, NON-NEGOTIABLE)
+
+Run BEFORE touching ANY Glob/Grep/file-write/git command.
+
+1. **Read binding file**: Read `<WORKTREE_ROOT>/.trae/session_binding.md`.**
+   - If it exists → confirm `SESSION_WORKTREE_ROOT` from file **MUST MATCH** the `WORKTREE_ROOT` passed by SM.
+   - If MISMATCH → **ABORT.** Ask: "SM says worktree = X but binding says Y. Switch binding first? (A = Switch, B = Cancel task)"** Never proceed silently.
+   - If binding file DOES NOT exist → create it NOW (ask user didn't bind yet). Write canonical format 4 lines: SESSION_WORKTREE_ROOT, BOUND_AT, TASK_ID, STATUS=BOUND. Ask user confirm once before writing.
+2. **Per-operation scissor check (before every file write, Glob/Grep, git cmd):**
+   - Is target path prefix within `SESSION_WORKTREE_ROOT`? If not → BLOCK.
+   - Cross-worktree ops = only (A) user confirms single out-of-scope write logged in decision.log OR (B) ask switch worktree first.
+3. **Never silent cross-worktree reads = violation (even "quick grep")
+4. **If at any point the agent thinks "maybe this code is also in worktree B" → DO NOT TOUCH B. Ask user explicitly: "Tarefa está vinculada à worktree X. Precisa trocar para Y antes? (A = Trocar, B = Continuar em X". Never silent swap.
+
+---
+
 ## 1. STEP 0 — INVOKE engineering-contracts skill FIRST
 
 **MANDATORY.** Call `engineering-contracts` skill before writing a single line of code.
