@@ -22,6 +22,8 @@ The agent MUST recognize these and react immediately.
 | `/harness-ship` | `harness-ship` | Preflight worktree + `gh auth` + no-secret-staged check → skill commits/push/PR. |
 | `/harness-fix` | `harness-debugger-bugfix` | Preflight worktree + capture 4 required inputs → skill roda scientific debug loop. |
 | `/harness-review` | `harness-code-review` | Preflight `gh auth` + PR URL parseable → skill puxa diff + metadata + 4-category review. |
+| `/harness-diff` | `harness-diff-context` | Preflight worktree (Modo B) / gh auth (Modo A) → relatório leve CONTEXTO p/ conversar sobre diff (PR URL ou worktree local vs branch default). DIFERENTE de /harness-review (review blocking vs contexto). |
+| `/harness-manual-test` | `harness-manual-test-executor` | Preflight worktree + session binding §19 + encontra manual_test_plan.md via --task-id ou --plan-path → GATE de setup approval obrigatório → executa steps via Playwright MCP + evidências screenshots + report final 8 seções. DIFERENTE de /harness-qa (QA = só comandos automatizados build/lint/test; Manual = browser step-a-step c/ evidências). |
 | `/harness-pr-comments` | `harness-pr-comments` | Preflight `gh auth` + PR URL → skill baixa comentários + classification + triage. |
 | `/harness-ci-fix` | `harness-ci-fixer` | Preflight `gh auth` + worktree → skill classifica R1-R9 + aplica minimal fix. |
 | `/harness-design` / `/harness-figma` | `harness-social-ui-designer` | Pergunta modo (A Social Media / B UI-UX / C Design System) + path save arquivo → skill usa open-pencil MCP p/ construir tudo localmente. |
@@ -230,6 +232,57 @@ Agent action: ask confirmation first.
 
 ---
 
+## `/harness-diff <PR_URL OR --worktree /abs/path> [--base origin/dev]`
+
+**What it does:** Leve "conversa preparada" sobre um diff. **DIFERENTE de `/harness-review`** (que dá verdict de approve/request-changes com issues CRITICAL + HIGH only). Este entrega um relatório 5 seções p/ VOCÊ TER CONTEXTO pra conversar sobre o diff com alguém: (1) o que implementa (alto nível), (2) principais mudanças por módulo, (3) CI checks status (Modo A) ou buckets JáCommitado/PorCommitar/Untracked (Modo B), (4) riscos leves, (5) 3 pontos de atenção pra pautar na call/comentário. Modo A = PR URL via gh CLI. Modo B = worktree local, compara com branch default (pergunta qual base se ambíguo).
+
+**When to invoke:** Você colou um link de PR OU apontou pra worktree e quer "entender o que aconteceu aqui" + pontos de conversa, sem o rigor formal de review. Quando quiser review blocking issues → use `/harness-review`.
+
+**Agent action:**
+1. Invoke `harness-diff-context` skill.
+2. Preflight Modo A (PR URL): `gh auth status` OK; URL parseável e reachable.
+3. Preflight Modo B (--worktree): worktree confirmada, session binding §19 lido (pergunta mismatch). Base branch: tenta auto-detect (origin/main ou origin/dev), se ambíguo → AskUserQuestion 2 opções + "outro".
+4. Coleta 3 fontes contexto Modo A: PR descr/metadata via gh pr view --json, diff names/stat, CI checks gh pr checks.
+5. Coleta 4 buckets Modo B: Já Commitado (base..HEAD), Por Commitar (staged + unstaged tracked), Untracked, Branch metadata.
+6. Estrutura relatório nas 5 seções CANÔNICAS (contexto alto / áreas mudança / CI ou buckets / riscos leves / 3 pontos conversa).
+7. Salva arquivo em `.trae/diff-context_PR-<N>_<ts>.md` (Modo A) ou `.trae/diff-context_LOCAL_<ts>.md` (Modo B).
+8. Entrega no chat resumo condensado §18 contracts (250–500w + 4 seções). Full report salvo em disco.
+
+**Syntax examples:**
+```
+/harness-diff https://github.com/myorg/myrepo/pull/42
+/harness-diff --worktree /abs/path/to/worktree
+/harness-diff --worktree /abs/path --base origin/dev
+```
+
+---
+
+## `/harness-manual-test <--worktree /abs/path> [--task-id <slug> OR --plan-path <abs/path/to/manual_test_plan.md>]`
+
+**What it does:** Executa passo-a-passo o `manual_test_plan.md` do Scrum Master via **Playwright MCP** (browser real: navigate/click/fill/submit + screenshot evidências) e HTTP driver para API calls. DIFERENTE de `/harness-qa` (QA = só comandos automatizados build/lint/test sem browser). Este harness Abre navegador, passo-a-passo com plano, grava evidências (PNG, visible_text, console_log) por step, e entrega report final 8 seções com verdict global. Safety: NÃO toca prod URLs sem 2 confirmações, setup approval gate OBRIGATÓRIO antes de qualquer comando shell setup.
+
+**When to invoke:** Scrum Master finalizou o `manual_test_plan.md` (todas ACs do plano escritas, ambiente pronto) e você quer o AGENTE EXECUTAR os testes manuais (abrir browser, clicar, preencher formulários, tirar prints) ao invés de você manualmente. Se só quer build/lint/test automáticos → use `/harness-qa`.
+
+**Agent action:**
+1. Invoke `harness-manual-test-executor` skill IMEDIATAMENTE.
+2. Preflight #1: confirmar worktree path + validar session binding §19 (mismatch = block pergunta).
+3. Preflight #2: resolver path manual_test_plan.md → (a) `--plan-path` dado → use; (b) `--task-id` dado → `<WORKTREE_ROOT>/.trae/<task-id>/manual_test_plan.md`; (c) nenhum dado → AskUserQuestion qual opção.
+4. Preflight #3: parse do plano (§0 Setup env, AC-N steps com GWT, Smoke S1..S5, HUMAN_ONLY items §3).
+5. **GATE setup approval OBRIGATÓRIO (antes qualqeur comando shell setup):** perguntar usuário (A=Executar setup, B=Pular app já roda, C=Cancelar).
+6. Criar evidence dir: `.trae/<task-id>/manual_test_evidence/` com subdirs AC-1, AC-2, ... + `execution.log`.
+7. **AC Execution Loop:** Para cada AC-N → classificação step pattern → driver Playwright/HTTP. Step por step com evidência cada. THEN assertion final → veredict ✅/⚠️/❌/⏭️ → close playwright session isolation.
+8. **Smoke S1..S5:** S1=build, S2=lint via comandos; S3=Login scenario Playwright; S4=top-level 3 pages Nav; S5=log grep CRITICAL/ERROR.
+9. Build report final 8 seções conforme references/MANUAL_TEST_EXECUTION_REPORT.md → save em `.trae/<task-id>/MANUAL_TEST_EXECUTION_REPORT.md`.
+10. Entrega chat resumo condensado §18 contracts (≤500w, 4 seções: status + ACs pass/fail counts + key failures ≤3 bullets + links report/evidence/plan + 1 oferta deep-dive).
+
+**Syntax examples:**
+```
+/harness-manual-test --worktree /abs/path/to/worktree --task-id feat-FLO-513-Process-a-refund
+/harness-manual-test --worktree /abs/path --plan-path /abs/.trae/some-other/manual_test_plan.md
+```
+
+---
+
 ## `/harness-pr-comments <PR_URL>`
 
 **What it does:** Scans every comment on a PR, classifies each one (human vs bot; valid actionable vs question vs nit vs outdated vs praise vs discussion). Produces a triage report with 3 outputs: (1) numbered implementation plan for comments we should act on, (2) pre-written ENGLISH polite responses for comments we decline/question, (3) comments we resolve silently. User approves the report → we implement + optionally post replies via gh.
@@ -305,6 +358,8 @@ Agent action: ask confirmation first.
 | `/harness-ship` | `harness-ship` (commits → push → DRAFT PR → assign) |
 | `/harness-fix` | `harness-debugger-bugfix` (scientific debug loop, different from features) |
 | `/harness-review` | `harness-code-review` (HIGH / CRITICAL + scope only) |
+| `/harness-diff` | `harness-diff-context` (contexto conversa leve — NO verdict) |
+| `/harness-manual-test` | `harness-manual-test-executor` (Playwright MCP + HTTP driver, steps de manual_test_plan.md c/ evidências screenshot + report 8 seções. Setup approval gate OBRIGATÓRIO. Fronteira vs harness-qa: QA = build/lint/test automatizados; Manual = browser/interativo real.) |
 | `/harness-pr-comments` | `harness-pr-comments` (triage, implementation plan, reply drafts) |
 | `/harness-ci-fix` | `harness-ci-fixer` (classify CI failure + minimal fix) |
 | `/harness-design` | `harness-social-ui-designer` (3 modos: Social Media / UI-UX / Design System — local open-pencil MCP equivalente Figma) |
