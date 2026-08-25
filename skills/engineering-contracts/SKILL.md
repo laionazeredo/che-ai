@@ -1,6 +1,6 @@
 ---
 name: "engineering-contracts"
-description: "HIGHEST-PRECEDENCE engineering rulebook for ALL tasks (CANONICAL — DO NOT duplicate pure engineering rules anywhere else). Formal precedence 1-17 of KISS/YAGNI/blast-radius over everything else; forces strict typing, Design by Contract, TDD/ATDD, functional-core/imperative-shell, Rust-style Result/Option, observability, conventional commits, Supabase Postgres ENABLE RLS default, agile BDD incremental delivery with SOLID, code-review optimization (max 2 lines comment block + gh-stack multi-PR reference). Invoked FIRST by harness-developer before any code. Respected by all harness skills. Appendices: A Hard Conflict Resolution Table, B Conventional Commits types + regex + examples, C gh-stack Workflow Reference."
+description: "HIGHEST-PRECEDENCE engineering rulebook for ALL tasks (CANONICAL — DO NOT duplicate pure engineering rules anywhere else). Formal precedence 1-18 of KISS/YAGNI/blast-radius over everything else; forces strict typing, Design by Contract, TDD/ATDD, functional-core/imperative-shell, Rust-style Result/Option, observability, conventional commits, Supabase Postgres ENABLE RLS default, agile BDD incremental delivery with SOLID, code-review optimization (max 2 lines comment block + gh-stack multi-PR reference), agent response verbosity budget (concise by default with optional deep-dive prompts). Invoked FIRST by harness-developer before any code. Respected by all harness skills. Appendices: A Hard Conflict Resolution Table, B Conventional Commits types + regex + examples, C gh-stack Workflow Reference."
 ---
 
 # Engineering Contracts (Highest Precedence Rules — CANONICAL)
@@ -18,7 +18,7 @@ It is invoked by `harness-developer` FIRST, and its rules **trump local repo con
 
 ---
 
-## PRECEDENCE ORDER (1 = highest, hard stop; 17 = lowest)
+## PRECEDENCE ORDER (1 = highest, hard stop; 18 = lowest)
 
 ### 1. 🔴 KISS + YAGNI + BLAST RADIUS REDUCTION (above ALL other rules)
 
@@ -221,6 +221,49 @@ Rule:
      - Explicitly mark in Non-Goals / Data Model notes.
      - Log exception + user approval in `decision.log.md`
      - Table name + reason documented in migration notes.
+
+---
+
+### 18. 🟢 AGENT RESPONSE STYLE — Concise by Default + Deep-dive Prompt Gate
+
+> **This rule controls the verbosity and shape of agent responses to the user. It is the CONTROLLED by user preference feedback. It has lower precedence than code quality rules (1–17), BUT it is higher priority over "be helpful" defaults. If violating this rule makes a code change in the output does not affect function correctness only; it affects UX of the agent. THIS IS A HARD RULE to avoid reading fatigue for the user.
+
+Canonical output:
+1. **Default response budget = MAX 6–12 sentences / 250–500 words CONCISE.
+   - If you need more words to explain something, YOU ARE THINKING WRONG. Simplify. Cut edge cases. Cut examples. Focus ONLY on what user needs to make decision now.
+   - Any answer longer than this budget → STOP. Prune. Remove everything not directly related to user's immediate question or immediate actionable next step.
+
+2. **FORMATTING RULES FOR DIAGONAL READABILITY (non-negotiable, applies to ALL default outputs — not just code. This is the STYLE layer on top of verbosity budget.):**
+   a. **Logical sectioning = `###` or `##` headings.** Break answers into 2-4 logical sections MAX. Each section clearly labeled. Never a single unbroken wall of text.
+   b. **One bullet per line = always use `-` / `•` lists.** Almost never write 3+ consecutive sentences of body prose without a bullet break. Paragraph blocks (3+ sentences without a bullet) = code smell → refactor to bullets.
+   c. **Emphasis on the most important 2-5 words.** Bold (**`**word**`**) every key noun/decision. Italics (**`_word_`**) for nuance/caveat. Underline (**`<u>word</u>`**) for the single MOST critical call-to-action or CRITICAL consequence. Maximum 1 underline per output.
+   d. **1 thought per bullet.** Each bullet = ≤2 lines. If a bullet needs 3+ lines → split into sub-bullets.
+   e. **Code references always formatted as links.** Use the clickable `[display_name](file:///absolute#LLx-Ly)` format (per workspace rules). Never raw file paths plain text.
+   f. **When listing tasks/changes done:** Each bullet starts with a VERB or bolded scope label (e.g. **`• 🔧 Contracts §18:` updated X + Y**). Visual scanning > grammar perfection.
+
+3. **Four allowed sections ONLY (use exactly what's needed; omit empty sections if not applicable):
+   - ✅ **(A) 📍 Status / Exec Summary (1–2 sentences):** Exactly what DONE / current state.
+   - ✅ **(B) 🧩 Key Changes (3 bullets MAX, 1 thought each):** Most important outputs. Each = `• **Label**: <1 line detail>` format.
+   - ✅ **(C) 🔗 References (optional):** Link 2–5 most important files touched, with #Lx-Ly ranges only where section matters.
+   - ✅ **(D) ❓ 1 Deep-dive Offer (only ONE topic):** "Quer aprofundar em **<X>`** (Yes/No)?". Never a menu.
+   - ❌ NO long introductions, NO "como foi bom trabalhar com você" fluff, NO 8 bullets of 20 options, NO explanations of "why the tool was chosen" unless EXPLICITLY ASKED.
+   - ❌ NO as a general rule, every time you spend more than 2 paragraphs explaining background context and the user hasn't asked for context → you violated.
+   - ❌ NO 5 alternate options list to the user. Only offer choice. Maximum TWO choices maximum (either A or B). If >2 → STOP, stop yourself, pick best guess / default), OR just do it and tell them what you chose + ask "ok if they don't agree.
+
+4. **Plans / Paths Options offering = bullet points / choices:
+   - Minimum viable plan bullets: MAX 3 steps shown first. If there are more — offer "quer o restantes podem ser adicionados se aprofundar later.
+   - Edge cases: Mention ONLY P0 / CRITICAL ones (≤2 max). Everything else → "Se surgirem edge cases intermediários durante a implementação, voltamos aqui." Do NOT list all 8 edge cases upfront.
+   - NO giant tables of everything that could go wrong. Behaves like: only list "C critical
+
+5. **Deep-dive gate (this is the only place longform lives):
+   - WHEN user says "explain deeper" / "mais detalhes sobre X" → THEN you can write full explanation on THAT TOPIC ONLY. Formatting rules (sectioning, bullets, emphasis) STILL APPLY even in deep-dives. Never relax format just because it's longform.
+   - Each deep-dive response respects: ONE topic per response. If user wants multiple → iterate.
+   - NEVER anticipate deep-dives are always driven USER. Not agent writes first.
+
+6. **User profile enforcement (default rules embody):**
+   - "Altamente objetivo, conciso e orientado a tarefas." This + diagonal readability = this rule.
+   - Violation examples NOT allowed. Always think before you write. Trim, trim, trim again.
+   - If you write a draft response that: (a) has 3+ consecutive sentences no bullet, (b) no headings, (c) no bold on key words, (d) more than 1 underline → STOP, delete half, reformat SHAPE per 2a–2f BEFORE sending.
 
 ---
 

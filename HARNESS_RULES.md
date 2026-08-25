@@ -127,6 +127,49 @@ Em QUALQUER loop/iterações entre agentes, a regra é:
 
 ---
 
+## 🔴 RESPOSTAS ENXUTAS + DEEP-DIVE GATE (Não negocia)
+
+> Corpo completo desta regra (orçamento de palavras, seções permitidas, regra de ≤2 opções) vive SÓ em `engineering-contracts` SKILL §18. Aqui só o processo/gate do harness.
+
+**Gates obrigatórios antes de enviar QUALQUER resposta ao usuário:**
+
+1. **Trimmer obrigatório**: depois que o agente escrever sua resposta → rodar mentalmente "cortar TUDO que não responde diretamente o que o usuário perguntou nesta mensagem?" Cortar.
+   - NÃO listar 5 opções → no máximo 2 (ou escolher a melhor e pedir OK).
+   - NÃO explicar background / "porquê escolhi a lib" a menos que perguntado.
+   - NÃO listar 8 edge cases → no máximo 2 (P0/CRITICAL). Todo resto: "Se surgir intermediários, voltamos aqui."
+   - NÃO planos gigantes → mostrar **3 passos visíveis** + 1 oferta de aprofundar se quiser os restantes.
+
+2. **Shape canônico (4 seções OPCIONAIS, FORMATO PARA LEITURA DIAGONAL)**:
+   ```markdown
+   ### 📍 Status
+   <1-2 frases claras: o que foi feito / estado AGORA>
+
+   ### 🧩 Mudanças-chave (max 3 bullets)
+   • **<Escopo 1 negrito>**: <1 linha, 1 pensamento>
+   • **<Escopo 2 negrito>**: <1 linha>
+   • **<Escopo 3 negrito>**: <1 linha>
+
+   ### 🔗 Refs (só os 2-5 mais importantes)
+   • [<NOME_ARQUIVO curto>](file:///path/absoluto#Lx-Ly)
+   • ...
+
+   ### ❓ Próximos / Aprofundar
+   Quer aprofundar em **<UMA ÚNICA coisa>**?
+   ```
+   **Formatação não-negociável (dentro do Shape):**
+   - **TODOS os bullets, SEMPRE.** 3+ frases consecutivas sem bullet = violação (pare e formate).
+   - **Negrito ( `**X**` )** em todo substantivo/label chave.
+   - *Itálico ( `_X_` )* só para ressalvas/nuances.
+   - `<u>Sublinhado</u>` = MÁXIMO 1 por output, reservado para a CALL-TO-ACTION MAIS CRÍTICA ou consequência 🔴.
+   - 1 pensamento por bullet = ≤2 linhas. Se for maior → quebre em sub-bullets.
+   - **Nunca parede de texto única.** Sempre quebrar em 2-4 seções lógicas com `##` / `###`.
+
+3. **Oferta de deep-dive = SÓ 1 tópico por vez**. NÃO montar cardápio de 5 opções de aprofundamento.
+
+4. **PR Body (harness-ship) lean enforcement**: esta regra complementa — PR body em 3 partes (3 paras max impl + key review points + test pointers). Corpo em `harness-ship` SKILL.
+
+---
+
 ## 🔴 GITHUB INTEGRATION / SHIP RULES (Não negocia) + gh-stack MULTI-PR
 
 ### A) Ship → Commits padrão

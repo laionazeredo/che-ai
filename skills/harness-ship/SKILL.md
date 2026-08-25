@@ -177,18 +177,39 @@ If found ticket: extract `<TICKET-ID>` (full URL or just ID). Append `Refs: <TIC
 
 ### Path A: GH_STACK_MODE=false (single PR, standard)
 
-#### A-4.2 Build structured PR Description (English)
+#### A-4.2 Build structured PR Description (English — LEAN, 3 SECTIONS MAX, NO VERBOSITY)
 
-Follow template at `references/PR_DESCRIPTION_TEMPLATE.md`.
-Fields to fill:
-- **What this PR does / why we need it** (1-3 lines, English)
-- **Assumptions adopted** (key decisions from decision.log → select top 3-5)
-- **Key review points** (places the reviewer should really scrutinize — tricky logic, performance, security-sensitive)
-- **Breaking changes (if any)** — list each. NONE is a valid value.
-- **How to test manually** — link the in-tree `.trae/<task-id>/manual_test_plan.md`
-  AND reproduce 2-3 core steps inline inside the PR description.
-- **Related ticket / links** — Linear ticket link, Jira link, or mark "N/A"
-- **Checklist** — marks our gates: lint/typecheck/tests/compliance/decisions-log
+**PR DESCRIPTION RULE (§18 contracts + HARNESS_RULES lean enforcement):
+
+Total paragraphs:
+- Max 3 paragraphs of implementation prose. No more.
+- No giant tables. No verbose "context setup.
+
+Exactly 3 sections below. Order matters. Do NOT add other sections:
+
+**Section 1 — Implementation (3 paragraphs MAX, each ≤5 lines):
+Para 1: What changed. 1–3 sentences — scope only, what was modified.
+Para 2: Why this approach — high level decisions (top 2 decisions only)
+Para 3: Non-goals if relevant (optional — only 1 sentence, or skip)
+
+**Section 2 — Key Review Points (bullet list, max 5:**
+What places the reviewer MUST scrutinize: security-sensitive logic, performance hot paths, places where concurrency correctness applies, data changes. Write each = 1 sentence focus. No paragraphs here. "Look at file X because Y." Max 5. 3 is ideal. If 6+ needed → PR is too big (ship → split gh-stack.
+
+**Section 3 — How to Verify (ONE bullet list, specific tests only — max 3):
+Each bullet = ONE specific test/command, not vague guidance. Format:
+- Unit: `<COMMAND>` pointing to test file specific (name, or <repo-specific:
+- E2E: `<COMMAND>` → which test →
+- Manual: `<2-3 steps concrete for manual.
+Line must include:
+ALSO add link to `.trae/<task-id>/manual_test_plan.md at the end of Section 3 as See full details in >
+
+**Optional one-liner "Related ticket": `<link or Refs: FLO-123>`
+
+**Removal of old sections (do NOT include**: Assumptions adopted → (No. No assumptions adopted paragraph section. If important → 1-liner merged into Section 1 Para 2 as "Key decisions were A and B.)
+- No separate Breaking changes as → folded into last section line of the → max 5 lines into a single separate line at TOP (just above footer if any; if "none write → 1-liner or "Breaking change:
+- No separate Checklist section removed —
+
+**Full body size budget: 25 lines or fewer lines TOTAL PR body. If longer → trim, trim, trim again.
 
 #### A-4.3 Create PR (Draft, not ready for review)
 
@@ -218,8 +239,7 @@ gh pr edit <PR_URL> --add-assignee @me
 #### B-4.2 Per-layer PR body + Depends-on chain (bottom-up)
 
 For each layer `L[i]` in `LAYERS[]` (bottom-up order):
-1. Build a PR description scoped EXCLUSIVELY to `L[i]` scope:
-   - **What this PR (layer <L[i].ID>) does**: 1–3 lines scoped to this layer's files.
+1. Build a PR description SCOPED EXCLUSIVELY to `L[i]` — same LEAN 3-section structure as Path A (Section1 Implementation 3paras MAX + Section2 Key Review Points ≤5 bullets + Section3 How to Verify specific tests ≤3 bullets).
    - **Depends on footer (CANONICAL gh-stack)**:
      - If `L[i].Depends on` is non-empty → append block to **TOP of PR body**:
        ```
@@ -228,7 +248,8 @@ For each layer `L[i]` in `LAYERS[]` (bottom-up order):
        ```
        (Use the numeric PR ID, not the full URL.)
      - If first layer (base, no Depends on) → skip this block.
-   - Include: assumptions scoped to layer, review points scoped to layer, related ticket footer (TICKET-ID), checklist for just that layer.
+   - Append: related ticket footer Refs: <TICKET-ID>.
+   - NO assumptions / NO checklists. Body total ≤25 lines per layer (same budget Path A).
 2. Write each layer body to `<tmp>_layer_<L[i].ID>_body.md`.
 
 #### B-4.3 Create each layer PR individually + gh-stack link

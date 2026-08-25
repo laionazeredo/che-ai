@@ -59,6 +59,7 @@ Where:
 | `manual_test_plan.md` | After all tasks DONE | Step-by-step manual verification plan |
 | `final_summary.md` | End of session | What was delivered, risks, stats |
 | `gh_stack_plan.md` | After TASK GRAPH (Phase 1.4), only if trigger ≥3 tasks or >15 files | gh-stack hierarchical PR plan: layers, branch names, scope-per-PR, Depends-on chain. Status field APPROVED mandatory before /harness-ship uses it. |
+| `test_spec_smoke.md` | After Phase 1.5 (before ANY TASK ENVELOPE handed to Dev) | 1-page BDD test contract: 3–5 core Given-When-Then behaviors, test split (unit/e2e/manual), files to touch, 2–3 key invariants, explicit out-of-scope tests. Status APPROVED required before ANY code writes. |
 
 ---
 
@@ -191,6 +192,37 @@ If user chooses B → re-plan Step B until A.
 If user chooses C → mark: `gh-stack: DECLINED BY USER (single PR)`. Log entry decision.log: `[gh-stack DECLINED] user chose single PR for large scope <task-id> (N tasks, X est. files)`. Delete gh_stack_plan.md OR save it with status = DECLINED.
 
 Also add `gh_stack_plan.md` to the mandatory files list (OPTIONAL; present only when needs_gh_stack triggered).
+
+---
+
+## 1.5 Phase 1.5 — QA TEST SPEC SMOKE (Contract-First, before any code writes)
+
+> Goal: Before ANY TASK ENVELOPE is handed off to Developer (serial) or envelopes are batch-written (parallel), the QA mindset creates a 1-page test spec for the GLOBAL scope. Reasoning: (1) BDD contract is explicit BEFORE code exists → no bias. (2) Fail fast: if QA cannot write the test spec from current scope capture + approved PRD → scope is underspecified → DO NOT start development. Fix scope first. (3) ≤30% overhead. Total test spec budget: ≤1 page, ≤15 lines. This is NOT the actual test file code — it is a contract spec that the actual test file writers follow later.
+
+Who does it: SM runs in QA mindset (or invokes harness-qa for this specific step if separate QA agent slot is available).
+
+Output file: `<WORKTREE_ROOT>/.trae/<task-id>/test_spec_smoke.md` (ONE file for the whole feature/task, NOT per-task per envelope.)
+
+### 1.5.1 Content (5 mandatory bullets, ≤15 lines TOTAL):
+
+1. **Behavior list (BDD Given-When-Then)**: 3–5 core behaviors under test. Core only. No edge cases listed here. Edge cases = defer until actual test file creation. Format:
+   - `GIVEN <precondition> WHEN <user action or trigger occurs> THEN <expected observable output or state>`.
+2. **Test split recommendation**: `<X> unit tests (where: packages/db, <pkg>) + <Y> e2e tests (routes: POST /x, UI flow Y) + <Z> manual smoke (admin finance page: refund button)`.
+3. **Specific test files to be created or updated** (enumerate file paths expected). NO wildcards. Example:
+   - `packages/platform/src/app/api/refund/route.test.ts` (unit API handler)
+   - `packages/platform/e2e/refund-admin.spec.ts` (e2e Playwright)
+4. **Key invariants that tests must assert (DbC post-conditions)**: 2–3 max. Example:
+   - After successful refund → `ticket.status = CANCELLED + sold_units decremented in same tx + Stripe refund_id stored`.
+5. **Explicit out-of-scope tests (NÃO TESTAR AGORA)** — write 2–3 bullets of edge cases explicitly NOT covered (deferred to future if needed). This prevents scope creep and confirms YAGNI.
+
+### 1.5.2 Gate (hard stop before development):
+
+When `test_spec_smoke.md` is written: present to user **ONLY the 5 bullets + file list** (≤15 lines max — do not rewrite full document again in chat, just reference it):
+> A) Aprovar este Test Spec Smoke e iniciar desenvolvimento
+> B) Ajustar X comportamento / Y divisão de testes
+
+If user chooses A → mark in session.md: `test_spec_smoke: APPROVED`. Add `test_spec_smoke.md` into MANDATORY output files table. Proceed to Phase 0.5 Parallel/Serial decision (next below).
+If user chooses B → iterate once on test_spec_smoke. If after 2 iterations still not approved → GO BACK to Scope Capture (Phase 0) / PRD adjustments, because scope is ambiguous. DO NOT start development without APPROVED test_spec_smoke.
 
 ---
 
