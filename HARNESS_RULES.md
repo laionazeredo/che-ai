@@ -133,28 +133,34 @@ Em QUALQUER loop/iterações entre agentes, a regra é:
 
 ### Preflight obrigatório (ANTES de qualquer comando, leitura de arquivo, git operation, Glob/Grep):
 
-1. **Ler binding file** `<WORKTREE_ROOT>/.trae/session_binding.md` se existir.
-   - Se existir → usar `SESSION_WORKTREE_ROOT` dele como SCOPE ABSOLUTO desta sessão.
-   - Se NÃO existir → seguir regra §19.2 (ordem de precedência: menção explícita do user → arquivos abertos → env workdirs → AskUserQuestion).
-   - **Pergunta SEMPRE se ambíguo.** ≤2 opções concretas + "outro". NUNCA chutar.
+1. **Ler Level 1 GLOBAL INDEX (resolver chicken-and-egg):** Ler `$HOME/.trae/bindings/registry.md`. Procurar ÚLTIMA entrada STATUS=BOUND com SESSION_ID=<atual>. Extrair WORKTREE_ROOT dessa entrada.
+   - Se encontrar → usar WORKTREE_ROOT dele como SCOPE ABSOLUTO sessão.
+   - Se NÃO encontrar → seguir regra §19.2 (ordem precedência: menção explícita user → arquivos abertos → env workdirs → AskUserQuestion com ≤2 opções. Perguntar sempre ambíguo; NUNCA chute.
 
-2. **Escrever binding file após primeira aprovação.**
-   - Formato canônico 4 linhas (SESSION_WORKTREE_ROOT, BOUND_AT, TASK_ID, STATUS=BOUND).
-   - Salvar SEMPRE em `<WORKTREE_ROOT>/.trae/session_binding.md`.
+2. **Escrever binding em BOTH LEVELS após primeira aprovação (atomically:**
+   - **Level 1:** Append (append-only entry to `registry.md with delimiter ---`. NEVER overwrite BOUND entries (keep history).
+   - **Level 2:** Inside bound worktree: mkdir `.trae/bindings/; write `session-<SESSION_ID>.md (PER SESSION_ID).
+   - 2 arquivos criados. 1 por SESSION_ID.
+   - Mais detalhes contract re-binding corpo está em contracts §19. Aqui só gates processo/enforcement. Aqui gate do harness.
 
-3. **Scissor check A CADA OPERAÇÃO de arquivo / git:**
-   - Target path começa com `SESSION_WORKTREE_ROOT`? Se NÃO → BLOQUEAR.
-   - Apenas 2 saídas: (a) user confirma "sim, escrever fora do scope" logado no decision.log, ou (b) perguntar "Switch worktree? A = Switch / B = Cancelar operação".
-   - **Nunca operar cross-worktree silenciosamente** (ler ou escrever).
+3. **Scissor check A CADA OPERAÇÃO de arquivo / git (agente + hook 1 global (automático:**
+   - Dupla verificação. 2 camadas. Alvo path começa com WORKTREE_ROOT? Se NÃO → BLOQUEAR.
+   - Saídas: (a) user confirma "sim, escrever fora scope logged decision.log, ou (b) perguntar Switch worktree? A = Switch / B = Cancel operação".
+   - **Nunca operar cross-worktree silenciosamente (ler ou escrever).
 
-4. **Trocar worktree (re-bind):**
-   - Só com confirmação EXPLÍCITA do usuário: "Sim, trocar para X agora".
-   - Marcar OLD binding STATUS=RELEASED + NEXT_BINDING.
-   - Criar NEW binding STATUS=BOUND + PREV_BINDING.
-   - Anunciar a troca no próximo 📍 Status output.
+4. **Trocar worktree re-bind:**
+   - Confirmação EXPLÍCITA do user: Sim, trocar X agora".
+   - OLD Level1 BOUND entry → STATUS=RELEASED + RELEASED_AT + NEXT_WORKTREE_ROOT + append new BOUND entry NEW Level2 OLD file STATUS=RELEASED + NEXT_BINDING; NEW Level2 NEW BOUND + PREV_BINDING.
+   - Anunciar troca próximo 📍 Status output.
 
 5. **Pre-send trimmer de refs:**
-   - Se draft output tem refs clickable em ≥2 worktrees DIFERENTES E usuário NÃO pediu comparação cross-worktree → PARAR. Apagar refs de worktree incorreto. Manter apenas refs do SESSION_WORKTREE_ROOT.
+   - Se draft output tem refs clickable ≥2 worktrees DIFERENTES E user NÃO pediu comparação → PARAR. Apagar refs worktree incorreto. Manter apenas refs do BOUND WORKTREE_ROOT.
+
+> **Enforcement AUTOMÁTICO GLOBAL (§19 2-LEVEL LAYOUT):**
+>   - **Level 1 (GLOBAL INDEX resolver chicken-and-egg + FLAGS per sessão):** `$HOME/.trae/bindings/registry.md` — entry por SESSION_ID, append-only, NÃO por worktree. `SESSION_ID → WORKTREE_ROOT` lookup sem precisar conhecer worktree. Field opcional `FLAGS: LANG_PT_CHECK=DISABLED` (omitido=ENABLED) para Hook3 por sessão.
+>   - **Level 2 (PER-SESSION DETAIL inside worktree):** `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md` — histórico/auditoria re-binding chain + mirror FLAGS p/ leitura humana.
+>   - **Hook 1 (PreToolUse):** [pretooluse-worktree-binding.sh](file:///home/laion/.trae/hooks/pretooluse-worktree-binding.sh) em [hooks.json](file:///home/laion/.trae/hooks.json#L5) — usa SÓ Level 1 para scissor check. Zero lock contention, resolve catch22, multi-sessão paralela works.
+>   - **Hook 3 (PostToolUse WARN-only):** [posttooluse-lang-pt-check.sh](file:///home/laion/.trae/hooks/posttooluse-lang-pt-check.sh) em [hooks.json](file:///home/laion/.trae/hooks.json#L22) — detecta texto PT-BR em arquivos escritos via Edit/Write (4+ stopwords PT OU 2+ linhas c/ acentos + 2 stopwords). NUNCA corrige automaticamente, NUNCA bloqueia (exit0 sempre). Decision=warn + adicionalContext instrui agente a **AskUserQuestion obrigatório**: (A) Traduzir p/ inglês, (B) Manter PT confirmado, (C) Desabilitar Hook3 nesta sessão (append flag `FLAGS: LANG_PT_CHECK=DISABLED` no Level 1 registry + Level 2 mirror).
 
 ---
 

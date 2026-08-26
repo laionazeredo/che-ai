@@ -30,15 +30,15 @@ If any is missing → **ABORT immediately** and go back to Scrum Master.
 
 Run BEFORE touching ANY Glob/Grep/file-write/git command.
 
-1. **Read binding file**: Read `<WORKTREE_ROOT>/.trae/session_binding.md`.**
-   - If it exists → confirm `SESSION_WORKTREE_ROOT` from file **MUST MATCH** the `WORKTREE_ROOT` passed by SM.
-   - If MISMATCH → **ABORT.** Ask: "SM says worktree = X but binding says Y. Switch binding first? (A = Switch, B = Cancel task)"** Never proceed silently.
-   - If binding file DOES NOT exist → create it NOW (ask user didn't bind yet). Write canonical format 4 lines: SESSION_WORKTREE_ROOT, BOUND_AT, TASK_ID, STATUS=BOUND. Ask user confirm once before writing.
-2. **Per-operation scissor check (before every file write, Glob/Grep, git cmd):**
-   - Is target path prefix within `SESSION_WORKTREE_ROOT`? If not → BLOCK.
-   - Cross-worktree ops = only (A) user confirms single out-of-scope write logged in decision.log OR (B) ask switch worktree first.
-3. **Never silent cross-worktree reads = violation (even "quick grep")
-4. **If at any point the agent thinks "maybe this code is also in worktree B" → DO NOT TOUCH B. Ask user explicitly: "Tarefa está vinculada à worktree X. Precisa trocar para Y antes? (A = Trocar, B = Continuar em X". Never silent swap.
+1. **Level 1 Global Index (AUTHORITY):** Read `$HOME/.trae/bindings/registry.md`. Find LAST STATUS=BOUND entry with `SESSION_ID` from env/IDE. Extract `WORKTREE_ROOT` from that entry. If NO entry: binding hasn't been made yet → ABORT. Ask: "No Level1 binding for this session. Create it? (A = Select worktree now; B = Cancel task). NEVER write without binding created."
+   - If found BOUND entry: confirm `WORKTREE_ROOT` from registry **MUST MATCH** the `WORKTREE_ROOT` passed by Scrum Master.
+   - If MISMATCH → **ABORT.** Ask: "SM says worktree = X but Level 1 registry (GLOBAL) says BOUND_ROOT=Y. Switch binding first? (A = Switch per §19.3; B = Cancel task)." Never silent proceed.
+2. **Level 2 Detail File (informational only for Dev):** If Level 2 `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md` does NOT exist → SM preflight didn't create it properly. Warn & create now (append Level 1 if needed, but don't duplicate BOUND entries). Report discrepancy to SM / decision.log.
+3. **Per-operation scissor check (before every file write, Glob/Grep, git cmd):**
+   - Target path prefix within `WORKTREE_ROOT`? If not → BLOCK.
+   - Cross-worktree ops only allowed two outcomes: (A) user confirms one-off out-of-scope write, log decision.log; OR (B) ask user to switch worktree first per §19.3.
+4. **Never silent cross-worktree reads = violation (even "just a quick grep"). Hook 1 pretooluse also enforces this independently via Level1 registry (double guard).**
+5. **If at any point agent thinks "maybe this code is also in worktree B" → DO NOT TOUCH B. Ask user explicitly: "Tarefa vinculada à worktree X. Trocar para Y antes? (A = Trocar, B = Continuar em X)". Never silent swap.
 
 ---
 

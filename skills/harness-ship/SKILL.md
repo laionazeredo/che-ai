@@ -41,18 +41,19 @@ If any precondition fails → report exactly which, stop execution, ask user.
 
 ### 0.7 WORKTREE SESSION BINDING PREFLIGHT (engineering-contracts §19, NON-NEGOTIABLE)
 
-Run BEFORE any `git status / git add / git commit / git push`. This PREVENTS wrong-worktree commits.
+Run BEFORE any `git status / git add / git commit / git push`. PREVENTS wrong-worktree commits.
 
-1. **Read binding file.** Read `<WORKTREE_ROOT>/.trae/session_binding.md`.
-   - If exists: confirm `SESSION_WORKTREE_ROOT` from file **MUST EQUAL** the `WORKTREE_ROOT` precondition 1.
-   - If MISMATCH → **BLOCK SHIP NOW.** Ask: "Binding file says worktree = X, but ship was invoked on Y. Which one ships? (A = X, B = Y, C = Cancel)". Never silent-continue.
-   - If binding file MISSING → create it NOW (canonical 4-line format). Ask user confirm worktree selection once before creating.
-2. **Scissor check on staging + file ops:**
-   - EVERY file being staged/committed → path MUST start with `SESSION_WORKTREE_ROOT`.
-   - If a file path is outside (symlink, relative trick, etc.) → UNSTAGE immediately, report to user, DO NOT commit.
-3. **Cross-worktree safety during ship loop (gh-stack mode):**
-   - After finishing a layer's commit/push/PR, NEXT layer's file ops → RE-RUN scissor check (2) against SESSION_WORKTREE_ROOT.
-   - Never silently cd into another worktree during multi-layer ship. If a layer says "use worktree B" → STOP. Ask user confirm re-binding per §19.3 (OLD=RELEASED / NEW=BOUND) before switching.
+1. **Level 1 Global Index (AUTHORITY):** Read `$HOME/.trae/bindings/registry.md`. Find LAST STATUS=BOUND entry for current `SESSION_ID`. Extract WORKTREE_ROOT from that entry.
+   - If NO entry: SHIP BLOCKED NOW. Ask "No Level1 binding for this session. Create before ship? (A = Select worktree; B = Cancel ship)." NEVER ship unbound.
+   - If found BOUND entry: confirm WORKTREE_ROOT from registry **MUST EQUAL** WORKTREE_ROOT precondition 1.
+   - MISMATCH → **BLOCK SHIP NOW.** Ask: "Level 1 GLOBAL registry binding says worktree = X, ship was invoked on Y. Which one actually ships? (A = X per binding; B = Y override binding + rebind; C = Cancel ship)." Never silent-continue.
+2. **Level 2 Detail File (optional audit):** Verify `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md` exists. If missing → warn decision.log entry (SM skipped Level 2 write). Do NOT block ship (Level 1 is the authority).
+3. **Scissor check staging + file ops:**
+   - EVERY file staged/committed → path MUST start with WORKTREE_ROOT from Level1 registry.
+   - File path outside (symlinks, relative tricks, etc.) → UNSTAGE immediately, report, DO NOT commit.
+4. **Cross-worktree safety during ship loop (gh-stack mode):**
+   - After finishing layer's commit/push/PR, NEXT layer file ops → RE-RUN scissor check (3) against BOUND WORKTREE_ROOT registry entry.
+   - Never silent cd another worktree during multi-layer ship. Layer says "use worktree B" → STOP. Ask user confirm re-binding §19.3 (old entry STATUS=RELEASED append new BOUND registry entry) before switching.
 
 ---
 
@@ -192,39 +193,26 @@ If found ticket: extract `<TICKET-ID>` (full URL or just ID). Append `Refs: <TIC
 
 ### Path A: GH_STACK_MODE=false (single PR, standard)
 
-#### A-4.2 Build structured PR Description (English — LEAN, 3 SECTIONS MAX, NO VERBOSITY)
+#### A-4.2 Build PR Description — LEAN 5 BLOCKS (ENGLISH by default, 30 lines max TOTAL)
 
-**PR DESCRIPTION RULE (§18 contracts + HARNESS_RULES lean enforcement):
+> **Corpo CANÔNICO / EXEMPLO com preenchimento real:** `references/PR_DESCRIPTION_TEMPLATE.md` (Layer 3 DONO do conteúdo — NÃO duplicar estrutura/corpo aqui). Abaixo só gates de processo e orçamento.
 
-Total paragraphs:
-- Max 3 paragraphs of implementation prose. No more.
-- No giant tables. No verbose "context setup.
+**LANGUAGE GATE (non-negotiable — #1 rule, before any writing):**
+- **DEFAULT = ENGLISH (EN-US / EN-UK).** Escrever TODO o corpo PR, headings, bullets, tickets refs, comandos TUDO em inglês.
+- **Só outra língua QUANDO:** mensagem DO usuário que invocou `/harness-ship` (ou instrução) contiver EXPLICITAMENTE um pedido de outra língua (ex: "escreve corpo PR em português").
+- **Nunca adivinhar / NUNCA assumir** "usuário fala PT então PR em PT". PT é SÓ para chat. PR body na ausência de menção = SEMPRE inglês.
 
-Exactly 3 sections below. Order matters. Do NOT add other sections:
+**PROCESS GATES (non-negotiable, trim aggressively before writing):**
 
-**Section 1 — Implementation (3 paragraphs MAX, each ≤5 lines):
-Para 1: What changed. 1–3 sentences — scope only, what was modified.
-Para 2: Why this approach — high level decisions (top 2 decisions only)
-Para 3: Non-goals if relevant (optional — only 1 sentence, or skip)
+1. **Block 1 — What was implemented:** bullets only, 3–6 items. No paragraphs. Each bullet = 1 concrete change. If >6 → PR too large (split gh-stack).
+2. **Block 2 — 🔍 Attention points:** bullets only, 3 IDEAL, 5 MAX. Each bullet starts with **Risk area:** `path/to/file.ts` — 1 sentence why. Risk areas = Security-sensitive / Performance / Blast-radius (DDL migration) / Cross-module / Concurrency. If >5 bullets → split gh-stack.
+3. **Block 3 — 💥 Breaking changes:** **INCLUIR SOMENTE SE HOUVER.** If NONE → DELETE o bloco INTEIRO do body (NÃO escrever "NONE", NÃO deixar section vazia). Quando incluir: heading única por breaking + Before/After/Migration bullets.
+4. **Block 4 — 🧪 How to verify:** bullets only, 1–3 items. Ordem: (a) Unit/E2E COMANDO CONCRETO apontando p/ teste específico + (b) Manual steps concretos (2–3 steps, sem vagueza) + (c) Link p/ plano completo `.trae/<task-id>/manual_test_plan.md`.
+5. **Block 5 — 🔗 Refs:** Ticket Linear/Jira (ID + URL). Opcionalmente 1 link extra (Figma, PRD path).
+6. **Seções PROIBIDAS (remover SEMPRE se aparecerem):** Scope In/Out, Assumptions adopted, What/Why paragraphs, Harness gates checklist, Tables gigantes, Context intro paragraphs.
+7. **Body budget:** ≤30 linhas TOTAIS (todos 5 blocos somados, incluindo headings). Sem breaking → alvo ~20 linhas. Com breaking → alvo ~28 linhas. Se ultrapassar → TRIM, TRIM, TRIM. Breaking changes longos? Mover migration detalhada p/ doc separado e linkar 1 linha no block 3.
 
-**Section 2 — Key Review Points (bullet list, max 5:**
-What places the reviewer MUST scrutinize: security-sensitive logic, performance hot paths, places where concurrency correctness applies, data changes. Write each = 1 sentence focus. No paragraphs here. "Look at file X because Y." Max 5. 3 is ideal. If 6+ needed → PR is too big (ship → split gh-stack.
-
-**Section 3 — How to Verify (ONE bullet list, specific tests only — max 3):
-Each bullet = ONE specific test/command, not vague guidance. Format:
-- Unit: `<COMMAND>` pointing to test file specific (name, or <repo-specific:
-- E2E: `<COMMAND>` → which test →
-- Manual: `<2-3 steps concrete for manual.
-Line must include:
-ALSO add link to `.trae/<task-id>/manual_test_plan.md at the end of Section 3 as See full details in >
-
-**Optional one-liner "Related ticket": `<link or Refs: FLO-123>`
-
-**Removal of old sections (do NOT include**: Assumptions adopted → (No. No assumptions adopted paragraph section. If important → 1-liner merged into Section 1 Para 2 as "Key decisions were A and B.)
-- No separate Breaking changes as → folded into last section line of the → max 5 lines into a single separate line at TOP (just above footer if any; if "none write → 1-liner or "Breaking change:
-- No separate Checklist section removed —
-
-**Full body size budget: 25 lines or fewer lines TOTAL PR body. If longer → trim, trim, trim again.
+**Linear ticket auto-include (A-4.0 common step):** Quando ticket detectado (A-4.0), **sempre** incluir na Block 5 "Refs". Não duplicar o ref em rodapé/comment separado.
 
 #### A-4.3 Create PR (Draft, not ready for review)
 

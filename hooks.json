@@ -1,1 +1,32 @@
-{}
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "name": "worktree-session-binding-guard",
+        "description": "Enforces contracts §19 — 1 session = 1 worktree. BLOCK any file/git op outside BOUND worktree; requires AskUserQuestion for re-bind.",
+        "matcher": "Read,Glob,Grep,Edit,Write,RunCommand,DeleteFile,LS,SearchCodebase",
+        "type": "command",
+        "command": "/home/laion/.trae/hooks/pretooluse-worktree-binding.sh",
+        "timeout": 5
+      }
+    ],
+    "PostToolUse": [
+      {
+        "name": "3layer-non-duplication-guard",
+        "description": "Enforces HARD STOP 3-Layer Architecture: Layer 1/2 (user_rules, HARNESS_RULES/COMMANDS) are title+link only. Layer 3 skills/*/SKILL.md owns the rule BODY. Warns with additionalContext when >=4 identical lines found in both Layer 1/2 AND any Layer 3 SKILL.md; never blocks post-hoc but flags to agent.",
+        "matcher": "Edit,Write",
+        "type": "command",
+        "command": "/home/laion/.trae/hooks/posttooluse-3layer-dedup.sh",
+        "timeout": 10
+      },
+      {
+        "name": "lang-pt-text-detector-warn-only",
+        "description": "WARN-only (never blocks): detects Portuguese text in files written via Edit/Write (4+ PT stopword hits OR 2+ diacritics lines + 2 PT words). Never auto-fixes. Signals the agent to AskUserQuestion: (A) translate to EN, (B) keep PT, (C) disable for this session. Per-session disable via Level1 registry FLAGS: LANG_PT_CHECK=DISABLED on BOUND entry.",
+        "matcher": "Edit,Write",
+        "type": "command",
+        "command": "/home/laion/.trae/hooks/posttooluse-lang-pt-check.sh",
+        "timeout": 8
+      }
+    ]
+  }
+}

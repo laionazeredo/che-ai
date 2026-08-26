@@ -26,31 +26,46 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
 
 > **One session = ONE worktree by default. DOUBT = ASK. Never guess. Never silent cross-worktree ops.**
 
-1. **Read existing binding file FIRST.** Check if ANY candidate worktree (from user mention, open files, env workdirs) already has `/.trae/session_binding.md`. If yes → read it, use its `SESSION_WORKTREE_ROOT` as default proposal.
-2. **Binding decision PRECEDENCE (STOP at first match):**
+1. **Read existing binding FIRST from Level 1 GLOBAL INDEX (chicken-and-egg resolver):** Read `$HOME/.trae/bindings/registry.md`. Look for LAST entry with:
+   - `SESSION_ID: <current-session-id-from-ide>` AND `STATUS: BOUND`. If found → use its `WORKTREE_ROOT` as default binding proposal for this session; jump to step 3 only if user explicitly says "switch".
+2. **Binding decision PRECEDENCE (STOP first match):**
    a. **Explicit user mention:** user said "worktree X" or gave path → PROPOSE binding to X, confirm once.
-   b. **Open files / context:** all user-open files inside one worktree → PROPOSE that worktree. (If files span ≥2 → fall to 2c.)
-   c. **Working dirs / session memory:** single most-recent worktree referenced in prior msgs → PROPOSE it.
-   d. **Ambiguous (≥2 candidates or 0 clear):** STOP. Use AskUserQuestion with ≤2 concrete options + "other (type path)". NEVER default.
-3. **After user confirms worktree (or binding file says STATUS=BOUND):**
-   - Write/create `<WORKTREE_ROOT>/.trae/session_binding.md` with:
-     ```
-     # Session Worktree Binding
-     SESSION_WORKTREE_ROOT: <absolute path>
-     BOUND_AT: <ISO timestamp>
-     TASK_ID: <slug or "manual">
-     STATUS: BOUND
-     ```
-   - Set variable `SESSION_WORKTREE_ROOT` = this value. GLOBAL for this session.
-4. **Re-binding (switch worktree mid-session):** ONLY after EXPLICIT user confirmation saying "Yes, switch to worktree X". When switching:
-   a. OLD binding: change STATUS → RELEASED, append `RELEASED_AT: <ts>` + `NEXT_BINDING: <newpath>`
-   b. NEW binding: write STATUS=BOUND + `PREV_BINDING: <oldpath>`
-   c. Announce swap in next 📍 Status output.
-   Agent-initiated switches = violation. Never "this code seems to be in worktree B so I'll touch it" without asking first.
+   b. **Open files / context:** all user-open files inside one worktree → PROPOSE that worktree. (≥2 worktrees → fall 2c.)
+   c. **Working dirs / session memory:** single most-recent worktree referenced prior msgs → PROPOSE it.
+   d. **Ambiguous (≥2 candidates or 0):** STOP. AskUserQuestion ≤2 concrete + "other (type path)". NEVER default.
+3. **After user confirms worktree (no existing BOUND for this SESSION_ID in registry):** WRITE INTO BOTH LEVELS (§19 2-LEVEL LAYOUT) — atomically:
+   a. **Level 1 (GLOBAL INDEX append-only):** Append entry to `$HOME/.trae/bindings/registry.md`. NEVER overwrite existing BOUND entries (keep history). Add delimiter `---` after entry. Format:
+      ```
+      SESSION_ID: <current-session-id-from-ide>
+      WORKTREE_ROOT: <absolute path>
+      TASK_ID: <slug or "manual">
+      BOUND_AT: <ISO timestamp>
+      STATUS: BOUND
+      ---
+      ```
+   b. **Level 2 (PER-SESSION DETAIL inside bound worktree):**
+      1. `mkdir -p <WORKTREE_ROOT>/.trae/bindings/`
+      2. Write `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md` with:
+         ```
+         SESSION_ID: <session-id>
+         WORKTREE_ROOT: <absolute path>
+         TASK_ID: <slug>
+         BOUND_AT: <ISO timestamp>
+         STATUS: BOUND
+         # PREV_BINDING: <old path> (only filled after re-bind/switch)
+         # NEXT_BINDING: <new path> (only filled after re-bind/switch)
+         ```
+   c. Set `SESSION_WORKTREE_ROOT` = this value. GLOBAL for session.
+4. **Re-binding (switch worktree mid-session):** ONLY after EXPLICIT user confirmation "Yes switch to X". When switching ATOMIC:
+   a. **Level1:** Find last BOUND for this SESSION_ID → change line STATUS: `BOUND` → `RELEASED | RELEASED_AT: <ts> | NEXT_WORKTREE_ROOT: <newpath>`. Then APPEND (don't overwrite) ENTIRELY NEW BOUND entry (line above format) pointing to new worktree. Add delimiter.
+   b. **Level2:** OLD detail md file → STATUS=RELEASED; add RELEASED_AT + NEXT_BINDING new file path. Create NEW detail md inside NEW worktree → STATUS=BOUND + PREV_BINDING=<oldpath>.
+   c. Announce switch in next 📍 Status.
+   Agent-initiated switches = violation. Never "this code seems to be in worktree B so I'll touch it" without asking.
 5. **Per-operation SCISSOR CHECK (before EVERY file write, Glob, Grep, git command):**
    - Does target path start with `SESSION_WORKTREE_ROOT`? If NO → BLOCK.
    - Two outcomes: (A) user confirms "write outside scope this time" → decision.log entry; (B) ask "Switch worktree first? A=Switch / B=Cancel op".
    - Silent cross-worktree reads = violation (even "just a quick grep").
+   - Note: The global hook 1 `pretooluse-worktree-binding.sh` also ENFORCES this independently via Level1 registry without relying on agent memory; agent still does manual check as double layer.
 
 ### 0.2 Harness output directory enforcement
 
@@ -69,15 +84,15 @@ Where:
 
 | File | Location | When created | Purpose |
 |---|---|---|---|
-| `session_binding.md` | `<WORKTREE_ROOT>/.trae/` (worktree-global, NOT inside task-id/) | Immediately after preflight 0.1 (before ANY scope capture) | **Session ↔ worktree binding contract.** 4 fields: SESSION_WORKTREE_ROOT, BOUND_AT, TASK_ID, STATUS=BOUND. Never modified except on re-binding (switch) → OLD=RELEASED/NEW=BOUND. |
-| `session.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | Start of session | Session metadata: task-id, worktree path, start time, goals |
-| `task_graph.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | After scope capture | Full list of tasks, deps, status, DONE criteria |
-| `task_envelope_<id>.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | One per task, before handoff to Dev | Formal contract per task |
-| `decision.log.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | Append during execution | Every trade-off / non-obvious decision with rationale |
+| `registry.md` entries + `session-<id>.md` files (2-LEVEL) | Level1 = `$HOME/.trae/bindings/registry.md` (GLOBAL 1 único usuário, fora worktrees / append only, entry por sessão). Level2 = `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md` (por sessão, dentro worktree). | Immediately preflight 0.1 after binding decision (before ANY scope). | **Session ↔ worktree.** Resolve chicken-and-egg (Level 1: SESSION_ID → WORKTREE_ROOT em 1 leitura sem conhecer a worktree antes). Multi-sessão paralela: 2 linhas separadas Level1, zero lock. |
+| `session.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | Start session | Session metadata: task-id, worktree path, start time, goals. |
+| `task_graph.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | After scope capture | Full list tasks, deps, status, DONE criteria. |
+| `task_envelope_<id>.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | One per task before Dev handoff | Formal contract per task |
+| `decision.log.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | Append during execution | Trade-off / non-obvious decision rationale |
 | `manual_test_plan.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | After all tasks DONE | Step-by-step manual verification plan |
-| `final_summary.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | End of session | What was delivered, risks, stats |
-| `gh_stack_plan.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | After TASK GRAPH (Phase 1.4), only if trigger ≥3 tasks or >15 files | gh-stack hierarchical PR plan: layers, branch names, scope-per-PR, Depends-on chain. Status field APPROVED mandatory before /harness-ship uses it. |
-| `test_spec_smoke.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | After Phase 1.5 (before ANY TASK ENVELOPE handed to Dev) | 1-page BDD test contract: 3–5 core Given-When-Then behaviors, test split (unit/e2e/manual), files to touch, 2–3 key invariants, explicit out-of-scope tests. Status APPROVED required before ANY code writes. |
+| `final_summary.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | End of session | Delivered content, risks, stats |
+| `gh_stack_plan.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | After TASK GRAPH (Phase 1.4) only if trigger ≥3 tasks or >15 files | gh-stack hierarchical PR plan; layers/branch names/scope-per-PR/Depends-on. APPROVED status before /harness-ship consumes |
+| `test_spec_smoke.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | Phase 1.5 (before ANY task envelope handed to Dev) | 1-page BDD test contract: 3–5 core Given-When-Then behaviors, test split (unit/e2e/manual), files to touch, 2–3 key invariants, explicit out-of-scope tests. Status APPROVED before ANY code writes. |
 
 ---
 

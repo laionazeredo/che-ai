@@ -1,115 +1,49 @@
 # PR DESCRIPTION TEMPLATE
 
 > Used by `harness-ship` when creating a GitHub DRAFT PR.
-> Language: ENGLISH (per harness rules).
+> Language: **ENGLISH by default.** Only write PR body in another language IF the user EXPLICITLY requests otherwise in the same message (e.g., "escreve PR em PT-BR"). No guessing.
+> Body size budget: **30 lines or fewer, TOTAL** (trim, trim, trim). No breaking → ~20 lines. With breaking → ~30 lines.
 
 ---
 
-## 📋 What this PR does / why we need it
+## What was implemented
 
-<1-3 clear sentences. English. Include user/business value.>
+<!-- 3-6 bullets MAX. Each bullet = one concrete change. No paragraphs. -->
 
-Example:
-```
-Adds Stripe Connect onboarding flow for event creators. This lets organizers
-sign up as Stripe connected accounts and start receiving payments for ticket
-sales. Part of FLO-123.
-```
-
----
-
-## 🎯 Scope (In / Out)
-
-### In scope (this PR covers):
+- ...
 - ...
 - ...
 
-### Out of scope (deliberately NOT done here — will be follow-up):
-- ...
-- ...
+## 🔍 Attention points
 
----
+<!-- What reviewers MUST pay attention to. 3 bullets ideal, 5 max.
+     Format per bullet: **Risk area:** `path/to/file.ts` — 1 sentence why.
+     Risk areas: Security-sensitive / Performance-sensitive / Blast-radius (DDL migration) / Cross-module coupling / Concurrency correctness -->
 
-## 🧠 Assumptions adopted
+- **Security-sensitive:** `packages/auth/src/...` — JWT role check added for the new admin endpoint
+- **Blast-radius risky:** migration `YYYYMMDD-name.sql` — adds index to high-traffic `ticket_scans` table
+- **Cross-module:** touches `@flockr/db` entity + `@flockr/platform` service together; confirm coupling is intentional
 
-(Top 3-5 key decisions / trade-offs extracted from `decision.log.md`)
+## 💥 Breaking changes
 
-1. **Assumption A:** <short explanation + why we chose this way>
-2. **Assumption B:** ...
-3. **Assumption C:** ...
+<!-- ONLY include this block when breaking changes EXIST.
+     If NONE → DELETE this entire "Breaking changes" section (do NOT write "NONE"). -->
 
----
+### `POST /api/v1/payments/refund` — body schema change
+- **Before:** `{ ticketId }` (ticket inferred payment implicitly)
+- **After:** `{ ticketId, paymentId }` (explicit, 400 if missing)
+- **Migration:** Update callers to pass `paymentId` from the order record
 
-## 🔍 Key review points
+## 🧪 How to verify
 
-(Places the reviewer MUST pay attention. NOT cosmetic/formatting.)
+<!-- 1-3 bullets: Unit + E2E first, then 1 quick manual sanity.
+     Unit/E2E = concrete command pointing to specific test.
+     Manual = 2-3 steps, concrete, no vagueness. -->
 
-- [ ] **Security-sensitive:** `path/to/file.ts` — contains auth check for X boundary
-- [ ] **Performance-sensitive:** loop with N² potential in `path/to/other.ts`
-- [ ] **Blast-radius risky:** migration `YYYYMMDD-name.sql` — DDL on large table `orders`
-- [ ] **Cross-module:** touches `packages/db` entity + `packages/platform` service together — confirm coupling is acceptable
+- **Unit:** `corepack pnpm nx run db:test --tui false -- src/refund-pipeline.test.ts` (covers refund eligibility + ledger entries)
+- **Manual:** (1) `pnpm nx run platform:dev`, (2) open event `FLO-513-sandbox`, (3) refund a paid ticket → dashboard shows "Refunded" + ledger debit line visible
+- **Full plan:** `./.trae/FLO-513-refund/manual_test_plan.md`
 
----
+## 🔗 Refs
 
-## 💥 Breaking changes (if any)
-
-**NONE.**
-
-OR — list each with migration guide:
-```
-### Breaking change 1: POST /orders now requires `customer_id` in body
-- Old behavior: customer inferred from JWT when omitted
-- New behavior: 400 if missing
-- Migration: clients sending request must now include `customer_id`
-```
-
----
-
-## 🧪 How to test manually
-
-**Full plan → `./.trae/<task-id>/manual_test_plan.md` (in-worktree file).**
-
-Quick sanity steps (inline for the reviewer):
-
-### Core happy path
-```bash
-# 1. Checkout this branch
-git checkout <branch>
-
-# 2. Install + start
-corepack pnpm install
-corepack pnpm nx run platform:dev --tui false
-
-# 3. Navigate → login as creator role → navigate /dashboard/earnings
-# Expected: "Connect Stripe" CTA visible, no console errors
-
-# 4. Click CTA → complete Stripe onboarding (test mode)
-# Expected: returns to Flockr; account status shows "Pending"
-```
-
-### Edge cases to try
-- Submit form with invalid Stripe test data
-- Refresh mid-flow; confirm state recovery
-- Log out; log back in; confirm onboarding status persisted
-
----
-
-## 🔗 Related tickets / references
-
-- **Linear ticket:** `FLO-123` — <https://linear.app/flockr/issue/FLO-123/...>  **(or) Jira / N/A**
-- **Related docs / designs:** Figma link, PRD path
-
----
-
-## ✅ Harness gates checklist
-
-(Automatically verified — marked at ship time.)
-
-- [ ] Build passes (TS typecheck + package builds) — QA Stage A
-- [ ] Lint passes (Biome/ESLint) — QA Stage B
-- [ ] Typecheck passes — QA Stage C
-- [ ] Unit + Integration tests pass — QA Stage D
-- [ ] Compliance LIGHT (per-task): 0 CRITICAL, 0 HIGH
-- [ ] Compliance HEAVY (full session): 0 CRITICAL, 0 HIGH
-- [ ] `decision.log.md` written for non-obvious trade-offs
-- [ ] Commits: atomic + conventional commits only
+- **Linear ticket:** `FLO-123` — https://linear.app/flockr/issue/FLO-123/slug

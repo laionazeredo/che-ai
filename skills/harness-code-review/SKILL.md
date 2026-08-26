@@ -25,17 +25,13 @@ We ONLY flag things that actually break production or waste $$$ or risk users.
 
 Run THIS BEFORE deciding mode or starting any review context gathering.
 
-1. **Read binding file from candidate worktree:**
-   - If user passed `--worktree <path>` (Mode B): Read `<path>/.trae/session_binding.md` if exists.
-   - If Mode A (PR URL + optional local worktree): Read `<worktree>/.trae/session_binding.md` if worktree path was provided.
-2. **Mode B worktree mismatch check (CRITICAL):**
-   - If binding file exists on Mode B worktree but says `SESSION_WORKTREE_ROOT: <DIFFERENT_PATH_THAN_USER_PROVIDED>` → BLOCK.
-   - Ask: "You asked review on worktree X, but binding file says session is bound to Y. Proceed with X anyway? (A = X, override binding; B = Switch to Y first; C = Cancel review)". NEVER silent override.
-3. **Mode A PR URL mode — cross-worktree safety:**
-   - If PR URL says branch `feat/FLO-513` AND a local worktree is provided AND binding file on that worktree says SESSION_WORKTREE_ROOT matches → proceed.
-   - If PR is for a branch that is in worktree B, but user provided --worktree pointing to A → BLOCK. Ask which one is correct.
-4. **Pre-send ref trimmer:**
-   - When outputting final review report, code refs (file links) MUST NOT span ≥2 worktrees, unless user explicitly asked "compare worktree X vs Y". If mixed → trim to a single worktree scope before sending.
+1. **Read Level1 Global Index FIRST:** Read `$HOME/.trae/bindings/registry.md`. Find LAST STATUS=BOUND entry with current SESSION_ID. Use its WORKTREE_ROOT for the session.
+2. **Mode B mismatch check (CRITICAL):**
+   - If user passed --worktree <path>: confirm Level1 registry WORKTREE_ROOT EXISTS and is DIFFERENT than <path> → BLOCK.
+   - Ask: "You asked review on worktree X but Level1 GLOBAL session is BOUND to Y. Options: (A = X, override binding; B = Switch binding switch first; C = Cancel review). NEVER silent override. If no Level1 entry → binding not made; proceed to decision flow to create binding (§19.2 only if user continues."
+3. **Mode A PR URL + local worktree:** PR for branch that resides Level 1 registry says BOUND on some worktree:
+   - If PR is for branch worktree B user says --worktree pointing to A → BLOCK. Ask which is correct.
+4. **Pre-send trimmer refs (global:** Output final report refs file links MUST NOT span ≥2 worktrees unless user explicitly asked cross-worktree comparison. Mixed trim single scope before send.
 
 ---
 

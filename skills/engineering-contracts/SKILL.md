@@ -275,15 +275,33 @@ Binding contract:
 
 1. **1 session ↔ 1 WORKTREE_ROOT by default.**
    - The very first operation of a harness flow (or first file access in a worktree scoped session) MUST produce a binding decision: which absolute worktree path is this session attached to?
-   - Write it ONCE into `<WORKTREE_ROOT>/.trae/session_binding.md` (canonical binding file). Format:
-     ```
-     # Session Worktree Binding
-     SESSION_WORKTREE_ROOT: <absolute path>
-     BOUND_AT: <ISO timestamp>
-     TASK_ID: <slug if available, else "manual">
-     STATUS: BOUND
-     ```
-   - If the binding file already exists from a prior session on the same worktree → READ IT FIRST and use its SESSION_WORKTREE_ROOT as the default.
+   - **2-LEVEL LAYOUT (resolves chicken-and-egg + multi-session parallelism + zero race condition + per-session FLAGS:**
+     - **Level 1 (GLOBAL INDEX / CHICKEN-AND-EGG SOLVER):** 1 unique per user, outside worktrees. Path: `$HOME/.trae/bindings/registry.md`. One entry per SESSION_ID, append-only (never overwrite, just add new lines).
+       ```
+       SESSION_ID: <session-identifier-from-ide>
+       WORKTREE_ROOT: <absolute path>
+       TASK_ID: <slug or manual>
+       BOUND_AT: <ISO timestamp>
+       STATUS: BOUND
+       FLAGS: LANG_PT_CHECK=DISABLED   (optional line — OMIT line entirely when default ENABLED)
+       ---
+       ```
+       Optional FLAGS field (OMIT when defaults suffice — keep registry minimal):
+       - `LANG_PT_CHECK=DISABLED`: Disables the PostToolUse Portuguese-text detector hook for THIS SESSION ONLY. When line omitted → default ENABLED (hook runs normally). Hook 3 reads this flag per SESSION_ID from Level 1.
+     - **Level 2 (PER-SESSION DETAIL / IN-WORKTREE DATA FILE):** 1 file per session, inside bound worktree. Path: `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md. Stores re-binding chain history & audit (PREV/NEXT only if worktree switched)+ FLAGS mirror for human readability. Not used for hook scissor checks (only SM/Ship/Dev read it for re-binding audit).
+       ```
+       SESSION_ID: <session-identifier>
+       WORKTREE_ROOT: <absolute path>
+       TASK_ID: <slug>
+       BOUND_AT: <ISO timestamp>
+       STATUS: BOUND
+       FLAGS: LANG_PT_CHECK=DISABLED   (same value as Level 1 if set; omit line if default)
+       # PREV_BINDING: <old detail md path> (after first switch)
+       # NEXT_BINDING: <new detail md path> (after switch)
+       ```
+   - Write once into BOTH during initial binding decision:
+     1. Append Level 1 entry in registry.md (add Level 2 file inside the bound worktree (idempotent: don't duplicate for same SESSION_ID + STATUS=BOUND already in registry).
+   - Scissor checks (hook 1) ONLY use Level 1 registry index; never enter worktree to lookup. If SESSION_ID not in Level 1 → binding doesn't exist yet (agent proceeds to binding decision flow (§19.2).
 
 2. **Initial binding decision rules (order of precedence — STOP at first match):**
    a. **Explicit user mention:** User said "worktree X" or gave a path → BIND TO X. Confirm once.
@@ -294,22 +312,22 @@ Binding contract:
 
 3. **Re-binding (switching worktree in same session):**
    - Switching is ONLY allowed after EXPLICIT user confirmation: "Yes, switch to worktree X now."
-   - When switching:
-     1. Write a RELEASED entry into OLD binding file: `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_BINDING: <newpath>`
-     2. Create NEW binding file on new worktree with STATUS=BOUND + `PREV_BINDING: <oldpath>`
+   - When switching (update BOTH levels atomically):
+     1. **Level 1 registry update**: Find the SESSION_ID entry, set `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_WORKTREE_ROOT: <newpath>`, then append NEW BOUND entry for the same SESSION_ID pointing to new worktree.
+     2. **Level 2 detail file update**: OLD detail file inside OLD worktree → `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_BINDING: <new-detail-md-path>`. Create NEW detail file inside NEW worktree → `STATUS: BOUND + PREV_BINDING: <old-detail-md-path>`
      3. Announce the switch in the next Status section output.
    - Agent-initiated switches (without user saying so) = violation. Never "oh, this code is in worktree B so let me touch it" without asking first.
 
 4. **Per-operation scissor check (MANDATORY before any git/Glob/Grep/file-write):**
-   - Before any file-system write or git command: verify `<target path>` starts with `SESSION_WORKTREE_ROOT` (from binding file).
-   - If target path is OUTSIDE → BLOCK. Two allowed outcomes:
-     a. User confirms "yes, write outside worktree scope for this one file" → log entry in decision.log.
-     b. Otherwise abort that operation and ask: "This target is outside worktree <X>. Switch worktree first? (A = switch, B = cancel op)"
-   - No silent cross-worktree reads without user first being made aware.
+   - Before any file-system write or git command: LOOKUP SESSION_ID in **Level 1 registry $HOME/.trae/bindings/registry.md** (ONLY). Use WORKTREE_ROOT from that entry.
+   - If target path is OUTSIDE WORKTREE_ROOT → BLOCK. Two outcomes:
+     a. User confirms "yes, write outside worktree scope this one file" → log decision.log.
+     b. Otherwise abort and ask: "This target is outside worktree <X>. Switch first? (A = switch, B = cancel)"
+   - No silent cross-worktree reads without user made aware.
 
 5. **Doubt / ambiguity → ask. Never guess.**
-   - "User said `refund feature` — which worktree has that?" if ≥2 have refund branches → list the candidates (≤2 options with short branch name hints) and AskUserQuestion.
-   - If the binding file says X but context hints Y → DO NOT silently switch to Y. Ask: "Binding says X but last 2 messages reference Y. Switch?"
+   - "User said refund feature; ≥2 worktrees have refund branches → list ≤2 concrete options AskUserQuestion.
+   - Binding Level1 says X but context hints Y → ASK. Never silent switch.
 
 6. **Pre-send self-check for scoping:**
    - If draft response contains references to files in ≥2 different worktrees (without user explicitly asking cross-worktree comparison): STOP. Trim. Either focus on 1 worktree, or ask which one first.
