@@ -1,9 +1,46 @@
+# ==============================
+# Harness Flockr — .gitignore GLOBAL
+# ==============================
+# Estratégia 3 camadas ENGINEERING-CONTRACTS §6.2:
+#   - VERSIONADO no repo (WHITELIST): commands/ contracts/ skills/ hooks/ scripts/ permission/
+#     + docs raiz (README, HARNESS_*, REFERENCE_*, package.json, pnpm-lock.yaml, tsconfig.json, hooks.json)
+#   - IGNORADO TOTAL (BLACKLIST): dados por-máquina / por-usuário — NUNCA sobrescritos por git pull
+
+# ===== .trae internals da IDE Trae =====
 builtin/
 builtin_skills/
 mcps/
 trae-browser-screenshots/
-memory/
 toolhost/
 memory-config.json
 skill-config.json
+
+# ===== BLACKLIST ABSOLUTA: dados por-máquina (user-specific) =====
+memory/
+#   Nível 1 binding local — cada sessão local. Escritor único = contracts helper.
+bindings/registry.jsonl
+
+#   Regras pessoais do usuário (perfil, idioma, preferências, flags por sessão).
+#   Use user_rules/.gitkeep para manter a pasta estrutura vazia no repo.
+user_rules/*
+!user_rules/.gitkeep
+
+# ===== DEPS & ARTIFATOS GERADOS =====
 node_modules/
+pnpm-debug.log*
+
+# ===== Backups do install-harness.sh (~/.trae.bak-YYYYMMDD-HHMM) =====
+*.bak-*
+*.bak
+
+# ===== Editor / OS =====
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== Logs runtime harness =====
+*.log

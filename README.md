@@ -1,13 +1,69 @@
 # Harness Flockr — Global `.trae` — READ ME
 
+> **Repo público:** `github.com/laionazeredo/trae-config`
+> **Design philosophy:** KISS + YAGNI + blast radius mínimo (engineering-contracts §1).
 > Documento único para entender TUDO o que o harness do Flockr implementa hoje.
-> Se você é novo: leia **§1 Visão geral + §2 Fluxo padrão Start → Dev → Ship**.
-> Se você quer um comando: pule para **§4 Lista de comandos (17)**.
-> Design philosophy: KISS + YAGNI + blast radius mínimo (engineering-contracts §1).
+> Se você é novo: leia **§0 INSTALL abaixo + §1 Visão geral + §2 Fluxo padrão Start → Dev → Ship**.
+> Se você quer um comando: pule para **§4 Lista de comandos (17)** (§9 no final do arquivo).
 
 ---
 
-## 0. Estrutura do diretório `.trae/`
+## 0. 🚀 INSTALL — 3 comandos (fresh install)
+
+Cenário: você abriu Trae em uma máquina NOVA, `~/.trae/` ainda não existe.
+
+```bash
+# 1. Clona repo público direto em ~/.trae
+gh repo clone laionazeredo/trae-config ~/.trae -- --depth 1
+
+# 2. Instala deps TS (tsx executor zero-build + typescript strict + @types/node)
+corepack enable
+corepack pnpm --dir ~/.trae install --prefer-offline
+
+# 3. Smoke rápido (OBRIGATÓRIO — 10s)
+ls ~/.trae/commands | wc -l            # esperado = 17
+corepack pnpm --dir ~/.trae decisions --help 2>&1 | head -3
+```
+
+Recarregue o Trae (ou feche/abra). Pronto.
+
+### Se ~/.trae/ JÁ existe (dados locais preservados)
+
+Use o install script idempotente. Ele faz backup automático e **NUNCA sobrescreve** `memory/`, `user_rules/`, `bindings/registry.jsonl`:
+
+```bash
+gh repo clone laionazeredo/trae-config /tmp/trae-src -- --depth 1
+bash /tmp/trae-src/scripts/install-harness.sh --dry-run                      # primeiro confere
+bash /tmp/trae-src/scripts/install-harness.sh --apply                         # executa de verdade
+```
+
+### O que este repositório tem (capacidades)
+
+| Camada | Conteúdo | Tamanho |
+|---|---|---|
+| **17 comandos** | `/harness-start`, `/harness-spec`, `/harness-ship`, `/harness-review`, `/harness-pr-comments`, `/harness-parallel`, `/harness-fig`, `/harness-decisions`… | 17 arquivos `.md` |
+| **37 skills** | 17 personas time ágil simulado (SM / Dev / QA / Compliance / Ship) + 20 domínio (Stripe, Supabase Postgres, Next.js, tRPC, Terraform, Linear, Resend…) | 37 pastas |
+| **3 hooks automáticos** | binding scissor (bloqueia path fora worktree), 3-layer dedup, lang-pt-check warn-only | 3 `.sh` |
+| **CLI decisions TS** | 4 modos: summary / filter / tail / export csv\|tsv | `contracts/decisions-query.cli.ts` |
+| **Contracts único** | path binding + 5 heurísticas token reduction + 4 helpers registry JSONL + 3 helpers decisions append | `contracts/harness_sessions_contract.sh` (17 helpers) |
+| **Install script** | dry-run default, backup automático, whitelist/blacklist estrita | `scripts/install-harness.sh` |
+
+### ⚠️ Blacklist — o que NÃO está versionado (dados LOCAIS por máquina)
+
+Estes vivem na sua máquina e **nunca são commitados** (ver `.gitignore`):
+
+```
+memory/                  # sessões / perfil LLM (gerado pela IDE)
+user_rules/*             # regras PESSOAIS (você que escreve: idioma, perfil, preferências)
+bindings/registry.jsonl  # binding session_id → worktree root (REGRA 7.8; writer único contracts)
+node_modules/  *.bak-*   # deps TS + backups install script
+```
+
+Regras de 3 camadas (precedência 1→3 HIGH): **user_rules (você)** > **contracts/** (aqui) > **skills/**. Não duplique regra em múltiplas camadas — o hook `posttooluse-3layer-dedup.sh` avisa quando isso acontece.
+
+---
+
+## 1. Estrutura do diretório `.trae/`
 
 ```
 ~/.trae/
