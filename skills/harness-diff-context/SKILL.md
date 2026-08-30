@@ -39,7 +39,7 @@ description: "Context builder for diff conversations. TWO MODES: (A) GitHub PR U
 
 1. **`gh` CLI authenticated:** Run `gh auth status` silently. If not → guide user to `gh auth login` then stop.
 2. **PR URL reachable:** Validate URL format + run a tiny `gh pr view <url> --json number,title` to confirm it exists. If 404 / 403 → stop and report.
-3. **Worktree binding optional:** If user also gave `--worktree <path>`, write/read session binding per §19 (ask if mismatch). If no worktree → proceed with GitHub only; report will be saved to `<WORKTREE_ROOT>/.trae/` if one is known, else to user's home `~/.trae/reports/`.
+3. **Worktree binding optional:** If user also gave `--worktree <path>`, write/read session binding per §19 (ask if mismatch). If no worktree → proceed with GitHub only; report will be saved to `$HARNESS_SESSION_DIR/reports/` (EFÊMERO per-session, via contract) if binding exists, else to `~/.trae/reports/`.
 
 #### A.1 Context collection (3 sources)
 
@@ -122,7 +122,7 @@ MÁXIMO 3 itens. 1 frase cada. Estes são seus tópicos pra pautar na call/comen
 
 #### A.3 Save + delivery
 Save report to:
-- Worktree known → `<WORKTREE_ROOT>/.trae/diff-context_PR-<N>_<YYYYMMDD-HHMM>.md`
+- Worktree/binding known → `$HARNESS_SESSION_DIR/reports/diff-context_PR-<N>_<YYYYMMDD-HHMM>.md` (EFÊMERO per-session)
 - Worktree unknown → `~/.trae/reports/diff-context_PR-<N>_<YYYYMMDD-HHMM>.md`
 
 Delivery to chat follows §18 shape: **📍 Status / 🧩 Resumo / 🔗 Refs / ❓ Deep-dive**.
@@ -140,9 +140,9 @@ Run BEFORE any git command.
 
 1. **`WORKTREE_ROOT` = absolute path from `--worktree` flag.**
 2. **Valid git worktree check:** `cd <WORKTREE_ROOT> && git rev-parse --is-inside-work-tree 2>/dev/null` → true. If not → stop.
-3. **Session binding file read:** Read `<WORKTREE_ROOT>/.trae/session_binding.md` if exists.
-   - If exists and `SESSION_WORKTREE_ROOT` ≠ provided path → BLOCK. Ask user: "Session binding says X but you asked Y. Proceed with Y anyway? (A = Y override; B = Switch back to X; C = Cancel)". Never silent override.
-   - If binding file missing → create canonical 4-line format. Ask user confirms worktree once.
+3. **Session binding file read:** Read `$HARNESS_SESSION_DIR/binding.md` if exists (via contract).
+   - If exists and `WORKTREE_ROOT` entry ≠ provided path → BLOCK. Ask user: "Session binding says X but you asked Y. Proceed with Y anyway? (A = Y override; B = Switch back to X; C = Cancel)". Never silent override.
+   - If binding file missing → follow §19 canonical 2-LEVEL flow (global registry Level1 + Level2 in session dir). Ask user confirms worktree once.
 
 #### B.1 Resolve BASE BRANCH (na dúvida = pergunta)
 
@@ -271,7 +271,7 @@ MÁXIMO 3, 1 frase cada:
 ```
 
 #### B.4 Save + delivery
-Save report to: `<WORKTREE_ROOT>/.trae/diff-context_LOCAL_<YYYYMMDD-HHMM>.md`
+Save report to: `$HARNESS_SESSION_DIR/reports/diff-context_LOCAL_<YYYYMMDD-HHMM>.md` (EFÊMERO per-session, via contract).
 
 Chat delivery follows §18 shape (condensed, not full dump unless asked).
 

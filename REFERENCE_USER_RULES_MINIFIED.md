@@ -17,9 +17,9 @@
 ---
 
 ## 📁 TRÊS ARQUIVOS CANÔNICOS — CONSULTE-OS SEMPRE
-1. **`/home/laion/.trae/HARNESS_RULES.md`** → Fluxo do harness, worktree-first, gates, paralelismo, PRD G1-G10, ship/gh rules.
-2. **`/home/laion/.trae/skills/engineering-contracts/SKILL.md`** → 14 regras de engenharia com precedência ordenada, DbC, TDD, SOLID, strong typing, security/PII, RLS, conventional commits, agilidade BDD, code review optimization.
-3. **`/home/laion/.trae/HARNESS_COMMANDS.md`** → 13 comandos /harness-* com sintaxe + arquitetura commands vs skills.
+1. **`/home/laion/.trae/HARNESS_RULES.md`** → Fluxo do harness, worktree-first, gates SPEC Approved, paralelismo, ship/gh rules.
+2. **`/home/laion/.trae/skills/engineering-contracts/SKILL.md`** → 18 regras de engenharia com precedência ordenada, DbC, TDD, SOLID, strong typing, security/PII, RLS, conventional commits, agilidade BDD, code review optimization, §19 Worktree Binding 2-LEVEL.
+3. **`/home/laion/.trae/HARNESS_COMMANDS.md`** → 14 comandos /harness-* com sintaxe + arquitetura commands vs skills.
 
 ---
 
@@ -32,7 +32,9 @@
 ---
 
 ## 🟥 REGRA 1: DIRETÓRIO DE SAÍDA
-- Tudo (spec, envelope, graph, decisions, summary, plans) → **`<WORKTREE_ROOT>/.trae/<task-id>/`**.
+- **DURÁVEL (multi-sessão, compartilhado worktree):** task_graph, decisions, manual_test_plan, gh_stack_plan, tasks/<task-id>/envelope → **`$HARNESS_WORKSPACE_SHARED/`** (fora worktree user, resolvido via `harness_compute_paths`).
+- **EFÊMERO (esta sessão só):** binding Level2, reports, qa/screenshots, final_summary → **`$HARNESS_SESSION_DIR/`**.
+- **MORATÓRIA HARD STOP:** NADA gerado vai em `<WORKTREE_ROOT>/.trae/*` (evita git sujo / commit acidental).
 - **NUNCA** em `docs/`, raiz do repo, ou pastas de packages a menos que usuário peça explicitamente.
 - **Corpo completo:** `HARNESS_RULES.md` §🔴 DIRETÓRIO DE SAÍDA DO HARNESS
 
@@ -75,14 +77,14 @@
 ---
 
 ## 🟠 REGRA 4: MAPEAMENTO DE COMANDOS (use o certo por fase)
-- **Início (especificação):** `/harness-prd` → PRD evidence-based com G1-G10 (UK/GDPR/GBP/RLS)
-- **Implementação feature/longa:** `/harness-start` (auto serial vs parallel) OU `/harness-parallel` (force parallel-or-bust)
+- **Início (especificação):** `/harness-spec` → SPEC otimizado p/ agente + harness (4 fontes: existente/ticket URL/PRD Flockr/inline). 7 seções + YAML frontmatter + gate Approved ANTES scope capture.
+- **Implementação feature/longa:** `/harness-start` (auto serial vs parallel) OU `/harness-parallel` (force parallel-or-bust). SM invoca `/harness-spec` automaticamente no preflight §0.5 se não houver Approved.
 - **Bug fix:** `/harness-fix` (loop científico; reproduz ANTES)
 - **Ship:** `/harness-ship` (commits atômicos conventional, push --no-verify, PR DRAFT + gh-stack se múltiplos PRs)
 - **Review/comments/CI:** `/harness-review`, `/harness-pr-comments`, `/harness-ci-fix`
 - **Operações leves:** `/harness-status`, `/harness-skip`, `/harness-decisions`, `/harness-summary`, `/harness-abort` (inline, NÃO viram skill)
 
-- **Corpo completo, sintaxe e exemplos:** `HARNESS_COMMANDS.md` (canônico; 13 comandos total)
+- **Corpo completo, sintaxe e exemplos:** `HARNESS_COMMANDS.md` (canônico; 14 comandos total)
 
 ---
 
@@ -115,15 +117,137 @@
 
 ## 🟡 REGRA 7: BLAST RADIUS 10 ARQUIVOS + DECISION LOG
 - Task tocar > 10 arquivos → justificar CADA um em decision.log.
-- Toda decisão não trivial (trade-off, exceção, arquivos não previstos, mutabilidade hot path) → `decision.log.md` com data/task-id/alternativas/razão.
+- Toda decisão não trivial (trade-off, exceção, arquivos não previstos, mutabilidade hot path) → `decisions.log.jsonl` com data/task-id/alternativas/razão.
 - **Corpo completo:** `HARNESS_RULES.md` §🟡 BLAST RADIUS + §🟡 DECISIONS LOG SEMPRE
 
 ---
 
-## 🟥 REGRA 8: PRD + PARALELISMO (corpo em HARNESS_RULES)
-- PRD: análise repo 4D (Performance/Security/Scalability/Maintainability) ANTES de perguntas. 4 lotes. G1-G10 P0 bloqueantes.
-- Paralelismo: Kahn waves + conflict graph coloring + file locks + single-writer shared artifacts. Cap 4 paralelo. Se overhead > serial, KISS vence.
-- **Corpo completo:** `HARNESS_RULES.md` §🔴 PARALELISMO + §🟣 PRD Rules
+## 🟢 REGRA 7.5: TOKEN REDUCTION (CAVEAN-STYLE 5 HEURÍSTICAS)
+**GOAL:** reduzir tokens sem perder semântica. Bypass global: `export HARNESS_FULL_OUTPUT=1`.
+| H# | Quando aplicar | Helper | Ação |
+|---|---|---|---|
+| H1 | `git diff` / `git show` output grande | `\| harness_tr_diff` | Só linhas +/- changed (sem headers ---/+++/@@). Cap HARNESS_TR_DIFF_MAX_LINES=500. |
+| H2 | Read tool de arquivo >300 linhas | `cat arquivo \| harness_tr_read TOTAL_LINES` | Trunca em 300 linhas + aviso `[...TRUNCADO lines X-Y]`. Bypass: passar offset/Limit no Read tool. |
+| H3 | Output com muitas blank lines / trailing ws | `\| harness_tr_collapse_blank` | ≥2 blank lines → 1; strip trailing whitespace. |
+| H4 | RunCommand stdout/stderr MUITO longo (builds, logs) | `\| harness_tr_stdout` | Cap chars HARNESS_TR_STDOUT_MAX_CHARS=4000 + footer aviso. |
+| H5 | Grep default metadata verbose | `harness_tr_grep PATTERN PATH [type]` | lines-only match; default context=0. Ajustar via HARNESS_TR_GREP_CONTEXT. |
+
+**Helpers definidos em:** `~/.trae/contracts/harness_sessions_contract.sh` (sourcear antes de usar).
+
+---
+
+## 🟢 REGRA 7.75: MVP SCRIPT MODE (DEEPSEEK-INSPIRED, SEM OVERENGENHARIA)
+
+**PROBLEMA:** Fluxo Read → Grep → Edit → Write demora N turnos chat-tool. Cada turno = 1 roundtrip LLM + 1 tool call = mais lento + mais caro.
+
+**REGRA MVP:** Quando o batch lógico for ≥3 tool calls QUE SÃO PURAMENTE LOCAIS (Read, cat, grep, sed, python, Write equivalente, git status/diff — tudo o que dá pra rodar em 1 RunCommand bash/node), escreva **1 script curto (≤20 linhas bash ou ≤40 linhas node)** e execute tudo em **1 ÚNICA tool call RunCommand**.
+
+### Quando usar Script Mode
+- Sim: Ler 3 arquivos, grep um pattern, fazer substituição em massa, gravar diff.
+- Sim: Criar 5 arquivos boilerplate de uma vez (com python heredoc).
+- Sim: Batch de pequenos ajustes + validação de sintaxe.
+- **NÃO usar:** Precisa de interação humana no meio, precisa de browser/UI, precisa de escrita em múltiplos worktrees.
+
+### Workflow padrão (3 passos)
+1. **Descreva o batch em 1 bullet PT-BR** antes de rodar: "Batch Script Mode: Ler A,B,C; grep pattern X; substituir old→new em A; write diff.txt report."
+2. **Escreva o script em 1 RunCommand com fail-fast:** `set -euo pipefail` + tudo atômico.
+3. **No final do script, imprima um relatório curto (≤15 linhas):** "Arquivos alterados: 3. Linhas modificadas: 12. Diff head-5: ...". Não imprima outputs gigantes.
+
+### Exemplo real (mesmo da task T1 route handler anterior)
+**ANTES (3 turnos, 3 tool calls separados):**
+- Turno1: Read `route.ts` → recebe 200 linhas
+- Turno2: Grep `fetch` no `route.ts` → recebe 5 matches
+- Turno3: Edit old_string/new_string no `route.ts`
+
+**DEPOIS (1 turno, SCRIPT MODE):**
+```bash
+# 1 RunCommand só. Todos os passos juntos. Fail-fast.
+set -euo pipefail
+WT=/home/laion/code/flockr/Lumos.worktrees/test-worktree
+FILE="$WT/apps/platform/app/api/health/route.ts"
+
+# Passo1: Ler e contar linhas (anterior = Read)
+LINES=$(wc -l < "$FILE")
+echo "INFO: route.ts tem $LINES linhas"
+
+# Passo2: Grep fetch + health pattern (anterior = Grep)
+echo "MATCHES fetch/gzip:"
+grep -nH "fetch\|gzip" "$FILE" || true
+
+# Passo3: Substituição atômica (anterior = Edit)
+python3 - "$FILE" <<'PY'
+import sys
+p = sys.argv[1]
+with open(p) as f: c = f.read()
+old = 'export const runtime = "nodejs"'
+new = 'export const runtime = "edge"\nexport const dynamic = "force-dynamic"'
+assert old in c, "old_string nao encontrado; abortando sem alterar"
+c2 = c.replace(old, new, 1)
+with open(p,"w") as f: f.write(c2)
+PY
+
+# Relatório curto (≤15 linhas)
+echo "=== BATCH OK: 1 arquivo alterado ==="
+git -C "$WT" diff --stat "$FILE"
+```
+
+### Limites MVP (NÃO implementar agora)
+- Sem worker thread isolado (isolated-vm): não precisa.
+- Sem gerar .d.ts de SDK dinâmico: não precisa.
+- Sem `run_code` transport único: reutiliza RunCommand normal.
+- Se script falhar → rollback manual ou volte para "1 tool call por vez" normal.
+
+### Anti-padrões a evitar
+- Não escreva scripts de >50 linhas: quebre em 2 batches.
+- Não imprima saídas de >2000 chars no stdout do script: aplique H4 `| harness_tr_stdout`.
+- Não misture interação dentro do script.
+
+---
+
+## 🟢 REGRA 7.8: REGISTRY DE BINDING GLOBAL É JSONL (ÚNICA FONTE: REGISTRY.JSONL)
+
+**REGISTRY_PATH canônico:** `$HOME/.trae/bindings/registry.jsonl` (**NÃO existe mais registry.md**, deletado em 2026-08-30, sem dual-write, sem drift).
+
+**1 entry = 1 linha JSONL schema v1:**
+```
+{ts ISO8601, event:BIND_BOOTSTRAP|BIND_APPEND|BIND_FLAGS_UPDATE, session_id,
+ status: BOUND|UNBOUND|FLAGS, worktree_root, workspace_name?, worktree_slug?,
+ branch?, friendly_name?, harness_session_dir?, harness_workspace_shared?,
+ workspace_file?, reason?, flags:{LANG_PT_CHECK:ENABLED|DISABLED}, data:{extra...}, _v:1}
+```
+
+**ESCRITA (única maneira permitida — NÃO use Edit/Write manual):**
+```bash
+source $HOME/.trae/contracts/harness_sessions_contract.sh
+harness_registry_append_jsonl "<sess-id>" "BOUND" "/abs/wt" \
+  '{"workspace_name":"Flockr","worktree_slug":"Lumos__x","friendly_name":"feat-abc",
+    "harness_session_dir":"/abs/sess","harness_workspace_shared":"/abs/ws",
+    "workspace_file":"/abs/Flockr.code-workspace","branch":"feat/x","reason":"sm explicit",
+    "flags":{"LANG_PT_CHECK":"DISABLED"}}'
+```
+- Dedup sha256 por linha (idempotente). JSON safe python3 heredoc.
+
+**LEITURA (única maneira — não awk/grep manual):**
+```bash
+source harness_sessions_contract.sh
+harness_registry_lookup_last "sess-abc123"  # → full JSON entry indentado
+# extrair campo:
+harness_registry_lookup_last "sess-abc123" | jq -r .worktree_root
+# flags.LANG_PT_CHECK:
+harness_registry_lookup_last "sess-abc123" | jq -r '.flags.LANG_PT_CHECK // "ENABLED"'
+```
+
+**Anti-padrões (nunca faça):**
+- ❌ `Edit $HOME/.trae/bindings/registry.jsonl old new`
+- ❌ `echo "SESSION_ID=x..." >> registry.jsonl` (sem schema)
+- ❌ awk/grep parse `WORKTREE_ROOT:` (formato legado extinto)
+
+---
+
+## 🟥 REGRA 8: SPEC + PARALELISMO (corpo em HARNESS_RULES)
+- **SPEC**: substitui PRD legacy; 4 fontes input (existente / ticket URL / PRD Flockr path / inline breve); 7 seções canônicas + YAML frontmatter required fields; gate **Approved obrigatório** ANTES scope capture no §0.5 do harness-scrum-master; override SPEC-OVERRIDE com log em decisions.
+- **Paralelismo:** Kahn waves + conflict graph coloring + file locks + single-writer shared artifacts. Cap 4 paralelo. Se overhead > serial, KISS vence.
+- **Corpo completo:** `HARNESS_RULES.md` §🔴 PARALELISMO + §🟣 SPEC Rules (gate + validation + approval loop)
 
 ---
 

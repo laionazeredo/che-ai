@@ -18,7 +18,7 @@ If found ANY:
 2. Remove or replace with env var references.
 3. If a secret was actually committed to git history (even once):
    - Recommend immediate rotation upstream (provider dashboard).
-   - Log incident + remediation action taken to `decision.log.md`.
+   - Log incident + remediation action taken to `decisions.log.jsonl`.
 
 ---
 
@@ -50,7 +50,7 @@ For EVERY new/migrated table:
 3. Default deny: with RLS enabled and zero policies, NO rows can be read/written. This is the desired starting state.
 4. Exceptions ONLY when:
    - Pure enum/reference/lookup table, immutable, public data for everyone.
-   - AND logged + user approved in `decision.log.md` (two confirmations: Non-Goals + explicit user OK).
+   - AND logged + user approved in `decisions.log.jsonl` (two confirmations: Non-Goals + explicit user OK).
 
 ---
 

@@ -177,4 +177,4 @@ Before/after comparison (screenshots / HTTP response diffs if applicable):
 
 ### Decision log entries during this session
 
-(Reference decisions appended to `<WORKTREE_ROOT>/.trae/<bug-slug>/decision.log.md`)
+(Reference decisions appended to `<WORKTREE_ROOT>/.trae/<bug-slug>/decisions.log.jsonl`)

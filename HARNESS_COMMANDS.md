@@ -16,8 +16,8 @@ The agent MUST recognize these and react immediately.
 ### Categoria A — 9 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invocam Skill correspondente:
 | Command | Skill invocada | Por que wrapper separado? |
 |---|---|---|
-| `/harness-prd` | `harness-prd-generator` | Preflight worktree + input (Linear/Jira/scope) + output location ask → then skill faz o trabalho pesado. |
-| `/harness-start` | `harness-scrum-master` | Preflight worktree → skill executa scope capture + TASK GRAPH. |
+| `/harness-spec [input] [worktree] [slug]` | `harness-spec` | Preflight binding §19 (worktree confirmado + nível 2 criado) → skill gera/valida SPEC em $HARNESS_WORKSPACE_SHARED. 4 fontes input. Gate Approved. **NÃO depende de /harness-start — roda sozinho.** |
+| `/harness-start` | `harness-scrum-master` | Preflight worktree → skill executa §0.5 SPEC GATE (auto-invoca harness-spec se não houver Approved) → scope capture + TASK GRAPH. |
 | `/harness-parallel` | `harness-scrum-master` → `harness-executor-dispatcher` | Preflight worktree + force_parallel flag + error if not parallelizable. |
 | `/harness-ship` | `harness-ship` | Preflight worktree + `gh auth` + no-secret-staged check → skill commits/push/PR. |
 | `/harness-fix` | `harness-debugger-bugfix` | Preflight worktree + capture 4 required inputs → skill roda scientific debug loop. |
@@ -32,8 +32,8 @@ The agent MUST recognize these and react immediately.
 | Command | Implementação inline | Por que NÃO é skill? |
 |---|---|---|
 | `/harness-status` | Lê `task_graph.md` → conta buckets → print status PT-BR | Skill seria 10 linhas, overhead > valor. |
-| `/harness-skip` | Append `decision.log.md` (SKIP GATE entry) + mark `task_graph.md` gate como skipped | 3 linhas de escrita de arquivos. |
-| `/harness-decisions` | Lê `decision.log.md` → sumariza PT-BR | 2 linhas read + summarize. |
+| `/harness-skip` | Append `decisions.log.jsonl` (SKIP GATE entry) + mark `task_graph.md` gate como skipped | 3 linhas de escrita de arquivos. |
+| `/harness-decisions` | Lê `decisions.log.jsonl` → sumariza PT-BR | 2 linhas read + summarize. |
 | `/harness-summary` | Usa SM logic p/ gerar interim summary structure | 8 linhas assembly summary object. |
 | `/harness-abort` | Escreve ABORTED em `session.md` + `task_graph.md` | 2 writes + confirm. |
 
@@ -44,19 +44,45 @@ The agent MUST recognize these and react immediately.
 
 ---
 
-## `/harness-start`
+## `/harness-spec [input_type:ticket|prd-flockr|desc|existing] [input_value] [worktree] [slug]`
 
-**What it does:** Triggers the full harness flow from Phase 0.
+**What it does:** Standalone entry-point for generating or validating a **Harness Execution Specification (SPEC)** — artefato de planejamento anti-alucinação/anti-scope-drift que substitui o PRD Flockr legado. Salva DURÁVEL em `$HARNESS_WORKSPACE_SHARED/spec_<slug>.md` (fora sessions/, fora worktree user). 4 fontes input aceitas: (A) SPEC Approved existente; (B) Ticket URL (Linear FLO-XXX / ClickUp / GitHub Issue); (C) PRD Flockr legado path (.md); (D) Descrição breve inline com prompts iterativos.
+**When to invoke:** User quer redigir/atualizar um SPEC **antes** do /harness-start, ou standalone para documento de planejamento, ou quando /harness-start SM §0.5 o invoca automaticamente por não haver Approved.
+**Agent action on this command:**
+1. IMMEDIATELY call `harness-spec` skill.
+2. Preflight: verifica binding §19 Level1 existente; se não houver, pergunta worktree + cria binding 2-LEVEL antes.
+3. Skill executa fluxo 4 fontes → valida §4 7 checks → loop aprovação 1-pass → save atômico temp+mv.
+4. **Retorna 2 últimas linhas parseável para SM:**
+   ```
+   SPEC_PATH=<absoluto sem quotes>
+   SPEC_STATUS=Approved|Draft
+   ```
+5. Append `[SPEC] <slug> <status> saved at <ISO>` em `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl`.
+**Syntax examples:**
+```
+/harness-spec input=ticket https://linear.app/flockr/issue/FLO-745 slug=api-fail-closed
+/harness-spec input=prd-flockr docs/prd/payments/refunds.md slug=refund-flow
+/harness-spec input=desc slug=fix-qr-scan "QR scanner nao valida ticket ja usado"
+/harness-spec input=existing slug=api-fail-closed
+```
+
+---
+
+## `/harness-start [input_type:ticket|prd-flockr|desc] [input_value] [--slug=slug]`
+
+**What it does:** Triggers the full harness flow from Phase 0. **SM §0.5 auto-invoca `/harness-spec` automaticamente se não houver SPEC Approved na worktree**, aceitando os mesmos args de input (ticket/prd/desc) e passando-os para harness-spec.
 **When to invoke:** User wants to start implementing a feature/bugfix through the simulated Agile team.
 **Agent action on this command:**
 1. IMMEDIATELY call `harness-scrum-master` skill.
-2. Scrum Master executes Pre-Flight (worktree path + task-id dir creation).
-3. Scrum Master proceeds to Scope Capture.
-4. If user provided args inline (PRD path, task slug), pass them as context.
+2. Scrum Master executes Pre-Flight (worktree path + `harness_compute_paths` → ensure_dirs + Level2 binding).
+3. **SM §0.5 SPEC GATE (antes scope capture):** Glob `$HARNESS_WORKSPACE_SHARED/spec_*.md` → parse Approved. Se 0 OU usuário forneceu input → **invoca harness-spec Skill automaticamente**, passando args de entrada do usuário (ticket/prd/desc).
+4. Captura 2 linhas retorno: `SPEC_PATH` + `SPEC_STATUS`. Gate: Approved → libera Scope Capture; Draft → oferece (A) Override `[SPEC-OVERRIDE]` logado em decisions / (B) Parar, terminar SPEC depois via `/harness-spec` standalone.
+5. Scrum Master proceeds to Scope Capture.
 **Syntax examples:**
 ```
 /harness-start "Implement Stripe Connect onboarding flow"
-/harness-start --spec=docs/prd/stripe-connect.md --slug=feat-stripe-connect
+/harness-start --slug=feat-stripe-connect input=ticket https://linear.app/flockr/issue/FLO-123
+/harness-start input=prd-flockr docs/prd/stripe-connect.md --slug=feat-stripe-connect
 ```
 
 ---
@@ -89,7 +115,7 @@ The agent MUST recognize these and react immediately.
 **Agent action:**
 1. Confirm user wants to skip this gate (ASK if reason was not provided).
 2. For `compliance-heavy`: require EXPLICIT confirmation TWICE. Print a huge warning in Portuguese: "Isso vai liberar sem checagem de segurança profunda. Continuar mesmo assim?"
-3. Append to `decision.log.md`:
+3. Append to `decisions.log.jsonl`:
    - `[<date>] [SKIP GATE] <gate> — reason: <reason> — user-approved`
 4. Proceed flow as if the gate passed (mark in TASK GRAPH: `QA_OK (SKIPPED — see decision.log)`.
 
@@ -103,7 +129,7 @@ Syntax examples:
 
 ## `/harness-decisions`
 
-**What it does:** Reads and prints (summarized) all entries from `decision.log.md` for the current session.
+**What it does:** Reads and prints (summarized) all entries from `decisions.log.jsonl` for the current session.
 **When to invoke:** User wants to review trade-offs made so far.
 
 ---
@@ -145,29 +171,6 @@ Agent action: ask confirmation first.
 
 ---
 
-## `/harness-prd <--link LINEAR_OR_JIRA_URL or --scope "text description"> [--worktree /abs/path] [--output PATH]`
-
-**What it does:** Evidence-based PRD (Product Requirements Document) generator. Different from generic PRD writers: it first runs a CRITICAL deep repo analysis (4 dimensions: Performance / Security+PII / Scalability+Data / Maintainability) against the confirmed worktree to ground the questionnaire in reality with file references, then runs a structured 4-batch questionnaire mapped 1-to-1 to the 15 sections of the repo-native PRD template (Overview, Problem, Goals/Non-Goals, User Stories, FRs, NFRs, Data Model, System Interactions, Dedup, Normalisation, ACs, Open Questions). Outputs the PRD in STRICT template format to the chosen path (default: .trae/<task-id>/prd-<slug>.md; alternative: docs/prd/<area>/<slug>.md if repo has docs/prd folder).
-**When to invoke:** You want a feature/spec/PRD written for an idea or for an existing ticket (Linear/Jira). Run BEFORE `/harness-start` / `/harness-parallel` so the harness loop has the spec to build the TASK GRAPH against.
-**Agent action:**
-1. Invoke `harness-prd-generator` skill.
-2. Preflight: confirm worktree path (ASK if missing).
-3. Preflight: collect input (linear/jira link via APIs, or free text scope).
-4. Ask user: output location (default: `.trae/<task-id>/prd-<slug>.md` vs `docs/prd/<area>/<slug>.md` vs custom).
-5. Step 1 CRITICAL REPO ANALYSIS (4 dimensions) → present evidence to user BEFORE questions.
-6. Step 2 Iterative questionnaire: 4 batches of questions (Batch 1 Strategy/Problem, Batch 2 Users/FR, Batch 3 NFR/Data/Systems, Batch 4 Dedup/Normalisation/AC/OpenQ). Wait for answers per batch.
-7. Step 3 Auto-check GAPs (G1-G10: GDPR retention, GBP pence, RLS declared, PII never raw logged, Non-Goals ≥2, permission denied AC exists, double-click AC exists, etc.). Flag P0 to user until answered.
-8. Step 4 Write PRD to chosen path in EXACT 15-section template format (never omit sections; write "N/A + why" if not applicable).
-9. Step 5 Executive review menu: edit section / answer P0 open Qs / move status from Draft → Review / save to canonical docs/prd + prep for ship.
-**Syntax examples:**
-```
-/harness-prd --link https://linear.app/flockr/issue/FLO-789
-/harness-prd --scope "Adicionar botão 1-click no dashboard do organizador para abrir Stripe Connect Dashboard, sem precisar navegar 3 telas." --worktree /abs/worktree/path
-/harness-prd --link <url> --output docs/prd/payments/stripe-dashboard-button.md
-```
-
----
-
 ## `/harness-ship`
 
 **What it does:** End-of-development ship: atomic conventional commits, push (creates remote branch if missing), opens a DRAFT PR against the default branch with a structured PR description, assigns the PR to you (the user).
@@ -184,7 +187,7 @@ Agent action: ask confirmation first.
 **Syntax examples:**
 ```
 /harness-ship
-/harness-ship --ticket FLO-123 --slug feat-stripe-connect
+/harness-ship --ticket PROJ-123 --slug feat-stripe-connect
 /harness-ship --draft-pr-title "feat(payments): Stripe Connect onboarding"
 ```
 
@@ -226,7 +229,7 @@ Agent action: ask confirmation first.
 8. If user says "suba essa review oficial": use `gh pr review` with the report as body + request-changes / comment / approve flag.
 **Syntax examples:**
 ```
-/harness-review https://github.com/myorg/myrepo/pull/42 --ticket https://linear.app/team/issue/FLO-123
+/harness-review https://github.com/myorg/myrepo/pull/42 --ticket https://linear.app/team/issue/PROJ-123
 /harness-review https://github.com/myorg/myrepo/pull/42 --scope "fix checkout 500 when empty cart"
 ```
 
@@ -277,7 +280,7 @@ Agent action: ask confirmation first.
 
 **Syntax examples:**
 ```
-/harness-manual-test --worktree /abs/path/to/worktree --task-id feat-FLO-513-Process-a-refund
+/harness-manual-test --worktree /abs/path/to/worktree --task-id feat-PROJ-123-Process-a-refund
 /harness-manual-test --worktree /abs/path --plan-path /abs/.trae/some-other/manual_test_plan.md
 ```
 
@@ -352,8 +355,8 @@ Agent action: ask confirmation first.
 
 | Command | Primary skill invoked |
 |---|---|
-| `/harness-prd` | `harness-prd-generator` (critical repo analysis → 4-batch questionnaire → strict 15-section PRD template) |
-| `/harness-start` | `harness-scrum-master` (auto-detects serial vs parallel; falls back serial if any precondition fails) |
+| `/harness-spec` | `harness-spec` (4 input sources: existing / ticket URL / PRD Flockr path / brief description; YAML frontmatter + 7 canonical sections; Approved gate; saves DURÁVEL workspace-shared; standalone ou invocado automaticamente por /harness-start SM §0.5) |
+| `/harness-start` | `harness-scrum-master` (§0.5 auto-invokes harness-spec if no Approved SPEC; auto-detects serial vs parallel; falls back serial if any precondition fails) |
 | `/harness-parallel` | `harness-scrum-master` → `harness-executor-dispatcher` (explicit parallel; ERROR if can't parallelize; no serial fallback) |
 | `/harness-ship` | `harness-ship` (commits → push → DRAFT PR → assign) |
 | `/harness-fix` | `harness-debugger-bugfix` (scientific debug loop, different from features) |
@@ -364,8 +367,8 @@ Agent action: ask confirmation first.
 | `/harness-ci-fix` | `harness-ci-fixer` (classify CI failure + minimal fix) |
 | `/harness-design` | `harness-social-ui-designer` (3 modos: Social Media / UI-UX / Design System — local open-pencil MCP equivalente Figma) |
 | `/harness-status` | Reads `task_graph.md` directly, no skill invocation needed |
-| `/harness-skip` | Updates `decision.log.md` + `task_graph.md`; tells SM to treat gate as passed |
-| `/harness-decisions` | Reads `decision.log.md` |
+| `/harness-skip` | Updates `decisions.log.jsonl` + `task_graph.md`; tells SM to treat gate as passed |
+| `/harness-decisions` | Reads `decisions.log.jsonl` |
 | `/harness-summary` | Uses SM logic to generate interim final_summary |
 | `/harness-abort` | SM writes ABORTED metadata |
 
@@ -373,7 +376,10 @@ Agent action: ask confirmation first.
 
 ## Rules for the AGENT when user issues a command
 
-1. **Worktree check FIRST.** If `/harness-*` is called but worktree is not yet confirmed → **ASK FOR WORKTREE before executing anything else.** Even if the command is just `/harness-status`.
+1. **Worktree check FIRST.** If `/harness-*` is called but worktree is not yet confirmed → **ASK FOR WORKTREE before executing anything else.** Even if the command is just `/harness-status`. EXCEÇÃO: `/harness-spec` roda binding preflight se não houver (auto-cria Level 1+2).
 2. **English for files, Portuguese for chat.** The reports printed to the user (status, decisions, warnings) are in Portuguese. The files written to disk are in English.
 3. **Do NOT invent new commands.** Only those listed above, plus any repo-local `/flockr-*` commands already defined per-worktree.
-4. **Logging.** Every command execution results in a new entry to `session.md` under `.trae/<task-id>/`.
+4. **Logging.** Every command execution results in a new entry to `session.md` under `$HARNESS_SESSION_DIR/` (resolvido via contract `harness_compute_paths`; NÃO mais em worktree/.trae — MORATÓRIA §19.1).
+5. **SPEC GATE ordem de precedência para planejamento:**
+   - `/harness-spec` standalone = apenas documento (sem scope-capture / dev), roda antes do harness-start.
+   - `/harness-start` = SM §0.5 auto-chama harness-spec SE não houver SPEC Approved, passando args input (ticket/prd/desc) do usuário; Approved libera scope-capture.

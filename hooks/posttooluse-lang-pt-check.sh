@@ -2,8 +2,9 @@
 # Hook 3 (GLOBAL WARN-only): PostToolUse — Portuguese Text Detector in written code/content
 # Behavior: NEVER blocks (exit code always 0, decision=allow or warn).
 #   - Watches Edit/Write tool operations (file writes).
-#   - Reads Level 1 registry ($HOME/.trae/bindings/registry.md):
-#       if SESSION_ID has FLAGS: LANG_PT_CHECK=DISABLED -> SKIP entirely (allow, no warn).
+#   - Reads Level 1 registry ($HOME/.trae/bindings/registry.jsonl):
+#       if SESSION_ID has flags.LANG_PT_CHECK == DISABLED -> SKIP entirely (allow, no warn).
+#       NÃO use Edit/Write direto. Sempre source harness_sessions_contract.sh + harness_registry_append_jsonl.
 #   - Otherwise: scans the WRITTEN file (toolArgs.file_path or cwd-written) for:
 #       (a) 3+ PT-BR stopwords on same file (comment/string/MD content lines), OR
 #       (b) combination of 2+ PT diacritics (ç ã õ é ê á à ó ô ú â î û ñ) with PT stopwords pattern
@@ -16,6 +17,12 @@
 # Exit code 0 ALWAYS (never blocks; warn is a signal, not a failure).
 
 set -euo pipefail
+
+CONTRACTS_SH="${HOME}/.trae/contracts/harness_sessions_contract.sh"
+if [ -f "$CONTRACTS_SH" ]; then
+  # shellcheck disable=SC1090
+  source "$CONTRACTS_SH"
+fi
 
 INPUT_JSON="$(cat)"
 
@@ -36,23 +43,32 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
-# Step 1: Check session-level disable flag from Level 1 registry
-REGISTRY_FILE="$HOME/.trae/bindings/registry.md"
+# Step 1: Check session-level disable flag from Level 1 registry JSONL
+REGISTRY_FILE="$HOME/.trae/bindings/registry.jsonl"
 PT_CHECK_ENABLED=true
-if [ -n "$SESSION_ID" ] && [ -f "$REGISTRY_FILE" ]; then
-  SESSION_ENTRIES=$(awk -v RS='---' -v sid="SESSION_ID: $SESSION_ID" '$0 ~ sid {print $0}' "$REGISTRY_FILE" 2>/dev/null || true)
-  if [ -n "$SESSION_ENTRIES" ]; then
-    # Last BOUND entry wins: look for FLAGS: ... LANG_PT_CHECK=DISABLED
-    LAST_FLAGS=$(echo "$SESSION_ENTRIES" | grep -E '^FLAGS:' | tail -1 || true)
-    if [[ "$LAST_FLAGS" == *"LANG_PT_CHECK=DISABLED"* ]]; then
-      PT_CHECK_ENABLED=false
-    fi
-  fi
+if [ -n "$SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
+  PY_SCRIPT='import json,sys
+p, sid = sys.argv[1:3]
+last = None
+with open(p) as f:
+    for ln in f:
+        ln = ln.strip()
+        if not ln: continue
+        try: e = json.loads(ln)
+        except Exception: continue
+        if e.get("session_id") == sid:
+            last = e
+if last is None:
+    print("true"); sys.exit(0)
+flags = last.get("flags") or {}
+enabled = flags.get("LANG_PT_CHECK", "ENABLED") == "ENABLED"
+print("true" if enabled else "false")'
+  PT_CHECK_ENABLED=$(python3 -c "$PY_SCRIPT" "$REGISTRY_FILE" "$SESSION_ID" 2>/dev/null || echo true)
 fi
 
-if [ "$PT_CHECK_ENABLED" = false ]; then
+if [ "$PT_CHECK_ENABLED" != "true" ]; then
   jq -nc --arg sess "$SESSION_ID" \
-        '{decision:"allow", reason: ("Hook3 lang-pt: SKIP per session Level1 registry FLAGS: LANG_PT_CHECK=DISABLED for sessionId=" + $sess)}'
+        '{decision:"allow", reason: ("Hook3 lang-pt: SKIP per session Level1 registry.jsonl flags.LANG_PT_CHECK=DISABLED for sessionId=" + $sess)}'
   exit 0
 fi
 
@@ -97,7 +113,7 @@ ADDL="ACTION REQUIRED by AGENT: AskUserQuestion to user BEFORE PROCEEDING furthe
 Padrão Flockr: código/docs/PR body em inglês por padrão. O que deseja fazer?
 (A) Traduzir conteúdo detectado para inglês (recomendado)
 (B) Manter em português (justificar e confirmar)
-(C) Desabilitar checagem de PT NESTA SESSÃO (adiciona FLAGS: LANG_PT_CHECK=DISABLED no Level 1 registry.md + Level 2 detail file)
+(C) Desabilitar checagem de PT NESTA SESSÃO (adiciona via helper `harness_registry_append_jsonl` com `"flags":{"LANG_PT_CHECK":"DISABLED"}` no Level 1 registry.jsonl + Level 2 detail file)
 Sample lines: $SAMPLE_LINES
 File analyzed: $FILE_PATH"
 

@@ -1,6 +1,6 @@
 ---
 name: "HARNESS GLOBAL RULES"
-description: "Global rules (process + flow) for the Flockr harness. Loaded as user_rules on every session. Defines worktree-first enforcement, .trae/<task-id>/ output directory, agile BDD process, GitHub/ship + gh-stack, parallelism and PRD G1-G10 critical gaps. Pure engineering rules (precedence 1-14, DbC, TDD, SOLID, strong typing, security, conventional commits, RLS, code review optimization) now live in the engineering-contracts SKILL and must NOT be duplicated here."
+description: "Global rules (process + flow) for the Flockr harness. Loaded as user_rules on every session. Defines worktree-first enforcement, .trae/<task-id>/ output directory, agile BDD process, GitHub/ship + gh-stack, parallelism and SPEC GATE RULES (4 input sources + 7 canonical sections + YAML frontmatter validation + Approved gate before scope capture). Pure engineering rules (precedence 1-14, DbC, TDD, SOLID, strong typing, security, conventional commits, RLS, code review optimization) now live in the engineering-contracts SKILL and must NOT be duplicated here."
 ---
 
 # 🌍 Harness — Global Process & Flow Rules (Always-On)
@@ -11,7 +11,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 > **Conteúdo deste arquivo (PROCESSO + FLUXO apenas — NÃO duplica regras de engenharia pura):**
 > - Regras de operação do harness: worktree-first, .trae output, ordem do time ágil, gates, timeouts
 > - Paralelismo (Kahn + conflict graph + locks)
-> - PRD generation rules + G1-G10 critical gap check (UK/GDPR/GBP/RLS)
+> - SPEC GATE RULES: 4 fontes input + 7 seções canônicas + validação frontmatter YAML obrigatório + gate Approved ANTES scope capture. Compatibilidade: PRD Flockr nativo aceito como FONTE C via harness-spec (parse headings automático).
 > - GitHub integration + ship + **gh-stack multi-PR hierárquico**
 > - Ferramentas preferenciais por integração
 >
@@ -37,20 +37,32 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 
 ## 🔴 DIRETÓRIO DE SAÍDA DO HARNESS
 
-> TUDO o que o harness produzir de documentos durante a execução (spec, tasks, envelope, decision.log, testes manuais, resumo final, PR stacks gh-stack) deve ir obrigatoriamente para `.trae/<task-id>/` DENTRO DO WORKTREE.
+> Separação estrita CÓDIGO vs DADOS. Nada gerado é escrito em `<WORKTREE_ROOT>/.trae/*` (MORATÓRIA HARD STOP, ver engineering-contracts §19.1).
+>
+> - **CÓDIGO IMUTÁVEL harness (skills/commands/hooks/user_rules/contracts):** permanece `$HOME/.trae/`.
+> - **DADOS/GERADOS/MUTÁVEIS (specs, plans, decisions, reports, evidências QA, bindings):** vão obrigatoriamente para `$HARNESS_SESSIONS_ROOT` (default `$HOME/code/harness-sessions`), **FORA DAS WORKTREES DO USUÁRIO**, sob `<WORKSPACE_NAME>/<WORKTREE_SLUG>/`.
+>
+> Contrato canônico de paths SINGLE SOURCE OF TRUTH: `source ~/.trae/contracts/harness_sessions_contract.sh` + `harness_compute_paths WORKTREE_ROOT SESSION_ID CWD`. **Proibido construir paths hardcoded.**
 
-1. Determinado o `WORKTREE_ROOT` e o `<task-id>` (slug da feature/bug):
-   - Crie imediatamente o diretório `<WORKTREE_ROOT>/.trae/<task-id>/` se ele não existir.
-2. **Arquivos obrigatórios que SEMPRE são criados neste diretório:**
-   - `session.md` — metadata da sessão
-   - `task_graph.md` — grafo completo de tarefas, dependências, status, gh-stack PR plan se >1 PR
-   - `task_envelope_<TASK-ID>.md` — UM por tarefa, antes de começar
-   - `decision.log.md` — append a cada decisão não óbvia / trade-off
-   - `manual_test_plan.md` — no final, quando todas tasks forem DONE
-   - `final_summary.md` — resumo final e estatísticas
-   - `gh_stack_plan.md` — (OPCIONAL, se múltiplos PRs parciais) → plano hierárquico de stacks gh-stack
-3. **NUNCA** crie esses arquivos em outros locais (docs/, raiz do repo, pastas de packages) a menos que usuário pede explicitamente.
-4. `.trae/` não precisa ser commitado. Se o repo já tiver `.trae/` no `.gitignore`, respeite.
+1. Determinado o `WORKTREE_ROOT` e o `SESSION_ID`:
+   - Execute `harness_compute_paths` → resolve `HARNESS_WORKSPACE_NAME` (via `.code-workspace` match cwd, fallback `default`) e `HARNESS_WORKTREE_SLUG` (padrão `RepoName__branch-slug`, separador canônico `__`).
+   - Execute `harness_ensure_session_dirs` → cria estrutura 2 diretórios por worktree **fora do código do usuário**:
+     - `$HARNESS_WORKSPACE_SHARED/` — **DURÁVEL** (várias sessões compartilham):
+       - `spec_<slug>.md` — (1+ por worktree) **Harness Execution Specification (SPEC).** 7 seções canônicas + YAML frontmatter campos obrigatórios. Gate Approved no SM §0.5. Substitui PRD legado.
+       - `task_graph.md` — grafo completo de tarefas, dependências, status, gh-stack PR plan
+       - `decisions.log.jsonl` — append a cada decisão não óbvia / trade-off (1 por worktree, não 1 por task)
+       - `manual_test_plan.md` — no final, quando todas tasks forem DONE
+       - `gh_stack_plan.md` — (OPCIONAL, se múltiplos PRs) plano hierárquico gh-stack
+       - `design/` — ADRs / design docs harness locais
+       - `tasks/<TASK_ID>/` — envelope/scope/ac, UM subdiretório por tarefa
+     - `$HARNESS_SESSION_DIR/` — **EFÊMERO** (esta sessão só):
+       - `binding.md` — Level2 detail (fora da worktree user, nunca commitado)
+       - `session.md` — metadata da sessão
+       - `reports/` — code-review, diff-context, merge-audit, batch-execution
+       - `qa/screenshots/`, `qa/logs/` — evidências Playwright/manual test
+       - `final_summary.md` — resumo final e estatísticas desta execução
+2. **NUNCA** crie esses arquivos em outros locais (docs/, raiz do repo, pastas de packages, `<WORKTREE_ROOT>/.trae/*`) a menos que usuário pede explicitamente.
+3. **NUNCA** toque `AGENTS.md` ou `CLAUDE.md` de worktree do usuário (harness altera só ~/.trae + harness-sessions).
 
 ---
 
@@ -68,7 +80,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 
 Para QUALQUER implementação de feature / bugfix com mais de um passo:
 1. **SCRUM MASTER (`harness-scrum-master`):**
-   - **Preflight 0.5** — Valida se já existe PRD Approved. Se não → recomenda rodar `/harness-prd` antes.
+   - **Preflight 0.5 (SPEC GATE — substitui PRD legado)** — Valida se já existe **SPEC Approved** em `$HARNESS_WORKSPACE_SHARED/` (glob `spec_*.md` → parse YAML `status: Approved`). Se 0 → **invoca skill `harness-spec` interativo automaticamente** (4 fontes input: existente / ticket URL / PRD Flockr path / descrição breve). Captura 2 linhas retorno: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → libera §1 scope capture; `Draft` → oferece (A) Override sem Approved append `[SPEC-OVERRIDE] <razão>` em `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` ou (B) Parar, terminar SPEC depois via `/harness-spec` standalone.
    - **Entende escopo → valida ACs →** (se grande) **planeja gh-stack multi-PR** → monta TASK GRAPH (ou aprova lista existente) → cria TASK ENVELOPE por task.
 2. **DEVELOPER (`harness-developer`):** SOMENTE chamado por SM, com ENVELOPE formal.
    - Primeiro invoca `engineering-contracts`.
@@ -88,19 +100,21 @@ Para QUALQUER implementação de feature / bugfix com mais de um passo:
 
 - Se uma task for modificar MAIS de 10 arquivos (novos ou editados):
   1. PARE.
-  2. Adicione entrada em `decision.log.md` justificando CADA arquivo.
+  2. Adicione entrada em `decisions.log.jsonl` justificando CADA arquivo.
   3. Volte para SM que avalia se é necessário mesmo ou se deve requebrar (via gh-stack múltiplos PRs parciais).
-- Adicionalmente: se uma task tocar arquivo FORA da lista "blast radius" do ENVELOPE → entrada obrigatória em `decision.log.md` + aprovação SM ANTES de seguir.
+- Adicionalmente: se uma task tocar arquivo FORA da lista "blast radius" do ENVELOPE → entrada obrigatória em `decisions.log.jsonl` + aprovação SM ANTES de seguir.
 
 ---
 
 ## 🟡 DECISIONS LOG SEMPRE
 
 Sempre que você tomar uma decisão não trivial (trade-off, exceção a regra, arquivos não previstos, mutabilidade em hot path, RLS policy em nova tabela, escolha de criar multi-PR stack vs single PR, etc.):
-1. Escreva em `<WORKTREE_ROOT>/.trae/<task-id>/decision.log.md`.
-2. Formato: `[YYYY-MM-DD HH:MM] [TASK-ID] <título curto>` → depois detalhe + alternativas consideradas + porquê escolheu.
+1. **USE HELPER OFICIAL:** `source ~/.trae/contracts/harness_sessions_contract.sh && harness_append_decision_jsonl "$WORKTREE_ROOT" "EVENT_TYPE" '{"key":"value"}'`.
+   - Único ponto de append (dedup, JSON safe, schema v1). Single source: `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl`.
+   - NÃO use Edit/Write manual do JSONL (risco quoting quebrado / semicol / sem dedup).
+2. Para consultar human-readable → `/harness-decisions` ou Skill `harness-decisions-query` (summary PT-BR / filtros / export CSV).
 
-Isso previne "por que diabos isso foi feito assim?" 2 meses depois.
+> **Regra:** 1 arquivo `decisions.log.jsonl` por worktree-slug, compartilhado entre sessões. NÃO há versão .md companion (risco drift/ambiguidade). Parseia via skill se precisar.
 
 ---
 
@@ -133,20 +147,21 @@ Em QUALQUER loop/iterações entre agentes, a regra é:
 
 ### Preflight obrigatório (ANTES de qualquer comando, leitura de arquivo, git operation, Glob/Grep):
 
-1. **Ler Level 1 GLOBAL INDEX (resolver chicken-and-egg):** Ler `$HOME/.trae/bindings/registry.md`. Procurar ÚLTIMA entrada STATUS=BOUND com SESSION_ID=<atual>. Extrair WORKTREE_ROOT dessa entrada.
+1. **Ler Level 1 GLOBAL INDEX (resolver chicken-and-egg):** Ler `$HOME/.trae/bindings/registry.jsonl`. Procurar ÚLTIMA entrada STATUS=BOUND com SESSION_ID=<atual>. Extrair WORKTREE_ROOT dessa entrada.
    - Se encontrar → usar WORKTREE_ROOT dele como SCOPE ABSOLUTO sessão.
    - Se NÃO encontrar → seguir regra §19.2 (ordem precedência: menção explícita user → arquivos abertos → env workdirs → AskUserQuestion com ≤2 opções. Perguntar sempre ambíguo; NUNCA chute.
 
-2. **Escrever binding em BOTH LEVELS após primeira aprovação (atomically:**
-   - **Level 1:** Append (append-only entry to `registry.md with delimiter ---`. NEVER overwrite BOUND entries (keep history).
-   - **Level 2:** Inside bound worktree: mkdir `.trae/bindings/; write `session-<SESSION_ID>.md (PER SESSION_ID).
+2. **Escrever binding em BOTH LEVELS após primeira aprovação (atomically):**
+   - **Level 1:** Append via helper OFICIAL `source harness_sessions_contract.sh && harness_registry_append_jsonl <sid> BOUND <wt> <payload>` p/ `registry.jsonl` (NÃO use Edit/Write manual). Append-only, NUNCA sobrescreve BOUND entries (mantém histórico). Payload fields opcionais: `"friendly_name":"slug-curto"` (perguntar 1x antes de criar HARNESS_SESSION_DIR; se dado SESSION_DIR ganha sufixo `--<friendly>`), `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}`, `"workspace_name"`, `"worktree_slug"`, `"branch"`, `"harness_session_dir"`, `"harness_workspace_shared"`, `"workspace_file"`, `"reason"`.
+   - **Level 2:** **FORA DA WORKTREE DO USUÁRIO** → `$HARNESS_SESSION_DIR/binding.md` (resolvido via contract). Histórico/auditoria re-binding chain + mirror FLAGS + FRIENDLY_NAME p/ leitura humana. Fields NOVOS obrigatórios Level2: `WORKSPACE_NAME`, `WORKTREE_SLUG`, `HARNESS_SESSION_DIR`, `HARNESS_WORKSPACE_SHARED`.
    - 2 arquivos criados. 1 por SESSION_ID.
-   - Mais detalhes contract re-binding corpo está em contracts §19. Aqui só gates processo/enforcement. Aqui gate do harness.
+   - Mais detalhes contract re-binding corpo está em contracts §19. Aqui só gates processo/enforcement.
 
-3. **Scissor check A CADA OPERAÇÃO de arquivo / git (agente + hook 1 global (automático:**
-   - Dupla verificação. 2 camadas. Alvo path começa com WORKTREE_ROOT? Se NÃO → BLOQUEAR.
+3. **Scissor check A CADA OPERAÇÃO de arquivo / git (agente + hook 1 global (automático)):**
+   - Dupla verificação. 2 camadas. Alvo path começa com `WORKTREE_ROOT` OU `HARNESS_SESSIONS_ROOT`? Se **nenhum** dos dois → BLOQUEAR.
+   - Arquivos em `$HARNESS_SESSIONS_ROOT/**` SEMPRE são permitidos após binding criado; não precisa de pergunta por operação.
    - Saídas: (a) user confirma "sim, escrever fora scope logged decision.log, ou (b) perguntar Switch worktree? A = Switch / B = Cancel operação".
-   - **Nunca operar cross-worktree silenciosamente (ler ou escrever).
+   - **Nunca operar cross-worktree silenciosamente (ler ou escrever).**
 
 4. **Trocar worktree re-bind:**
    - Confirmação EXPLÍCITA do user: Sim, trocar X agora".
@@ -157,10 +172,10 @@ Em QUALQUER loop/iterações entre agentes, a regra é:
    - Se draft output tem refs clickable ≥2 worktrees DIFERENTES E user NÃO pediu comparação → PARAR. Apagar refs worktree incorreto. Manter apenas refs do BOUND WORKTREE_ROOT.
 
 > **Enforcement AUTOMÁTICO GLOBAL (§19 2-LEVEL LAYOUT):**
->   - **Level 1 (GLOBAL INDEX resolver chicken-and-egg + FLAGS per sessão):** `$HOME/.trae/bindings/registry.md` — entry por SESSION_ID, append-only, NÃO por worktree. `SESSION_ID → WORKTREE_ROOT` lookup sem precisar conhecer worktree. Field opcional `FLAGS: LANG_PT_CHECK=DISABLED` (omitido=ENABLED) para Hook3 por sessão.
->   - **Level 2 (PER-SESSION DETAIL inside worktree):** `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md` — histórico/auditoria re-binding chain + mirror FLAGS p/ leitura humana.
->   - **Hook 1 (PreToolUse):** [pretooluse-worktree-binding.sh](file:///home/laion/.trae/hooks/pretooluse-worktree-binding.sh) em [hooks.json](file:///home/laion/.trae/hooks.json#L5) — usa SÓ Level 1 para scissor check. Zero lock contention, resolve catch22, multi-sessão paralela works.
->   - **Hook 3 (PostToolUse WARN-only):** [posttooluse-lang-pt-check.sh](file:///home/laion/.trae/hooks/posttooluse-lang-pt-check.sh) em [hooks.json](file:///home/laion/.trae/hooks.json#L22) — detecta texto PT-BR em arquivos escritos via Edit/Write (4+ stopwords PT OU 2+ linhas c/ acentos + 2 stopwords). NUNCA corrige automaticamente, NUNCA bloqueia (exit0 sempre). Decision=warn + adicionalContext instrui agente a **AskUserQuestion obrigatório**: (A) Traduzir p/ inglês, (B) Manter PT confirmado, (C) Desabilitar Hook3 nesta sessão (append flag `FLAGS: LANG_PT_CHECK=DISABLED` no Level 1 registry + Level 2 mirror).
+>   - **Level 1 (GLOBAL INDEX resolver chicken-and-egg + FLAGS + FRIENDLY_NAME por sessão):** `$HOME/.trae/bindings/registry.jsonl` — entry por SESSION_ID, append-only, NÃO por worktree. `SESSION_ID → WORKTREE_ROOT` lookup sem precisar conhecer worktree. ÚNICO writer = helper `harness_registry_append_jsonl` (nunca Edit/Write manual). Payload opcional: `"friendly_name":""`, `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}` (omitido=ENABLED p/ Hook3 por sessão).
+>   - **Level 2 (PER-SESSION DETAIL — FORA DA WORKTREE USER):** `$HARNESS_SESSION_DIR/binding.md` (não mais dentro de `<WORKTREE_ROOT>/.trae/bindings/`) — resolve via contract `harness_compute_paths` → `harness_level2_binding_path`. Histórico/auditoria re-binding chain + mirror FLAGS + FRIENDLY_NAME p/ leitura humana. Nunca commitado por construção.
+>   - **Hook 1 (PreToolUse):** [pretooluse-worktree-binding.sh](file:///home/laion/.trae/hooks/pretooluse-worktree-binding.sh) em [hooks.json](file:///home/laion/.trae/hooks.json#L5) — usa SÓ Level 1 para scissor check. **EXCEÇÃO:** paths em `$HARNESS_SESSIONS_ROOT/**` são permitidos (não código do usuário). Zero lock contention, resolve catch22, multi-sessão paralela works.
+>   - **Hook 3 (PostToolUse WARN-only):** [posttooluse-lang-pt-check.sh](file:///home/laion/.trae/hooks/posttooluse-lang-pt-check.sh) em [hooks.json](file:///home/laion/.trae/hooks.json#L22) — detecta texto PT-BR em arquivos escritos via Edit/Write (4+ stopwords PT OU 2+ linhas c/ acentos + 2 stopwords). NUNCA corrige automaticamente, NUNCA bloqueia (exit0 sempre). Decision=warn + adicionalContext instrui agente a **AskUserQuestion obrigatório**: (A) Traduzir p/ inglês, (B) Manter PT confirmado, (C) Desabilitar Hook3 nesta sessão (append `"flags":{"LANG_PT_CHECK":"DISABLED"}` via helper oficial no Level 1 registry.jsonl + Level 2 mirror).
 
 ---
 
@@ -271,7 +286,7 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 |---|---|---|
 | GitHub | `gh` CLI + `gh-stack` (hierarquia multi-PR) | Sem navegador para API calls. Navegador só para UI de review visual se pedido. |
 | Jira / Confluence | API REST via `DO_JIRA_*` / `DO_CONFLUENCE_*` env vars | Sempre checar presença de vars. |
-| Linear | GraphQL API → `FLOCKR_LINEAR_API_KEY` env var | Sempre checar presença. |
+| Linear | GraphQL API → `LINEAR_API_KEY` env var | Sempre checar presença. |
 | Figma | Figma REST API → `LAION_FIGMA_PAT` env var | Sempre checar. |
 | Railway | `railway` CLI | 1º uso: checkar conta logada + perguntar ao usuário se mantém. |
 | Vercel | `vercel` CLI | 1º uso: checkar conta logada + perguntar ao usuário se mantém. |
@@ -363,66 +378,16 @@ KISS ganha sempre. Parallel é OTIMIZAÇÃO, não OBRIGATORIEDADE.
 
 ---
 
-## 🟣 PRD — Regras de Geração (Análise Crítica + Questionário Iterativo)
-
-### Regra 0 — Análise de repo ANTES de qualquer pergunta
-- `/harness-prd` NÃO começa com perguntas de produto.
-- PRIMEIRO: rodar análise 4 dimensões (Performance, Security+PII, Scalability+Data, Maintainability) EVIDENCE-BASED (nomes de arquivos, linhas, padrões reais do worktree).
-- Apresentar resumo executivo das 4 dimensões ao usuário EM PORTUGUÊS, com severidade por área + HIGH findings, ANTES da 1ª pergunta.
-- Sem análise → não começa questionário. Hard blocker.
-
-### Regra 1 — Fluxo rígido: 4 lotes de perguntas (não despeja tudo de uma vez)
-- **Batch 1 (estratégia)**: Overview + Problem + Goals + Non-Goals. Espera respostas → follow-ups clarificantes.
-- **Batch 2 (usuários + FRs)**: User stories table + FRs com edge cases + Idempotency/double-click.
-- **Batch 3 (qualidade + dados + sistemas)**: NFR table + Data Model (tables + RLS) + Migrations + System Interactions + Mermaid.
-- **Batch 4 (dedup + normalização + AC + open Qs)**: Dedup rules + Normalisation (GBP pence integer, UTC/London, E.164, email lowercase, UK postcode) + Acceptance Criteria checklist + Open Questions P0/P1/P2.
-
-### Regra 2 — NUNCA pula seção do template; N/A com justificativa se não aplicável
-- Template de 15 seções: Overview, Problem, Goals, Non-Goals, User Stories, FRs, NFRs, Data Model, System Interactions, Dedup, Normalisation, ACs, Open Questions.
-- Se seção for "não aplicável", escrever `N/A — <1 frase explicando POR QUE não aplicável>` (ex: "N/A — feature é UI-only redirect, não altera banco de dados.").
-
-### Regra 3 — Critical Gap Auto-Check (G1-G10) ANTES de montar PRD final
-Depois de colher respostas, checar OBRIGATORIAMENTE:
-
-| Gap | O que valida | Falha = P0? |
-|---|---|---|
-| G1 | User stories tem persona attendente OU declarado explicitamente "admin-only" em Non-Goals | ✅ P0 se audiências mistas |
-| G2 | NFR data retention: GDPR UK default 12 meses ou 6 anos contábeis | ✅ P0 risco ICO |
-| G3 | Moeda = GBP Pence Integer em NFR + Data Model + Normalisation (NUNCA float) | ✅ P0 £ bug 0.01 |
-| G4 | Nova tabela tem ENABLE RLS + Supabase/Postgres policies declaradas em Data Model + AC | ✅ P0 Flockr obrigatório RLS (ver também `engineering-contracts` §17 — regra global de RLS default) |
-| G5 | PII raw nunca logado declarado em NFR Observability (hash + pattern) | ✅ P0 UK GDPR |
-| G6 | Double click / idempotency AC existe | 🟡 P1 duplicações |
-| G7 | Permission denied (403) AC existe por role | ✅ P0 segurança |
-| G8 | Non-Goals tem ≥2 itens explícitos OOS | 🟡 P1 scope creep |
-| G9 | Serviço externo falha = retry policy + degrade vs hard-fail | 🟡 P1 / P0 se money |
-| G10 | Open Questions P0 > 3 | Se sim → fechar P0 ANTES de marcar PRD "Review" |
-
-Qualquer P0 não resolvido = NÃO monta PRD. Loop de volta até fechar.
-
-### Regra 4 — Ordem de execução recomendada
-Fluxo de trabalho ideal (não obrigatório, mas sugerido):
-```
-1. /harness-prd → gera PRD Draft (com análise crítica + questionário)
-2. Stakeholder review → fecha Open Questions P0
-3. /harness-prd edita → move status: Draft → Review → Approved
-4. (SM valida approved PRD no preflight 0.5) → /harness-start OU /harness-parallel com PRD approved → decompõe TASK GRAPH → executa
-   - Se scope grande durante TASK GRAPH → SM planeja gh-stack multi-PR e salva gh_stack_plan.md p/ aprovação
-5. /harness-ship → (single OU stack) commit(s) atômico(s) + push + PR(s) DRAFT(s) hierárquicos via gh-stack
-6. /harness-review + /harness-pr-comments → ciclo de code review
-7. /harness-ci-fix (se CI quebrar) → finaliza
-```
-
----
-
 ## 🌍 COMMANDS & SKILLS ARCHITECTURE REFERENCE
 
-> **A referência COMPLETA + sintaxe + exemplos dos 13 comandos está em:** `HARNESS_COMMANDS.md` (canônico). NÃO DUPLICAR aqui.
+> **A referência COMPLETA + sintaxe + exemplos dos 14 comandos está em:** `HARNESS_COMMANDS.md` (canônico). NÃO DUPLICAR aqui.
 >
-> Visão rápida (13 comandos total):
-> - 8 **pesados (workflow)** → wrapper de validação preflight + `Skill(...)`:
->   `/harness-prd` | `/harness-start` | `/harness-parallel` | `/harness-ship` | `/harness-fix` | `/harness-review` | `/harness-pr-comments` | `/harness-ci-fix`
+> Visão rápida (14 comandos total):
+> - 9 **pesados (workflow)** → wrapper de validação preflight + `Skill(...)`:
+>   `/harness-spec` | `/harness-start` | `/harness-parallel` | `/harness-ship` | `/harness-fix` | `/harness-review` | `/harness-diff` | `/harness-manual-test` | `/harness-pr-comments` | `/harness-ci-fix` | `/harness-design`
 > - 5 **leves (operação em arquivo)**: inline, NÃO viram skill (ler/escrever markdown, KISS → não criar skill de 3 linhas):
 >   `/harness-status` | `/harness-skip` | `/harness-decisions` | `/harness-summary` | `/harness-abort`
+> - Contagem atualizada: consultar `HARNESS_COMMANDS.md` §Architecture Commands vs Skills para Category A (heavy) + Category B (light) exata.
 > - Corpo completo mapping command → skill + arquitetura explicada: `HARNESS_COMMANDS.md` §Architecture Commands vs Skills.
 
 ---

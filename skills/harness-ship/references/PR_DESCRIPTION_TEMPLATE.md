@@ -21,8 +21,8 @@
      Risk areas: Security-sensitive / Performance-sensitive / Blast-radius (DDL migration) / Cross-module coupling / Concurrency correctness -->
 
 - **Security-sensitive:** `packages/auth/src/...` — JWT role check added for the new admin endpoint
-- **Blast-radius risky:** migration `YYYYMMDD-name.sql` — adds index to high-traffic `ticket_scans` table
-- **Cross-module:** touches `@flockr/db` entity + `@flockr/platform` service together; confirm coupling is intentional
+- **Blast-radius risky:** migration `YYYYMMDD-name.sql` — adds index to high-traffic `orders` table
+- **Cross-module:** touches `@myorg/db` entity + `@myorg/web` service together; confirm coupling is intentional
 
 ## 💥 Breaking changes
 
@@ -40,10 +40,10 @@
      Unit/E2E = concrete command pointing to specific test.
      Manual = 2-3 steps, concrete, no vagueness. -->
 
-- **Unit:** `corepack pnpm nx run db:test --tui false -- src/refund-pipeline.test.ts` (covers refund eligibility + ledger entries)
-- **Manual:** (1) `pnpm nx run platform:dev`, (2) open event `FLO-513-sandbox`, (3) refund a paid ticket → dashboard shows "Refunded" + ledger debit line visible
-- **Full plan:** `./.trae/FLO-513-refund/manual_test_plan.md`
+- **Unit:** `pnpm test packages/db/src/refund-pipeline.test.ts` (covers refund eligibility + ledger entries)
+- **Manual:** (1) `pnpm dev`, (2) open event `PROJ-123-sandbox`, (3) refund a paid order → dashboard shows "Refunded" + ledger debit line visible
+- **Full plan:** `./.trae/PROJ-123-refund/manual_test_plan.md`
 
 ## 🔗 Refs
 
-- **Linear ticket:** `FLO-123` — https://linear.app/flockr/issue/FLO-123/slug
+- **Issue tracker ticket:** `PROJ-123` — https://linear.app/myorg/issue/PROJ-123/slug

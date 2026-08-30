@@ -33,12 +33,12 @@ It is invoked by `harness-developer` FIRST, and its rules **trump local repo con
 If you detect a security or PII leak risk:
 1. **DO NOT write that code** in that form.
 2. Stop and design a safer version.
-3. If unsure → log to `decision.log.md` + escalate.
+3. If unsure → log to `decisions.log.jsonl` + escalate.
 
 - Never log secrets, API keys, raw passwords, JWTs, session tokens.
 - Never persist or log raw recipient email addresses or email bodies. Use hashing for correlation.
 - Never log full environment variables, especially with keys/secrets.
-- **Supabase Postgres DEFAULT RULE (see also §17):** Every NEW table created MUST have Row Level Security (RLS) enabled + explicit policies defined. Tables without RLS are blocked unless explicit exception logged + user approved in `decision.log.md` + Non-Goals of PRD.
+- **Supabase Postgres DEFAULT RULE (see also §17):** Every NEW table created MUST have Row Level Security (RLS) enabled + explicit policies defined. Tables without RLS are blocked unless explicit exception logged + user approved in `decisions.log.jsonl` + Non-Goals of PRD.
 
 ### 3. 🟠 REPO EXISTING STYLE & CONVENTIONS (win unless undefined)
 
@@ -201,7 +201,7 @@ Rules enforced on EVERY implementation:
      - 1-line isolated inline comments not forming a contiguous block.
    - **If you need 3+ consecutive comment lines to explain something:**
      - That is a *code smell*. The code is too complex. Refactor into smaller, clearly-named functions.
-     - If still needed (e.g. workaround for a very specific library bug): **LOG an exception in `decision.log.md`, with justification.**
+     - If still needed (e.g. workaround for a very specific library bug): **LOG an exception in `decisions.log.jsonl`, with justification.**
 3. **Code review mindset — write comments as if you're the reviewer.**
    - What questions would a reviewer ask? Answer them in the function name, not in a comment.
    - Ship PR body explains WHAT and WHY, not HOW (how = code).
@@ -215,11 +215,11 @@ Rules enforced on EVERY implementation:
 Rule:
 1. **For EVERY new table:** immediately add `ALTER TABLE <schema>.<table> ENABLE ROW LEVEL SECURITY;` in the migration.
 2. **Define explicit read/write policies per role** (e.g. `organizer_select_policy`, `admin_all_policy`). A table with RLS enabled but ZERO policies = no rows can be read/written (default deny) — good.
-3. **Add an Acceptance Criteria in the PRD spec (if using harness-prd) specifically for RLS:** e.g. `AC-RLS: Organizer A cannot read or write tickets/events owned by Organizer B (403 or 404 as appropriate).` This is validated during QA.
+3. **Add an Acceptance Criteria in the SPEC (if using harness-spec standalone or /harness-start SM §0.5 SPEC gate) specifically for RLS:** e.g. `- [MUST] AC-RLS GIVEN Organizer A authenticated WHEN querying tickets/events owned by Organizer B THEN HTTP 403 or 404 returned | TEST=qa_integration` literal format in §4. This is validated during QA.
 4. **ONLY exception (allowed logged + user approved double confirmation):**
    - Pure lookup tables (enum reference tables, immutable public seed data for everyone) → RLS not needed, BUT:
      - Explicitly mark in Non-Goals / Data Model notes.
-     - Log exception + user approval in `decision.log.md`
+     - Log exception + user approval in `decisions.log.jsonl`
      - Table name + reason documented in migration notes.
 
 ---
@@ -271,63 +271,115 @@ Canonical output:
 
 > **This rule controls worktree scoping during a chat session. It is a HARD SCISSORS rule — violating it causes wrong-code commits on wrong worktrees (data loss). Higher precedence than "be helpful / be efficient" defaults. Lower precedence only than safety rules (§2 Security / §6 DbC). It applies to ALL harness skills and direct chat file operations.**
 
+#### 19.1 HARNESS SESSIONS ROOT (PATH CONTRACT — all mutable/generated data lives here)
+
+**Immutable harness code (skills, commands, hooks, rules, references) STAYS in `$HOME/.trae/`.** Never put generated output there.  
+**Generated output (session bindings, task graphs, decisions, QA evidence, design docs, summaries) MUST LIVE under `$HARNESS_SESSIONS_ROOT` (default: `$HOME/code/harness-sessions`).** One flat parent folder per user.
+
+Path layout (CANONICAL — all skills/commands MUST build paths by calling the contract script `$HOME/.trae/contracts/harness_sessions_contract.sh`; NEVER hardcode):
+```
+$HARNESS_SESSIONS_ROOT/
+└── <WORKSPACE_NAME>/                            # Ex: Flockr  (from Flockr.code-workspace)
+    └── <WORKTREE_SLUG>/                         # CANONICAL <repo>__<branch-or-worktree-basename>  (2 underscores)
+        │                                        #   Lumos worktree pattern: parent dir Lumos.worktrees/<slug> → slug = Lumos__<slug>
+        │                                        #   Plain repo pattern: git dir Lumos, branch feat/X → slug = Lumos__feat--X
+        ├── workspace/                           # DURÁVEL / per-worktree. Compartilhado entre múltiplas sessões. NUNCA apaga.
+        │   ├── task_graph.md                    # (OBSOLETE per-task layout: agora um task_graph compartilhado por worktree por task-id)
+        │   ├── decisions.log.jsonl                 # trade-offs / exceções / non-obvious decisions
+        │   ├── gh_stack_plan.md                 # se ≥3 tasks ou >15 arquivos
+        │   ├── manual_test_plan.md              # plano manual de smoke/QA
+        │   ├── design/                          # (seu item 4:) documentos de design do harness, ADRs, figures
+        │   └── tasks/<TASK_ID>/                 # arquivos PER-TASK duráveis (envelope, scope, acceptance criteria)
+        │
+        └── sessions/
+            └── <SESSION_ID>/                    # EFÊMERO / per-sessão. Apagável após sessão fechar (exceto binding history audit).
+                ├── binding.md                   # Level 2 DETAIL (§19.3) — audit/rebind chain
+                ├── qa/                          # evidências de /harness-manual-test
+                │   ├── screenshots/*.png
+                │   └── logs/*.jsonl
+                ├── reports/                     # PR review reports, diff reports, batch reports
+                └── summary.md                   # re-summaries / milestones da sessão
+
+RESOLVER (authoritative): `$HOME/.trae/contracts/harness_sessions_contract.sh`
+  - source harness_sessions_contract.sh
+  - harness_compute_paths <WORKTREE_ROOT> <SESSION_ID> <current-cwd>
+  - exports: HARNESS_WORKSPACE_NAME / HARNESS_WORKTREE_SLUG / HARNESS_WORKSPACE_SHARED / HARNESS_SESSION_DIR / HARNESS_LEVEL2_BINDING
+  - ensure dirs: harness_ensure_session_dirs
+```
+
+MORATÓRIA (hard stop): NENHUM arquivo `.md` ou `.json` ou `.png` gerado pelo harness é escrito em `<WORKTREE_ROOT>/.trae/*` a partir de agora. Isso evita git status sujo / commit acidental de evidências de QA / decisions / etc.
+
 Binding contract:
 
 1. **1 session ↔ 1 WORKTREE_ROOT by default.**
    - The very first operation of a harness flow (or first file access in a worktree scoped session) MUST produce a binding decision: which absolute worktree path is this session attached to?
-   - **2-LEVEL LAYOUT (resolves chicken-and-egg + multi-session parallelism + zero race condition + per-session FLAGS:**
-     - **Level 1 (GLOBAL INDEX / CHICKEN-AND-EGG SOLVER):** 1 unique per user, outside worktrees. Path: `$HOME/.trae/bindings/registry.md`. One entry per SESSION_ID, append-only (never overwrite, just add new lines).
+   - **MOVE FORWARD: O usuário deve ser perguntado qual o FRIENDLY_NAME da pasta desta sessão imediatamente após binding ser criado. Regra: Pergunta 1 única, no momento em que binding é criado: "Qual o nome amigável dessa pasta (slug short)?". Resposta user é salva em Level1 campo FRIENDLY_NAME e vira sub-papel de SESSION_DIR se definido. NÃO é obrigatório.**
+   - **2-LEVEL LAYOUT (resolves chicken-and-egg + multi-session parallelism + zero race condition + per-session FLAGS + never pollutes worktree git status:**
+     - **Level 1 (GLOBAL INDEX / CHICKEN-AND-EGG SOLVER):** 1 unique per user, outside worktrees + sessions dir. Path: `$HOME/.trae/bindings/registry.jsonl`. One entry per SESSION_ID, append-only (never overwrite, just add new lines).
        ```
        SESSION_ID: <session-identifier-from-ide>
        WORKTREE_ROOT: <absolute path>
        TASK_ID: <slug or manual>
+       FRIENDLY_NAME: <optional slug-for-user, pergunta na hora do binding>
        BOUND_AT: <ISO timestamp>
        STATUS: BOUND
        FLAGS: LANG_PT_CHECK=DISABLED   (optional line — OMIT line entirely when default ENABLED)
        ---
        ```
-       Optional FLAGS field (OMIT when defaults suffice — keep registry minimal):
+       Optional fields (OMIT when defaults suffice — keep registry minimal):
        - `LANG_PT_CHECK=DISABLED`: Disables the PostToolUse Portuguese-text detector hook for THIS SESSION ONLY. When line omitted → default ENABLED (hook runs normally). Hook 3 reads this flag per SESSION_ID from Level 1.
-     - **Level 2 (PER-SESSION DETAIL / IN-WORKTREE DATA FILE):** 1 file per session, inside bound worktree. Path: `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md. Stores re-binding chain history & audit (PREV/NEXT only if worktree switched)+ FLAGS mirror for human readability. Not used for hook scissor checks (only SM/Ship/Dev read it for re-binding audit).
+       - `FRIENDLY_NAME`: short slug. Se user forneceu no momento do binding, HARNESS_SESSION_DIR vira `<WORKTREE>/sessions/<SESSION_ID>--<FRIENDLY_NAME>/` (facilita navegação humana).
+     - **Level 2 (PER-SESSION DETAIL / SESSIONS DIR — NUNCA DENTRO DA WORKTREE DO USUÁRIO):** 1 file per session, **inside the sessions dir da worktree DENTRO DE $HARNESS_SESSIONS_ROOT.** Canonical path:
+       ```
+       $HARNESS_SESSIONS_ROOT/<WORKSPACE>/<WORKTREE_SLUG>/sessions/<SESSION_ID>[--<FRIENDLY_NAME>]/binding.md
+       ```
+       Stores re-binding chain history & audit (PREV/NEXT only if worktree switched)+ FLAGS mirror for human readability. Not used for hook scissor checks (only SM/Ship/Dev read it for re-binding audit).
        ```
        SESSION_ID: <session-identifier>
        WORKTREE_ROOT: <absolute path>
        TASK_ID: <slug>
+       FRIENDLY_NAME: <same as Level 1 if provided; omit if default>
        BOUND_AT: <ISO timestamp>
        STATUS: BOUND
        FLAGS: LANG_PT_CHECK=DISABLED   (same value as Level 1 if set; omit line if default)
+       WORKSPACE_NAME: <canonical from .code-workspace>
+       WORKTREE_SLUG: <canonical repo__branch>
+       HARNESS_SESSION_DIR: <absolute>  (facilita debug)
+       HARNESS_WORKSPACE_SHARED: <absolute>
        # PREV_BINDING: <old detail md path> (after first switch)
        # NEXT_BINDING: <new detail md path> (after switch)
        ```
    - Write once into BOTH during initial binding decision:
-     1. Append Level 1 entry in registry.md (add Level 2 file inside the bound worktree (idempotent: don't duplicate for same SESSION_ID + STATUS=BOUND already in registry).
-   - Scissor checks (hook 1) ONLY use Level 1 registry index; never enter worktree to lookup. If SESSION_ID not in Level 1 → binding doesn't exist yet (agent proceeds to binding decision flow (§19.2).
+     1. Append Level 1 entry via HELPER OFICIAL: `source harness_sessions_contract.sh && harness_registry_append_jsonl <sid> BOUND <wt_root> <payload_json>`. Add Level 2 file inside `$HARNESS_SESSIONS_ROOT/...` (use resolver contract `harness_compute_paths`). Idempotência built-in: helper deduplica por conteúdo sha256, não duplica mesma entry SESSION_ID+STATUS=BOUND já existente. NÃO use Edit/Write manual no registry.jsonl.
+   - Scissor checks (hook 1) ONLY use Level 1 registry index; never enter sessions dir to lookup. If SESSION_ID not in Level 1 → binding doesn't exist yet (agent proceeds to binding decision flow §19.2).
 
 2. **Initial binding decision rules (order of precedence — STOP at first match):**
    a. **Explicit user mention:** User said "worktree X" or gave a path → BIND TO X. Confirm once.
    b. **Open files / context window:** User has 1+ files open that are all inside the same worktree → BIND to that worktree. (If files span 2+ worktrees → fall to c.)
    c. **Working directories in <env>:** If there is a single most-relevant working directory (check recent session memory / prior messages) → propose it; else GO TO (2e).
-   d. **Binding file exists in a worktree mentioned anywhere in recent messages:** Use that.
+   d. **Binding file exists in sessions dir matched via contract resolver:** Use that.
    e. **Ambiguous (≥2 candidates or 0 clear matches):** STOP. Do NOT guess. Use AskUserQuestion with ≤2 concrete options + "other (type path)".
 
 3. **Re-binding (switching worktree in same session):**
    - Switching is ONLY allowed after EXPLICIT user confirmation: "Yes, switch to worktree X now."
-   - When switching (update BOTH levels atomically):
+   - When switching (update BOTH levels atomically + contract resolver re-run):
      1. **Level 1 registry update**: Find the SESSION_ID entry, set `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_WORKTREE_ROOT: <newpath>`, then append NEW BOUND entry for the same SESSION_ID pointing to new worktree.
-     2. **Level 2 detail file update**: OLD detail file inside OLD worktree → `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_BINDING: <new-detail-md-path>`. Create NEW detail file inside NEW worktree → `STATUS: BOUND + PREV_BINDING: <old-detail-md-path>`
+     2. **Level 2 detail file update**: OLD detail file inside OLD `HARNESS_SESSION_DIR/binding.md` → `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_BINDING: <new-detail-md-path>`. Create NEW detail file inside NEW worktree sessão dir → `STATUS: BOUND + PREV_BINDING: <old-detail-md-path>`
      3. Announce the switch in the next Status section output.
    - Agent-initiated switches (without user saying so) = violation. Never "oh, this code is in worktree B so let me touch it" without asking first.
 
 4. **Per-operation scissor check (MANDATORY before any git/Glob/Grep/file-write):**
-   - Before any file-system write or git command: LOOKUP SESSION_ID in **Level 1 registry $HOME/.trae/bindings/registry.md** (ONLY). Use WORKTREE_ROOT from that entry.
-   - If target path is OUTSIDE WORKTREE_ROOT → BLOCK. Two outcomes:
-     a. User confirms "yes, write outside worktree scope this one file" → log decision.log.
+   - Before any file-system write or git command: LOOKUP SESSION_ID in **Level 1 registry $HOME/.trae/bindings/registry.jsonl** (ONLY). Use WORKTREE_ROOT from that entry.
+   - If target path is a **USER CODE** file (ou seja, está dentro de WORKTREE_ROOT mas NÃO é um arquivo gerado em $HARNESS_SESSIONS_ROOT) E fica FORA WORKTREE_ROOT → BLOCK. Two outcomes:
+     a. User confirms "yes, write outside worktree scope this one user code file" → log decision.log.
      b. Otherwise abort and ask: "This target is outside worktree <X>. Switch first? (A = switch, B = cancel)"
+   - Exception to scissor check for HARNESS_GENERATED paths: Arquivos que ficam em **$HARNESS_SESSIONS_ROOT/** são explicitamente FORA do worktree e SEMPRE podem ser escritos após binding criado; não precisa de pergunta por operação.
    - No silent cross-worktree reads without user made aware.
 
 5. **Doubt / ambiguity → ask. Never guess.**
    - "User said refund feature; ≥2 worktrees have refund branches → list ≤2 concrete options AskUserQuestion.
    - Binding Level1 says X but context hints Y → ASK. Never silent switch.
+   - User não forneceu FRIENDLY_NAME ainda → perguntar 1 única vez antes de criar arquivos na HARNESS_SESSION_DIR.
 
 6. **Pre-send self-check for scoping:**
    - If draft response contains references to files in ≥2 different worktrees (without user explicitly asking cross-worktree comparison): STOP. Trim. Either focus on 1 worktree, or ask which one first.
@@ -466,4 +518,4 @@ These rules are **intentionally strict.** They exist because:
 - LLMs write overly-commented/verbose code hard to review. §16 forces clean/concise code.
 - LLMs anticipate future and deliver giant PRs. §15 + gh-stack Appendix C forces small incrementals.
 
-If any rule feels wrong for a specific case → **log the exception + rationale to `decision.log.md` under `.trae/<task-id>/`**, and proceed.
+If any rule feels wrong for a specific case → **log the exception + rationale to `decisions.log.jsonl` under `.trae/<task-id>/`**, and proceed.

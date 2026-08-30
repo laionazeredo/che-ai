@@ -24,8 +24,8 @@ The SM MUST pass, either as function arguments or in a well-known dispatch confi
 | Input | Source | Purpose |
 |---|---|---|
 | `WORKTREE_ROOT` | Confirmed by SM preflight | Absolute path |
-| `<WORKTREE_ROOT>/.trae/<task-id>/task_graph.md` | SM Phase 0 output | Full task list, deps, status |
-| One `task_envelope_<TASK_ID>.md` file per task in `TODO`/`READY` state | SM Section 2.1 output | Each one has **Blast Radius → ALLOWED files** |
+| `$HARNESS_WORKSPACE_SHARED/task_graph.md` (DURÁVEL workspace-shared) | SM Phase 0 output | Full task list, deps, status |
+| One `task_envelope_<TASK_ID>.md` file per task in `TODO`/`READY` state → at `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/` (DURÁVEL) | SM Section 2.1 output | Each one has **Blast Radius → ALLOWED files** |
 | `max_parallel` (optional, int) | SM or user | Cap for concurrent Devs. Default = `min(cpu_cores, 3)`. Max cap = 4 hard. |
 
 If ANY task marked READY-for-parallel does NOT have a fully enumerated `Blast Radius → ALLOWED files` list (with globs resolved to concrete files, not just "src/*") → **REFUSE parallel for that task and fall back to serial.** Blast-radius glob wildcards are not allowed in parallel mode because the lock system cannot validate intent.
@@ -67,7 +67,7 @@ Given a candidate set `S = {T1, T2, ...}` from the same Kahn wave:
 
 ### 1.4 Output of Step 1
 
-Save to `<WORKTREE_ROOT>/.trae/<task-id>/execution_batches.md`:
+Save to `$HARNESS_WORKSPACE_SHARED/execution_batches.md` (DURÁVEL workspace-shared, via `source ~/.trae/contracts/harness_sessions_contract.sh`):
 
 ```markdown
 # EXECUTION BATCHES — <task-id>
@@ -100,11 +100,11 @@ For every mini-batch about to run:
 
 1. Before fanning out Devs:
    - For each task T in the mini-batch, for each file f in Files(T):
-     - **ASSERT**: no `<WORKTREE_ROOT>/.trae/_locks/<normalized-f>.lock.json` exists with state `HELD`.
+     - **ASSERT**: no `$HARNESS_WORKSPACE_SHARED/_locks/<normalized-f>.lock.json` exists with state `HELD`.
      - If any exists held → re-queue T into next mini-batch.
 2. On task T start (just before invoking harness-developer):
    - Atomically for ALL files in Files(T):
-     - Write `.trae/_locks/<hash>-<basename>.lock.json`:
+     - Write `$HARNESS_WORKSPACE_SHARED/_locks/<hash>-<basename>.lock.json` (DURÁVEL workspace-shared, runtime, never staged):
        ```json
        {"task_id": "T1", "batch": "B1", "held_at": "<ISO>", "state": "HELD"}
        ```
@@ -112,7 +112,7 @@ For every mini-batch about to run:
 3. On task T end (regardless of success/failure):
    - Atomically for ALL files in Files(T): change state `RELEASED` with `ended_at` + `outcome` (PASS/FAIL_SCOPE/FAIL_QA/FAIL_COMPLIANCE).
 
-Lock directory is `.trae/_locks/` → gitignored by default via `.gitignore` entry in `.trae/` if exists.
+Lock directory is `$HARNESS_WORKSPACE_SHARED/_locks/` → lives OUTSIDE user worktree code by design (MORATÓRIA §19.1); never staged/committed.
 
 ---
 
@@ -123,7 +123,7 @@ For each task T in current mini-batch:
 1. Mark `task_graph.md` row for T: `Status = IN_PROGRESS (parallel, batch=<B>, mini-batch=<MB>)`.
 2. Invoke a **dedicated parallel-execution sub-agent call** for `harness-developer` with:
    - Full env variable context: `WORKTREE_ROOT`, TASK_ID=T, envelope path.
-   - `general_purpose_task` sub-agent invoked with **isolation semantics** — each agent writes its own report file as `<WORKTREE_ROOT>/.trae/<task-id>/dev_report_<TASK_ID>_<timestamp>.md` and **never writes to task_graph.md** (that is dispatcher's single-writer role).
+   - `general_purpose_task` sub-agent invoked with **isolation semantics** — each agent writes its own report file as `$HARNESS_SESSION_DIR/reports/dev_report_<TASK_ID>_<timestamp>.md` (EFÊMERO per-session, via contract) and **never writes to task_graph.md** (that is dispatcher's single-writer role).
    - Output: when all sub-agents return, collect all per-task dev reports.
 
 ### 3.1 Developer Report Per-Task Parallel Contract
@@ -163,7 +163,7 @@ Algorithm:
    - `LOW`: different files in same directory (no overlap, just coincidence) → ok.
    - `MEDIUM`: exact same file path but diff is disjoint (hunks don't overlap) → SM reviews, applies with explicit decision.log entry.
    - `HIGH`: exact same file path AND overlapping hunks (or the file is > 100 lines modified by both) → **HARD FAIL.** Roll back one of the two task's changes (git stash or git checkout HEAD -- <file> for whichever has more LOC committed), re-run task serial, re-apply gates.
-5. Save merge-audit report to `<WORKTREE_ROOT>/.trae/<task-id>/merge_audit_<BATCH>_<MINI>.md`.
+5. Save merge-audit report to `$HARNESS_SESSION_DIR/reports/merge_audit_<BATCH>_<MINI>.md` (EFÊMERO per-session).
 
 If ANY task fails gates OR merge audit reports HIGH conflict → mark mini-batch PARTIAL and continue. The dispatcher returns a structured status to SM.
 
@@ -175,7 +175,7 @@ If ANY task fails gates OR merge audit reports HIGH conflict → mark mini-batch
 2. Advance Kahn in-degree counter by 1 for each task that is DONE.
 3. Build the next mini-batch or next Kahn wave.
 4. When **no more tasks remain** (all in task_graph marked DONE or FAILED_*):
-   - Write `<WORKTREE_ROOT>/.trae/<task-id>/BATCH_EXECUTION_REPORT.md`
+   - Write `$HARNESS_SESSION_DIR/reports/BATCH_EXECUTION_REPORT.md` (EFÊMERO per-session, via contract)
      - Batches run, minibatches, tasks per batch, conflicts caught
      - Per-task status (DONE / FAIL_SCOPE / FAIL_QA / FAIL_COMPLIANCE / CONFLICT_ROLLBACK)
      - Per-batch merge audit tally
@@ -216,9 +216,9 @@ Safety first. The dispatcher MUST fall back to SM's serial per-task loop if ANY:
 ```yaml
 max_parallel_default: 3
 max_parallel_hard_cap: 4
-lock_dir: .trae/_locks
+lock_dir: $HARNESS_WORKSPACE_SHARED/_locks  (DURÁVEL workspace-shared, outside user worktree)
 stale_lock_timeout_seconds: 3600
 merge_audit_high_conflict_min_lines_overlap: 5
 ```
 
-User can override via file: `<WORKTREE_ROOT>/.trae/<task-id>/dispatcher.config.json` on a per-task basis.
+User can override via file: `$HARNESS_WORKSPACE_SHARED/tasks/<task-id>/dispatcher.config.json` (DURÁVEL, per-task, shared across sessions) on a per-task basis.

@@ -30,10 +30,10 @@ If any is missing → **ABORT immediately** and go back to Scrum Master.
 
 Run BEFORE touching ANY Glob/Grep/file-write/git command.
 
-1. **Level 1 Global Index (AUTHORITY):** Read `$HOME/.trae/bindings/registry.md`. Find LAST STATUS=BOUND entry with `SESSION_ID` from env/IDE. Extract `WORKTREE_ROOT` from that entry. If NO entry: binding hasn't been made yet → ABORT. Ask: "No Level1 binding for this session. Create it? (A = Select worktree now; B = Cancel task). NEVER write without binding created."
+1. **Level 1 Global Index (AUTHORITY):** Read `$HOME/.trae/bindings/registry.jsonl`. Find LAST STATUS=BOUND entry with `SESSION_ID` from env/IDE. Extract `WORKTREE_ROOT` from that entry. If NO entry: binding hasn't been made yet → ABORT. Ask: "No Level1 binding for this session. Create it? (A = Select worktree now; B = Cancel task). NEVER write without binding created."
    - If found BOUND entry: confirm `WORKTREE_ROOT` from registry **MUST MATCH** the `WORKTREE_ROOT` passed by Scrum Master.
    - If MISMATCH → **ABORT.** Ask: "SM says worktree = X but Level 1 registry (GLOBAL) says BOUND_ROOT=Y. Switch binding first? (A = Switch per §19.3; B = Cancel task)." Never silent proceed.
-2. **Level 2 Detail File (informational only for Dev):** If Level 2 `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md` does NOT exist → SM preflight didn't create it properly. Warn & create now (append Level 1 if needed, but don't duplicate BOUND entries). Report discrepancy to SM / decision.log.
+2. **Level 2 Detail File (informational only for Dev):** If Level 2 `$HARNESS_SESSION_DIR/binding.md` (resolved via contract `harness_compute_paths` + `harness_level2_binding_path`) does NOT exist → SM preflight didn't create it properly. Warn & create now (append Level 1 if needed, but don't duplicate BOUND entries). Report discrepancy to SM / decision.log. Decision log entries append to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (SINGLE shared file per worktree-slug, not one per task-id.)
 3. **Per-operation scissor check (before every file write, Glob/Grep, git cmd):**
    - Target path prefix within `WORKTREE_ROOT`? If not → BLOCK.
    - Cross-worktree ops only allowed two outcomes: (A) user confirms one-off out-of-scope write, log decision.log; OR (B) ask user to switch worktree first per §19.3.
@@ -185,7 +185,7 @@ Count all files you:
 
 **If count > 10 files:**
 1. **STOP. DO NOT PROCEED.**
-2. Open `decision.log.md` under `.trae/<task-id>/` and write an entry titled
+2. Open `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (single file shared across all tasks on this worktree, not per task-id) and write an entry titled
    `[TASK-ID] BLAST RADIUS > 10 FILES — self-review`
 3. For EACH file: justify why it absolutely must be part of this task.
 4. Go back to Scrum Master with the list. Do NOT submit to QA before SM approves the exception.
@@ -194,9 +194,8 @@ Count all files you:
 
 Also validate:
 - Every file touched is listed in the TASK ENVELOPE's `Blast radius` list.
-  If you touched a file NOT in the list → write an entry to `decision.log.md`
+  If you touched a file NOT in the list → write an entry to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl`
   justifying why, with title `[TASK-ID] OUTSIDE BLAST RADIUS: <filepath>`.
-  Go back to SM for explicit approval.
 
 ---
 

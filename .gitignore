@@ -6,3 +6,4 @@ memory/
 toolhost/
 memory-config.json
 skill-config.json
+node_modules/

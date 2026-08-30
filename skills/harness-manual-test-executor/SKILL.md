@@ -15,7 +15,7 @@ description: "Executes the manual_test_plan.md step-by-step using Playwright MCP
 
 | Concern | `harness-qa` | This skill `harness-manual-test-executor` |
 |---|---|---|
-| Scope | lint / typecheck / build / unit / E2E commands (CI-style) | **Manual Test Plan steps** written in `.trae/<task-id>/manual_test_plan.md` (GWT scenarios per AC, browser + API interactions). |
+| Scope | lint / typecheck / build / unit / E2E commands (CI-style) | **Manual Test Plan steps** written in `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` (via `source ~/.trae/contracts/harness_sessions_contract.sh`) — DURÁVEL, compartilhado entre sessões nesta worktree. |
 | Driver | Shell commands (pnpm/vitest/playwright CLI) | **Playwright MCP** (open tab, navigate, click, fill, screenshot) + **HTTP driver** (curl-style via playwright_get/post/put/patch/delete). |
 | Evidence | Command exit codes + stdout/stderr | **PNG screenshots per step**, visible text assertions, HTTP response bodies, browser console logs. |
 | Output | Per-pass/fail command line summary | **Per-AC pass/fail report** with evidence links + environment checks pass/fail + smoke check summary. |
@@ -28,19 +28,20 @@ description: "Executes the manual_test_plan.md step-by-step using Playwright MCP
 
 1. **WORKTREE_ROOT absolute path** provided (by SM or user via command).
 2. **Task ID or explicit path to `manual_test_plan.md`** — one of the two:
-   - Option A (from harness session): `<WORKTREE_ROOT>/.trae/<task-id>/manual_test_plan.md` exists.
+   - Option A (from harness session): `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` (via contract) exists (DURÁVEL workspace-shared).
    - Option B (standalone): user passes explicit file path to a Markdown file containing the AC sections below.
 3. If neither exists → STOP. Ask user to provide task-id or the manual_test_plan.md path.
 4. **Worktree Session Binding preflight (engineering-contracts §19):**
-   - Read `<WORKTREE_ROOT>/.trae/session_binding.md` if present.
+   - Resolve paths via `source ~/.trae/contracts/harness_sessions_contract.sh` + `harness_compute_paths`.
+   - Check `$HARNESS_SESSION_DIR/binding.md` Level2 entry if present (EFÊMERO per-session).
    - Mismatch with provided WORKTREE_ROOT → BLOCK. Ask override/switch/cancel.
-   - Missing binding → create canonical 4-line format (SESSION_WORKTREE_ROOT / BOUND_AT / TASK_ID / STATUS=BOUND), ask user confirm once.
+   - Missing binding → follow §19 canonical binding flow (global registry Level1 + Level2), ask user confirm once.
 
 ---
 
 ## 1. STEP 0 — Parse the Manual Test Plan into executable steps
 
-Open and parse `<WORKTREE_ROOT>/.trae/<task-id>/manual_test_plan.md` (or user-provided custom path).
+Open and parse `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` (DURÁVEL workspace-shared, via contract) or user-provided custom path.
 
 Extract into an in-memory `PLAN_DATA` object with these sections:
 
@@ -66,19 +67,21 @@ If zero `### AC-` headers → STOP. Report: "manual_test_plan.md doesn't have AC
 
 ## 2. STEP 1 — Evidence directory pre-creation
 
-Create this directory structure immediately after parsing succeeds (before any browser/curl):
+Create this directory structure immediately after parsing succeeds (before any browser/curl). Use `source ~/.trae/contracts/harness_sessions_contract.sh` + `harness_ensure_session_dirs` first.
 
 ```
-<WORKTREE_ROOT>/.trae/<task-id>/manual_test_evidence/
-├── ENVIRONMENT_SETUP.log       # stdout/stderr de setup commands executados
-├── AC-<N>_<slug>/
-│   ├── step_<K>_screenshot.png   # um PNG por step que faz interação browser / verificação visual
-│   ├── step_<K>_visible_text.txt # conteúdo get_visible_text() após step K
-│   ├── step_<K>_api_response.json# resposta HTTP se step fez get/post/etc
-│   ├── step_<K>_console.log      # playwright_console_logs() se houver erros/warnings
-│   └── FINAL_ASSERT_<X>.png      # screenshot final do THEN expected verificado
-├── SMOKE_<Sx>_<slug>.*           # evidências smoke tests S1..S5
-└── execution.log                 # timeline global: cada step timestamp + ação + resultado
+$HARNESS_SESSION_DIR/qa/              ← EFÊMERO per-session (generated evidence, never in user code)
+├── ENVIRONMENT_SETUP.log             # stdout/stderr de setup commands executados
+├── screenshots/
+│   ├── AC-<N>_<slug>/
+│   │   ├── step_<K>_screenshot.png   # um PNG por step que faz interação browser / verificação visual
+│   │   ├── step_<K>_visible_text.txt # conteúdo get_visible_text() após step K
+│   │   ├── step_<K>_api_response.json# resposta HTTP se step fez get/post/etc
+│   │   ├── step_<K>_console.log      # playwright_console_logs() se houver erros/warnings
+│   │   └── FINAL_ASSERT_<X>.png      # screenshot final do THEN expected verificado
+│   └── SMOKE_<Sx>_<slug>.*           # evidências smoke tests S1..S5 (png/log)
+├── logs/
+│   └── execution.log                 # timeline global: cada step timestamp + ação + resultado
 ```
 
 ---
@@ -174,7 +177,7 @@ Save each evidence file: `SMOKE_<Sx>_<name>.log` or `.png`.
 
 Canonical sections (match references/MANUAL_TEST_EXECUTION_REPORT.md). Use language **English for file content, Portuguese when delivering chat summary §18**.
 
-Report saved to: `<WORKTREE_ROOT>/.trae/<task-id>/MANUAL_TEST_EXECUTION_REPORT.md` (or user custom dir if standalone).
+Report saved to: `$HARNESS_SESSION_DIR/reports/MANUAL_TEST_EXECUTION_REPORT.md` (EFÊMERO per-session, via contract) or user custom dir if standalone.
 
 Report sections:
 1. Header (task-id, worktree, timestamps start/end duration, target base URLs)
@@ -211,5 +214,5 @@ The chat message user sees uses condensed §18 shape. It DOES NOT dump the full 
 3. **AC Isolation**: After last step of each AC → `playwright_close` + new `playwright_navigate` to clean base URL on next AC. Do not share browser session state between ACs unless steps explicitly say "continue logged in from previous AC".
 4. **Ambiguity rule (engineering-contracts §19 doubt = ask)**: If step text is ambiguous / selector not clear / which button? → ASK user. Never guess CSS selector.
 5. **One SKIP per AC is OK; ≥5 SKIP total → warn user**: "Este plano tem muitos HUMAN_REVIEW_NEEDED. Quer parar ou continuar?"
-6. **Per operation scissor check (§19)**: All screenshot PNG / log files written MUST be inside WORKTREE_ROOT/.trae/<task-id>/. If write path somehow escapes → block before saving.
+6. **Per operation scissor check (§19)**: All screenshot PNG / log files written MUST be under `$HARNESS_SESSION_DIR/qa/`. If write path somehow escapes → block before saving. Evidence is NEVER written to the user worktree (MORATÓRIA .trae/ worktree, engineering-contracts §19.1).
 7. **Response budget active (§18):** Chat summary = always ≤500 words. Full report and evidence → on disk only.

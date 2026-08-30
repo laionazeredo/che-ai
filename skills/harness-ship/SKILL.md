@@ -30,12 +30,12 @@ If any precondition fails → report exactly which, stop execution, ask user.
 
 ### 0.6 gh-stack mode detection (N4 hierarchical PR stack)
 
-1. Check if file exists: `<WORKTREE_ROOT>/.trae/<task-id>/gh_stack_plan.md`.
+1. Check if file exists: `$HARNESS_WORKSPACE_SHARED/gh_stack_plan.md` (via `source ~/.trae/contracts/harness_sessions_contract.sh`).
 2. If it exists:
    - Read it. Validate it has a field `Status: APPROVED` at the top.
    - Check `gh` extension installed: run `gh extension list 2>/dev/null | grep -i "stack"` silently.
    - If gh-stack extension NOT installed → offer `gh extension install https://github.com/github/gh-stack` to user; wait for confirmation, install, then continue. If user declines → FALLBACK to single-PR mode (Steps 2–5 normal path).
-   - Parse layers table bottom-up (first layer = lowest in the stack, merged first; last layer = top of stack). Extract per layer: `Layer ID`, `Branch Name` (slug like `FLO-513-l1-refund-pipeline`), `Scope (files)`, `Depends on`.
+   - Parse layers table bottom-up (first layer = lowest in the stack, merged first; last layer = top of stack). Extract per layer: `Layer ID`, `Branch Name` (slug like `PROJ-123-l1-refund-pipeline`), `Scope (files)`, `Depends on`.
    - Set boolean: `GH_STACK_MODE=true`. Record `LAYERS[]` array ordered bottom-up.
 3. If file NOT exists OR status ≠ APPROVED → `GH_STACK_MODE=false`. Proceed with standard single-PR path (Steps 2–5 current).
 
@@ -43,14 +43,15 @@ If any precondition fails → report exactly which, stop execution, ask user.
 
 Run BEFORE any `git status / git add / git commit / git push`. PREVENTS wrong-worktree commits.
 
-1. **Level 1 Global Index (AUTHORITY):** Read `$HOME/.trae/bindings/registry.md`. Find LAST STATUS=BOUND entry for current `SESSION_ID`. Extract WORKTREE_ROOT from that entry.
+1. **Level 1 Global Index (AUTHORITY):** Read `$HOME/.trae/bindings/registry.jsonl`. Find LAST STATUS=BOUND entry for current `SESSION_ID`. Extract WORKTREE_ROOT from that entry.
    - If NO entry: SHIP BLOCKED NOW. Ask "No Level1 binding for this session. Create before ship? (A = Select worktree; B = Cancel ship)." NEVER ship unbound.
    - If found BOUND entry: confirm WORKTREE_ROOT from registry **MUST EQUAL** WORKTREE_ROOT precondition 1.
    - MISMATCH → **BLOCK SHIP NOW.** Ask: "Level 1 GLOBAL registry binding says worktree = X, ship was invoked on Y. Which one actually ships? (A = X per binding; B = Y override binding + rebind; C = Cancel ship)." Never silent-continue.
-2. **Level 2 Detail File (optional audit):** Verify `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md` exists. If missing → warn decision.log entry (SM skipped Level 2 write). Do NOT block ship (Level 1 is the authority).
+2. **Level 2 Detail File (optional audit):** Verify `$HARNESS_SESSION_DIR/binding.md` exists (via `source ~/.trae/contracts/harness_sessions_contract.sh`). If missing → warn decision.log entry (SM skipped Level 2 write). Do NOT block ship (Level 1 is the authority).
 3. **Scissor check staging + file ops:**
    - EVERY file staged/committed → path MUST start with WORKTREE_ROOT from Level1 registry.
-   - File path outside (symlinks, relative tricks, etc.) → UNSTAGE immediately, report, DO NOT commit.
+   - Generated files under `$HARNESS_SESSIONS_ROOT/**` are NEVER staged; they live outside user code by design.
+   - File path outside WORKTREE_ROOT and not under HARNESS_SESSIONS_ROOT (symlinks, relative tricks, etc.) → UNSTAGE immediately, report, DO NOT commit.
 4. **Cross-worktree safety during ship loop (gh-stack mode):**
    - After finishing layer's commit/push/PR, NEXT layer file ops → RE-RUN scissor check (3) against BOUND WORKTREE_ROOT registry entry.
    - Never silent cd another worktree during multi-layer ship. Layer says "use worktree B" → STOP. Ask user confirm re-binding §19.3 (old entry STATUS=RELEASED append new BOUND registry entry) before switching.
@@ -184,8 +185,8 @@ Push failure rule same as Path A (per layer; block on first failure, don't conti
 
 Look in:
 - `.trae/<task-id>/session.md` for field "Ticket URL/ID"
-- Branch name pattern: `feat/FLO-123-login`, `fix/FLO-456`, `ticket FLO-123` anywhere in session/task_graph/envelope files
-- User command args: `/harness-ship ticket:FLO-123`
+- Branch name pattern: `feat/PROJ-123-login`, `fix/PROJ-456`, `ticket PROJ-123` anywhere in session/task_graph/envelope files
+- User command args: `/harness-ship ticket:PROJ-123`
 
 If found ticket: extract `<TICKET-ID>` (full URL or just ID). Append `Refs: <TICKET-ID>` footer to EVERY PR body (single OR all layers in stack).
 
@@ -207,7 +208,7 @@ If found ticket: extract `<TICKET-ID>` (full URL or just ID). Append `Refs: <TIC
 1. **Block 1 — What was implemented:** bullets only, 3–6 items. No paragraphs. Each bullet = 1 concrete change. If >6 → PR too large (split gh-stack).
 2. **Block 2 — 🔍 Attention points:** bullets only, 3 IDEAL, 5 MAX. Each bullet starts with **Risk area:** `path/to/file.ts` — 1 sentence why. Risk areas = Security-sensitive / Performance / Blast-radius (DDL migration) / Cross-module / Concurrency. If >5 bullets → split gh-stack.
 3. **Block 3 — 💥 Breaking changes:** **INCLUIR SOMENTE SE HOUVER.** If NONE → DELETE o bloco INTEIRO do body (NÃO escrever "NONE", NÃO deixar section vazia). Quando incluir: heading única por breaking + Before/After/Migration bullets.
-4. **Block 4 — 🧪 How to verify:** bullets only, 1–3 items. Ordem: (a) Unit/E2E COMANDO CONCRETO apontando p/ teste específico + (b) Manual steps concretos (2–3 steps, sem vagueza) + (c) Link p/ plano completo `.trae/<task-id>/manual_test_plan.md`.
+4. **Block 4 — 🧪 How to verify:** bullets only, 1–3 items. Ordem: (a) Unit/E2E COMANDO CONCRETO apontando p/ teste específico + (b) Manual steps concretos (2–3 steps, sem vagueza) + (c) Link p/ plano completo `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md`.
 5. **Block 5 — 🔗 Refs:** Ticket Linear/Jira (ID + URL). Opcionalmente 1 link extra (Figma, PRD path).
 6. **Seções PROIBIDAS (remover SEMPRE se aparecerem):** Scope In/Out, Assumptions adopted, What/Why paragraphs, Harness gates checklist, Tables gigantes, Context intro paragraphs.
 7. **Body budget:** ≤30 linhas TOTAIS (todos 5 blocos somados, incluindo headings). Sem breaking → alvo ~20 linhas. Com breaking → alvo ~28 linhas. Se ultrapassar → TRIM, TRIM, TRIM. Breaking changes longos? Mover migration detalhada p/ doc separado e linkar 1 linha no block 3.
@@ -308,7 +309,7 @@ Resumo:
   • PR criada (DRAFT): <PR_URL>  [atribuída a você]
   • Assumptions, review points, breaking changes: veja corpo da PR
   • Manual test plan: referenciado no corpo e disponível em:
-    <worktree>/.trae/<task-id>/manual_test_plan.md
+    $HARNESS_WORKSPACE_SHARED/manual_test_plan.md
 
 Próximos passos:
   1. Rode um smoke test manual usando o plano acima.
@@ -327,7 +328,7 @@ Resumo Geral:
   • Worktree: <worktree path>
   • Número de PRs na stack (bottom-up): <N layers>
   • gh-stack chain criada. Todas as PRs DRAFT + atribuídas a você.
-  • Plano original: consultar <worktree>/.trae/<task-id>/gh_stack_plan.md
+  • Plano original: consultar $HARNESS_WORKSPACE_SHARED/gh_stack_plan.md
 
 Stack de PRs (ordem de merge = base primeiro para o topo):
 ───────────────────────────────────────────────
@@ -352,7 +353,7 @@ LN (topo, merged last) → depends on #<L[N-1].PR_NUMBER>
    PR DRAFT: <LN.PR_URL>   [base: L[N-1].BranchName]
 ───────────────────────────────────────────────
 
-Manual test plan global: <worktree>/.trae/<task-id>/manual_test_plan.md
+Manual test plan global: $HARNESS_WORKSPACE_SHARED/manual_test_plan.md
 (Valide o comportamento de cada layer individualmente antes de marcar a stack como pronta.)
 
 Próximos passos (ordem de review = mesma ordem de merge bottom-up):

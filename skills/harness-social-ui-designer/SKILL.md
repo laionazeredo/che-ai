@@ -1,21 +1,23 @@
 ---
 name: "harness-social-ui-designer"
-description: "V2 — Design pipeline: social media creatives or UI/UX features. MANDATORY FLOW: (1) Spec detalhada escrita + iteração usuário → APROVAÇÃO EXPLÍCITA GATE; (2) Execução em ETAPAS (≤4); (3) Revisor visual por etapa valida alinhado spec; (4) Fallback composição offline (Pillow/ImageMagick) + Unsplash foto real. Usa mcp_open-pencil local Figma-equivalent. Trigger: /harness-design, /harness-figma, posts/stories/screens."
+description: "V3 — Design pipeline 4 modos: (A) Social Media, (B) UI/UX Feature, (C) Design System, (D) Logotipo & Marca. MANDATORY FLOW: (1) Spec detalhada escrita + iteração usuário até APROVAÇÃO EXPLÍCITA GATE; (2) Execução em ETAPAS (≤5); (3) Revisor visual por etapa valida alinhado spec; (4) Fallback offline. Usa mcp_open-pencil local. Trigger: /harness-design, /harness-figma."
 ---
 
-# Harness — Social UI Designer (Orchestrator) v2.0
+# Harness — Social UI Designer (Orchestrator) v3.0
 
 > **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo):**
 > - **Formatting + verbosity ≤500w**: engineering-contracts §18 (subtítulos ## / ###, bullets ≤2 linhas, bold keywords)
 > - **Hard-won session lessons** (composição offline / template text nodes / validação unique colors): §3 abaixo
 > - **Design tokens + Tailwind**: engineering-contracts skill (DS section)
 > - **Image source fallback waterfall**: §3 item #1 (Unsplash real > text_to_image endpoint > G(search) headless)
+> - **SVG vetor quality gates**: §12 logo/marca
 
 Este é o **orquestrador top-level** do design harness. Backend = `mcp_open-pencil` local (equivalente a Figma desktop, sem auth/limites).
-**3 modos mutuamente exclusivos** (escolher 1 no início via `AskUserQuestion`):
+**4 modos mutuamente exclusivos** (escolher 1 no início via `AskUserQuestion`):
 - **MODE A → Social Media Posts**: posts 1:1 / stories 9:16 + copies profissionais.
 - **MODE B → UI/UX Feature**: wireframes → hi-fi → dev-spec (React/Tailwind 4).
 - **MODE C → Design System**: Tailwind 4 tokens ↔ OpenPencil variables + componentes atômicos.
+- **MODE D → Logotipo & Marca**: descoberta profunda de marca → briefing de marca → conceitos logo → refinamento vetorial → brandbook completo (SVG obrigatório).
 
 ---
 
@@ -46,6 +48,20 @@ Spec deve ter **TODOS** esses campos preenchidos, por peça/screen:
 
 Campos extra para **MODE B UI screens**: persona, job story, 3 core behaviors max, breakpoints responsive (mobile 375 / tablet 768 / desktop 1280).
 Campos extra para **MODE C Design System**: origem tokens (Tailwind 4 config / do zero), dark mode obrigatório, lista componentes (Button/Card/Input/Textarea/Badge/Avatar/Alert/Toggle/Switch/Radio/Checkbox/Select — default 12).
+Campos extra para **MODE D Logotipo & Marca (OBRIGATÓRIOS 100% preenchidos)**:
+| Campo MODE D | Descrição obrigatória |
+|---|---|
+| **Nome marca + slogan (se houver)** | Texto VERBATIM do wordmark; slogan opcional. |
+| **Ideia central / posicionamento marca** | 1-2 frases "A marca X é para Y que querem Z". |
+| **Setor + público-alvo (persona mínimo)** | Ex: "Padaria artesanal UK, público 25-55 anos, classe média-alta". |
+| **Paleta primária (cores marca hex)** | 2-5 cores hex (primary / secondary / accent / neutrals). Se não definida → descobrir. |
+| **Tipografia wordmark + corpo** | Família wordmark (Display) + Body (ex: Playfair Display Bold 72 / Inter 400). |
+| **Voz da marca (brand voice doc) + 3 frases exemplo** | Tom (amigável / premium / minimalista / jovem / sério) + 3 exemplos de comunicação escrita. |
+| **Referências (até 5)** | (a) URLs de sites/marcas similares; (b) Logotipos existentes em anexo; (c) Temas/estilos visuais (ex: "minimalista nórdico", "artesanal papel kraft"). |
+| **Estilo logotipo (até 3 escolher)** | Wordmark-only / Lettermark (monograma iniciais) / Pictorial mark (ícone) / Combination mark (ícone+palavra) / Emblem (selo). |
+| **Arquitetura de informação do brandbook final** | Capa → Logos → Paleta → Tipografia → Aplicações mockups → Do/Don't (mínimo 6 seções). |
+| **Variantes logo obrigatórias** | Primary (horizontal full) / Secondary (stacked / vert.) / Monochrome preto / Monochrome branco / Icon only / Favicon 64×64. ≥6 variantes. |
+| **SVG deliverable OBRIGATÓRIO (HARD GATE)** | Todas variantes devem ser SVG standalone, SEM bitmaps embutidos, < 128KB, viewBox `0 0 1024 1024` default. |
 
 #### 0.2 Escrever spec no disco e pedir aprovação explícita
 - Salvar spec em: `/home/laion/.trae/designs/<slug>-spec.md`
@@ -56,8 +72,21 @@ Campos extra para **MODE C Design System**: origem tokens (Tailwind 4 config / d
 
 ---
 
-### GATE 0: Escolher modo A/B/C (se user não especificou)
-Se pedido do usuário já indica modo → direto. Senão parar e perguntar via `AskUserQuestion`.
+### GATE 0: Escolher modo A/B/C/D (se user não especificou)
+Se pedido do usuário já indica modo → direto. Senão parar e perguntar via `AskUserQuestion` (4 opções: A Social / B UI-UX / C Design System / **D Logotipo & Marca**).
+
+### GATE 0.1 → MODE D EXCLUSIVO: Perguntas de descoberta profunda OBRIGATÓRIAS
+Se modo = **D (Logotipo & Marca)**, ANTES de escrever spec §0.1, rodar **5 lotes de perguntas** (lote por lote, esperar respostas por lote):
+
+| Lote D | Perguntas OBRIGATÓRIAS (max 5 por lote) |
+|---|---|
+| **Lote D1 — Identidade** | 1. Nome completo marca (verbatim, maiúsculas/minúsculas exatas)? 2. Slogan existe? Se sim qual verbatim. 3. Quando a marca nasceu? Tem história curta para contar? 4. Qual setor/indústria exato? 5. Região/país onde opera? |
+| **Lote D2 — Posicionamento** | 1. Qual problema a marca resolve? 1 frase. 2. Quem é o cliente ideal (persona, 3 características). 3. Quem são os 3-5 principais concorrentes diretos. 4. Diferencial 1 único contra concorrentes. 5. 3 adjetivos que descrevem personalidade da marca (ex: acolhedor, premium, jovem). |
+| **Lote D3 — Estilo & Estética (até 5 cada)** | 1. 3-5 **URLs de marcas/sites de referência** (amamos / odiamos). 2. 3-5 temas/estilos visuais de referência: minimalista / brutalista / artesanal / luxo / retro / moderno / orgânico / tech etc. 3. Você tem logotipos antigos, sketches, desenhos, moodboards existentes anexar? 4. Quais cores associadas à marca (ou cores que NÃO quer usar de jeito nenhum). 5. Tipografia favorita (ou família que odeia). |
+| **Lote D4 — Voz & Comunicação** | 1. Tom de voz 1 frase (ex: "especialista acessível", "amigo que explica bem", "luxo discreto"). 2. 3 frases EXEMPLO de como marca falaria com cliente (uma saudação, um agradecimento, um CTA). 3. Frases proibidas / NUNCA dizer. 4. Uso de emoji permitido? (Sim / Não / Com moderação). 5. Língua principal e outras línguas que marca opera. |
+| **Lote D5 — Aplicações & Restrições** | 1. Top 5 lugares onde o logo vai aparecer (Instagram perfil / cartão visita / fachada loja / camiseta / site header / embalagem...). 2. O que o logo NÃO PODE ter (ex: "nenhum ícone de pãozinho genérico", "não queremos uso de gradient"). 3. Você já tem paleta/tipografia definida? (Sim → compartilhar / Não → construímos do zero). 4. Variantes logo obrigatórias? (mini favicon, horizontal stacked, preto, branco, monograma iniciais). 5. Formatos entrega finais? (SVG obrigatório default + PNG 1x/2x + PDF vetor / Favicon .ico / fonte wordmark?). |
+
+**Fail-fast lote D (se 2 lotes ainda ambíguo)**: perguntar 1 vez: "Default: minimalista, tons terrosos neutros, Inter + Playfair, 3 conceitos, 6 variantes. Seguir assim e ir refinando por etapa? (Sim / Não — listar ajustes)".
 
 ### GATE 1: Save path + brandbook
 - **Path projeto (OpenPencil source)**: perguntar caminho absoluto em /home/laion; default `/home/laion/.trae/designs/<modo>-<slug>-YYYYMMDD.pen`.
@@ -154,9 +183,40 @@ Goal: Extrair tokens Tailwind → criar variables + 12 componentes atômicos × 
 
 ---
 
-## ✅ 4. QUALITY GATES (HARD FAIL se não passar → fix antes de entregar)
-Todos gates aplicam a **QUALQUER MODO** e **toda etapa final**:
+## 🏷 4. MODE D — Logotipo & Marca (SVG OBRIGATÓRIO + Brandbook)
+Goal: Descoberta profunda marca → briefing validado → 3 conceitos logo (esboço baixo-fidelidade na OpenPencil) → refinamento vetorial de 1 conceito → **SVG standalone por variante** (HARD) → brandbook final com paleta/tipografia/aplicações + voz da marca.
 
+### Pré-condições HARD MODE D (falhar = STOP):
+1. **5 lotes perguntas descoberta GATE 0.1 respondidos.**
+2. **Spec MODE D (§GATE -1 campos extra D) 100% preenchida e APROVADA pelo usuário → salva em `spec.APPROVED.md`.**
+3. **Pelo menos 2 referências (URL / logos anexos / temas) informadas.**
+
+### Fluxo etapas MODE D (≤5 etapa total; cada etapa valida com usuário ANTES de próxima):
+**Cada etapa SEMPRE nesta ordem → (a) Executor cria; (b) Revisor Visual valida alinhado spec; (c) Usuário confirma PASS / pede ajustes ≤2 bullets; (d) Se aprovado user → próxima etapa.**
+
+| Etapa MODE D | O que executa (Agente Executor Designer) | O que valida Revisor Visual antes de mostrar user | Checkpoint OBRIGATÓRIO usuário |
+|---|---|---|---|
+| **D0 — Brand Briefing Validado** | Escrever `brandbook/00-briefing.md`: nome, slogan, posicionamento, persona, concorrentes, diferencial, 5 adjetivos personalidade, voz da marca + 3 frases exemplo, top 5 aplicações, restrições proibidas. | (1) Todos campos D1-D5 de descoberta aparecem no briefing; (2) 3 frases voz da marca escritas; (3) ≤2 referências por URL/anexo listadas. | ✅ Usuário assina: "Briefing correto — pode gerar conceitos" (Sim / Não ajustes X) |
+| **D1 — 3 Conceitos Baixa Fidelidade** | No OpenPencil, 3 artboards lado-a-lado 1024×1024 (CONCEITO-A / B / C). Cada um: **caixas + labels** (nenhuma estética final): posição wordmark / posição ícone / iniciais / proporção geral horizontal ou empilhada. Apenas formas básicas + labels de texto. | (1) 3 conceitos existem; (2) Nenhum bitmap / gradient / fill estético; (3) Cada conceito tem proporção / estilo diferente (ex: A = horizontal wordmark only; B = ícone+palavra vertical; C = monograma circular). | ✅ Usuário escolhe 1 conceito para refinar (pode dizer "híbrido A topo + B corpo"). ≤1 híbrido permitido. |
+| **D2 — Refinamento Vetorial do Conceito Escolhido** | No OpenPencil, em 1 artboard só: construir **vectors puros** (BOOLEANOS union/subtract/intersect — SEM raster, SEM bitmaps) para: (a) wordmark (1 tipo ligado em curvas se display); (b) ícone / símbolo / monograma; (c) combinação primary horizontal full. Aplicar paleta hex da spec; aplicar tipografia wordmark exata; ajustar kerning visual. | (1) **TODOS nós são vetores** (ver export SVG — sem `<image>`, sem base64); (2) Paleta exata hex spec (`analyze_colors`); (3) Tipografia ligada; (4) SVG inicial exportado < 256KB; (5) Proporções alinhadas conceito escolhido D1. | ✅ Usuário valida traço / kerning / cores do vetor. |
+| **D3 — 6 Variantes + Export SVG (HARD GATE)** | Criar **≥6 variantes logo obrigatórias**: (1) Primary horizontal full (wordmark + ícone); (2) Secondary stacked vertical; (3) Lettermark / monograma iniciais square; (4) Pictorial icon-only; (5) Monochrome preto (1 cor); (6) Monochrome branco (1 cor reverse). **TODAS 6 exportar individualmente como SVG standalone vetor puro.** Validar via snippet §12.1 antes de avançar. Extra opcional: favicon 64×64 SVG. | (1) **6 arquivos SVG em `/vectors/`**; (2) **Cada SVG: zero tags `<image>` / zero base64 (validar regex)**; (3) Cada SVG `viewBox="0 0 1024 1024"` (ou proporção correta); (4) Tamanho cada < 128KB; (5) 2 variantes monocromáticas (preto + branco) 100% 1 cor; (6) SVG standalone abre em browser sem erros (validar via parse XML). | ✅ Usuário valida as 6 variantes finais. Pede ajustes finais de cor / espaçamento (≤3 bullets). |
+| **D4 — Brandbook Final Completo + Aplicações Mockups** | (a) Montar estrutura brandbook 6 seções mínimo: `01-capa.md`, `02-logos-e-variantes.md` (todas 6 SVGs embed), `03-paleta.md` (nomes cores + hex + usos: primary / secondary / text / bg), `04-tipografia.md` (Display wordmark + Body + weights + line heights + examples), `05-aplicacoes.md` (≥3 mockups aplicação real: perfil Insta 1:1 / cartão visita / header site 1280×640 — gerar PNG mockups em canvas separado), `06-do-and-dont.md` (3 DO + 3 DON'T: ex: DO deixar clear space 0.5× altura "X" / DON'T colocar sobre fotos sem contraste). (b) Export PNG 2× todas SVGs em `/exports/logo-*@2x.png`. | (1) 6 seções brandbook em markdown + assets; (2) 3 mockups PNG criados (≥2560 wide); (3) DO/DON'T tem pelo menos 3 cada; (4) TODAS SVGs já validadas permanecem em `/vectors/`; (5) Voz da marca consistente no texto do brandbook. | ✅ Usuário aprova brandbook final. |
+
+---
+
+### Fluxo de validação usuário por etapa MODE D (HARD — NÃO pula):
+1. Executor termina etapa → salva arquivos.
+2. Revisor emite PASS/REWORK ≤3 bullets.
+3. Se REWORK → executor corrige só desvios.
+4. Se PASS do revisor → **sobe pro usuário pergunta única**: `"Etapa D<N> concluída. Aprova para avançar para D<N+1>? (Sim / Não — ajustes: [1,2,3 pontos])"`.
+5. Se NÃO → ajustar apenas os pontos listados; re-subir para aprovação. **Não avança para próxima etapa sem Sim explícito do usuário.**
+
+---
+
+## ✅ 4. QUALITY GATES (HARD FAIL se não passar → fix antes de entregar)
+Todos gates 1-7 aplicam a **QUALQUER MODO** e **toda etapa final**. Gates D1-D5 são **MODE D exclusivos (HARD)**:
+
+### Gates globais (todos modos)
 1. **CONTRASTE WCAG AA**: Body text ≥ 4.5:1; large text ≥3:1. Checar com `analyze_colors` MCP se dúvida. Overlay dark obrigatório se texto branco + foto luminosa (card forno lenha = exemplo).
 2. **IMAGENS VALIDADAS**: (a) `unique colors > 25.000` (§3.3) POR PEÇA que esperava foto; (b) SEM placeholder endpoint (checar bytes + MD5); (c) Tema da foto corresponde à peça.
 3. **SEMPRE EXPORT SCALE 2 (2×)**: Feed 2160×2160; Stories 2160×3840; Screens desktop ≥2560 wide.
@@ -164,6 +224,15 @@ Todos gates aplicam a **QUALQUER MODO** e **toda etapa final**:
 5. **FALLBACK OFFLINE OBRIGATÓRIO SE ETAPA 3 FOTOS HEADLESS FALHAR**: Rodar compositor Pillow §3.1.4 (colar foto asset baixada sobre PNG base texto renderizado) — este é o gate final para entregar foto **garantida**.
 6. **STORAGE PATHS LIMPOS**: Nenhum output temporário em `/tmp`; todos assets em `/home/laion/.trae/designs/<slug>/assets/`, exports em `/exports/`.
 7. **SPEC CHECKSUM**: Saída final **DEVE** corresponder à `APPROVED-spec.md`. Revisor compara item por item (paleta / copies verbatim / layout / dimensão).
+
+### Gates MODE D exclusivos (Logotipo & Marca) — HARD fail
+8. **D1: SVG PURO (SEM BITMAPS)**: Nenhuma variante logo pode conter `<image>` tags inline, base64 bitmaps, `<foreignObject>`, ou raster data embed. Validar via regex em cada arquivo SVG. Se precisar de foto → PNG separado, NÃO dentro do logo SVG.
+9. **D2: VARIANTES OBRIGATÓRIAS MÍNIMAS 6**: Primary horizontal + Secondary stacked + Monochrome preto + Monochrome branco + Icon only + Monogram/Lettermark iniciais. ≥6 arquivos em `/vectors/` ao final da D3.
+10. **D3: SVG PEQUENO, STANDALONE, VIEWBOX CORRETO**: Cada SVG ≤128KB; `viewBox` (ex: `0 0 1024 1024` square OU proporção width:height natural); SEM dependências externas (fonts linkadas remotas, URLs); abre em qualquer navegador moderno sem erros. Validar snippet §12.1.
+11. **D4: MONOCROMÁTICO 1 COR**: variantes preta (`#000000` ou cor escura spec) E branca (`#FFFFFF`) DEVEM ter 100% dos paths em SÓ 1 fill. Nenhum gradient, nenhuma sombra rasterizada. Para testar: abrir SVG em editor de texto → substituir fill → só 1 cor muda (não partes).
+12. **D5: BRANDBOOK 6 SEÇÕES MÍNIMO**: 00-briefing / 02-logos-variantes / 03-paleta / 04-tipografia / 05-aplicacoes-mockups (≥3) / 06-do-and-dont (≥3 DO / ≥3 DON'T). Mockups PNG ≥2560px cada.
+13. **D6: NOMENCLATURA SVG CANÔNICA**: `logo-primary.svg`, `logo-stacked.svg`, `logo-monochrome-black.svg`, `logo-monochrome-white.svg`, `logo-icon.svg`, `logo-monogram-<INITIALS>.svg`. Nenhum espaço / caractere especial.
+14. **D7: CLEAR SPACE & MIN SIZE DOCUMENTADO**: Brandbook 02-logos-variantes deve ter tabela: clear-space mínimo (ex: "0.5× a altura do X do wordmark") e tamanho mínimo impressão / digital (ex: "≥48px altura digital").
 
 ---
 
@@ -220,7 +289,23 @@ Quer aprofundar em **<UMA COISA ÚNICA>**? (Sim / Não)
   │   ├── C1-hero.png          # Imagens 1024×1024 (>25k unique colors)
   │   └── C2-flatlay.png
   ├── exports/
-  │   ├── FINAL-<piece>@2x.png # Saídas 2160×2160 / 2160×3840
+  │   ├── FINAL-<piece>@2x.png # Saídas 2160×2160 / 2160×3840 (modos A/B)
+  │   └── logo-primary@2x.png  # (MODE D only) PNG 2× de cada variante SVG
+  ├── vectors/ (MODE D only OBRIGATÓRIO)
+  │   ├── logo-primary.svg
+  │   ├── logo-stacked.svg
+  │   ├── logo-monochrome-black.svg
+  │   ├── logo-monochrome-white.svg
+  │   ├── logo-icon.svg
+  │   └── logo-monogram-<INICIAIS>.svg
+  ├── brandbook/ (MODE D only)
+  │   ├── 00-briefing.md
+  │   ├── 01-capa.md
+  │   ├── 02-logos-e-variantes.md (embed todos SVG)
+  │   ├── 03-paleta.md
+  │   ├── 04-tipografia.md
+  │   ├── 05-aplicacoes.md
+  │   └── 06-do-and-dont.md
   ├── tokens/ (MODE C only)
   │   ├── tokens.tailwind.txt / tokens.css / tokens.json
   └── dev-spec.md (MODE B only, ≤15 linhas)
@@ -262,6 +347,97 @@ Quer aprofundar em **<UMA COISA ÚNICA>**? (Sim / Não)
 - C2: idem C1
 - C3: Texto branco sobre foto forno + overlay 35% → ≥4.5:1 via overlay
 - C4: idem C1
+```
+
+---
+
+## 🗂 9.1 SPEC TEMPLATE COMPLETO — MODE D (Logotipo & Marca)
+> **MODE D EXCLUSIVO.** Copiar este template, preencher 100% campos após rodar 5 lotes perguntas D1-D5, apresentar ao usuário, esperar APROVAÇÃO EXPLÍCITA "Sim, aprovo spec" antes de qualquer vetor desenhado.
+
+```
+# SPEC MODE D — Logotipo & Marca <NOME-MARCA> (YYYY-MM-DD)
+## D0 — Identidade e Posicionamento
+- Nome marca (VERBATIM maiúsculas/minúsculas):
+- Slogan (se existe, VERBATIM):
+- História curta / origem marca (1-2 frases):
+- Setor / indústria exato:
+- Região / país opera:
+- Problema que resolve (1 frase):
+- Cliente ideal (persona: 3 características):
+- 3-5 concorrentes diretos + URL seus sites:
+- 1 diferencial único vs concorrentes:
+- 5 adjetivos personalidade da marca:
+- Voz da marca (1 frase tom):
+  - 3 frases EXEMPLO de como marca fala com cliente:
+  - Frases PROIBIDAS / NUNCA dizer:
+  - Emojis permitidos? (Sim / Não / Com moderação)
+  - Língua principal + outras línguas:
+
+## D1 — Estética, Referências e Restrições
+### Referências OBRIGATÓRIAS (pelo menos 2 de uma categoria):
+- (a) 3-5 URLs de marcas/sites de referência (amamos):
+- (b) 3-5 URLs de marcas/sites de referência (odiamos):
+- (c) Logotipos antigos / sketches / moodboards existentes anexados (lista paths):
+- (d) Temas/estilos visuais de referência (ex: "minimalista nórdico", "brutalista", "luxo", "artesanal kraft"):
+### Cores:
+- Paleta hex DEFINIDA (se já tiver): primary=#XXXXXX | secondary=#XXXXXX | accent=#XXXXXX | neutrals=#XXXXXX,#XXXXXX,#XXXXXX
+- Cores PROIBIDAS NUNCA USAR:
+### Tipografia:
+- Wordmark (Display) família já definida? (Sim → qual / Não → escolheremos no D2)
+- Body família já definida? (Sim → qual / Não)
+- Famílias tipográficas PROIBIDAS odiamos:
+### Estilo(s) logotipo (escolher até 3):
+- [ ] Wordmark-only (só texto)
+- [ ] Lettermark / monograma iniciais
+- [ ] Pictorial mark (ícone abstrato / ilustração)
+- [ ] Combination mark (ícone + palavra horizontal)
+- [ ] Emblem / selo (circular, retangular)
+### Top 5 lugares logo vai aparecer (definem proporções e min-size):
+1. Ex: perfil Instagram 320×320
+2. Ex: cartão visita 85×55mm (300dpi)
+3. Ex: header site 1280×640 (256px altura máx)
+4. Ex: embalagem frente
+5. Ex: camiseta serigrafia
+### O QUE O LOGO NÃO PODE TER (restrições explícitas):
+- Proibição 1 (ex: "nenhum ícone genérico de pão"):
+- Proibição 2 (ex: "sem gradient, cor chata só"):
+- Proibição 3:
+
+## D2 — Variantes obrigatórias + arquitetura brandbook
+### Variantes logo OBRIGATÓRIAS (≥6):
+1. Primary horizontal full (wordmark + ícone lado)
+2. Secondary stacked vertical (wordmark abaixo do ícone)
+3. Monochrome preto (1 cor fill único, sem gradiente)
+4. Monochrome branco (1 cor fill único, reverse)
+5. Icon / pictorial mark only (quadrado)
+6. Lettermark / monograma iniciais (quadrado)
+7. (opcional) Favicon 64×64 SVG
+### Nomes arquivos SVG finais (HARD gate D6):
+- `vectors/logo-primary.svg`
+- `vectors/logo-stacked.svg`
+- `vectors/logo-monochrome-black.svg`
+- `vectors/logo-monochrome-white.svg`
+- `vectors/logo-icon.svg`
+- `vectors/logo-monogram-<INICIAIS>.svg`
+### Brandbook (6 seções mínimo):
+1. Capa (nome marca + slogan + logo primary + data)
+2. Logos e variantes (todas 6 SVGs + clear-space + min-size table)
+3. Paleta de cores (nomes + hex + usos: primary / secondary / texto / fundo)
+4. Tipografia (Display wordmark + Body + weights + line-height + exemplos)
+5. Aplicações reais (≥3 mockups PNG 2×: perfil IG / cartão / header site)
+6. DO and DON'T (≥3 DO + ≥3 DON'T, cada um com explicação curta)
+
+## D3 — SVG gates finais (HARD — falha = STOP):
+- Cada SVG ≤ 128KB
+- Cada SVG: ZERO `<image>`, ZERO base64, ZERO `<foreignObject>`, ZERO links externos
+- viewBox (square: `0 0 1024 1024` ou proporção natural ex: `0 0 1536 512` para horizontal)
+- Monochrome preto e branco: 100% fill único (checar via grep fill= 1 única cor não transparente)
+- Todos SVGs parse XML válido (Python xml.etree.ElementTree)
+
+---
+## Assinatura
+**Aprovador (usuário):** _________________________  Data: ________
+Resposta esperada para continuar: "Sim, aprovo spec MODE D. Pode executar etapas D0 → D4."
 ```
 
 ---
@@ -330,8 +506,67 @@ def compose_photo_onto_base(base_png:str, foto_png:str, out_png:str, *,
     out.save(out_png,"PNG",optimize=True)
 ```
 
+### 10.3 MODE D — Validação SVG vetor puro (rodar POR VARIANTE após export D3)
+```python
+import os,re,xml.etree.ElementTree as ET
+def validate_svg_logo(path:str,min_variants:int=6)->tuple[bool,str]:
+    if not os.path.exists(path):
+        return False,f"{os.path.basename(path):48s} MISSING"
+    with open(path,'rb') as f: raw=f.read(); sz=os.path.getsize(path)//1024
+    try:
+        root=ET.fromstring(raw)
+        tag=lambda x: x.split('}')[-1] if '}' in x else x
+        # D1: sem image / foreignObject / base64 data URI
+        forbidden_tags={'image','foreignObject','use'}
+        bad_tags=[e.tag for e in root.iter() if tag(e.tag) in forbidden_tags]
+        has_b64=b'data:image' in raw or b'base64' in raw
+        # D3: viewBox exists
+        vb=root.attrib.get('viewBox','')
+        # Monochrome check heuristic: count unique fill hex
+        fills=set(re.findall(r'fill\s*=\s*["\'](#[0-9a-fA-F]{3,8})["\']',raw.decode('utf-8','ignore')))
+        mono_ok = len(fills)<=2  # ≤2 cores não transparente (1 fill + maybe stroke same)
+        xml_ok = True
+    except ET.ParseError as e:
+        return False,f"{os.path.basename(path):48s} sz={sz:>3d}KB XML_INVALID: {str(e)[:40]}"
+    ok=True; r=[]
+    if sz>128: ok=False; r.append(f'oversize({sz}KB>128KB)')
+    if bad_tags: ok=False; r.append('bad_tags:'+','.join(tag(x) for x in bad_tags[:3]))
+    if has_b64: ok=False; r.append('b64_or_datauri')
+    if not vb: ok=False; r.append('no_viewBox')
+    return ok,f"{os.path.basename(path):48s} sz={sz:>3d}KB fills={len(fills)} vb={bool(vb)} mono~{mono_ok} {'OK' if ok else 'FAIL:'+','.join(r)}"
+```
+
+### 10.4 MODE D — Export PNG 2× de todos SVG (via cairosvg OU Pillow fallback)
+```python
+def rasterize_svgs_to_png2x(vectors_dir:str, exports_dir:str, scale:int=2):
+    import subprocess, pathlib
+    V=pathlib.Path(vectors_dir); E=pathlib.Path(exports_dir); E.mkdir(parents=True,exist_ok=True)
+    for svg in V.glob('*.svg'):
+        out=E/f"{svg.stem}@{scale}x.png"
+        # Try cairosvg first, else rsvg-convert, else ImageMagick convert
+        for cmd in (["cairosvg",str(svg),"-o",str(out),f"--scale={scale}"],
+                    ["rsvg-convert","-o",str(out),"-w",str(2048),str(svg)],
+                    ["convert","-density",str(144*scale),str(svg),str(out)]):
+            try:
+                if subprocess.run(cmd,capture_output=True,timeout=30).returncode==0: break
+            except FileNotFoundError: continue
+```
+
 ---
 
 ## 🧩 11. MCP Backend A/B (comparativo rápido)
 - **PADRÃO: `mcp_open-pencil` local → 140+ tools, 100% offline sem auth, sem limites API.** Sempre usar.
 - **OPCIONAL futuro: Figma Cloud MCP (github southleft v1.39.1)** → trabalha DIRETO em projetos Figma via PAT + file key; tem Code Connect; mas requer token, rede, rate limits. Adicionar apenas se usuário pedir explicitamente cloud. KISS: manter local por padrão.
+
+---
+
+## 🧰 12. MODE D — SVG Logo Reference (vetor booleano & clean-up)
+### 12.1 Vetor puro & booleans (HARD para logo)
+1. **WORDMARK**: se display/script, ideal converter outlines em paths via OpenPencil `boolean_union` ANTES de exportar SVG (garante render sem depender de fonte instalada).
+2. **SÍMBOLO/MONOGRAMA**: construir SEMPRE com primitivos (rect / circle / path bezier) → depois `boolean_union/subtract/intersect` para único contorno. Evitar 12 camadas sobrepostas que geram artefatos.
+3. **CLEAN-UP OBRIGATÓRIO ANTES EXPORT SVG**: remove layers vazias / invisíveis / duplicates; flatten groups desnecessários. Nomes camadas finais: `wordmark` / `icon` / `monogram` / `bg`.
+
+### 12.2 Regras WCAG & contraste no logo
+- Variante primary: contraste logo contra fundo claro (branco / bg spec) ≥ 3:1 para legível em header 48px+.
+- Variante monochrome branca: testar SEMPRE contra fundo #111827 escuro da própria paleta.
+- Clear-space mínimo documentado no brandbook 02-logos-e-variantes: **0.5× a altura do X do wordmark em TODOS os lados do bounding box do logo.**

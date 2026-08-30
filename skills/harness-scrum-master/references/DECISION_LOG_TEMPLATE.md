@@ -1,7 +1,7 @@
 # DECISION LOG TEMPLATE
 
 > Append-only log. Each entry = one non-obvious decision / trade-off / exception to rules.
-> File location: `<WORKTREE_ROOT>/.trae/<task-id>/decision.log.md`
+> File location: `<WORKTREE_ROOT>/.trae/<task-id>/decisions.log.jsonl`
 > Format for each entry:
 
 ---

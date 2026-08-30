@@ -25,7 +25,7 @@ We ONLY flag things that actually break production or waste $$$ or risk users.
 
 Run THIS BEFORE deciding mode or starting any review context gathering.
 
-1. **Read Level1 Global Index FIRST:** Read `$HOME/.trae/bindings/registry.md`. Find LAST STATUS=BOUND entry with current SESSION_ID. Use its WORKTREE_ROOT for the session.
+1. **Read Level1 Global Index FIRST:** Read `$HOME/.trae/bindings/registry.jsonl`. Find LAST STATUS=BOUND entry with current SESSION_ID. Use its WORKTREE_ROOT for the session.
 2. **Mode B mismatch check (CRITICAL):**
    - If user passed --worktree <path>: confirm Level1 registry WORKTREE_ROOT EXISTS and is DIFFERENT than <path> → BLOCK.
    - Ask: "You asked review on worktree X but Level1 GLOBAL session is BOUND to Y. Options: (A = X, override binding; B = Switch binding switch first; C = Cancel review). NEVER silent override. If no Level1 entry → binding not made; proceed to decision flow to create binding (§19.2 only if user continues."
@@ -252,14 +252,14 @@ Then at the end (both modes, except verdict notes):
 
 ### Mode A (GitHub PR) — unchanged:
 - Write review report TO DISK at:
-  `<WORKTREE_ROOT if provided else current-dir>/.trae/review_PR-<ID>_<YYYYMMDD>.md`
-  (If no worktree provided by user, write report to chat + offer to save at `.trae/` of user's choice.)
+  `$HARNESS_SESSION_DIR/reports/review_PR-<ID>_<YYYYMMDD>.md` (EFÊMERO per-session, via contract)
+  (If no worktree / binding exists yet, fallback: write report to chat + offer to save at user home `~/.trae/reports/`.)
 - **DO NOT approve or request changes DIRECTLY on GitHub via `gh pr review`** unless user explicitly asks after seeing the report and saying "suba isso como review oficial". Our first deliverable = the report for the user to review in chat.
 - If there are ZERO findings → still write a report saying "No CRITICAL/HIGH issues found; scope matches; dependencies justified." + list what you checked so user trusts the review was actually done.
 
 ### Mode B (Local Worktree) — NEW:
 - Write review report TO DISK at:
-  `<WORKTREE_ROOT>/.trae/review_LOCAL-WORKTREE_<YYYYMMDD>_<HHMMSS>.md`
+  `$HARNESS_SESSION_DIR/reports/review_LOCAL-WORKTREE_<YYYYMMDD>_<HHMMSS>.md` (EFÊMERO per-session, via contract)
   (Timestamped because there may be multiple local review passes before code is committed.)
 - **DO NOT interact with GitHub at all** in Mode B (no gh commands, no PR creation). Pure local output only.
 - Zero findings → still write report with: "No CRITICAL/HIGH issues found in modified files. Scope matches stated goals; dependencies justified." Include the full changed files list + what you checked per category (Runtime/Security/Deps/Scope) so user trusts audit was actually done.

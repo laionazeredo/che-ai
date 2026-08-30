@@ -26,7 +26,7 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
 
 > **One session = ONE worktree by default. DOUBT = ASK. Never guess. Never silent cross-worktree ops.**
 
-1. **Read existing binding FIRST from Level 1 GLOBAL INDEX (chicken-and-egg resolver):** Read `$HOME/.trae/bindings/registry.md`. Look for LAST entry with:
+1. **Read existing binding FIRST from Level 1 GLOBAL INDEX (chicken-and-egg resolver):** Read `$HOME/.trae/bindings/registry.jsonl`. Look for LAST entry with:
    - `SESSION_ID: <current-session-id-from-ide>` AND `STATUS: BOUND`. If found → use its `WORKTREE_ROOT` as default binding proposal for this session; jump to step 3 only if user explicitly says "switch".
 2. **Binding decision PRECEDENCE (STOP first match):**
    a. **Explicit user mention:** user said "worktree X" or gave path → PROPOSE binding to X, confirm once.
@@ -34,7 +34,7 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
    c. **Working dirs / session memory:** single most-recent worktree referenced prior msgs → PROPOSE it.
    d. **Ambiguous (≥2 candidates or 0):** STOP. AskUserQuestion ≤2 concrete + "other (type path)". NEVER default.
 3. **After user confirms worktree (no existing BOUND for this SESSION_ID in registry):** WRITE INTO BOTH LEVELS (§19 2-LEVEL LAYOUT) — atomically:
-   a. **Level 1 (GLOBAL INDEX append-only):** Append entry to `$HOME/.trae/bindings/registry.md`. NEVER overwrite existing BOUND entries (keep history). Add delimiter `---` after entry. Format:
+   a. **Level 1 (GLOBAL INDEX append-only JSONL):** NÃO use Edit/Write manual. Use HELPER OFICIAL ÚNICO: `source $HOME/.trae/contracts/harness_sessions_contract.sh && harness_registry_append_jsonl <SESSION_ID> BOUND <WORKTREE_ROOT> '{payload json}'. NEVER overwrite existing BOUND entries (keep histórico append-only). Helper faz dedup sha256 automaticamente + JSON safe sort_keys. Payload fields opcionais: workspace_name, worktree_slug, branch, friendly_name, harness_session_dir, harness_workspace_shared, workspace_file, reason, flags:{LANG_PT_CHECK:ENABLED|DISABLED}. Schema _v:1 por linha.
       ```
       SESSION_ID: <current-session-id-from-ide>
       WORKTREE_ROOT: <absolute path>
@@ -77,44 +77,54 @@ All harness documents produced during execution MUST live inside:
 
 Where:
 - `<task-id>` is a slug like `feat-login-flow` or `fix-payment-npe` (derived from feature name or Linear/Jira ticket if available).
-- If `.trae/` does not exist under the worktree, create it.
-- Create the `<task-id>/` subdirectory immediately after preflight passes.
+- Before ANY file writes: resolve paths via contract: `source ~/.trae/contracts/harness_sessions_contract.sh` then `harness_compute_paths WORKTREE_ROOT SESSION_ID CWD`. Never hardcode.
+- Run `harness_ensure_session_dirs` immediately after binding decision. Creates 2 directory trees **outside user's worktree**: `$HARNESS_WORKSPACE_SHARED/` (durable multi-session) + `$HARNESS_SESSION_DIR/` (ephemeral per-session). MORATORIUM: never write generated files under `<WORKTREE_ROOT>/.trae/*`.
 
 **MANDATORY files created by this skill:**
 
 | File | Location | When created | Purpose |
 |---|---|---|---|
-| `registry.md` entries + `session-<id>.md` files (2-LEVEL) | Level1 = `$HOME/.trae/bindings/registry.md` (GLOBAL 1 único usuário, fora worktrees / append only, entry por sessão). Level2 = `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md` (por sessão, dentro worktree). | Immediately preflight 0.1 after binding decision (before ANY scope). | **Session ↔ worktree.** Resolve chicken-and-egg (Level 1: SESSION_ID → WORKTREE_ROOT em 1 leitura sem conhecer a worktree antes). Multi-sessão paralela: 2 linhas separadas Level1, zero lock. |
-| `session.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | Start session | Session metadata: task-id, worktree path, start time, goals. |
-| `task_graph.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | After scope capture | Full list tasks, deps, status, DONE criteria. |
-| `task_envelope_<id>.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | One per task before Dev handoff | Formal contract per task |
-| `decision.log.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | Append during execution | Trade-off / non-obvious decision rationale |
-| `manual_test_plan.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | After all tasks DONE | Step-by-step manual verification plan |
-| `final_summary.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | End of session | Delivered content, risks, stats |
-| `gh_stack_plan.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | After TASK GRAPH (Phase 1.4) only if trigger ≥3 tasks or >15 files | gh-stack hierarchical PR plan; layers/branch names/scope-per-PR/Depends-on. APPROVED status before /harness-ship consumes |
-| `test_spec_smoke.md` | `<WORKTREE_ROOT>/.trae/<task-id>/` | Phase 1.5 (before ANY task envelope handed to Dev) | 1-page BDD test contract: 3–5 core Given-When-Then behaviors, test split (unit/e2e/manual), files to touch, 2–3 key invariants, explicit out-of-scope tests. Status APPROVED before ANY code writes. |
+| `registry.jsonl` entries + `binding.md` (2-LEVEL) | Level1 = `$HOME/.trae/bindings/registry.jsonl` (GLOBAL append-only JSONL, entry por session. ÚNICO writer = helper `harness_registry_append_jsonl`, NÃO Edit/Write manual). Level2 = `$HARNESS_SESSION_DIR/binding.md` (per session, OUTSIDE user worktree — never committed). | Immediately preflight 0.1 after binding decision (before ANY scope). | **Session ↔ worktree.** Resolve chicken-and-egg (Level1: `SESSION_ID → WORKTREE_ROOT`). Level1 payload JSONL fields: `friendly_name`, `flags.LANG_PT_CHECK=ENABLED|DISABLED`, `workspace_name`, `worktree_slug`, `branch`, `harness_session_dir`, `harness_workspace_shared`, `workspace_file`, `reason`. |
+| `spec_<slug>.md` | `$HARNESS_WORKSPACE_SHARED/` | §0.5 BEFORE scope capture. Generated by harness-spec skill (4 inputs: existing/ticket/Flockr PRD/inline). Durable: shared across sessions; Approved status = GATE unlock. | **Execution contract.** 7 sections + YAML frontmatter (change_class, blast radius, DbC PRE/POST/INV, MoSCoW GWT AC + TEST_METHOD per AC, test strategy thresholds, hints, approved_at). Replaces legacy PRD. |
+| `session.md` | `$HARNESS_SESSION_DIR/` | Start session | Session metadata: task-id, worktree path, start time, goals. |
+| `task_graph.md` | `$HARNESS_WORKSPACE_SHARED/` | After scope capture | Full list tasks, deps, status, DONE criteria. Durable: shared across sessions on same worktree. |
+| `task_envelope_<id>.md` | `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/` | One per task before Dev handoff | Formal contract per task. Subdir per task in durable workspace area. |
+| `decisions.log.jsonl` | `$HARNESS_WORKSPACE_SHARED/` | Append during execution (single shared file per worktree) | Trade-off / non-obvious decision rationale. Multi-session durable: not fragmented per task-id. |
+| `manual_test_plan.md` | `$HARNESS_WORKSPACE_SHARED/` | After all tasks DONE | Step-by-step manual verification plan. Durable (reusable in future sessions on same worktree). |
+| `final_summary.md` | `$HARNESS_SESSION_DIR/` | End of session | Delivered content, risks, stats for THIS run only. |
+| `gh_stack_plan.md` | `$HARNESS_WORKSPACE_SHARED/` | After TASK GRAPH (Phase 1.4) only if trigger ≥3 tasks or >15 files | gh-stack hierarchical PR plan. APPROVED status before `/harness-ship` consumes. Durable. |
+| `test_spec_smoke.md` | `$HARNESS_WORKSPACE_SHARED/tasks/<task-id>/` | Phase 1.5 (before ANY task envelope handed to Dev) | 1-page BDD test contract: 3–5 core Given-When-Then behaviors. |
 
 ---
 
 ## 1. Phase 0 — SCOPE CAPTURE (once per feature)
 
-### 0.5 Preflight: Approved PRD validation (NEW — P1.6)
+### 0.5 Preflight: Approved SPEC validation (GATE before scope capture)
 
-Before asking for ACs/goals, check:
-1. If the user provided a PRD file path → verify it exists AND its status section says "Approved" (or equivalent user confirmation text).
-2. If a PRD was expected (feature work, not a tiny bugfix) but NONE provided → say:
-   > "Para escopos de feature, recomendo rodar `/harness-prd` antes para termos um PRD aprovado com todos os GAP checks (G1–G10: GDPR, GBP Pence, Supabase RLS default, PII nunca raw logado, etc.). Quer:
-   > A) Rodar `/harness-prd` agora para gerar PRD formal?
-   > B) Prosseguir sem PRD (você assume responsabilidade de fornecer ACs explícitas)?
-3. If user chooses B → proceed. Log decision in `decision.log.md` entry: `[PRD-OVERRIDE] scope capture started without Approved PRD — user confirmed.`
+This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and `harness_ensure_session_dirs`, **BEFORE** any §1 scope capture questions.
+
+1. **Glob existing specs:** Look in `$HARNESS_WORKSPACE_SHARED/spec_*.md`. Parse YAML frontmatter `status` of each.
+2. **Count Approved specs:**
+   - **Exactly 1 Approved:** Ask user: "Found 1 Approved SPEC. Use this existing SPEC? (A) Yes, skip generation / (B) Generate new SPEC".
+   - **≥2 Approved:** List slugs and ask user to pick 1, OR "Generate new".
+   - **0 Approved:** Proceed straight to step 3.
+3. **If generate new or 0 Approved:** Invoke the **`harness-spec`** Skill. Pass along any user-provided PRD path, ticket URL, or inline description the user gave in the current message. Capture returned last-2-lines:
+   ```
+   SPEC_PATH=<abs-path>
+   SPEC_STATUS=Approved|Draft
+   ```
+4. **Gate enforcement:**
+   - If `SPEC_STATUS=Approved` (either existing or freshly approved by user) → unlock scope capture §1.1. Set `SESSION_SPEC_PATH=<path>` for downstream skills.
+   - If `SPEC_STATUS=Draft` after harness-spec finishes (user cancelled Approval) → offer: "(A) Run scope capture WITHOUT approved SPEC (log override to decisions) / (B) Stop here, finish SPEC later via /harness-spec".
+5. **Case A (override without Approved SPEC):** Append entry to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` → `[SPEC-OVERRIDE] scope capture started without Approved SPEC — user confirmed. Reason: <user typed reason or "cancel-approval" exit>`. Proceed to §1.
 
 ### 1.1 Input validation
 
 Check if user provided:
-- [ ] PRD or spec document (existing file or inline description) — OR explicit user confirmation `B` from step 0.5
+- [ ] Approved SPEC file (session SPEC_PATH set by §0.5) — OR explicit SPEC-OVERRIDE decision logged
 - [ ] Goals / problem statement
 - [ ] Constraints (tech, time, architectural, business)
-- [ ] Acceptance Criteria (ACs) — prefer Given/When/Then format
+- [ ] Acceptance Criteria (ACs) — prefer Given/When/Then format (auto-populate from SPEC §4 if available)
 - [ ] Existing task list OR expects this skill to generate one
 
 If **any** item above is missing → **ASK the user** with specific questions before proceeding.
@@ -133,7 +143,7 @@ If user said "decompose into tasks" or did not provide a list:
 
 ### 1.3 Build TASK GRAPH
 
-Write `<WORKTREE_ROOT>/.trae/<task-id>/task_graph.md`:
+Write `$HARNESS_WORKSPACE_SHARED/task_graph.md` (resolved via `harness_compute_paths` — durable, shared across sessions on this worktree):
 
 ```markdown
 # TASK GRAPH — <task-id>
@@ -188,7 +198,7 @@ If `needs_gh_stack = FALSE` → SKIP. Mark in session.md: `gh-stack: NOT NEEDED 
 If `needs_gh_stack = TRUE` → Step B.
 
 **Step B — Build gh_stack_plan.md:**
-Group the TASK GRAPH tasks into "PR layers" (semantic groups). Bottom layers = contracts/types/data-model. Top layers = UI/routes/integration tests. Write to `<WORKTREE_ROOT>/.trae/<task-id>/gh_stack_plan.md`:
+Group the TASK GRAPH tasks into "PR layers" (semantic groups). Bottom layers = contracts/types/data-model. Top layers = UI/routes/integration tests. Write to `$HARNESS_WORKSPACE_SHARED/gh_stack_plan.md` (durable area):
 
 ```
 # GH STACK PLAN — <task-id>
@@ -234,7 +244,7 @@ Also add `gh_stack_plan.md` to the mandatory files list (OPTIONAL; present only 
 
 Who does it: SM runs in QA mindset (or invokes harness-qa for this specific step if separate QA agent slot is available).
 
-Output file: `<WORKTREE_ROOT>/.trae/<task-id>/test_spec_smoke.md` (ONE file for the whole feature/task, NOT per-task per envelope.)
+Output file: `$HARNESS_WORKSPACE_SHARED/tasks/<task-id>/test_spec_smoke.md` (ONE file for the whole feature/task, NOT per-task per envelope. Durable area: reusable, survives session cleanup.)
 
 ### 1.5.1 Content (5 mandatory bullets, ≤15 lines TOTAL):
 
@@ -320,7 +330,7 @@ Create `<WORKTREE_ROOT>/.trae/<task-id>/task_envelope_<TASK_ID>.md`
 using the template in `references/TASK_ENVELOPE_TEMPLATE.md`.
 
 **CRITICAL fields that prevent scope creep:**
-- **Blast radius**: explicit list of files / directories that MAY be touched. If Dev needs to touch something outside → must come back to SM for approval, logged to `decision.log.md`.
+- **Blast radius**: explicit list of files / directories that MAY be touched. If Dev needs to touch something outside → must come back to SM for approval, logged to `decisions.log.jsonl`.
 - **Reuse mandate**: specific existing functions, classes, or modules that MUST be reused (if applicable).
 - **Max files heuristic**: if task envelope anticipates > 10 files → SM must re-evaluate and justify in decision.log.
 
@@ -410,7 +420,7 @@ Create `<WORKTREE_ROOT>/.trae/<task-id>/final_summary.md`:
 - Total Dev iterations: <sum of (scope loops + qa loops + compliance loops)>
 
 ## Trade-offs / Decisions Logged
-- <bulleted list of key entries from decision.log.md>
+- <bulleted list of key entries from decisions.log.jsonl>
 
 ## Remaining Risks
 - <anything that could blow up in prod, with severity>

@@ -22,7 +22,7 @@ Lightweight inline command (no Skill needed):
 3. For `compliance-heavy` gate:
    - Require EXPLICIT confirmation TWICE from user.
    - Print HUGE warning (PT-BR): "Isso vai liberar sem checagem de segurança profunda. Continuar mesmo assim?"
-4. Append to `decision.log.md` inside `.trae/<task-id>/`:
+4. Append to `decisions.log.jsonl` inside `.trae/<task-id>/`:
    `[<date>] [SKIP GATE] <gate> — reason: <reason> — user-approved`
 5. Mark gate in TASK GRAPH as passed with skip annotation:
    e.g. `QA_OK (SKIPPED — see decision.log)`

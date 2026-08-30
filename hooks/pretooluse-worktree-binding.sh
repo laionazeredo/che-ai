@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
 # Hook 1 (GLOBAL OBRIGATÓRIO §19): PreToolUse — Worktree Session Binding Guard
 # 2-LEVEL LAYOUT:
-#   Level 1 = GLOBAL INDEX (AUTHORITY): $HOME/.trae/bindings/registry.md
+#   Level 1 = GLOBAL INDEX (AUTHORITY): $HOME/.trae/bindings/registry.jsonl
 #     entry per SESSION_ID. Resolves chicken-and-egg: lookup WORKTREE_ROOT from SESSION_ID
 #     WITHOUT knowing worktree first. 1 session = 1 BOUND entry active (last STATUS=BOUND wins)
-#   Level 2 = PER-SESSION DETAIL (per-worktree inside worktree): not used by this hook for scissor checks;
-#     only SM/Ship/Dev read level 2 for re-binding audit chain.
+#     NÃO use Edit/Write direto. Sempre source harness_sessions_contract.sh + harness_registry_append_jsonl.
+#   Level 2 = PER-SESSION DETAIL (FORA WORKTREE USER — NUNCA commitado):
+#     $HARNESS_SESSION_DIR/binding.md (resolvido via harness_sessions_contract.sh).
+#     Not used by this hook for scissor checks; only SM/Ship/Dev read level 2 for audit chain.
 #
 # This hook exits 2 (BLOCK) only when:
 #   (a) SESSION_ID FOUND in Level1 registry AND target path outside BOUND WORKTREE_ROOT active STATUS=BOUND
-# Otherwise allow (allow unknown sessions proceed to binding-decision flow §19.2.
+#       AND target path is NOT inside $HARNESS_SESSIONS_ROOT (exceção paths gerados).
+# Otherwise allow (allow unknown sessions proceed to binding-decision flow §19.2).
 #
 # Input  stdin JSON: {event, sessionId, toolName, toolArgs: {...}}
 # Output stdout JSON: {decision allow/block + reason}
 # Exit code 0=allow / 2=block
 
 set -euo pipefail
+
+CONTRACTS_SH="${HOME}/.trae/contracts/harness_sessions_contract.sh"
+if [ -f "$CONTRACTS_SH" ]; then
+  # shellcheck disable=SC1090
+  source "$CONTRACTS_SH"
+fi
 
 INPUT_JSON="$(cat)"
 
@@ -28,24 +37,10 @@ if [[ ! "$TOOL_NAME" =~ ^($TOOLS_TO_GUARD)$ ]]; then
   exit 0
 fi
 
-# --- LEVEL 1 LOOKUP (registry.md, chicken-and-egg solved: lookup by SESSION_ID ---
-REGISTRY_FILE="$HOME/.trae/bindings/registry.md"
-BOUND_ROOT=""
-if [ -n "$SESSION_ID" ] && [ -f "$REGISTRY_FILE" ]; then
-  # Split entries separated by '---' delimiters, find last entry matching this session with STATUS=BOUND
-  SESSION_ENTRIES=$(awk -v RS='---' -v sid="SESSION_ID: $SESSION_ID" '$0 ~ sid {print $0}' "$REGISTRY_FILE" 2>/dev/null || true)
-  if [ -n "$SESSION_ENTRIES" ]; then
-    # SESSION_ENTRIES já contém SÓ blocos desta sessão (split RS='---' + filter SESSION_ID).
-    # Ordem cronológica: primeira entrada = mais antiga, última = mais recente.
-    # Pegar ÚLTIMA ocorrência de WORKTREE_ROOT (binding ativo mais novo).
-    BOUND_ROOT=$(echo "$SESSION_ENTRIES" | grep -E '^WORKTREE_ROOT:' | tail -1 | cut -d: -f2- | tr -d '[:space:]' || true)
-  fi
-fi
-
-if [ -z "$BOUND_ROOT" ]; then
-  echo '{"decision":"allow","reason":"§19: Nenhuma entrada BOUND para SESSION_ID no Level 1 registry (ainda não houve binding decision nesta sessão). Prossiga para §19.2 binding decision flow. Scissor check permitido."}'
-  exit 0
-fi
+# --- HARNESS_SESSIONS_ROOT EXCEPTION (explicit, by design) ---
+# Paths de dados gerados (plans, reports, qa, Level2 binding) são SEMPRE permitidos.
+# Eles estão fora do código do usuário → não há risco cross-worktree de código.
+HARNESS_SESSIONS_ROOT="${HARNESS_SESSIONS_ROOT:-$HOME/code/harness-sessions}"
 
 extract_paths() {
   jq -r '[.toolArgs.file_path // empty,
@@ -58,6 +53,41 @@ extract_paths() {
 }
 
 mapfile -t CANDIDATE_PATHS < <(extract_paths)
+
+# Early allow: qualquer path candidato começa com HARNESS_SESSIONS_ROOT → permitido
+for p in "${CANDIDATE_PATHS[@]}"; do
+  if [[ "$p" == "$HARNESS_SESSIONS_ROOT"/* ]]; then
+    echo '{"decision":"allow","reason":"§19 EXCEÇÃO HARNESS_SESSIONS_ROOT: path alvo é pasta de dados gerados/efêmeros harness (fora código usuário). Scissor bypassed by design."}'
+    exit 0
+  fi
+done
+
+# --- LEVEL 1 LOOKUP JSONL (chicken-and-egg solved: lookup by SESSION_ID) ---
+REGISTRY_FILE="$HOME/.trae/bindings/registry.jsonl"
+BOUND_ROOT=""
+if [ -n "$SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
+  PY_SCRIPT='import json,sys
+p, sid = sys.argv[1:3]
+last = None
+with open(p) as f:
+    for ln in f:
+        ln = ln.strip()
+        if not ln: continue
+        try: e = json.loads(ln)
+        except Exception: continue
+        if e.get("session_id") == sid and e.get("status") == "BOUND":
+            last = e
+if last is None:
+    sys.exit(1)
+print(last.get("worktree_root") or "")'
+  BOUND_ROOT=$(python3 -c "$PY_SCRIPT" "$REGISTRY_FILE" "$SESSION_ID" 2>/dev/null) || true
+fi
+
+if [ -z "$BOUND_ROOT" ]; then
+  echo '{"decision":"allow","reason":"§19: Nenhuma entrada BOUND para SESSION_ID no Level 1 registry.jsonl (ainda não houve binding decision nesta sessão). Prossiga para §19.2 binding decision flow. Scissor check permitido."}'
+  exit 0
+fi
+
 WORKTREE_PREFIXES=()
 for p in "${CANDIDATE_PATHS[@]}"; do
   if [[ "$p" == */Lumos || "$p" == */Lumos/* || "$p" == */Lumos.worktrees/* ]]; then
