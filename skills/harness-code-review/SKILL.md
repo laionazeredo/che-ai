@@ -355,7 +355,7 @@ Checks:
      - (d) Se só tem inline calculations (sem direct repo instantiation) e não tem service equivalente → **MEDIUM**.
    - Fix: router procedure = 3 linhas máximo: `validate input` → `authorize assertCan(...)` → `call service.someMethod(...)`. Methods de service retornam structs que o router só repassa como response.
 2. **Repository-layer bypass writes inside services (HIGH for writes; MEDIUM for reads)**. If diff contains `queryRunner.manager.getRepository(X).update/.insert/.delete`, or raw `.createQueryBuilder(...).execute()` writes inside a service file (not a repository file). Architecture rule: "Repositories own all TypeORM querying". HIGH if writes (breaks the atomic DB schema surface); MEDIUM if read-only queries.
-3. **Entity/enum definitions inside apps** (data-layer.md rules). Flag HIGH if apps define TypeORM entities / duplicate enums / own migration runners. All come from `@flockr/db` shared package.
+3. **Entity/enum definitions inside apps** (shared DB package pattern). Flag HIGH if apps define TypeORM entities / duplicate enums / own migration runners. All entities should live in the shared DB package detected by harness-xray (look for `@<scope>/db` / `packages/db` / project profile). Only bypass if project profile explicitly says "no monorepo DB package".
 4. **Migration Hygiene — hand-created fabricated timestamps + intra-branch consolidation + RLS policy defaults (HIGH/MEDIUM)**. Se `changedFiles[]` contiver quaisquer arquivos em paths `**/migrations/*.ts` / `**/migrations/*.sql` / `**/db/migrations/*`:
    - **(a) Fabricated timestamps (HIGH)**: Extraia o prefixo numérico (geralmente 13 dígitos ms UNIX) de CADA migration filename (ex: `1788150000000-CreateRefundsTable.ts`, `1788150001000-AddPaymentsRefundId.ts`). SE múltiplas migrations no mesmo branch tem timestamps REDONDOS / IGUAIS NO ÚLTIMO 3-4 DÍGITOS / espaçamento EXATO entre si (ex: 1000ms, 10_000ms) → **HIGH**. Motivo: `migration:create` CLI gera timestamps de tempo real (aleatórios nos últimos dígitos). Timestamps redondos/arredondados = arquivo criado à mão → viola packages/db rule "Never hand-create migration files".
    - **(b) Intra-branch patching (HIGH)**: Uma migration M-1 cria um enum tipo X (ex: `CREATE TYPE refund_status_enum AS ENUM (PENDING,COMPLETED,FAILED)`), e OUTRA migration M-2/M-3/... DENTRO DO MESMO BRANCH (mesmo diff) ALTERA esse mesmo enum com `ALTER TYPE ... ADD VALUE` ou DROP + RECREATE → **HIGH**. Motivo: pré-merge, branch migrations DEVEM ser consolidadas em 1 migration end-state (não 5 patches seguidos).
@@ -407,6 +407,49 @@ How:
 
 ---
 
+### Category 5: 🟡 Design Quality / Ousterhout RED FLAGS (engineering-contracts Appendix D D.1) — HIGH if RF01-RF04, MEDIUM if RF05-RF13
+
+Appendix D canonical source → `skills/engineering-contracts/SKILL.md` "Appendix D — A Philosophy of Software Design (John Ousterhout)". This category never flags patterns explicitly requested in the ticket scope (downgrade to NIT waivable only if scope explicitly asked for the abstraction shape).
+
+**How to apply this category (never guess — always diff-based):**
+
+1. **RF01 — Shallow Module / Class / Abstraction (HIGH if NEW abstraction, 3+ files depend on it, API surface > implementation lines)**.
+   - Trigger: Diff adds a NEW exported `class X`, `interface X`, `abstract class X`, `function createXService()` factory, or `useX()` hook, AND: (a) the abstraction has `> 8 public exports/methods` OR (b) 3+ OTHER files in the diff import from it, AND (c) total implementation LOC inside the abstraction is `≤ 1.2× the public API surface LOC` (lines of signatures/exports/types = ~same as implementation). This is Ousterhout #1 signature red flag: "new abstraction adds complexity without hiding any."
+   - Downgrade to NIT if: scope file / task envelope explicitly says "create this interface / this generic hook for reuse across future features."
+
+2. **RF02 — Information Leakage across module boundaries (HIGH if cross-package / cross-layer)**.
+   - Trigger (scan imports + function args):
+     - Service file in `packages/foo/src/services/x.ts` imports a DATABASE-SPECIFIC type (ex: `QueryRunner`, `EntityManager`, `SupabaseClient`) from a DB-only package and exposes it in any public function parameter or return type → caller must now know the DB engine = info leakage HIGH.
+     - Backend route handler returns an internal DB entity CLASS directly (not a pick/omit/response DTO type) including internal fields (ex: `stripeIdRaw`, `authzCache`, internal enums) → frontend now knows backend schema details = HIGH.
+     - Config parsing details (zod schema field names, `process.env.KEY` lookups) leak into component/service files (not just a typed config object) = MEDIUM.
+
+3. **RF03 — Pass-Through Method / Handler Chain (HIGH if ≥3 layers deep with NO logic)**.
+   - Trigger: Find a call chain `router.foo → service.foo(...args) → repository.foo(...args) → queryRunner.manager.getRepository(X).foo(...args)` where 2+ consecutive layers do NOTHING except pass the exact same args forward (no validation, no authz, no mapping, no idempotency key injection, no error wrapping, no metric emit). Flag HIGH per chain of depth ≥3 with ZERO added value per intermediate layer. If one layer adds authz or input validation only → flag MEDIUM (still suspicious but not pure passthrough).
+
+4. **RF04 — Temporal Decomposition (HIGH if a business concept is split into classes/modules by PHASE instead of by DOMAIN ENTITY)**.
+   - Trigger (file structure scan): If scope was "process a refund" → diff creates files like `RefundStep1Validate.ts`, `RefundStep2StripeCall.ts`, `RefundStep3UpdateDB.ts`, `RefundStep4EmitEvent.ts` with NO `RefundService.ts` / `Refund aggregate` file that OWNS the concept + invariant checks. Files grouped by WHEN they run (sequential phases) instead of WHAT domain concept they implement → HIGH. Correct shape = one module owns the concept and its invariants, exposes one method orchestrating the steps internally.
+
+5. **RF05 — Repetition / Near-Duplicate Logic (MEDIUM if 2+ blocks, NIT if just formatting)**.
+   - Scan for two+ blocks in the diff with `≥ 12 identical token sequences` in different files (not test fixtures). Flag MEDIUM unless scope explicitly says "ship fast with duplication now, DRY in follow-up PR" (documented in PR body).
+
+6. **RF06 — Over-generic `<T>` with exactly 1 concrete caller (MEDIUM)**.
+   - Trigger: Diff adds `class Foo<T>` or `function bar<T>()` or `interface X<T, U, V>` with 3+ generic params, AND there is EXACTLY 1 concrete instantiation/caller in the whole repo. If scope explicitly mentions "will be reused in epic Y" → downgrade to LOW waivable.
+
+7. **RF07 — Comment / Over-comment Explaining WHAT, not WHY (MEDIUM if masking complexity)**.
+   - Trigger: A `/* 5+ line comment block */` that literally restates the next 5 lines in English (ex: "Now we get the order and then we check if it's paid" followed by `const order = await repo.findById(); if (order.status === PAID) {...}`). If the code needs that much WHAT-comment → the abstraction is wrong; rename functions/extract helpers instead of prose. MEDIUM only if total comment-LOC ≥ implementation-LOC for that block.
+
+8. **RF08-RF13 — Secondary flags (all MEDIUM, grouped):**
+   - RF08: Boolean-flag hell = function with `≥ 4 boolean params` controlling internal behavior (prefer 2 separate functions / strategy 2-max).
+   - RF09: Conjoined methods = one public function whose body does two conceptually unrelated things with a single shared error path (split).
+   - RF10: Configuration/config flags explosion = `≥ 5 new YAML/env vars added` for ONE feature with no justification in scope (default-first, expose only what users must override).
+   - RF11: Unused generality / unused extension point = NEW exported parameter, optional overload, or interface method that has ZERO callers in the diff and zero mention in the scope document.
+   - RF12: Wrong naming = class/module name is a VERB (ex: `ProcessRefund.ts`) not a NOUN that owns responsibility (ex: `RefundProcessor` or better `RefundService`).
+   - RF13: Hidden side effect in a getter/helper = function named `getX`, `loadX`, `findX`, `formatX` that actually WRITES / MUTATES / EMITS events internally.
+
+**HARD RULE for ship integration §0.9.2 (≤2 HIGH findings auto-fix contract):** ANY Category 5 HIGH finding (RF01-RF04) counts TOWARD the same "≤ 2 HIGH total" ship-gate threshold alongside Categories 0–4 HIGHs. This means: 2 Category 5 HIGHs alone also triggers the Ask User / Request Changes path, just like Architecture HIGHs.
+
+---
+
 ## 3. NON-goals (we explicitly skip these — do NOT waste tokens / time)
 
 - ❌ Biome / formatting / indentation issues. (That's lint CI.)
@@ -444,16 +487,16 @@ Follow template: `references/REVIEW_REPORT_TEMPLATE.md`
 
 For each finding (both modes identical from here):
 - Severity: 🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / LOW WARN NON-BLOCKING
-- Category: Pipeline Integrity / Runtime / Security / Architecture / Scope
+- Category: Pipeline Integrity / Runtime / Security / Architecture / Scope / Design Quality (Ousterhout)
 - File:line
 - Snippet (3 lines before + 3 lines after, from patch)
 - Why this is a problem (evidence-based — never "I don't like it")
-- **Explicit rule citation (MANDATORY when possible)**: quote the EXACT project rule file:line from .claude/rules/*.md / AGENTS.md / decision docs you read during bootstrap. Example: "viola [architecture.md](file:///.../.claude/rules/architecture.md#L12) 'Router → Service → Repository: Routers must not contain business logic >30 lines'".
+- **Explicit rule citation (MANDATORY when possible)**: quote the EXACT project rule file:line from .claude/rules/*.md / AGENTS.md / decision docs you read during bootstrap. Example: "viola [architecture.md](file:///.../.claude/rules/architecture.md#L12) 'Router → Service → Repository: Routers must not contain business logic >30 lines'". For Category 5: ALWAYS cite `engineering-contracts/SKILL.md` Appendix D D.1 with the RF number (ex: "viola Appendix D RF03 — Pass-Through Method ≥3 layers").
 - Actionable fix — specific lines/what should replace
 - Optional: suggest code change snippet ONLY if obvious. NEVER rewrite whole file.
 
 **N-1. Coverage of Review TABLE** (OBRIGATÓRIO — usuário confia audit):
-- 6 rows obrigatórias: §1.5 Bootstrap → Category 0 Pipeline Integrity → Category 1 Runtime → Category 2 Security+PII+Authz audit → Category 3 Architecture/Repo boundary → Category 4 Scope deviation / Demo UI / Test naming
+- 7 rows obrigatórias: §1.5 Bootstrap → Category 0 Pipeline Integrity → Category 1 Runtime → Category 2 Security+PII+Authz audit → Category 3 Architecture/Repo boundary → Category 4 Scope deviation / Demo UI / Test naming → Category 5 Design Quality / Ousterhout RF01-RF13
 - Non-goals (style/format/coverage%) → Skipped intentionally note.
 
 **N. Final verdict section (template):**

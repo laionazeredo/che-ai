@@ -226,9 +226,11 @@ Cada env var NOVAS vs diff marcada:
 
 ---
 
-## 6. CHECK 5 — 🧩 LEAN / KISS / YAGNI — Overengineering Scanner (12 categorias genéricas L1-L12)
+## 6. CHECK 5 — 🧩 LEAN / KISS / YAGNI — Overengineering Scanner (12 categorias genéricas L1-L12 + 13 Ousterhout RED FLAGS Appendix D)
 
 > **Pilar novo introduzido 2026-09.** Combate LLM overengineering by default. Cada linha de código nova tem que justificar sua existência contra o scope explícito do diff. NÃO é "clean code gosto pessoal"; é YAGNI + blast-radius reduction + reuse-before-create do engineering-contracts §1 §4.
+>
+> **Integração Ousterhout (APoSD Appendix D canônico):** Depois de rodar as 12 categorias L1-L12, aplique também as 13 RED FLAGS Appendix D (D.1). Mesmo formato finding com mesmo downgrade scope justificador AC. Severidade default no scope-checker: HIGH (RF01-RF04), MEDIUM (RF05-RF13). Cross-reference com findings do harness-code-review no ship gate.
 
 ### 6.0 Pre-step — Justificador de escopo automático (downgrade severity quando a abstração é pedida no escopo)
 

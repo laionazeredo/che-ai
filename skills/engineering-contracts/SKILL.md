@@ -20,13 +20,29 @@ It is invoked by `harness-developer` FIRST, and its rules **trump local repo con
 
 ## PRECEDENCE ORDER (1 = highest, hard stop; 18 = lowest)
 
-### 1. 🔴 KISS + YAGNI + BLAST RADIUS REDUCTION (above ALL other rules)
+### 1. 🔴 KISS + YAGNI + BLAST RADIUS REDUCTION + NO ACCIDENTAL COMPLEXITY (above ALL other rules)
 
 > These are not "nice to have". They are hard constraints. If any other rule on this list would force you to violate one of these — **VIOLATE THE LOWER RULE, NOT THESE.**
 
 - **KISS (Keep It Simple, Stupid):** If there are two ways and one is simpler (less indirection, fewer files, fewer abstractions), **pick the simpler one always.**
 - **YAGNI (You Ain't Gonna Need It):** Do NOT add infrastructure, abstraction, configuration, module, parameter, feature, OR extensibility point "because future use will need it." Only code what the current, explicit Acceptance Criteria DEMAND.
 - **Blast radius reduction:** Change as few files and as few lines as strictly necessary. Prefer editing 1 function in 1 file to creating 3 files + a pattern. If a PR has >10 files touched → STOP and re-evaluate.
+- **🔴 NO ACCIDENTAL COMPLEXITY HARD RULE (aplica-se ANTES de escrever 1ª linha):**
+  - **Definição:** Complexidade = Essencial (do domínio, inevitável) vs Acidental (nossa culpa — abstração desnecessária, indireção inútil, configuração genérica prematura, framework X só porque "mundo usa", wrapper por wrapper, etc).
+  - **Hard stop processo:** Antes de criar QUALQUER nova abstração / classe / módulo / dependência / CLI flag, você deve se perguntar e responder (registrado mentalmente ou 1 linha em decisions se task for complexa):
+    1. "Isso resolve complexidade ESSENCIAL do domínio do negócio / problema atual?"
+    2. "Consigo resolver o problema atual SEM isso, com 1 wrapper simples / função inline / parâmetro a mais na função existente?"
+    3. "Se eu não fizer isso AGORA, quanto trabalho vai dar para adicionar DEPOIS quando REALMENTE precisar? (≤3 linhas → SEMPRE faça depois; ≤1 dia trabalho → provavelmente também depois)"
+  - **Lista VERMELHA de complexidade acidental (qualquer 1 item é motivo para STOP + re-design):**
+    - ✋ Interface / Protocol / Abstract class com APENAS 1 implementação concreta HOJE (se não tem 2 implementações hoje, não precisa da abstração ainda)
+    - ✋ Dependency Injection container / IoC para ≤5 services (construa manualmente — fábrica de 3 linhas)
+    - ✋ Strategy pattern com ≤2 estratégias E a 2ª é "default que quase nunca muda"
+    - ✋ Event bus / PubSub interno com ≤2 subscribers (chame direto)
+    - ✋ Config / yaml / toml de ambiente para ≤3 flags fixas (env var única basta)
+    - ✋ Micro-serviço splitado sem necessidade de deploy independente provada (monólito modular primeiro)
+    - ✋ Framework novo inteiro só para 1 feature (ex: instalar LangGraph só para loop que já existe via contracts + gates)
+    - ✋ N camadas a mais de indireção "porque arquitetura limpa manda" sem que nenhuma delas resolva um problema real do produto
+    - ✋ Função genérica `<T>` quando só existe 1 tipo concreto sendo passado hoje
 
 ### 2. 🔴 SECURITY & PII COMPLIANCE (hard stop)
 
@@ -514,6 +530,95 @@ gh-stack update --base main
 - Each individual PR passes CI individually (QA + light compliance per PR).
 - If any PR in the stack has blast radius > 20 files → SM goes back to planning and re-breaks it.
 - Body of each non-base PR MUST open with `Depends on: #<previous-pr-number>` (gh-stack does this automatically, but harness validates).
+
+---
+
+## Appendix D — A Philosophy of Software Design (John Ousterhout — CANONICAL Quick-Ref)
+
+> **Fonte original:** John Ousterhout, _A Philosophy of Software Design_, 2ª Ed. (2018, 2021).
+> **Mapa de integração no harness:**
+> - **§1 No Accidental Complexity (hard rule acima)** = fundação 3 primeiros capítulos (complexity is greatest risk).
+> - **harness-scope-checker CHECK 5 (LEAN/YAGNI scanner)** = lê 13 RED FLAGS abaixo + atribui Lean findings (com justificador AC se necessário).
+> - **harness-code-review (gate 0.9.2 no ship)** = cada finding abaixo que aparece no diff ganha severidade: **HIGH** (4 itens em negrito abaixo, quebram deep modules), **MEDIUM** (restantes 9).
+> - **harness-spec antes de escrever código** = checklist "Before You Code" abaixo obrigatório se task ≥ 8 arquivos.
+> - **harness-ship gate 0.9.2 antes de commitar** = checklist "Before You Commit" abaixo obrigatório.
+
+### D.1 13 RED FLAGS DE COMPLEXIDADE (qualquer 1 = aviso; 2+ no mesmo módulo = refatorar antes de PR)
+
+| # | Red flag | O que é | Severidade no code-review |
+|---|---|---|---|
+| RF01 | **Shallow Module** (Módulo Raso) | Interface `public` grande / complexa que entrega pouca funcionalidade útil. Ex: classe com 12 métodos públicos que faz só CRUD simples numa tabela. | **HIGH** |
+| RF02 | **Information Leakage** (Vazamento de Informação) | Detalhe interno de um módulo aparece FORA dele. Ex: consumers de `OrderService` têm que saber `order.discounts[0].raw_percent` em vez de `order.totalAfterDiscounts()`. | **HIGH** |
+| RF03 | **Pass-Through Method** (Método "Repassa") | Método que não faz nada exceto chamar outro método com os mesmos parâmetros (zero valor agregado). Sinal de camada rasa. | **HIGH** |
+| RF04 | **Overexposure / Temporal Decomposition** (Super-Exposição / Decomposição Temporal) | Abstração dividida pelo "passo a passo do tempo" em vez de por conhecimento. Ex: `OrderStep1Create`, `OrderStep2ValidateAddress`, `OrderStep3Charge` em classes separadas (só existe a ordem correta de chamar — não são módulos independentes). | **HIGH** |
+| RF05 | **Repetition** (Duplicação Verdadeira) | Mesma lógica ≥ 3 lugares com ≥ 5 linhas parecidas. Não confundir com "acidentalmente parecido" (esses podem ficar). | MEDIUM |
+| RF06 | **Special-General Mixture** (Mistura Especial-Geral) | Código geral (ex: helper `httpClient`) contém branches de caso especial (`if url == "/checkout/payment"`) que só existem para 1 consumer. | MEDIUM |
+| RF07 | **Conjoined Methods** (Métodos Conjuntos) | Dois métodos que SEMPRE são chamados juntos na mesma ordem. Se A sempre vem depois de B, pertencem ao mesmo método / mesmo módulo. | MEDIUM |
+| RF08 | **Comment Repeats Code** (Comentário Repete Código) | Comentário de linha `// incrementa contador` seguido de `counter++`. Se comentário só traduz o código, apague. | MEDIUM |
+| RF09 | **Implementation Documentation Interface Doc** | Docstring da função pública fala de detalhes internos ("chama Stripe API v1 com idempotency key de 30 chars") em vez de falar do CONTRATO ("dado PaymentIntent id, retorna status + valor autorizado"). | MEDIUM |
+| RF10 | **Too Obscure / Hard to Guess** (Muito Obscuro) | Nome de função ou parâmetro que você não sabe o que faz SEM ler o corpo. Ex: `process(obj, flag)` (flag = boolean 0/1, sem enum). | MEDIUM |
+| RF11 | **Hard to Extend** (Difícil de Estender) | Para adicionar 1 novo caso válido (ex: novo payment method, novo status) você tem que editar ≥ 4 arquivos diferentes e lembrar de todos os lugares. | MEDIUM |
+| RF12 | **Choice not Restriction** (Escolha em vez de Restrição) | API tem 12 parâmetros opcionais e o consumer tem que saber combinação correta. Módulos bons RESTRINGEM o espaço de escolhas do caller. | MEDIUM |
+| RF13 | **Obvious / Easy gotcha** (Pegadinha Óbvia) | Uso normal correto do módulo, mas 1 caso padrão se você se esquecer → bug sutil (ex: `client.send(data)` — se caller não chamar `client.init()` 1 vez antes → silenciosamente falha em produção, sem warning em dev). | MEDIUM |
+
+### D.2 15 PRINCÍPIOS DE DESIGN DO LIVRO (aplicar em ordem)
+
+1. **Complexidade is the Greatest Enemy.** Maior risco em software = complexidade, não bugs isolados. Complexidade cresce exponencialmente com tamanho.
+2. **Make Deep Modules.** O melhor módulo = **pequena interface pública simples** que entrega **grande quantidade de funcionalidade / esconde MUITA complexidade.** Bom ≠ pequeno. Bom = baixa razão (interface / funcionalidade).
+3. **Abstraction = Eliminate Everything Obvious + Preserve Everything Important.** Quando você abstrai, remove tudo o que é óbvio (caller não precisa saber) e deixa visível só o que é ESSENCIAL para usar bem.
+4. **Modules Should be Deep, not Shallow.** Shallow = muitos arquivos, pouca redução de complexidade. Deep = menos arquivos, cada um remove muita dor do resto do sistema.
+5. **Information Hiding + Information Leakage are opposites.** Hiding = detalhe interno existe em 1 lugar só e ninguém sabe. Leakage = detalhe interno aparece em ≥ 2 lugares (qualquer mudança agora é multipla).
+6. **General-Purpose modules are deeper than Special-Purpose ones.** Quando dúvida entre fazer módulo "genérico com caso especial em 1 lugar" vs "especializado", escolha genérico (profundidade maior a longo prazo).
+7. **Different Layer, Different Abstraction.** Camadas devem ter ABSTRAÇÕES DIFERENTES. Se camada HTTP repete exatamente os mesmos campos/parâmetros da camada Service → é pass-through → shallow → joga fora.
+8. **Pull Complexity Downwards.** Sempre que possível, mova complexidade para DENTRO do módulo (abaixo) e deixe a interface (cima) mais simples. NÃO faça caller lidar com casos especiais do módulo.
+9. **Better Together than Apart.** Se duas peças de código compartilham estado / sempre são usadas juntas / uma não faz sentido sem a outra → ELAS PERTENCEM AO MESMO MÓDULO.
+10. **Define Errors out of Existence.** Melhor tratamento de erro = projetar a interface de forma que o erro NÃO POSSA existir / não precise ser tratado por quem chama. Ex: retornar `Option<T>`/`null` semântico em vez de lançar exceção.
+11. **Design it Twice.** Para decisões arquiteturais não óbvias, desenhe 2 abordagens COMPLETAMENTE DIFERENTES no papel (5-10 linhas cada), compare trade-offs, só então escolha. Evita viés de primeira ideia.
+12. **Comments Should Describe Things that aren't Obvious from Code.** Comentar NÃO é "documentar". Comentário bom = explica INTENÇÃO, CONTEXTO, PORQUÊ, CASO ESPECIAL QUE NÃO APARECE NO CÓDIGO. Comentário ruim = traduz sintaxe.
+13. **Write Comments First.** Escreva primeiro a docstring pública / comentários de intenção, SÓ DEPOIS escreva o corpo do código. Se você não consegue explicar sem escrever o código → design ruim.
+14. **Incremental / Agile Development Works for Design Too.** Não precisa desenhar tudo no dia 1. Escreva primeira versão → encontre complexidade acidental → refatore para ficar mais profundo → repita.
+15. **Consistency Reduces Cognitive Load.** Mesmos nomes, mesmos padrões de erro, mesmos formatos de retorno por todo canto. Poder de previsibilidade = redução de complexidade.
+
+### D.3 CHECKLIST BEFORE YOU CODE (obrigatório se task ≥ 8 arquivos / ≥ 300 linhas)
+
+```
+□ (1) Entendi QUAL complexidade ESSENCIAL este módulo resolve?
+□ (2) Já olhei se existe MÓDULO EXISTENTE que resolve 80%+? (Rule 4 REUSE BEFORE CREATE)
+□ (3) Projetei a INTERFACE PÚBLICA PRIMEIRO (antes do corpo)? Ela é MENOR que o corpo esperado?
+□ (4) Interface pública NÃO vaza detalhes internos (storage, framework usado, estrutura de dado)?
+□ (5) Existe NO MÍNIMO 2 casos de uso diferentes para essa abstração hoje? (se 1 = reconsiderar — talvez seja raso)
+□ (6) Defini ERROS FORA DA EXISTÊNCIA onde pude? (retornar Option em vez de throw, etc)
+□ (7) Nome da função / parâmetros = obvio sem ler o corpo? (se não = renomeie)
+□ (8) Comentário público / docstring descreve CONTRATO (o que faz, entrada, saída, side effects), NÃO implementação?
+□ (9) Complexidade foi PUXADA PARA DENTRO do módulo (caller não sabe de casos especiais)?
+```
+
+### D.4 CHECKLIST BEFORE YOU COMMIT (obrigatório antes de `/harness-ship`)
+
+```
+□ (1) Nenhum dos 13 RED FLAGS (D.1) aparece NO DIF que vou commitar?
+      → Se RF01,RF02,RF03,RF04 aparecerem: HIGH severity no code-review (≤ 2 HIGHs com 0 CRITICAL = auto-fix no ship; >2 HIGHs = pare e refatore antes).
+□ (2) Cada novo módulo / classe tem interface PÚBLICA pequena comparada ao valor entregue?
+□ (3) Nenhum método Pass-Through (repasse sem valor) novo?
+□ (4) Nenhum Information Leakage (detalhe interno de arquivo A aparece em arquivo B consumer)?
+□ (5) Comentários novos = explicam intenção/porquê/contexto (não repetem sintaxe)?
+□ (6) Adicionei complexidade ESSENCIAL (do domínio) ou ACIDENTAL? (Se acidental → remova ANTES do commit.)
+□ (7) Se mudei interface pública: atualizei / escrevi docstring contrato primeiro?
+□ (8) Consistência: este código segue os mesmos nomes / padrões / erro handling do resto do módulo?
+```
+
+### D.5 MAPA: Quando usar qual princípio (8 situações canônicas)
+
+| Situação | Princípios chave | Harness integration |
+|---|---|---|
+| Criando NOVA classe / módulo do zero | D.2 #2 (deep), #3 (abstraction), #6 (general-purpose), #13 (comments first) | harness-spec §6 hints + Before-You-Code (D.3) |
+| Refatorando módulo existente que está "ruim" | D.2 #1 (enemy complexity), #4 (not shallow), #9 (together), #10 (errors out) | harness-code-review HIGH findings → auto-fix |
+| Criando interface pública / API tRPC / REST | D.2 #5 (no leakage), #8 (pull down), #12 (restriction, not choice), #15 (consistency) | scope-checker CHECK4 env + design doc |
+| Tratamento de erros / edge cases | D.2 #10 (define erros fora existência) + §2 security | code-review MEDIUM findings |
+| Nomeando funções / parâmetros / variáveis | D.1 RF10 (não obscuro) + D.2 #15 (consistência) | code-review nit auto-fix |
+| Escrevendo comentários / docs | D.1 RF08,RF09 (não repete código / não doc interna) + D.2 #12, #13 (comments first) | code-review comments guideline §16 |
+| Decisão arquitetural grande (nova layer, nova lib) | D.2 #11 (design twice) + §1 No Accidental Complexity | ADR skill (adr-architecture) obrigatório |
+| Planejando feature grande / épico (antes SPEC) | D.2 #1 (complexity é enemy #1) + #7 (different abstraction por layer) | harness-project-knowledge + xray arquitetura |
 
 ---
 

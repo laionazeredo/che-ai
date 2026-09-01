@@ -19,6 +19,14 @@
 #   HARNESS_SESSION_DIR        = $HARNESS_WORKTREE_DIR/sessions/$SESSION_ID  (efêmero per-session)
 #   HARNESS_LEVEL2_BINDING     = $HARNESS_SESSION_DIR/binding.md  (§19 Level 2 detail)
 #   HARNESS_DECISIONS_LOG      = $HARNESS_WORKSPACE_SHARED/decisions.log.jsonl  (single source of truth, append-only JSONL)
+#   ——— NÍVEL 1.5 NOVO (compartilhado worktrees × sessões do MESMO projeto) ———
+#   HARNESS_PROJECT_SLUG  = slug canônico do PROJETO (derivado git remote origin URL)
+#   HARNESS_PROJECT_DIR   = $HARNESS_SESSIONS_ROOT/.registry/projects/$HARNESS_PROJECT_SLUG
+#   HARNESS_PROJECT_PROFILE    = $HARNESS_PROJECT_DIR/project_profile.md   (auto: harness-xray)
+#   HARNESS_PRODUCT_CONTEXT    = $HARNESS_PROJECT_DIR/product_context.md   (humano: harness-project-knowledge)
+#   HARNESS_ARCHITECTURE_DOC   = $HARNESS_PROJECT_DIR/architecture.md      (hybrid auto+manual)
+#   HARNESS_ROADMAP_DOC        = $HARNESS_PROJECT_DIR/roadmap.md           (humano)
+#   HARNESS_PROJECT_REGISTRY   = $HARNESS_PROJECT_DIR/registry.jsonl       (append-only audit)
 #
 # FUNÇÕES EXTRA (DECISIONS.JSONL):
 #   harness_decisions_path  [cwd_override]
@@ -200,6 +208,58 @@ harness_resolve_worktree_slug() {
   echo "${safe_repo}__${safe_branch}"
 }
 
+# =========================================================
+# NÍVEL 1.5 — PROJECT REGISTRY HELPERS (compartilhado worktrees × sessões)
+# =========================================================
+# Slug canônico do PROJETO = derivado da URL do git remote "origin".
+# NÃO depende de branch NÃO depende de worktree: mesmo projeto = mesmo slug,
+# independente de quantas worktrees/features locais existam.
+# Exemplos:
+#   git@github.com:laionazeredo/trae-config.git        → laionazeredo--trae-config
+#   https://github.com/flockr/Lumos.git                 → flockr--Lumos
+#   /home/user/myrepo (sem remote, só .git local)        → local--myrepo
+harness_project_slug_from_git_origin() {
+  local worktree_root="${1:-$WORKTREE_ROOT}"
+  [ -n "$worktree_root" ] || { echo "harness_project_slug_from_git_origin: WORKTREE_ROOT empty" >&2; return 2; }
+
+  local origin_url=""
+  if command -v git >/dev/null 2>&1; then
+    origin_url="$(git -C "$worktree_root" remote get-url origin 2>/dev/null || echo "")"
+  fi
+
+  local raw=""
+  if [ -n "$origin_url" ]; then
+    # Remove protocol prefix (https://, git@, ssh://) e trailing .git
+    raw="$(echo "$origin_url" \
+      | sed -E 's#^(https?://|git@|ssh://|git://)##' \
+      | sed -E 's#\.git$##' \
+      | sed -E 's#^[^:]+:#/#')"   # transforma git@host:owner/repo → host/owner/repo
+  else
+    # Fallback: sem remote → slugifica basename da worktree
+    raw="local/$(basename "$worktree_root")"
+  fi
+
+  # Substitui tudo que não é alfanum/hífen por -- e colapsa múltiplos --
+  echo "$raw" \
+    | sed -E 's#[^a-zA-Z0-9_-]#--#g' \
+    | sed -E 's#--+#--#g' \
+    | sed -E 's#^--|--$##g'
+}
+
+# Retorna path absoluto do registry do projeto (sem criar diretório).
+harness_project_registry_dir() {
+  local project_slug="${1:-$HARNESS_PROJECT_SLUG}"
+  [ -n "$project_slug" ] || { echo "harness_project_registry_dir: project_slug empty" >&2; return 2; }
+  echo "$HARNESS_SESSIONS_ROOT/.registry/projects/$project_slug"
+}
+
+# Helpers de arquivo específico no registry do projeto.
+harness_project_profile_path()    { harness_project_registry_dir "$@" | xargs -I{} echo "{}/project_profile.md"; }
+harness_product_context_path()    { harness_project_registry_dir "$@" | xargs -I{} echo "{}/product_context.md"; }
+harness_architecture_doc_path()   { harness_project_registry_dir "$@" | xargs -I{} echo "{}/architecture.md"; }
+harness_roadmap_doc_path()        { harness_project_registry_dir "$@" | xargs -I{} echo "{}/roadmap.md"; }
+harness_project_registry_path()   { harness_project_registry_dir "$@" | xargs -I{} echo "{}/registry.jsonl"; }
+
 harness_compute_paths() {
   local worktree_root="${1:-$WORKTREE_ROOT}"
   local session_id="${2:-${SESSION_ID:-unknown-session}}"
@@ -209,30 +269,43 @@ harness_compute_paths() {
 
   export HARNESS_WORKSPACE_NAME="$(harness_resolve_workspace_name "$cwd_override")"
   export HARNESS_WORKTREE_SLUG="$(harness_resolve_worktree_slug "$worktree_root")"
+  export HARNESS_PROJECT_SLUG="$(harness_project_slug_from_git_origin "$worktree_root")"
+  export HARNESS_PROJECT_DIR="$(harness_project_registry_dir "$HARNESS_PROJECT_SLUG")"
   export HARNESS_WORKSPACE_DIR="$HARNESS_SESSIONS_ROOT/$HARNESS_WORKSPACE_NAME"
   export HARNESS_WORKTREE_DIR="$HARNESS_WORKSPACE_DIR/$HARNESS_WORKTREE_SLUG"
   export HARNESS_WORKSPACE_SHARED="$HARNESS_WORKTREE_DIR/workspace"
   export HARNESS_SESSION_DIR="$HARNESS_WORKTREE_DIR/sessions/$session_id"
   export HARNESS_LEVEL2_BINDING="$HARNESS_SESSION_DIR/binding.md"
+  export HARNESS_PROJECT_PROFILE="$HARNESS_PROJECT_DIR/project_profile.md"
+  export HARNESS_PRODUCT_CONTEXT="$HARNESS_PROJECT_DIR/product_context.md"
+  export HARNESS_ARCHITECTURE_DOC="$HARNESS_PROJECT_DIR/architecture.md"
+  export HARNESS_ROADMAP_DOC="$HARNESS_PROJECT_DIR/roadmap.md"
+  export HARNESS_PROJECT_REGISTRY="$HARNESS_PROJECT_DIR/registry.jsonl"
 
   # HARD STOP (NON-NEGOTIABLE): nenhum desses paths pode cair DENTRO da worktree.
   # Se HARNESS_SESSIONS_ROOT por engano estiver apontando pra dentro de worktree_root,
   # por exemplo USER setou HARNESS_SESSIONS_ROOT=/home/.../Lumos.worktrees/.sess,
   # daqui a nada artifacts começam a aparecer no diff. Trava imediatamente.
-  harness_assert_outside_worktree "$HARNESS_WORKSPACE_DIR"   "$worktree_root" "HARNESS_WORKSPACE_DIR"
-  harness_assert_outside_worktree "$HARNESS_WORKTREE_DIR"    "$worktree_root" "HARNESS_WORKTREE_DIR"
+  harness_assert_outside_worktree "$HARNESS_PROJECT_DIR"    "$worktree_root" "HARNESS_PROJECT_DIR"
+  harness_assert_outside_worktree "$HARNESS_WORKSPACE_DIR"  "$worktree_root" "HARNESS_WORKSPACE_DIR"
+  harness_assert_outside_worktree "$HARNESS_WORKTREE_DIR"   "$worktree_root" "HARNESS_WORKTREE_DIR"
   harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$worktree_root" "HARNESS_WORKSPACE_SHARED"
-  harness_assert_outside_worktree "$HARNESS_SESSION_DIR"     "$worktree_root" "HARNESS_SESSION_DIR"
-  harness_assert_outside_worktree "$HARNESS_LEVEL2_BINDING"  "$worktree_root" "HARNESS_LEVEL2_BINDING"
+  harness_assert_outside_worktree "$HARNESS_SESSION_DIR"    "$worktree_root" "HARNESS_SESSION_DIR"
+  harness_assert_outside_worktree "$HARNESS_LEVEL2_BINDING" "$worktree_root" "HARNESS_LEVEL2_BINDING"
 }
 
 harness_ensure_session_dirs() {
   # Hard stop extra por redundância: se paths passaram mas algo mudou, trava antes do mkdir.
   local wt_root="${1:-${WORKTREE_ROOT:-}}"
   if [ -n "$wt_root" ]; then
+    harness_assert_outside_worktree "$HARNESS_PROJECT_DIR"      "$wt_root" "HARNESS_PROJECT_DIR (ensure)"
     harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$wt_root" "HARNESS_WORKSPACE_SHARED (ensure)"
     harness_assert_outside_worktree "$HARNESS_SESSION_DIR"      "$wt_root" "HARNESS_SESSION_DIR (ensure)"
   fi
+  # Nível 1.5: registry global do projeto (compartilhado worktrees × sessões)
+  mkdir -p "$HARNESS_SESSIONS_ROOT/.registry/projects/$HARNESS_PROJECT_SLUG"
+  [ -f "$HARNESS_PROJECT_REGISTRY" ] || : > "$HARNESS_PROJECT_REGISTRY"
+  # Nível 2: workspace + worktree + session
   mkdir -p "$HARNESS_WORKSPACE_DIR" \
            "$HARNESS_WORKTREE_DIR" \
            "$HARNESS_WORKSPACE_SHARED" \

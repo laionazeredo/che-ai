@@ -1,6 +1,6 @@
 ---
 name: "HARNESS GLOBAL RULES"
-description: "Global rules (process + flow) for the Flockr harness. Loaded as user_rules on every session. Defines worktree-first enforcement, .trae/<task-id>/ output directory, agile BDD process, GitHub/ship + gh-stack, parallelism and SPEC GATE RULES (4 input sources + 7 canonical sections + YAML frontmatter validation + Approved gate before scope capture). Pure engineering rules (precedence 1-14, DbC, TDD, SOLID, strong typing, security, conventional commits, RLS, code review optimization) now live in the engineering-contracts SKILL and must NOT be duplicated here."
+description: "Global rules (process + flow) for the universal agent harness. Loaded as user_rules on every session. Defines worktree-first enforcement, .trae/<task-id>/ output directory, agile BDD process, GitHub/ship + gh-stack, parallelism and SPEC GATE RULES (4 input sources + 7 canonical sections + YAML frontmatter validation + Approved gate before scope capture). Pure engineering rules (precedence 1-14, DbC, TDD, SOLID, strong typing, security, conventional commits, RLS, code review optimization) now live in the engineering-contracts SKILL and must NOT be duplicated here."
 ---
 
 # 🌍 Harness — Global Process & Flow Rules (Always-On)
@@ -11,7 +11,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 > **Conteúdo deste arquivo (PROCESSO + FLUXO apenas — NÃO duplica regras de engenharia pura):**
 > - Regras de operação do harness: worktree-first, .trae output, ordem do time ágil, gates, timeouts
 > - Paralelismo (Kahn + conflict graph + locks)
-> - SPEC GATE RULES: 4 fontes input + 7 seções canônicas + validação frontmatter YAML obrigatório + gate Approved ANTES scope capture. Compatibilidade: PRD Flockr nativo aceito como FONTE C via harness-spec (parse headings automático).
+> - SPEC GATE RULES: 4 fontes input + 7 seções canônicas + validação frontmatter YAML obrigatório + gate Approved ANTES scope capture. Compatibilidade: PRD legado de qualquer projeto (estilo headings padrão) aceito como FONTE C via harness-spec (parse headings automático).
 > - GitHub integration + ship + **gh-stack multi-PR hierárquico**
 > - Ferramentas preferenciais por integração
 >
@@ -80,7 +80,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 
 Para QUALQUER implementação de feature / bugfix com mais de um passo:
 1. **SCRUM MASTER (`harness-scrum-master`):**
-   - **Preflight 0.5 (SPEC GATE — substitui PRD legado)** — Valida se já existe **SPEC Approved** em `$HARNESS_WORKSPACE_SHARED/` (glob `spec_*.md` → parse YAML `status: Approved`). Se 0 → **invoca skill `harness-spec` interativo automaticamente** (4 fontes input: existente / ticket URL / PRD Flockr path / descrição breve). Captura 2 linhas retorno: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → libera §1 scope capture; `Draft` → oferece (A) Override sem Approved append `[SPEC-OVERRIDE] <razão>` em `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` ou (B) Parar, terminar SPEC depois via `/harness-spec` standalone.
+   - **Preflight 0.5 (SPEC GATE — substitui PRD legado)** — Valida se já existe **SPEC Approved** em `$HARNESS_WORKSPACE_SHARED/` (glob `spec_*.md` → parse YAML `status: Approved`). Se 0 → **invoca skill `harness-spec` interativo automaticamente** (4 fontes input: existente / ticket URL / legacy-project PRD .md path / descrição breve). Captura 2 linhas retorno: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → libera §1 scope capture; `Draft` → oferece (A) Override sem Approved append `[SPEC-OVERRIDE] <razão>` em `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` ou (B) Parar, terminar SPEC depois via `/harness-spec` standalone.
    - **Entende escopo → valida ACs →** (se grande) **planeja gh-stack multi-PR** → monta TASK GRAPH (ou aprova lista existente) → cria TASK ENVELOPE por task.
 2. **DEVELOPER (`harness-developer`):** SOMENTE chamado por SM, com ENVELOPE formal.
    - Primeiro invoca `engineering-contracts`.

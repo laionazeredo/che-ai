@@ -1,6 +1,6 @@
 ---
 name: "harness-spec"
-description: "Generate or validate a Harness Execution Specification (SPEC). 4 inputs: existing spec file, ticket URL (Linear/ClickUp), Flockr-style PRD .md path, or inline brief. Produces 7 sections + machine-parsable YAML frontmatter, user-approved before save into $HARNESS_WORKSPACE_SHARED/spec_<slug>.md (DURABLE workspace area OUTSIDE user worktree code)."
+description: "Generate or validate a Harness Execution Specification (SPEC). 4 inputs: existing spec file, ticket URL (Linear/ClickUp/GitHub), legacy-project PRD .md path, or inline brief. Produces 7 sections + machine-parsable YAML frontmatter, user-approved before save into $HARNESS_WORKSPACE_SHARED/spec_<slug>.md (DURABLE workspace area OUTSIDE user worktree code)."
 ---
 
 # Harness Spec Generator (SPEC)
@@ -10,7 +10,7 @@ description: "Generate or validate a Harness Execution Specification (SPEC). 4 i
 > - Path resolution (WORKSPACE_NAME, WORKTREE_SLUG, HARNESS_WORKSPACE_SHARED, HARNESS_SESSION_DIR): `source ~/.trae/contracts/harness_sessions_contract.sh`, call `harness_compute_paths WT SID CWD`
 > - Worktree binding 2-LEVEL (Level1 registry, Level2 sessions dir): engineering-contracts §19
 
-Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~60–120 lines, 7 sections). Replaces the Flockr-specific PRD artifact. Gate before scope capture in `/harness-start` and standalone runnable via `/harness-spec`.
+Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~60–120 lines, 7 sections). Replaces project-specific legacy PRD artifacts. Gate before scope capture in `/harness-start` and standalone runnable via `/harness-spec`.
 
 ---
 
@@ -49,7 +49,7 @@ Present choices when input arg is missing or ambiguous. First match wins, never 
 |---|---|---|---|
 | A | **Existing SPEC file** | File path OR pick from glob `$HARNESS_WORKSPACE_SHARED/spec_*.md` | Read it; if `status=Approved` → jump straight to §5 (approval). If Draft → proceed to §3 editing with the existing content pre-filled. |
 | B | **Ticket URL** (Linear FLO-XXX, ClickUp, GitHub issue) | Full URL | 1. Try to extract title + description + status via MCP tools (`mcp_flockr-linear`, `mcp_laion-clickup`, `mcp_github`). If MCP fails → fall back to user-provided inline description. 2. Populate frontmatter `ticket_ref:` + `spec_id:` from slug. 3. Seed §1 WHY bullets from ticket description. 4. Seed §4 MUST ACs = 3 bullets if ticket has Acceptance Criteria field. |
-| C | **Flockr PRD** (legacy .md path) | Absolute path to `.md` file | Parse with headings, map: `Problem / Background` → §1 WHY; `Goals` → §4 MUST; `Non-Goals` → §1 Non-goals; `Data Model / Migration` → §6 Hints; `Acceptance Criteria` → §4 MUST AC, each prefixed `GWT` verbatim; `Risk` → §5 Rollback trigger. If section missing → leave empty and prompt user to fill during §4 review. |
+| C | **Legacy PRD** (.md legado do projeto) | Absolute path to `.md` file | Parse with headings, map: `Problem / Background` → §1 WHY; `Goals` → §4 MUST; `Non-Goals` → §1 Non-goals; `Data Model / Migration` → §6 Hints; `Acceptance Criteria` → §4 MUST AC, each prefixed `GWT` verbatim; `Risk` → §5 Rollback trigger. If section missing → leave empty and prompt user to fill during §4 review. |
 | D | **Inline brief** (short text 2–5 sentences) | User typed description or typed nothing at all → walk through interactive prompts 1-by-1 | Prompt for: change_class (feature|bug|refactor|perf|ops); 3 bullets §1 WHY; 3 sections §2 (Can Touch ≤ 10 files, Can Create, Cannot Touch ≤ 5 lines); 3 PRE + 3 POST + 2 INVARIANTS in §3; 3 MUST + 1 SHOULD + 1 MAY §4 ACs (each AC must include GWT + TEST_METHOD literal). Defaults: `estimated_files_max=15`, `estimated_max_lines_add=400`, `new_dependencies=[]`, `pii_touch=none`, `supabase_rls_touch=false`, `currency_gbp_pence=false`, `flags=LANG_PT_CHECK=ENABLED`. |
 
 ---

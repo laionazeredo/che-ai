@@ -1,8 +1,8 @@
 ---
-description: "Generate or update a Harness Execution Specification (SPEC). Standalone, or called by /harness-start. Accepts 4 inputs: existing spec, ticket URL, Flockr PRD path, inline description."
+description: "Generate or update a Harness Execution Specification (SPEC). Standalone, or called by /harness-start. Accepts 4 inputs: existing spec, ticket URL, legacy-project PRD .md path, inline description."
 arguments:
   - name: input
-    description: "One of: path-to-existing-spec, ticket-URL, path-to-Flockr-PRD.md, or inline description text. Optional; if omitted, interactive prompt picks source."
+    description: "One of: path-to-existing-spec, ticket-URL, path-to-legacy-project-PRD.md, or inline description text. Optional; if omitted, interactive prompt picks source."
     required: false
   - name: worktree
     description: "Absolute worktree path. If missing and no binding exists, ASK first before proceeding."
