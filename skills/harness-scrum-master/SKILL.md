@@ -34,7 +34,7 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
    c. **Working dirs / session memory:** single most-recent worktree referenced prior msgs → PROPOSE it.
    d. **Ambiguous (≥2 candidates or 0):** STOP. AskUserQuestion ≤2 concrete + "other (type path)". NEVER default.
 3. **After user confirms worktree (no existing BOUND for this SESSION_ID in registry):** WRITE INTO BOTH LEVELS (§19 2-LEVEL LAYOUT) — atomically:
-   a. **Level 1 (GLOBAL INDEX append-only JSONL):** NÃO use Edit/Write manual. Use HELPER OFICIAL ÚNICO: `source $HOME/.trae/contracts/harness_sessions_contract.sh && harness_registry_append_jsonl <SESSION_ID> BOUND <WORKTREE_ROOT> '{payload json}'. NEVER overwrite existing BOUND entries (keep histórico append-only). Helper faz dedup sha256 automaticamente + JSON safe sort_keys. Payload fields opcionais: workspace_name, worktree_slug, branch, friendly_name, harness_session_dir, harness_workspace_shared, workspace_file, reason, flags:{LANG_PT_CHECK:ENABLED|DISABLED}. Schema _v:1 por linha.
+   a. **Level 1 (GLOBAL INDEX append-only JSONL):** NÃO use Edit/Write manual. Use HELPER OFICIAL ÚNICO: `source $HOME/.trae/contracts/harness_sessions_contract.sh && harness_registry_append_jsonl <SESSION_ID> BOUND <WORKTREE_ROOT> '{payload json}'. NEVER overwrite existing BOUND entries (keep histórico append-only). Helper faz dedup sha256 automaticamente + JSON safe sort_keys. **Também roda cleanup AUTOMÁTICO de artifacts legados DENTRO da worktree: tudo que for .trae/ legacy, decisions.log, task_graph etc é movido FORA para backup em $HARNESS_WORKSPACE_SHARED/legacy_binding_cleanup/<ts>/. Payload fields opcionais: workspace_name, worktree_slug, branch, friendly_name, harness_session_dir, harness_workspace_shared, workspace_file, reason, flags:{LANG_PT_CHECK:ENABLED|DISABLED}. Schema _v:1 por linha.
       ```
       SESSION_ID: <current-session-id-from-ide>
       WORKTREE_ROOT: <absolute path>
@@ -43,22 +43,26 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
       STATUS: BOUND
       ---
       ```
-   b. **Level 2 (PER-SESSION DETAIL inside bound worktree):**
-      1. `mkdir -p <WORKTREE_ROOT>/.trae/bindings/`
-      2. Write `<WORKTREE_ROOT>/.trae/bindings/session-<SESSION_ID>.md` with:
+   b. **Level 2 (PER-SESSION DETAIL OUTSIDE user worktree — NEVER inside worktree):**
+      1. `source ~/.trae/contracts/harness_sessions_contract.sh && harness_compute_paths <WORKTREE_ROOT> <SESSION_ID> && harness_ensure_session_dirs <WORKTREE_ROOT>`
+      2. Write `$HARNESS_LEVEL2_BINDING` (= `$HARNESS_SESSION_DIR/binding.md`, contract-resolved, guaranteed outside worktree by harness_assert_outside_worktree) with:
          ```
          SESSION_ID: <session-id>
          WORKTREE_ROOT: <absolute path>
          TASK_ID: <slug>
          BOUND_AT: <ISO timestamp>
          STATUS: BOUND
+         WORKSPACE_NAME: <canonical from workspace resolver, or "default">
+         WORKTREE_SLUG: <canonical repo__branch slug>
+         HARNESS_WORKSPACE_SHARED: <abs path outside worktree>
+         HARNESS_SESSION_DIR: <abs path outside worktree>
          # PREV_BINDING: <old path> (only filled after re-bind/switch)
          # NEXT_BINDING: <new path> (only filled after re-bind/switch)
          ```
    c. Set `SESSION_WORKTREE_ROOT` = this value. GLOBAL for session.
 4. **Re-binding (switch worktree mid-session):** ONLY after EXPLICIT user confirmation "Yes switch to X". When switching ATOMIC:
    a. **Level1:** Find last BOUND for this SESSION_ID → change line STATUS: `BOUND` → `RELEASED | RELEASED_AT: <ts> | NEXT_WORKTREE_ROOT: <newpath>`. Then APPEND (don't overwrite) ENTIRELY NEW BOUND entry (line above format) pointing to new worktree. Add delimiter.
-   b. **Level2:** OLD detail md file → STATUS=RELEASED; add RELEASED_AT + NEXT_BINDING new file path. Create NEW detail md inside NEW worktree → STATUS=BOUND + PREV_BINDING=<oldpath>.
+   b. **Level2:** OLD detail md file (OLD HARNESS_SESSION_DIR/binding.md) → STATUS=RELEASED; add RELEASED_AT + NEXT_BINDING new file path. Create NEW detail md INSIDE **NEW HARNESS_SESSION_DIR/binding.md OUTSIDE new worktree** → STATUS=BOUND + PREV_BINDING=<oldpath>. NUNCA dentro do worktree.
    c. Announce switch in next 📍 Status.
    Agent-initiated switches = violation. Never "this code seems to be in worktree B so I'll touch it" without asking.
 5. **Per-operation SCISSOR CHECK (before EVERY file write, Glob, Grep, git command):**
@@ -67,18 +71,34 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
    - Silent cross-worktree reads = violation (even "just a quick grep").
    - Note: The global hook 1 `pretooluse-worktree-binding.sh` also ENFORCES this independently via Level1 registry without relying on agent memory; agent still does manual check as double layer.
 
-### 0.2 Harness output directory enforcement
+### 0.2 Harness output directory enforcement — NUNCA DENTRO WORKTREE
 
-All harness documents produced during execution MUST live inside:
+**NÃO EXISTE pasta `.trae/<task-id>` DENTRO da worktree.** Essa estrutura NÃO É MAIS USADA (foi causa raiz de decisions.log / task_graph aparecendo em commits). Todos os artifacts resolvidos VIA CONTRATO EM `$HARNESS_SESSIONS_ROOT/<workspace>/<worktree-slug>/` FORA do código do usuário:
 
 ```
-<WORKTREE_ROOT>/.trae/<task-id>/
+$HARNESS_WORKSPACE_SHARED  (durable, multi-session, FORA worktree)
+  ├── decisions.log.jsonl
+  ├── task_graph.md
+  ├── spec_<slug>.md
+  ├── gh_stack_plan.md
+  ├── manual_test_plan.md
+  ├── design/
+  └── tasks/<TASK_ID>/
+        ├── task_envelope_<id>.md
+        └── test_spec_smoke.md
+
+$HARNESS_SESSION_DIR       (ephemeral per-session, FORA worktree)
+  ├── binding.md           (Level 2 — audit trail re-bind)
+  ├── session.md
+  ├── final_summary.md
+  ├── reports/
+  └── qa/
 ```
 
 Where:
-- `<task-id>` is a slug like `feat-login-flow` or `fix-payment-npe` (derived from feature name or Linear/Jira ticket if available).
+- `<task-id>` slug now goes inside `HARNESS_WORKSPACE_SHARED/tasks/<task-id>/` subdir when needed (not a folder inside worktree).
 - Before ANY file writes: resolve paths via contract: `source ~/.trae/contracts/harness_sessions_contract.sh` then `harness_compute_paths WORKTREE_ROOT SESSION_ID CWD`. Never hardcode.
-- Run `harness_ensure_session_dirs` immediately after binding decision. Creates 2 directory trees **outside user's worktree**: `$HARNESS_WORKSPACE_SHARED/` (durable multi-session) + `$HARNESS_SESSION_DIR/` (ephemeral per-session). MORATORIUM: never write generated files under `<WORKTREE_ROOT>/.trae/*`.
+- Run `harness_ensure_session_dirs WORKTREE_ROOT` immediately after binding decision. Creates 2 directory trees **strictly outside user's worktree** — `harness_assert_outside_worktree` HARD-STOPs (exit 99) se qualquer path resolvido cair dentro da worktree (por exemplo se usuário setou HARNESS_SESSIONS_ROOT errado). MORATORIUM: never write generated files under `<WORKTREE_ROOT>/.trae/*`.
 
 **MANDATORY files created by this skill:**
 
@@ -282,7 +302,7 @@ After the TASK GRAPH is user-approved and before Phase 1 loop, the Scrum Master 
 3. At least one pair of tasks in the SAME KAHN WAVE (zero in-degree simultaneously) has: `Files(Ta) ∩ Files(Tb) == ∅` — i.e., there exists at least one parallel gain to be had, otherwise it's just serial with extra overhead.
 4. User did NOT pass `--serial` flag.
 5. Worktree has NO uncommitted edits outside the scope of this harness session (check `git status --porcelain` — if dirty outside envelope files, ask user if they want to proceed parallel anyway or stash first).
-6. No stale `.trae/_locks/*.lock.json` files with state `HELD` from a prior aborted run exist → if they do, list them + prompt user "purge stale locks before proceeding (Y/N)?".
+6. No stale `$HARNESS_SESSION_DIR/_locks/*.lock.json` files with state `HELD` from a prior aborted run exist → if they do, list them + prompt user "purge stale locks before proceeding (Y/N)?".
 
 ### 2.0.2 If ANY parallel precondition FAIL → FALL BACK to serial
 
@@ -292,11 +312,11 @@ No change in behavior.
 ### 2.0.3 If ALL parallel preconditions PASS → fan out via `harness-executor-dispatcher`
 
 1. Write the per-task envelopes FIRST (same as Phase 2.1 in serial, but for all TODO tasks now), so dispatcher has all file lists.
-2. Write an optional user-overridable `dispatcher.config.json` in `<WORKTREE_ROOT>/.trae/<task-id>/`:
+2. Write an optional user-overridable `dispatcher.config.json` in `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/`:
    ```json
    {"max_parallel": 3}
    ```
-   (default: min(cpu_cores, 3); hard cap 4).
+   (default: min(cpu_cores, 3); hard cap 4). Resolve via `harness_compute_paths`; NEVER inside `<WORKTREE_ROOT>`.
 3. **Ask user explicit confirmation** before fanning out. Message template (Portuguese):
    > 🚀 Modo paralelo detectado! 
    > - Tasks totais: N 
@@ -307,10 +327,10 @@ No change in behavior.
    > Confirmar execução paralela via dispatcher? (sim / não → serial)
 4. If user says NÃO (serial fallback) → go to original Phase 1-6 serial loop.
 5. If user says SIM → call `harness-executor-dispatcher` skill with full context (worktree, task-id, task_graph, envelope paths, max_parallel, dispatcher.config.json path).
-6. Dispatcher returns:
-   - `<WORKTREE_ROOT>/.trae/<task-id>/execution_batches.md`
-   - `<WORKTREE_ROOT>/.trae/<task-id>/merge_audit_Bx_My.md` per batch
-   - `<WORKTREE_ROOT>/.trae/<task-id>/BATCH_EXECUTION_REPORT.md` with per-task final status (DONE / FAIL).
+6. Dispatcher returns (all resolved via `harness_compute_paths`, NEVER inside worktree):
+   - `$HARNESS_SESSION_DIR/reports/execution_batches.md`
+   - `$HARNESS_SESSION_DIR/reports/merge_audit_Bx_My.md` per batch
+   - `$HARNESS_SESSION_DIR/reports/BATCH_EXECUTION_REPORT.md` with per-task final status (DONE / FAIL).
 7. SM post-processes the report:
    - **All DONE, 0 FAIL, 0 CONFLICT**: proceed to Phase 7 (Compliance HEAVY + manual_test_plan + final_summary) as usual.
    - **Any failures (SCOPE / QA / COMPLIANCE_LIGHT / HIGH conflict rollback)**: SM takes the failed tasks back into **SERIAL mode** one-by-one, re-running them through Phase 1-6 serially (de-scoped, not parallel — since they already showed instability/conflict). Then proceed to Phase 7 once all individually DONE.
@@ -326,8 +346,9 @@ For EACH task in the TASK GRAPH, in dependency order:
 
 ### 2.1 TASK ENVELOPE (before calling Developer)
 
-Create `<WORKTREE_ROOT>/.trae/<task-id>/task_envelope_<TASK_ID>.md`
+Create `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/task_envelope_<TASK_ID>.md`
 using the template in `references/TASK_ENVELOPE_TEMPLATE.md`.
+Resolve the path via `harness_compute_paths` + `harness_ensure_session_dirs`; NEVER inside `<WORKTREE_ROOT>`.
 
 **CRITICAL fields that prevent scope creep:**
 - **Blast radius**: explicit list of files / directories that MAY be touched. If Dev needs to touch something outside → must come back to SM for approval, logged to `decisions.log.jsonl`.
@@ -394,7 +415,8 @@ This scans the ENTIRE worktree diff (not just per-task), checks for:
 
 ### 3.2 Generate MANUAL_TEST_PLAN.md
 
-Create `<WORKTREE_ROOT>/.trae/<task-id>/manual_test_plan.md` using the template.
+Create `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` using the template (durable, shared across sessions for the same worktree).
+Resolve via `harness_compute_paths`; NEVER inside `<WORKTREE_ROOT>`.
 It must have:
 - One section per Acceptance Criteria (from the whole PRD)
 - GIVEN / WHEN / THEN structure
@@ -403,7 +425,7 @@ It must have:
 
 ### 3.3 Generate FINAL_SUMMARY.md
 
-Create `<WORKTREE_ROOT>/.trae/<task-id>/final_summary.md`:
+Create `$HARNESS_SESSION_DIR/final_summary.md` (ephemeral per-session; resolved via `harness_compute_paths`, NEVER inside worktree):
 
 ```markdown
 # Final Summary — <task-id>
@@ -436,7 +458,11 @@ Create `<WORKTREE_ROOT>/.trae/<task-id>/final_summary.md`:
 Print a concise, human-readable summary in Portuguese:
 - Quais tasks foram entregues
 - Stats principais
-- Onde encontrar os artefatos (`.trae/<task-id>/...`)
+- Onde encontrar os artefatos (todos FORA worktree, via `harness_compute_paths`):
+  - Task envelopes + dispatcher config → `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/`
+  - Manual test plan → `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md`
+  - Decisions log → `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl`
+  - Final summary + parallel reports → `$HARNESS_SESSION_DIR/` (`final_summary.md`, `reports/*`)
 - Avisar que está pronto para `/harness-ship` ou validação manual
 
 ---
@@ -444,7 +470,7 @@ Print a concise, human-readable summary in Portuguese:
 ## Appendix A: Mandatory checkpoints (never skip)
 
 - [ ] Preflight: worktree path confirmed by user
-- [ ] Preflight: `.trae/<task-id>/` dir exists
+- [ ] Preflight: `harness_compute_paths WORKTREE_ROOT` + `harness_ensure_session_dirs WORKTREE_ROOT` executados SANS `HARNESS SESSIONS CONTRACT VIOLATION` (todos paths FORA worktree)
 - [ ] Scope capture: ACs explicit and user-approved
 - [ ] TASK GRAPH: user approved or provided
 - [ ] Per task: ENVELOPE written with blast radius + DONE criteria

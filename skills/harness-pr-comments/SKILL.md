@@ -98,7 +98,8 @@ For HUMAN comments → classify content:
 
 ## 3. Triage Report Structure
 
-Write file: `<worktree or cwd>/.trae/pr-<ID>-comments_<YYYYMMDD>.md`
+Write file: `$HARNESS_WORKSPACE_SHARED/pr_comments/pr-<ID>_<YYYYMMDD>.md`
+(Resolve via `source $HOME/.trae/contracts/harness_sessions_contract.sh && harness_compute_paths $WORKTREE_ROOT $SESSION_ID && harness_ensure_session_dirs $WORKTREE_ROOT` first; NEVER create `<worktree>/.trae/` dirs.)
 
 ### Summary table
 

@@ -92,14 +92,14 @@ The agent MUST recognize these and react immediately.
 **What it does:** Prints a concise status report of the CURRENT harness session.
 **When to invoke:** User wants to see where we are in the TASK GRAPH progress.
 **Agent action:**
-1. Look for `task_graph.md` inside `<WORKTREE_ROOT>/.trae/<task-id>/`.
+1. Source `$HOME/.trae/contracts/harness_sessions_contract.sh` → `harness_compute_paths WORKTREE_ROOT` → look for `task_graph.md` at `$HARNESS_WORKSPACE_SHARED/task_graph.md` (FORA worktree).
 2. If not found → "Nenhuma sessão do harness ativa nesta worktree. Use `/harness-start`."
 3. If found → print in Portuguese:
    - Qual task está IN_PROGRESS e em qual fase (scope/qa/compliance)
    - Contagem: Total / TODO / SCOPE_OK / QA_OK / DONE / BLOCKED
    - Lista de tasks bloqueadas, se houver
    - Avisos: tasks perto de estourar 2 iterações
-   - Caminho completo da pasta `.trae/<task-id>/`
+   - Caminhos dos artefatos (todos FORA worktree): `$HARNESS_WORKSPACE_SHARED/` (durável) + `$HARNESS_SESSION_DIR/` (efêmero)
 
 ---
 
@@ -161,7 +161,7 @@ Agent action: ask confirmation first.
 **Flags:**
 - `--serial`: Forces sequential, one task at a time. Use when parallel causes issues and you want debug single-task mode.
 - `--max-parallel=N`: Overrides concurrency cap. Max allowed value 4; if user passes >4, clamp to 4 + warning.
-- `--purge-stale-locks`: Auto-purges `.trae/_locks/*.lock.json` from aborted runs (asks confirm unless this flag present).
+- `--purge-stale-locks`: Auto-purges `$HARNESS_SESSION_DIR/_locks/*.lock.json` from aborted runs — resolve path via `harness_compute_paths` (asks confirm unless this flag present; NEVER inside worktree).
 **Syntax examples:**
 ```
 /harness-parallel --max-parallel=4
@@ -182,7 +182,7 @@ Agent action: ask confirmation first.
 4. Wait for your explicit APPROVAL of the commit plan.
 5. Apply each commit individually.
 6. `git push --no-verify --set-upstream origin <branch>` (creates remote if missing).
-7. Build readable PR body (default English; PT only if YOU explicitly request) from: `.trae/<task-id>/manual_test_plan.md` + `PR_DESCRIPTION_TEMPLATE.md` (filled style reference, follow it strictly) + relevant decisions. Enforce §A-4.2 process gates (acronyms expanded, 1 bullet = 1 change + why, risk→consequence, plain steps to verify, ≤50 lines total).
+7. Build readable PR body (default English; PT only if YOU explicitly request) from: `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` + `PR_DESCRIPTION_TEMPLATE.md` (filled style reference, follow it strictly) + relevant decisions from `$(harness_decisions_path)`. Resolve paths via `harness_compute_paths`; NEVER read from `<WORKTREE_ROOT>/.trae/*`. Enforce §A-4.2 process gates (acronyms expanded, 1 bullet = 1 change + why, risk→consequence, plain steps to verify, ≤50 lines total).
 8. Open DRAFT PR against default branch → assign to `@me` → print PR URL.
 **Syntax examples:**
 ```
@@ -269,13 +269,13 @@ Agent action: ask confirmation first.
 **Agent action:**
 1. Invoke `harness-manual-test-executor` skill IMEDIATAMENTE.
 2. Preflight #1: confirmar worktree path + validar session binding §19 (mismatch = block pergunta).
-3. Preflight #2: resolver path manual_test_plan.md → (a) `--plan-path` dado → use; (b) `--task-id` dado → `<WORKTREE_ROOT>/.trae/<task-id>/manual_test_plan.md`; (c) nenhum dado → AskUserQuestion qual opção.
+3. Preflight #2: resolver path manual_test_plan.md → (a) `--plan-path` dado → use; (b) default (nenhum flag): `source $HOME/.trae/contracts/harness_sessions_contract.sh && harness_compute_paths $WORKTREE_ROOT && echo $HARNESS_WORKSPACE_SHARED/manual_test_plan.md`; (c) nenhum binding criado → AskUserQuestion qual opção.
 4. Preflight #3: parse do plano (§0 Setup env, AC-N steps com GWT, Smoke S1..S5, HUMAN_ONLY items §3).
 5. **GATE setup approval OBRIGATÓRIO (antes qualqeur comando shell setup):** perguntar usuário (A=Executar setup, B=Pular app já roda, C=Cancelar).
-6. Criar evidence dir: `.trae/<task-id>/manual_test_evidence/` com subdirs AC-1, AC-2, ... + `execution.log`.
+6. Criar evidence dir: `$HARNESS_SESSION_DIR/manual_test_evidence/` (FORA worktree) com subdirs AC-1, AC-2, ... + `execution.log`.
 7. **AC Execution Loop:** Para cada AC-N → classificação step pattern → driver Playwright/HTTP. Step por step com evidência cada. THEN assertion final → veredict ✅/⚠️/❌/⏭️ → close playwright session isolation.
 8. **Smoke S1..S5:** S1=build, S2=lint via comandos; S3=Login scenario Playwright; S4=top-level 3 pages Nav; S5=log grep CRITICAL/ERROR.
-9. Build report final 8 seções conforme references/MANUAL_TEST_EXECUTION_REPORT.md → save em `.trae/<task-id>/MANUAL_TEST_EXECUTION_REPORT.md`.
+9. Build report final 8 seções conforme references/MANUAL_TEST_EXECUTION_REPORT.md → save em `$HARNESS_SESSION_DIR/reports/MANUAL_TEST_EXECUTION_REPORT.md` (FORA worktree, `harness_assert_outside_worktree`).
 10. Entrega chat resumo condensado §18 contracts (≤500w, 4 seções: status + ACs pass/fail counts + key failures ≤3 bullets + links report/evidence/plan + 1 oferta deep-dive).
 
 **Syntax examples:**
@@ -294,7 +294,7 @@ Agent action: ask confirmation first.
 1. Invoke `harness-pr-comments` skill.
 2. Pull ALL comments via `gh pr view --json comments,reviews` → flatten.
 3. Classification framework: BOT vs HUMAN, then HUMAN → (CORRECTNESS, SECURITY, ARCHITECTURE, SCOPE CREEP, QUESTION, NIT, PRAISE, DISCUSSION, OUTDATED, DUPLICATE).
-4. Triage report saved to `.trae/pr-<N>-comments_<YYYYMMDD>.md`.
+4. Triage report saved to `$HARNESS_WORKSPACE_SHARED/pr_comments/pr-<N>_<YYYYMMDD>.md` (resolve via `harness_compute_paths`; NEVER inside `<WORKTREE_ROOT>/.trae/`).
 5. Deliver to user chat: summary buckets count, Section 1 (TO IMPLEMENT) sorted by severity, Section 2 (DRAFT RESPONSES) English polite non-argumentative, Section 3 DISCUSSION PENDING USER, Section 4 NIT optional, Section 5 RESOLVED SILENTLY.
 6. Aggregated implementation plan as atomic commits batches.
 7. If user says: implement → apply fixes in worktree. If user says: post replies → `gh pr reply` each drafted comment.

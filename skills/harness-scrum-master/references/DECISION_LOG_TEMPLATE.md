@@ -1,7 +1,8 @@
 # DECISION LOG TEMPLATE
 
 > Append-only log. Each entry = one non-obvious decision / trade-off / exception to rules.
-> File location: `<WORKTREE_ROOT>/.trae/<task-id>/decisions.log.jsonl`
+> Resolve path via `harness_decisions_path` from $HOME/.trae/contracts/harness_sessions_contract.sh (harness_compute_paths WORKTREE_ROOT first)
+> File location: `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (NEVER inside `<WORKTREE_ROOT>/.trae/*`)
 > Format for each entry:
 
 ---

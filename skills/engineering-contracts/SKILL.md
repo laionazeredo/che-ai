@@ -527,4 +527,4 @@ These rules are **intentionally strict.** They exist because:
 - LLMs write overly-commented/verbose code hard to review. §16 forces clean/concise code.
 - LLMs anticipate future and deliver giant PRs. §15 + gh-stack Appendix C forces small incrementals.
 
-If any rule feels wrong for a specific case → **log the exception + rationale to `decisions.log.jsonl` under `.trae/<task-id>/`**, and proceed.
+If any rule feels wrong for a specific case → **log the exception + rationale to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (NEVER under `<WORKTREE_ROOT>/.trae/`; use `harness_compute_paths` from `$HOME/.trae/contracts/harness_sessions_contract.sh` to resolve the correct path outside the user worktree)**, and proceed.

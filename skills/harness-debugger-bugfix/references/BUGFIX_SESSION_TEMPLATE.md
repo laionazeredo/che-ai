@@ -1,7 +1,7 @@
 # BUGFIX SESSION TEMPLATE
 
 > Used by harness-debugger-bugfix for a bug fix session.
-> Location: `<WORKTREE_ROOT>/.trae/<bug-slug>/bugfix_session.md`
+> Location: `$HARNESS_SESSION_DIR/bugfix_session.md` (resolved via `harness_compute_paths`; NEVER inside `<WORKTREE_ROOT>/.trae/`)
 > Append-only across iterations.
 
 ---
@@ -177,4 +177,4 @@ Before/after comparison (screenshots / HTTP response diffs if applicable):
 
 ### Decision log entries during this session
 
-(Reference decisions appended to `<WORKTREE_ROOT>/.trae/<bug-slug>/decisions.log.jsonl`)
+(Reference decisions appended to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` — durable shared dir; NEVER inside worktree. Resolve via `harness_decisions_path` helper.)

@@ -34,12 +34,15 @@ If user fails to provide ANY of 1, 2, or 3 → **ASK with specific questions** b
 
 ### 0.3 Session artifacts dir
 
-Create and use:
+First: `source $HOME/.trae/contracts/harness_sessions_contract.sh && harness_compute_paths $WORKTREE_ROOT && harness_ensure_session_dirs $WORKTREE_ROOT`.
+Create and use (ALL strictly outside user's worktree; `harness_assert_outside_worktree` HARD-STOPS if misconfigured):
 ```
-<WORKTREE_ROOT>/.trae/<task-id-slug>/
+$HARNESS_SESSION_DIR/           (ephemeral per-session: bugfix_session.md, qa/, reports/)
+$HARNESS_WORKSPACE_SHARED/      (durable: decisions.log.jsonl)
 ```
-Inside: write `bugfix_session.md` using `references/BUGFIX_SESSION_TEMPLATE.md`.
+Inside `$HARNESS_SESSION_DIR/`: write `bugfix_session.md` using `references/BUGFIX_SESSION_TEMPLATE.md`.
 Append to this file on every iteration.
+NEVER write `<WORKTREE_ROOT>/.trae/...
 
 ---
 
@@ -216,8 +219,9 @@ Report to user (in Portuguese):
   3. ...
   4. Expected: ...
 
-📎 Artefatos:
-  - bugfix_session.md completo: <worktree>/.trae/<slug>/bugfix_session.md
+📎 Artefatos (todos FORA worktree, resolvidos via `harness_compute_paths`):
+  - bugfix_session.md completo: `$HARNESS_SESSION_DIR/bugfix_session.md`
+  - Decisions: `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl`
   - Se houver ticket: recomendo colar link lá.
 ```
 

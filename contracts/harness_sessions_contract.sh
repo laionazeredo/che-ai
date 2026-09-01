@@ -46,6 +46,63 @@ set -euo pipefail
 export HARNESS_SESSIONS_ROOT="${HARNESS_SESSIONS_ROOT:-$HOME/code/harness-sessions}"
 
 # =========================================================
+# HARD STOP GUARDS — NUNCA permita criar artifacts DENTRO de WORKTREE_ROOT
+# =========================================================
+# Qualquer path resolvido que comece com $WORKTREE_ROOT (ou seja, que cai
+# dentro da pasta do projeto do usuário) causa FAIL IMEDIATO com mensagem
+# clara. Isso é o enforcer real: se não é criado dentro da worktree, nunca
+# vai aparecer em git status e muito menos em PR.
+
+harness_assert_outside_worktree() {
+  local candidate_path="$1"
+  local worktree_root="$2"
+  local label="${3:-path}"
+
+  [ -n "$candidate_path" ] || return 0
+  [ -n "$worktree_root"  ] || return 0
+
+  # Normaliza trailing slashes
+  worktree_root="${worktree_root%/}"
+  candidate_path_abs="$candidate_path"
+  case "$candidate_path_abs" in
+    /*) : ;;
+    *)  candidate_path_abs="$(cd "$(dirname "$candidate_path_abs")" 2>/dev/null && pwd)/$(basename "$candidate_path_abs")" ;;
+  esac
+
+  # Check starts-with worktree_root/ OR exatamente igual worktree_root
+  if [ "$candidate_path_abs" = "$worktree_root" ] ||
+     [ "${candidate_path_abs#$worktree_root/}" != "$candidate_path_abs" ]; then
+    cat >&2 <<ERR
+
+\
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ 🔴 HARNESS SESSIONS CONTRACT VIOLATION — HARD STOP                       │
+  ├──────────────────────────────────────────────────────────────────────────┤
+  │                                                                          │
+  │   $label está caindo DENTRO da worktree do usuário.                      │
+  │   Isso NUNCA pode acontecer — causa commit acidental de                 │
+  │   decisions.log, task_graph, manual_test_plan, spec_*.md etc em PRs.     │
+  │                                                                          │
+  │   label        : $label                                                  │
+  │   candidato    : $candidate_path_abs                                     │
+  │   worktree_root: $worktree_root                                          │
+  │                                                                          │
+  │  Como corrigir:                                                          │
+  │   - NÃO construa paths com \$PWD/.trae/ nem \$WORKTREE_ROOT/.trae/.      │
+  │   - Sempre use:                                                          │
+  │       source \$HOME/.trae/contracts/harness_sessions_contract.sh        │
+  │       harness_compute_paths \$WORKTREE_ROOT \$SESSION_ID                 │
+  │   - Depois use \$HARNESS_WORKSPACE_SHARED (garantido FORA worktree).     │
+  │                                                                          │
+  │   Se foi um script/harness que chegou aqui, aborte imediatamente.        │
+  └──────────────────────────────────────────────────────────────────────────┘
+
+ERR
+    exit 99
+  fi
+}
+
+# =========================================================
 # IMPLEMENTAÇÃO
 # =========================================================
 
@@ -157,13 +214,30 @@ harness_compute_paths() {
   export HARNESS_WORKSPACE_SHARED="$HARNESS_WORKTREE_DIR/workspace"
   export HARNESS_SESSION_DIR="$HARNESS_WORKTREE_DIR/sessions/$session_id"
   export HARNESS_LEVEL2_BINDING="$HARNESS_SESSION_DIR/binding.md"
+
+  # HARD STOP (NON-NEGOTIABLE): nenhum desses paths pode cair DENTRO da worktree.
+  # Se HARNESS_SESSIONS_ROOT por engano estiver apontando pra dentro de worktree_root,
+  # por exemplo USER setou HARNESS_SESSIONS_ROOT=/home/.../Lumos.worktrees/.sess,
+  # daqui a nada artifacts começam a aparecer no diff. Trava imediatamente.
+  harness_assert_outside_worktree "$HARNESS_WORKSPACE_DIR"   "$worktree_root" "HARNESS_WORKSPACE_DIR"
+  harness_assert_outside_worktree "$HARNESS_WORKTREE_DIR"    "$worktree_root" "HARNESS_WORKTREE_DIR"
+  harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$worktree_root" "HARNESS_WORKSPACE_SHARED"
+  harness_assert_outside_worktree "$HARNESS_SESSION_DIR"     "$worktree_root" "HARNESS_SESSION_DIR"
+  harness_assert_outside_worktree "$HARNESS_LEVEL2_BINDING"  "$worktree_root" "HARNESS_LEVEL2_BINDING"
 }
 
 harness_ensure_session_dirs() {
+  # Hard stop extra por redundância: se paths passaram mas algo mudou, trava antes do mkdir.
+  local wt_root="${1:-${WORKTREE_ROOT:-}}"
+  if [ -n "$wt_root" ]; then
+    harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$wt_root" "HARNESS_WORKSPACE_SHARED (ensure)"
+    harness_assert_outside_worktree "$HARNESS_SESSION_DIR"      "$wt_root" "HARNESS_SESSION_DIR (ensure)"
+  fi
   mkdir -p "$HARNESS_WORKSPACE_DIR" \
            "$HARNESS_WORKTREE_DIR" \
            "$HARNESS_WORKSPACE_SHARED" \
            "$HARNESS_WORKSPACE_SHARED/design" \
+           "$HARNESS_WORKSPACE_SHARED/tasks" \
            "$HARNESS_SESSION_DIR" \
            "$HARNESS_SESSION_DIR/qa" \
            "$HARNESS_SESSION_DIR/qa/screenshots"
@@ -182,10 +256,12 @@ harness_decisions_path() {
   local worktree_root="${1:-${WORKTREE_ROOT:-}}"
   local cwd_override="${2:-$PWD}"
   [ -n "$worktree_root" ] || { echo "harness_decisions_path: WORKTREE_ROOT empty" >&2; return 2; }
-  local hwn sl
+  local hwn sl out_path
   hwn="$(harness_resolve_workspace_name "$cwd_override")"
   sl="$(harness_resolve_worktree_slug "$worktree_root")"
-  echo "$HARNESS_SESSIONS_ROOT/$hwn/$sl/workspace/decisions.log.jsonl"
+  out_path="$HARNESS_SESSIONS_ROOT/$hwn/$sl/workspace/decisions.log.jsonl"
+  harness_assert_outside_worktree "$out_path" "$worktree_root" "HARNESS_DECISIONS_LOG"
+  echo "$out_path"
 }
 
 harness_append_decision_jsonl() {
@@ -200,6 +276,10 @@ harness_append_decision_jsonl() {
 
   local out_path
   out_path="$(harness_decisions_path "$worktree_root")"
+  # Redundância extra: decisions_path JÁ roda o assert, mas repetimos aqui por
+  # se alguém passar um out_path hardcoded de fora (caso que nunca deve existir,
+  # mas custo de rodar de novo é 0).
+  harness_assert_outside_worktree "$out_path" "$worktree_root" "HARNESS_DECISIONS_LOG (append)"
   mkdir -p "$(dirname "$out_path")"
 
   local ts_iso
@@ -258,6 +338,127 @@ with open(out_path, "a", encoding="utf-8") as f:
     f.write(line + "\n")
 PYEOF
 }
+
+# ---------------------------------------------------------------------------
+# LIMPEZA DE LEGACY ARTIFACTS DENTRO DA WORKTREE (BIND TIME)
+# ---------------------------------------------------------------------------
+# Por bugs harness antigos, pode existir .trae/ ou decisions.log.jsonl /
+# task_graph etc DENTRO da worktree. Ao criar um NOVO binding BOUND,
+# identificamos TUDO isso, movemos para $HARNESS_WORKSPACE_SHARED/legacy_binding_cleanup/
+# como backup seguro, e DELETAMOS da worktree.
+#
+# NÃO É git rm --cached (deixa história intacta); só limpa da cópia de
+# trabalho atual. Se arquivos já estavam no git history, o problema aparece
+# em diff do harness-ship? NÃO — porque harness-ship só faz diff vs
+# DEFAULT_BRANCH, e arquivos que estão ambos lado vs diff sem mudança são
+# irrelevantes. A limpeza é só do working tree.
+
+harness_cleanup_legacy_artifacts_in_worktree() {
+  local worktree_root="$1"
+  local shared_outside="$2"   # HARNESS_WORKSPACE_SHARED já resolvido FORA worktree
+
+  [ -n "$worktree_root" ] || return 0
+  [ -d "$worktree_root" ]   || return 0
+  [ -n "$shared_outside" ]  || return 0
+
+  harness_assert_outside_worktree "$shared_outside" "$worktree_root" "cleanup_backup_target"
+
+  local backup_dir="$shared_outside/legacy_binding_cleanup/$(date -u +"%Y%m%dT%H%M%SZ")"
+  local total_found=0
+  local -a found_list=()
+
+  # Lista de patterns EXATOS (find name patterns). Igual a blacklist anterior mas
+  # agora usada apenas find + delete worktree copy, NÃO mais usada pra gitignore.
+  local -a patterns=(
+    ".trae"                              # diretorio inteiro
+    "decisions.log.jsonl"
+    "decisions.log.md"
+    "decisions.log"
+    "decision.log.jsonl"
+    "decision.log.md"
+    "decision.log"
+    "task_graph.md"
+    "task_graph.yaml"
+    "manual_test_plan.md"
+    "final_summary.md"
+    "execution_batches.md"
+    "batch_execution_report.md"
+    "merge_audit.md"
+    "merge_audit.jsonl"
+    "scope-report.md"
+    "scope-report.json"
+    "scope_check_report.md"
+    "scope_check_report.json"
+    "gh_stack_plan.md"
+    "task_envelope.md"
+    "graphify-out"
+    "harness-review-report.md"
+    "harness-compliance-report.md"
+    "flockr-review-report.md"
+  )
+
+  # Construindo find args.
+  local -a find_args=()
+  local p
+  for p in "${patterns[@]}"; do
+    find_args+=( -o -name "$p" )
+  done
+  # Remove o primeiro -o (bug do inicio da cadeia):
+  unset 'find_args[0]'
+
+  # find retorna arquivos OU diretórios que batam os patterns, DENTRO da worktree:
+  # Usamos -print0 / read -d '' pra segurar paths com spaces/newlines.
+  while IFS= read -r -d '' match; do
+    total_found=$(( total_found + 1 ))
+    found_list+=( "$match" )
+  done < <(cd "$worktree_root" && find . \( "${find_args[@]}" \) -print0 2>/dev/null | sed -z 's@^\./@@' | while IFS= read -r -d '' x; do printf '%s\0' "$worktree_root/$x"; done)
+
+  if [ "$total_found" -eq 0 ]; then
+    return 0
+  fi
+
+  # Tem legado: cria pasta backup e move tudo pra lá preservando caminhos.
+  mkdir -p "$backup_dir"
+
+  local rel target_dir
+  local -a report=()
+  for match in "${found_list[@]}"; do
+    # Relativo a worktree_root
+    rel="${match#$worktree_root/}"
+    [ "$rel" = "$match" ] && continue   # segurança nunca deve acontecer
+
+    # Target no backup_dir
+    target="$backup_dir/$rel"
+    target_dir="$(dirname "$target")"
+    mkdir -p "$target_dir"
+
+    if mv -f "$match" "$target" 2>/dev/null; then
+      report+=( "$rel -> backup $target" )
+    else
+      # se não mover por qualquer motivo (arquivo foi deletado/lock/nfs falhou etc),
+      # tenta rm -f anyway se for UNTRACKED mas deixa quieto.
+      rm -rf "$match" 2>/dev/null || true
+      report+=( "$rel (deleted fallback, mv failed)" )
+    fi
+  done
+
+  # Reporta em stderr p/ agente verificar. O path backup fica em
+  # $HARNESS_WORKSPACE_SHARED/legacy_binding_cleanup/<ts>/ .
+  {
+    echo "🧹 harness_cleanup_legacy_artifacts: movidos $total_found arquivos/diretórios LEGACY de dentro de $worktree_root."
+    echo "   backup_dir = $backup_dir"
+    local r
+    for r in "${report[@]}"; do
+      echo "    · $r"
+    done
+  } >&2
+}
+
+# ---------------------------------------------------------------------------
+# LEVEL 1 BINDING REGISTRY + CLEANUP HOOK
+# ---------------------------------------------------------------------------
+# Sempre que houver BIND_APPEND / BIND_BOOTSTRAP com STATUS=BOUND, o cleanup
+# roda antes de escrever no registry.
 
 harness_migrate_decisions_md_to_jsonl() {
   local old_md="$1"
@@ -418,6 +619,26 @@ harness_registry_append_jsonl() {
   [ -n "$session_id" ]   || { echo "harness_registry_append_jsonl: session_id empty" >&2; return 2; }
   [ -n "$status" ]       || { echo "harness_registry_append_jsonl: status empty" >&2; return 2; }
   [ -n "$worktree_root" ] || { echo "harness_registry_append_jsonl: worktree_root empty" >&2; return 2; }
+
+  # ── HOOK: on first BIND_BOOTSTRAP / BIND_APPEND de STATUS=BOUND, limpa artifacts
+  #    legados que PODEM estar DENTRO da worktree (bugs harness antigos).
+  #    Fazemos isso ANTES de escrever a entry no registry, e usamos o próprio
+  #    HARNESS_WORKSPACE_SHARED (já resolvido FORA worktree via harness_compute_paths)
+  #    como destino do backup. Se shared ainda não estiver definido, computamos.
+  if [ "$status" = "BOUND" ]; then
+    local wt_shared
+    wt_shared="${HARNESS_WORKSPACE_SHARED:-}"
+    if [ -z "$wt_shared" ] || [ "$wt_shared" = "/" ]; then
+      local tmp_hwn tmp_sl
+      tmp_hwn="$(harness_resolve_workspace_name "$PWD")"
+      tmp_sl="$(harness_resolve_worktree_slug "$worktree_root")"
+      wt_shared="${HARNESS_SESSIONS_ROOT:-$HOME/code/harness-sessions}/$tmp_hwn/$tmp_sl/workspace"
+    fi
+    # Garante que o backup directory não cai dentro da worktree.
+    harness_assert_outside_worktree "$wt_shared" "$worktree_root" "wt_shared cleanup root"
+    mkdir -p "$wt_shared"
+    harness_cleanup_legacy_artifacts_in_worktree "$worktree_root" "$wt_shared"
+  fi
 
   local out_path
   out_path="$(harness_registry_path)"

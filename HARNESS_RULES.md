@@ -253,7 +253,7 @@ Para qualquer comando `/harness-ship` ou afins:
    - Task Graph tiver ≥3 tasks que formam unidades de PR claramente separáveis.
    - OU: Usuário explicitamente pediu "entregar em múltiplos PRs".
    - OU: Uma única task tiver blast radius > 15 arquivos e SM decidir quebrar em 2+ PRs.
-2. **Planejamento (SM cria arquivo `.trae/<task-id>/gh_stack_plan.md`) ANTES do Dev começar:**
+2. **Planejamento (SM cria arquivo `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/gh_stack_plan.md` — FORA worktree, via `harness_compute_paths`) ANTES do Dev começar:**
    - Lista ordenada: `PR #N`, título, base branch, head branch, tasks cobertas, ACs do PR, reviewers opcionais, ordem de stack (base → topo).
    - Exemplo de estrutura: `[PR1 (base main)] contracts types → [PR2 (base PR1 branch)] service layer → [PR3 (base PR2 branch)] API + tests`.
    - Mostrar plano ao usuário para aprovação ANTES de Dev iniciar.
@@ -383,7 +383,7 @@ Quando existem arquivos `UU | AA | DD | AU | UA | DU | UD` (git status unmerged)
 2. **TODOS** os envelopes de task têm **lista EXPLÍCITA e ENUMERADA de arquivos permitidos** (NÃO use globs `src/**/*` nem `packages/` — só paths concretos).
 3. Pelo menos 2 tasks na **mesma onda Kahn (sem dependências mútuas)** têm **interseção vazia de arquivos**.
 4. Worktree está **limpa de alterações não comitadas FORA dos envelopes** (ou usuário deu approve explícito).
-5. Nenhum `.trae/_locks/*.lock.json` stale com estado `HELD` de sessão abortada anterior existe (se existir, purgar com approve do usuário).
+5. Nenhum `$HARNESS_SESSION_DIR/_locks/*.lock.json` stale com estado `HELD` de sessão abortada anterior existe (resolve via `harness_compute_paths`; NEVER inside worktree — se existir, purgar com approve do usuário).
 
 ### ❌ Quando NUNCA paralelizar (FALLBACK to serial)
 1. Qualquer arquivo listado em mais de 1 task do mesmo mini-batch → **quebre em mini-batches separados via conflict graph coloring**.
@@ -393,7 +393,7 @@ Quando existem arquivos `UU | AA | DD | AU | UA | DU | UD` (git status unmerged)
 5. Compliance HEAVY, QA cross-file, ou merge-audit HIGH conflict → **rodam SINGLE-THREADED**.
 
 ### 🔒 Lock files & Single-writer rules
-- **Blast-radius file locks:** `.trae/_locks/<hash>-<basename>.lock.json` → adquirir ANTES de invocar Dev, liberar APÓS gates passarem + merge-audit LOW/MEDIUM-confirmed.
+- **Blast-radius file locks:** `$HARNESS_SESSION_DIR/_locks/<hash>-<basename>.lock.json` (resolve via `harness_compute_paths`; NEVER inside worktree) → adquirir ANTES de invocar Dev, liberar APÓS gates passarem + merge-audit LOW/MEDIUM-confirmed.
 - **Single writers for shared artifacts:**
   - `task_graph.md` status updates = **APENAS o dispatcher escreve**. Nenhum Dev paralelo toca nesse arquivo.
   - `session.md` = dispatcher append-only + SM escreve início/fim.
