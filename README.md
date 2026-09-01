@@ -73,38 +73,38 @@ Recarregue o Trae (feche/abra ou reload window). **Pronto.**
 ```mermaid
 %%{init: {'theme':'base'}}%%
 flowchart TD
-    NewRepo([👤 Cheguei numa codebase NOVA ou voltei depois de meses])
-    ProdInit([👤 Criando produto/projeto do zero])
-    NewRepo -->|1 vez por repo| XRay([0️⃣  harness-xray Raio-X do repositório\n(Graphify first → fallback lightweight AST scan)\nsalva project_profile no registry global])
-    ProdInit -->|1 vez por projeto| PK([0️⃣  harness-project-knowledge\nregistry global: produto + arquitetura + roadmap + personas + integrações])
-    XRay & PK --> Read{Qualquer sessão a partir de AGORA\nlê registry FIRST antes de qualquer coisa}
-    Read --> B([👤 Pede feature/bug/refactor])
-    B --> Spec([1️⃣  harness-spec SPEC 7 seções canônicas + YAML frontmatter\nApproved gate = libera escopo])
-    Spec --> ADRGate{change_class é\narch/platform/large-migration?}
-    ADRGate -->|Sim| ADR([adr-architecture skill\ncria ADR-XXX design doc\n(em workspace/design/)])
-    ADRGate -->|Não| SM([2️⃣  harness-start Scrum Master\ngates 0-1.5: binding + spec aprovado + ADR se aplicável + tasks graph + envelopes])
+    NewRepo["👤 Cheguei numa codebase NOVA ou voltei depois de meses"]
+    ProdInit["👤 Criando produto/projeto do zero"]
+    NewRepo -->|"1 vez por repo"| XRay["0️⃣  harness-xray Raio-X do repositório<br/>(Graphify first → fallback lightweight AST scan)<br/>salva project_profile no registry global"]
+    ProdInit -->|"1 vez por projeto"| PK["0️⃣  harness-project-knowledge<br/>registry global: produto + arquitetura + roadmap + personas + integrações"]
+    XRay & PK --> Read{"Qualquer sessão a partir de AGORA<br/>lê registry FIRST antes de qualquer coisa"}
+    Read --> B["👤 Pede feature/bug/refactor"]
+    B --> Spec["1️⃣  harness-spec SPEC 7 seções canônicas + YAML frontmatter<br/>Approved gate = libera escopo"]
+    Spec --> ADRGate{"change_class é<br/>arch/platform/large-migration?"}
+    ADRGate -->|"Sim"| ADR["adr-architecture skill<br/>cria ADR-XXX design doc<br/>(em workspace/design/)"]
+    ADRGate -->|"Não"| SM["2️⃣  harness-start Scrum Master<br/>gates 0-1.5: binding + spec aprovado + ADR se aplicável + tasks graph + envelopes"]
     ADR --> SM
-    SM --> Dev{3️⃣ Dev tasks atomic}
-    Dev -->|Serial T1→TN| T1[T1] --> Tn[...TN]
-    Dev -->|Paralelo Kahn waves| Parallel([harness-parallel executor dispatcher\nfile locks + blast radius])
-    Tn --> QA(QA 🔬 per-task\nbuild/lint/typecheck/test)
+    SM --> Dev{"3️⃣ Dev tasks atomic"}
+    Dev -->|"Serial T1→TN"| T1["T1"] --> Tn["...TN"]
+    Dev -->|"Paralelo Kahn waves"| Parallel["harness-parallel executor dispatcher<br/>file locks + blast radius"]
+    Tn --> QA["QA 🔬 per-task<br/>build/lint/typecheck/test"]
     Parallel --> QA
-    QA --> CL(🛡 Compliance Light per-task\nPII/secrets/SQL injection)
-    CL --> Done{Todas tasks DONE?}
-    Done -->|Não| Dev
-    Done -->|Sim| Ship([4️⃣  harness-ship\n§0.9 4-GATES EXECUTÁVEIS fail-fast order:])
-    Ship --> G1(Gate 0.9.1 🔍 SCOPE 6-checks\nAC delivered × tests × docs × env × LEAN YAGNI × SCORE=√(scope·LEAN)≥7.0)
-    G1 --> G2(Gate 0.9.2 🔎 CODE-REVIEW\n0C + ≤2H → auto-remediate SEM perguntar\nany CRITICAL ou ≥3H → BLOQUEIA ship)
-    G2 --> G3(Gate 0.9.3 🛡 COMPLIANCE HEAVY\nfull diff scan 0C + 0H SEM override direto)
-    G3 --> G4(Gate 0.9.4 🧪 QA FINAL\nopcional --run-qa flag; detect stack)
-    G4 --> PR([📤 Draft PR aberto · 1 conventional commit])
-    PR -->|human reviewer| Cmt([harness-pr-comments triage: actionable/nit; reply drafts + implementation plan])
-    PR -->|CI vermelho| Ci([harness-ci-fix diagnostica + corrige até 3 planos de fix])
-    PR -->|nit, quality, blockers| Rv([harness-review blocking: runtime/security/deps/scope])
-    Cmt & Ci & Rv --> Mergeable{PR mergable?}
-    Mergeable -->|Não| PR
-    Mergeable -->|Sim Merge!| Obs([Post-deploy checklist:\nrollback doc · observabilidade provider · SLO baseline\n(decision log entry POST_DEPLOY_CHECK)])
-    Obs --> End([✅ SDLC COMPLETO end-to-end])
+    QA --> CL["🛡 Compliance Light per-task<br/>PII/secrets/SQL injection"]
+    CL --> Done{"Todas tasks DONE?"}
+    Done -->|"Não"| Dev
+    Done -->|"Sim"| Ship["4️⃣  harness-ship<br/>§0.9 4-GATES EXECUTÁVEIS fail-fast order:"]
+    Ship --> G1["Gate 0.9.1 🔍 SCOPE 6-checks<br/>AC delivered × tests × docs × env × LEAN YAGNI × SCORE=√(scope·LEAN)≥7.0"]
+    G1 --> G2["Gate 0.9.2 🔎 CODE-REVIEW<br/>0C + ≤2H → auto-remediate SEM perguntar<br/>any CRITICAL ou ≥3H → BLOQUEIA ship"]
+    G2 --> G3["Gate 0.9.3 🛡 COMPLIANCE HEAVY<br/>full diff scan 0C + 0H SEM override direto"]
+    G3 --> G4["Gate 0.9.4 🧪 QA FINAL<br/>opcional --run-qa flag; detect stack"]
+    G4 --> PR["📤 Draft PR aberto · 1 conventional commit"]
+    PR -->|"human reviewer"| Cmt["harness-pr-comments triage: actionable/nit; reply drafts + implementation plan"]
+    PR -->|"CI vermelho"| Ci["harness-ci-fix diagnostica + corrige até 3 planos de fix"]
+    PR -->|"nit, quality, blockers"| Rv["harness-review blocking: runtime/security/deps/scope"]
+    Cmt & Ci & Rv --> Mergeable{"PR mergable?"}
+    Mergeable -->|"Não"| PR
+    Mergeable -->|"Sim Merge!"| Obs["Post-deploy checklist:<br/>rollback doc · observabilidade provider · SLO baseline<br/>(decision log entry POST_DEPLOY_CHECK)"]
+    Obs --> End["✅ SDLC COMPLETO end-to-end"]
 ```
 
 ### O Runbook em 4 + 2 comandos (os que você usa todo dia)
@@ -161,14 +161,14 @@ flowchart BT
       U[👤 user_rules/*]
       B[🔐 bindings/registry.jsonl]
       M[🧠 memory/*]
-      C[✨ skills/commands do usuário\nque NÃO existem no repo oficial]
+      C[✨ skills/commands do usuário<br/>que NÃO existem no repo oficial]
     end
 
     subgraph Layers["Camadas de Precedência (↑ = ganha)"]
       direction BT
-      L3["🥉 Layer 3 — Skills / personas\n(38 pastas: 18 personas ágeis + 20 domínio)"]
-      L2["🥈 Layer 2 — Contracts + Regras\ncontracts/ · HARNESS_RULES.md · REFERENCE_USER_RULES_MINIFIED.md"]
-      L1["🥇 Layer 1 — Hooks automáticos · enforcement\n(3 hooks: pretooluse binding · post 3layer-dedup · post lang-pt)"]
+      L3["🥉 Layer 3 — Skills / personas<br/>(38 pastas: 18 personas ágeis + 20 domínio)"]
+      L2["🥈 Layer 2 — Contracts + Regras<br/>contracts/ · HARNESS_RULES.md · REFERENCE_USER_RULES_MINIFIED.md"]
+      L1["🥇 Layer 1 — Hooks automáticos · enforcement<br/>(3 hooks: pretooluse binding · post 3layer-dedup · post lang-pt)"]
     end
 
     U & B & M & C -- PRECEDÊNCIA MÁXIMA --> L1
@@ -195,15 +195,15 @@ flowchart BT
 ```mermaid
 %%{init: {'theme':'base'}}%%
 flowchart TD
-    A([👤 Bash 1-comando:\nself-update-harness.sh]) --> B[Passo 1:\nBaixa última versão oficial\n/tmp/trae-src-fetch.XXXXXX]
-    B --> C{Passo 2:\nDetecta caso target}
-    C -->|CASO 1 · 90% users\n~/.trae/.git existe?| D1[🟢 update-harness.sh\ngit pull --ff-only]
-    C -->|CASO 2 · fallback\n~/.trae NÃO é git repo| D2[🟡 install-harness.sh --update\nmerge item-a-item]
-    D1 --> E{Conflitos mods locais?\nOu divergência?}
-    E -->|Não| F1[🎉 Apply OK\n· gitignore protege BLACKLIST\n· pnpm install se package*.json mudou]
-    E -->|Sim| G1[⛔ FAIL CLOSED\nAborta sem merge.\nSugestão: commit ou stash]
-    D2 --> F2[🎉 Apply OK\n· BLACKLIST arrays NEVER touched\n· backup individual\n  mv item → item.bak-YYYYMMDD-HHMM]
-    F1 & F2 & G1 --> CLEAN[🧹 trap EXIT\nrm -rf /tmp fetch folder]
+    A([👤 Bash 1-comando:<br/>self-update-harness.sh]) --> B[Passo 1:<br/>Baixa última versão oficial<br/>/tmp/trae-src-fetch.XXXXXX]
+    B --> C{Passo 2:<br/>Detecta caso target}
+    C -->|CASO 1 · 90% users<br/>~/.trae/.git existe?| D1[🟢 update-harness.sh<br/>git pull --ff-only]
+    C -->|CASO 2 · fallback<br/>~/.trae NÃO é git repo| D2[🟡 install-harness.sh --update<br/>merge item-a-item]
+    D1 --> E{Conflitos mods locais?<br/>Ou divergência?}
+    E -->|Não| F1[🎉 Apply OK<br/>· gitignore protege BLACKLIST<br/>· pnpm install se package*.json mudou]
+    E -->|Sim| G1[⛔ FAIL CLOSED<br/>Aborta sem merge.<br/>Sugestão: commit ou stash]
+    D2 --> F2[🎉 Apply OK<br/>· BLACKLIST arrays NEVER touched<br/>· backup individual<br/>  mv item → item.bak-YYYYMMDD-HHMM]
+    F1 & F2 & G1 --> CLEAN[🧹 trap EXIT<br/>rm -rf /tmp fetch folder]
 
     classDef user fill:#10B981,stroke:#059669,color:#fff
     classDef fetch fill:#0EA5E9,stroke:#0284C7,color:#fff
