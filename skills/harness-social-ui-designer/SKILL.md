@@ -1,6 +1,6 @@
 ---
 name: "harness-social-ui-designer"
-description: "V3 — Design pipeline 4 modos: (A) Social Media, (B) UI/UX Feature, (C) Design System, (D) Logotipo & Marca. MANDATORY FLOW: (1) Spec detalhada escrita + iteração usuário até APROVAÇÃO EXPLÍCITA GATE; (2) Execução em ETAPAS (≤5); (3) Revisor visual por etapa valida alinhado spec; (4) Fallback offline. Usa mcp_open-pencil local. Trigger: /harness-design, /harness-figma."
+description: "V4 — Backend-neutral design pipeline with Social Media, UI/UX Feature, Design System and Brand modes. Mandatory SPEC approval, staged execution and visual review. Supports capability-selected OpenPencil, Figma or spec-only execution. Trigger: /harness-design, /harness-figma."
 ---
 
 # Harness — Social UI Designer (Orchestrator) v3.0
@@ -12,7 +12,22 @@ description: "V3 — Design pipeline 4 modos: (A) Social Media, (B) UI/UX Featur
 > - **Image source fallback waterfall**: §3 item #1 (Unsplash real > text_to_image endpoint > G(search) headless)
 > - **SVG vetor quality gates**: §12 logo/marca
 
-Este é o **orquestrador top-level** do design harness. Backend = `mcp_open-pencil` local (equivalente a Figma desktop, sem auth/limites).
+Este é o **orquestrador top-level** do design harness. O workflow é backend-neutral.
+Backend selection MUST follow `references/DESIGN_BACKEND_CONTRACT.md`.
+OpenPencil-specific instructions apply ONLY when backend=`openpencil`.
+Figma execution follows `references/backends/FIGMA.md` when backend=`figma`.
+Never select a backend only because the runtime is Trae or Codex.
+
+### Runtime bootstrap
+
+Before creating any durable design artifact:
+
+    source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
+    harness_compute_paths "$WORKTREE_ROOT" "$(harness_current_session_id)" "$PWD"
+    HARNESS_DESIGN_ROOT="${HARNESS_DESIGN_ROOT:-$HARNESS_WORKSPACE_SHARED/designs}"
+    HARNESS_DESIGN_DIR="$HARNESS_DESIGN_ROOT/<modo>-<slug>-YYYYMMDD"
+
+Create `$HARNESS_DESIGN_DIR` only after the bound-worktree/session preflight passes.
 **4 modos mutuamente exclusivos** (escolher 1 no início via `AskUserQuestion`):
 - **MODE A → Social Media Posts**: posts 1:1 / stories 9:16 + copies profissionais.
 - **MODE B → UI/UX Feature**: wireframes → hi-fi → dev-spec (React/Tailwind 4).
@@ -64,7 +79,7 @@ Campos extra para **MODE D Logotipo & Marca (OBRIGATÓRIOS 100% preenchidos)**:
 | **SVG deliverable OBRIGATÓRIO (HARD GATE)** | Todas variantes devem ser SVG standalone, SEM bitmaps embutidos, < 128KB, viewBox `0 0 1024 1024` default. |
 
 #### 0.2 Escrever spec no disco e pedir aprovação explícita
-- Salvar spec em: `/home/laion/.trae/designs/<slug>-spec.md`
+- Salvar spec em: `$HARNESS_DESIGN_DIR/spec.md`
 - Mostrar spec ao usuário **formatada para leitura diagonal** (tabelas, negrito, bullets).
 - Pergunta única de aprovação (obrigatória):
   > **"Aprovo esta spec do jeito que está — pode executar (Sim / Não, ajustar estes X pontos)"**
@@ -89,9 +104,9 @@ Se modo = **D (Logotipo & Marca)**, ANTES de escrever spec §0.1, rodar **5 lote
 **Fail-fast lote D (se 2 lotes ainda ambíguo)**: perguntar 1 vez: "Default: minimalista, tons terrosos neutros, Inter + Playfair, 3 conceitos, 6 variantes. Seguir assim e ir refinando por etapa? (Sim / Não — listar ajustes)".
 
 ### GATE 1: Save path + brandbook
-- **Path projeto (OpenPencil source)**: perguntar caminho absoluto em /home/laion; default `/home/laion/.trae/designs/<modo>-<slug>-YYYYMMDD.pen`.
+- **Design directory**: `$HARNESS_DESIGN_DIR="$HARNESS_DESIGN_ROOT/<modo>-<slug>-YYYYMMDD"`. Source representation is backend-specific.
 - **Brandbook (3 bullets curtos)**: paleta hex / tipografia (default Inter) / tom de voz copy (default "Profissional acessível").
-- Inicializar documento `mcp_open-pencil.new_document(path: <PATH>)` → guardar `DESIGN_FILE_PATH` e `OPEN_PENCIL_DOCUMENT_ID`.
+- Inicializar/abrir a fonte de design usando o driver ativo. OpenPencil pode criar source local; Figma registra metadata em `$HARNESS_DESIGN_DIR/figma-source.md`.
 
 ---
 
@@ -144,7 +159,7 @@ Por frame (card/screen):
 Goal: Entregar N criativos (default 4 Feed 1:1) com copies 100% verbatim, paleta, layout grid, fotos, estética, export @2x, **tudo alinhado à spec §GATE -1 aprovada**.
 
 ### 1.0 Precondição hard: Spec APROVADA pelo usuário (§GATE -1)
-- Copiar spec aprovada para: `/home/laion/.trae/designs/<slug>-spec.APPROVED.md` (SHA256 salvo para revisor comparar).
+- Copiar spec aprovada para: `$HARNESS_DESIGN_DIR/spec.APPROVED.md` (SHA256 salvo para revisor comparar).
 
 ### Fluxo etapas (≤4 etapa total, 1 etapa executa de cada vez)
 **POR ETAPA → (a) Agente Executor (designer) executa; (b) Agente Revisor Visual valida contra spec; (c) Se passar → próxima etapa; (d) Se reprovar ≤2 vezes → rework etapa; >2 vezes → voltar spec ajuste.**
@@ -222,7 +237,7 @@ Todos gates 1-7 aplicam a **QUALQUER MODO** e **toda etapa final**. Gates D1-D5 
 3. **SEMPRE EXPORT SCALE 2 (2×)**: Feed 2160×2160; Stories 2160×3840; Screens desktop ≥2560 wide.
 4. **LAYERS SEM NOMES LIXO**: SEM "Rectangle 12", "Text 4". Sempre: `<Piece>-<Role>` (ex `C1-Headline-Hero`, `CTA-Buy-Ticket`).
 5. **FALLBACK OFFLINE OBRIGATÓRIO SE ETAPA 3 FOTOS HEADLESS FALHAR**: Rodar compositor Pillow §3.1.4 (colar foto asset baixada sobre PNG base texto renderizado) — este é o gate final para entregar foto **garantida**.
-6. **STORAGE PATHS LIMPOS**: Nenhum output temporário em `/tmp`; todos assets em `/home/laion/.trae/designs/<slug>/assets/`, exports em `/exports/`.
+6. **STORAGE PATHS LIMPOS**: outputs duráveis ficam em `$HARNESS_DESIGN_DIR`; assets em `$HARNESS_DESIGN_DIR/assets/`; exports em `$HARNESS_DESIGN_DIR/exports/`.
 7. **SPEC CHECKSUM**: Saída final **DEVE** corresponder à `APPROVED-spec.md`. Revisor compara item por item (paleta / copies verbatim / layout / dimensão).
 
 ### Gates MODE D exclusivos (Logotipo & Marca) — HARD fail
@@ -280,7 +295,7 @@ Quer aprofundar em **<UMA COISA ÚNICA>**? (Sim / Não)
 
 ## 📁 8. NOMENCLATURA PATHS
 ```
-/home/laion/.trae/designs/<slug>-YYYYMMDD/
+$HARNESS_DESIGN_DIR/
   ├── spec.md                  # Spec draft (iteração)
   ├── spec.APPROVED.md         # Spec SHA256 travada após aprovação (GATE-1)
   ├── source.pen               # OpenPencil source (via save_document; .openpencil cópia idêntica)
@@ -554,9 +569,21 @@ def rasterize_svgs_to_png2x(vectors_dir:str, exports_dir:str, scale:int=2):
 
 ---
 
-## 🧩 11. MCP Backend A/B (comparativo rápido)
-- **PADRÃO: `mcp_open-pencil` local → 140+ tools, 100% offline sem auth, sem limites API.** Sempre usar.
-- **OPCIONAL futuro: Figma Cloud MCP (github southleft v1.39.1)** → trabalha DIRETO em projetos Figma via PAT + file key; tem Code Connect; mas requer token, rede, rate limits. Adicionar apenas se usuário pedir explicitamente cloud. KISS: manter local por padrão.
+## 🧩 11. DESIGN BACKEND SELECTION
+
+Canonical contract: `references/DESIGN_BACKEND_CONTRACT.md`.
+
+Available drivers:
+
+- `openpencil` → `references/backends/OPENPENCIL.md`
+- `figma` → `references/backends/FIGMA.md`
+- `spec-only` → SPEC/dev-spec only; STOP before pixel execution
+
+Selection is capability-based, not IDE-based.
+
+User explicit backend choice has precedence when that capability exists.
+
+If the requested backend capability is unavailable, FAIL CLOSED instead of silently switching design engines.
 
 ---
 
