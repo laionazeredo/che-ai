@@ -67,7 +67,7 @@ Given a candidate set `S = {T1, T2, ...}` from the same Kahn wave:
 
 ### 1.4 Output of Step 1
 
-Save to `$HARNESS_WORKSPACE_SHARED/execution_batches.md` (DURÁVEL workspace-shared, via `source ~/.trae/contracts/harness_sessions_contract.sh`):
+Save to `$HARNESS_WORKSPACE_SHARED/execution_batches.md` (DURÁVEL workspace-shared, via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`):
 
 ```markdown
 # EXECUTION BATCHES — <task-id>

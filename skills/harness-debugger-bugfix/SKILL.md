@@ -34,7 +34,7 @@ If user fails to provide ANY of 1, 2, or 3 → **ASK with specific questions** b
 
 ### 0.3 Session artifacts dir
 
-First: `source $HOME/.trae/contracts/harness_sessions_contract.sh && harness_compute_paths $WORKTREE_ROOT && harness_ensure_session_dirs $WORKTREE_ROOT`.
+First: `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh" && harness_compute_paths $WORKTREE_ROOT && harness_ensure_session_dirs $WORKTREE_ROOT`.
 Create and use (ALL strictly outside user's worktree; `harness_assert_outside_worktree` HARD-STOPS if misconfigured):
 ```
 $HARNESS_SESSION_DIR/           (ephemeral per-session: bugfix_session.md, qa/, reports/)

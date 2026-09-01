@@ -30,7 +30,7 @@ If any is missing → **ABORT immediately** and go back to Scrum Master.
 
 Run BEFORE touching ANY Glob/Grep/file-write/git command.
 
-1. **Level 1 Global Index (AUTHORITY):** Read `$HOME/.trae/bindings/registry.jsonl`. Find LAST STATUS=BOUND entry with `SESSION_ID` from env/IDE. Extract `WORKTREE_ROOT` from that entry. If NO entry: binding hasn't been made yet → ABORT. Ask: "No Level1 binding for this session. Create it? (A = Select worktree now; B = Cancel task). NEVER write without binding created."
+1. **Level 1 Global Index (AUTHORITY):** Read `harness_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `harness_current_session_id`. Extract `WORKTREE_ROOT` from that entry. If NO entry: binding hasn't been made yet → ABORT. Ask: "No Level1 binding for this session. Create it? (A = Select worktree now; B = Cancel task). NEVER write without binding created."
    - If found BOUND entry: confirm `WORKTREE_ROOT` from registry **MUST MATCH** the `WORKTREE_ROOT` passed by Scrum Master.
    - If MISMATCH → **ABORT.** Ask: "SM says worktree = X but Level 1 registry (GLOBAL) says BOUND_ROOT=Y. Switch binding first? (A = Switch per §19.3; B = Cancel task)." Never silent proceed.
 2. **Level 2 Detail File (informational only for Dev):** If Level 2 `$HARNESS_SESSION_DIR/binding.md` (resolved via contract `harness_compute_paths` + `harness_level2_binding_path`) does NOT exist → SM preflight didn't create it properly. Warn & create now (append Level 1 if needed, but don't duplicate BOUND entries). Report discrepancy to SM / decision.log. Decision log entries append to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (SINGLE shared file per worktree-slug, not one per task-id.)

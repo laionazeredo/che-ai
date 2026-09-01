@@ -19,7 +19,7 @@ description: "Queries, filters, summarizes, exports, and audits Harness decision
 2. **`decisions.log.jsonl` exists?** If file doesn't exist → say "Nenhuma decisão registrada nesta worktree ainda." Stop.
 3. **Source contracts first** before calling the helper CLI wrapper below:
    ```bash
-   source ~/.trae/contracts/harness_sessions_contract.sh
+   source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
    PATH_FILE=$(harness_decisions_path "<WORKTREE_ROOT>")
    ```
 
@@ -55,10 +55,10 @@ Common event types:
 ## 2. Query modes (use the smallest scope needed)
 
 Run queries via the TypeScript CLI runner (zero-build, tsx executor):
-`corepack pnpm --dir ~/.trae exec tsx ~/.trae/contracts/decisions-query.cli.ts <path> <mode> [args]`.
+`corepack pnpm --dir "$HARNESS_HOME" exec tsx "$HARNESS_HOME/contracts/decisions-query.cli.ts" <path> <mode> [args]`.
 
 Shortcut via package.json script:
-`corepack pnpm --dir ~/.trae decisions <path> <mode> [args]`.
+`corepack pnpm --dir "$HARNESS_HOME" decisions <path> <mode> [args]`.
 
 ### MODE: `summary` (DEFAULT when user says "mostra as decisões")
 

@@ -282,10 +282,10 @@ Canonical output:
 
 #### 19.1 HARNESS SESSIONS ROOT (PATH CONTRACT — all mutable/generated data lives here)
 
-**Immutable harness code (skills, commands, hooks, rules, references) STAYS in `$HOME/.trae/`.** Never put generated output there.  
+**Immutable harness code (skills, commands, hooks, rules, references) STAYS in `$HARNESS_HOME/`.** Never put generated output there.
 **Generated output (session bindings, task graphs, decisions, QA evidence, design docs, summaries) MUST LIVE under `$HARNESS_SESSIONS_ROOT` (default: `$HOME/code/harness-sessions`).** One flat parent folder per user.
 
-Path layout (CANONICAL — all skills/commands MUST build paths by calling the contract script `$HOME/.trae/contracts/harness_sessions_contract.sh`; NEVER hardcode):
+Path layout (CANONICAL — all skills/commands MUST build paths by calling the contract script `$HARNESS_HOME/contracts/harness_sessions_contract.sh`; NEVER hardcode):
 ```
 $HARNESS_SESSIONS_ROOT/
 └── <WORKSPACE_NAME>/                            # Ex: Flockr  (from Flockr.code-workspace)
@@ -309,9 +309,20 @@ $HARNESS_SESSIONS_ROOT/
                 ├── reports/                     # PR review reports, diff reports, batch reports
                 └── summary.md                   # re-summaries / milestones da sessão
 
-RESOLVER (authoritative): `$HOME/.trae/contracts/harness_sessions_contract.sh`
+RESOLVER (authoritative): `$HARNESS_HOME/contracts/harness_sessions_contract.sh`
+
+Runtime portability:
+- `HARNESS_HOME` is the canonical Harness installation root.
+- Default for Trae compatibility: `HARNESS_HOME=$HOME/.trae`.
+- Skills MUST NOT resolve runtime paths by directly reading `$HOME/.trae` after runtime bootstrap.
+- The only permitted legacy bootstrap is `${HARNESS_HOME:-$HOME/.trae}` to locate and source the canonical contract; after sourcing it, use `HARNESS_HOME` and canonical helper functions.
+- Effective session identity MUST be obtained through `harness_current_session_id`.
+- `HARNESS_SESSION_ID` has precedence when present (Codex/runtime-neutral).
+- `SESSION_ID` remains the backward-compatible Trae fallback.
+- Level 1 registry path MUST be obtained through `harness_registry_path`.
+
   - source harness_sessions_contract.sh
-  - harness_compute_paths <WORKTREE_ROOT> <SESSION_ID> <current-cwd>
+  - harness_compute_paths <WORKTREE_ROOT> [<EFFECTIVE_SESSION_ID>] <current-cwd>
   - exports: HARNESS_WORKSPACE_NAME / HARNESS_WORKTREE_SLUG / HARNESS_WORKSPACE_SHARED / HARNESS_SESSION_DIR / HARNESS_LEVEL2_BINDING
   - ensure dirs: harness_ensure_session_dirs
 ```
@@ -324,9 +335,9 @@ Binding contract:
    - The very first operation of a harness flow (or first file access in a worktree scoped session) MUST produce a binding decision: which absolute worktree path is this session attached to?
    - **MOVE FORWARD: O usuário deve ser perguntado qual o FRIENDLY_NAME da pasta desta sessão imediatamente após binding ser criado. Regra: Pergunta 1 única, no momento em que binding é criado: "Qual o nome amigável dessa pasta (slug short)?". Resposta user é salva em Level1 campo FRIENDLY_NAME e vira sub-papel de SESSION_DIR se definido. NÃO é obrigatório.**
    - **2-LEVEL LAYOUT (resolves chicken-and-egg + multi-session parallelism + zero race condition + per-session FLAGS + never pollutes worktree git status:**
-     - **Level 1 (GLOBAL INDEX / CHICKEN-AND-EGG SOLVER):** 1 unique per user, outside worktrees + sessions dir. Path: `$HOME/.trae/bindings/registry.jsonl`. One entry per SESSION_ID, append-only (never overwrite, just add new lines).
+     - **Level 1 (GLOBAL INDEX / CHICKEN-AND-EGG SOLVER):** 1 unique per user, outside worktrees + sessions dir. Path: resolved by `harness_registry_path` (default `$HARNESS_HOME/bindings/registry.jsonl`). One entry per SESSION_ID, append-only (never overwrite, just add new lines).
        ```
-       SESSION_ID: <session-identifier-from-ide>
+       SESSION_ID: <effective-session-id-from-harness_current_session_id>
        WORKTREE_ROOT: <absolute path>
        TASK_ID: <slug or manual>
        FRIENDLY_NAME: <optional slug-for-user, pergunta na hora do binding>
@@ -378,7 +389,7 @@ Binding contract:
    - Agent-initiated switches (without user saying so) = violation. Never "oh, this code is in worktree B so let me touch it" without asking first.
 
 4. **Per-operation scissor check (MANDATORY before any git/Glob/Grep/file-write):**
-   - Before any file-system write or git command: LOOKUP SESSION_ID in **Level 1 registry $HOME/.trae/bindings/registry.jsonl** (ONLY). Use WORKTREE_ROOT from that entry.
+   - Before any file-system write or git command: LOOKUP the effective session id from `harness_current_session_id` in **Level 1 registry resolved by `harness_registry_path`** (ONLY). Use WORKTREE_ROOT from that entry.
    - If target path is a **USER CODE** file (ou seja, está dentro de WORKTREE_ROOT mas NÃO é um arquivo gerado em $HARNESS_SESSIONS_ROOT) E fica FORA WORKTREE_ROOT → BLOCK. Two outcomes:
      a. User confirms "yes, write outside worktree scope this one user code file" → log decision.log.
      b. Otherwise abort and ask: "This target is outside worktree <X>. Switch first? (A = switch, B = cancel)"
@@ -527,4 +538,4 @@ These rules are **intentionally strict.** They exist because:
 - LLMs write overly-commented/verbose code hard to review. §16 forces clean/concise code.
 - LLMs anticipate future and deliver giant PRs. §15 + gh-stack Appendix C forces small incrementals.
 
-If any rule feels wrong for a specific case → **log the exception + rationale to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (NEVER under `<WORKTREE_ROOT>/.trae/`; use `harness_compute_paths` from `$HOME/.trae/contracts/harness_sessions_contract.sh` to resolve the correct path outside the user worktree)**, and proceed.
+If any rule feels wrong for a specific case → **log the exception + rationale to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (NEVER under `<WORKTREE_ROOT>/.trae/`; use `harness_compute_paths` from `$HARNESS_HOME/contracts/harness_sessions_contract.sh` to resolve the correct path outside the user worktree)**, and proceed.

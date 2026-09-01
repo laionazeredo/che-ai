@@ -19,7 +19,7 @@ Persona: **merge-conflito-resolver.** Mantém KISS/YAGNI + blast-radius mínimo 
 
 Run BEFORE any git op.
 
-1. Read Level1 Global Index `$HOME/.trae/bindings/registry.jsonl`. LAST STATUS=BOUND SESSION_ID → WORKTREE_ROOT.
+1. Read Level1 Global Index `harness_registry_path`. LAST STATUS=BOUND for the effective session id from `harness_current_session_id` → WORKTREE_ROOT.
 2. If user passed `--worktree <path>` AND mismatch with Level1 → **BLOCK.** 3 opções user:
    - A = override binding temporariamente para `<path>`;
    - B = switch binding primeiro (§19.3 re-bind chain);

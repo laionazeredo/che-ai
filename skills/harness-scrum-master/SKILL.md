@@ -26,17 +26,17 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
 
 > **One session = ONE worktree by default. DOUBT = ASK. Never guess. Never silent cross-worktree ops.**
 
-1. **Read existing binding FIRST from Level 1 GLOBAL INDEX (chicken-and-egg resolver):** Read `$HOME/.trae/bindings/registry.jsonl`. Look for LAST entry with:
-   - `SESSION_ID: <current-session-id-from-ide>` AND `STATUS: BOUND`. If found → use its `WORKTREE_ROOT` as default binding proposal for this session; jump to step 3 only if user explicitly says "switch".
+1. **Read existing binding FIRST from Level 1 GLOBAL INDEX (chicken-and-egg resolver):** Read `harness_registry_path`. Look for LAST entry with:
+   - `SESSION_ID: <effective-session-id-from-harness_current_session_id>` AND `STATUS: BOUND`. If found → use its `WORKTREE_ROOT` as default binding proposal for this session; jump to step 3 only if user explicitly says "switch".
 2. **Binding decision PRECEDENCE (STOP first match):**
    a. **Explicit user mention:** user said "worktree X" or gave path → PROPOSE binding to X, confirm once.
    b. **Open files / context:** all user-open files inside one worktree → PROPOSE that worktree. (≥2 worktrees → fall 2c.)
    c. **Working dirs / session memory:** single most-recent worktree referenced prior msgs → PROPOSE it.
    d. **Ambiguous (≥2 candidates or 0):** STOP. AskUserQuestion ≤2 concrete + "other (type path)". NEVER default.
 3. **After user confirms worktree (no existing BOUND for this SESSION_ID in registry):** WRITE INTO BOTH LEVELS (§19 2-LEVEL LAYOUT) — atomically:
-   a. **Level 1 (GLOBAL INDEX append-only JSONL):** NÃO use Edit/Write manual. Use HELPER OFICIAL ÚNICO: `source $HOME/.trae/contracts/harness_sessions_contract.sh && harness_registry_append_jsonl <SESSION_ID> BOUND <WORKTREE_ROOT> '{payload json}'. NEVER overwrite existing BOUND entries (keep histórico append-only). Helper faz dedup sha256 automaticamente + JSON safe sort_keys. **Também roda cleanup AUTOMÁTICO de artifacts legados DENTRO da worktree: tudo que for .trae/ legacy, decisions.log, task_graph etc é movido FORA para backup em $HARNESS_WORKSPACE_SHARED/legacy_binding_cleanup/<ts>/. Payload fields opcionais: workspace_name, worktree_slug, branch, friendly_name, harness_session_dir, harness_workspace_shared, workspace_file, reason, flags:{LANG_PT_CHECK:ENABLED|DISABLED}. Schema _v:1 por linha.
+   a. **Level 1 (GLOBAL INDEX append-only JSONL):** NÃO use Edit/Write manual. Use HELPER OFICIAL ÚNICO: `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh" && harness_registry_append_jsonl <EFFECTIVE_SESSION_ID> BOUND <WORKTREE_ROOT> '{payload json}'. NEVER overwrite existing BOUND entries (keep histórico append-only). Helper faz dedup sha256 automaticamente + JSON safe sort_keys. **Também roda cleanup AUTOMÁTICO de artifacts legados DENTRO da worktree: tudo que for .trae/ legacy, decisions.log, task_graph etc é movido FORA para backup em $HARNESS_WORKSPACE_SHARED/legacy_binding_cleanup/<ts>/. Payload fields opcionais: workspace_name, worktree_slug, branch, friendly_name, harness_session_dir, harness_workspace_shared, workspace_file, reason, flags:{LANG_PT_CHECK:ENABLED|DISABLED}. Schema _v:1 por linha.
       ```
-      SESSION_ID: <current-session-id-from-ide>
+      SESSION_ID: <effective-session-id-from-harness_current_session_id>
       WORKTREE_ROOT: <absolute path>
       TASK_ID: <slug or "manual">
       BOUND_AT: <ISO timestamp>
@@ -44,7 +44,7 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
       ---
       ```
    b. **Level 2 (PER-SESSION DETAIL OUTSIDE user worktree — NEVER inside worktree):**
-      1. `source ~/.trae/contracts/harness_sessions_contract.sh && harness_compute_paths <WORKTREE_ROOT> <SESSION_ID> && harness_ensure_session_dirs <WORKTREE_ROOT>`
+      1. `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh" && harness_compute_paths <WORKTREE_ROOT> <EFFECTIVE_SESSION_ID> && harness_ensure_session_dirs <WORKTREE_ROOT>`
       2. Write `$HARNESS_LEVEL2_BINDING` (= `$HARNESS_SESSION_DIR/binding.md`, contract-resolved, guaranteed outside worktree by harness_assert_outside_worktree) with:
          ```
          SESSION_ID: <session-id>
@@ -97,14 +97,14 @@ $HARNESS_SESSION_DIR       (ephemeral per-session, FORA worktree)
 
 Where:
 - `<task-id>` slug now goes inside `HARNESS_WORKSPACE_SHARED/tasks/<task-id>/` subdir when needed (not a folder inside worktree).
-- Before ANY file writes: resolve paths via contract: `source ~/.trae/contracts/harness_sessions_contract.sh` then `harness_compute_paths WORKTREE_ROOT SESSION_ID CWD`. Never hardcode.
+- Before ANY file writes: resolve paths via contract: `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"` then `harness_compute_paths "$WORKTREE_ROOT" "$(harness_current_session_id)" "$PWD"`. Never hardcode.
 - Run `harness_ensure_session_dirs WORKTREE_ROOT` immediately after binding decision. Creates 2 directory trees **strictly outside user's worktree** — `harness_assert_outside_worktree` HARD-STOPs (exit 99) se qualquer path resolvido cair dentro da worktree (por exemplo se usuário setou HARNESS_SESSIONS_ROOT errado). MORATORIUM: never write generated files under `<WORKTREE_ROOT>/.trae/*`.
 
 **MANDATORY files created by this skill:**
 
 | File | Location | When created | Purpose |
 |---|---|---|---|
-| `registry.jsonl` entries + `binding.md` (2-LEVEL) | Level1 = `$HOME/.trae/bindings/registry.jsonl` (GLOBAL append-only JSONL, entry por session. ÚNICO writer = helper `harness_registry_append_jsonl`, NÃO Edit/Write manual). Level2 = `$HARNESS_SESSION_DIR/binding.md` (per session, OUTSIDE user worktree — never committed). | Immediately preflight 0.1 after binding decision (before ANY scope). | **Session ↔ worktree.** Resolve chicken-and-egg (Level1: `SESSION_ID → WORKTREE_ROOT`). Level1 payload JSONL fields: `friendly_name`, `flags.LANG_PT_CHECK=ENABLED|DISABLED`, `workspace_name`, `worktree_slug`, `branch`, `harness_session_dir`, `harness_workspace_shared`, `workspace_file`, `reason`. |
+| `registry.jsonl` entries + `binding.md` (2-LEVEL) | Level1 = `harness_registry_path` (GLOBAL append-only JSONL, entry por session. ÚNICO writer = helper `harness_registry_append_jsonl`, NÃO Edit/Write manual). Level2 = `$HARNESS_SESSION_DIR/binding.md` (per session, OUTSIDE user worktree — never committed). | Immediately preflight 0.1 after binding decision (before ANY scope). | **Session ↔ worktree.** Resolve chicken-and-egg (Level1: `SESSION_ID → WORKTREE_ROOT`). Level1 payload JSONL fields: `friendly_name`, `flags.LANG_PT_CHECK=ENABLED|DISABLED`, `workspace_name`, `worktree_slug`, `branch`, `harness_session_dir`, `harness_workspace_shared`, `workspace_file`, `reason`. |
 | `spec_<slug>.md` | `$HARNESS_WORKSPACE_SHARED/` | §0.5 BEFORE scope capture. Generated by harness-spec skill (4 inputs: existing/ticket/Flockr PRD/inline). Durable: shared across sessions; Approved status = GATE unlock. | **Execution contract.** 7 sections + YAML frontmatter (change_class, blast radius, DbC PRE/POST/INV, MoSCoW GWT AC + TEST_METHOD per AC, test strategy thresholds, hints, approved_at). Replaces legacy PRD. |
 | `session.md` | `$HARNESS_SESSION_DIR/` | Start session | Session metadata: task-id, worktree path, start time, goals. |
 | `task_graph.md` | `$HARNESS_WORKSPACE_SHARED/` | After scope capture | Full list tasks, deps, status, DONE criteria. Durable: shared across sessions on same worktree. |
