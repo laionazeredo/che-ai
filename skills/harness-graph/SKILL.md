@@ -1,14 +1,26 @@
 ---
 name: "harness-graph"
-description: "Wrapper canônico e genérico do Graphify CLI (pipx package graphifyy = tree-sitter AST knowledge graph 100% local, 33 linguagens). Subcomandos: refresh, query 'pergunta', path A B, stats. Produz graphify-out/ na raiz do worktree (gitignored). Suporta fallback leve (grep-based) se graphify não instalado. Integração com harness-xray (auto refresh durante onboarding)."
+description: "Wrapper canônico e genérico do Graphify CLI (pipx package graphifyy = tree-sitter AST knowledge graph 100% local, 33 linguagens). Subcomandos: refresh, query 'pergunta', path A B, stats. Produz graphify-out/ na raiz do worktree (gitignored). Suporta fallback chain de engines Node.js alternativos (CodeGraph npm, @sentropic/graphify, codebase-vis, @lubab/madar) e fallback final leve grep-based se nenhum instalado. Integração com harness-xray (auto refresh durante onboarding)."
 ---
 
-# Harness Graph — Knowledge Graph AST (Graphify CLI Wrapper)
+# Harness Graph — Knowledge Graph AST (Engine Wrapper com fallback chain)
 
-> **Canonical tool:** Graphify CLI (PyPI: `graphifyy`, double `y`)
-> **Instalar:** `pipx install graphifyy`
+> **Canonical default tool:** Graphify CLI (PyPI: `graphifyy`, double `y`)
+> **Instalar (RECOMENDADO default):** `pipx install graphifyy`
 > **Version tested:** 0.9.x+
 > **Onde gera output:** `$WORKTREE_ROOT/graphify-out/` (sempre gitignored global, commitar nunca)
+
+> **Alternativas 100% Node.js (OPCIONAL · unificar ecossistema só JS):**
+> O harness usa a primeira engine encontrada nesta ordem (fallback chain declarativa):
+> 1. `codegraph` CLI — `npm install -g @colbymchenry/codegraph` (21 linguagens · MCP · SQLite FTS5 · file watcher incremental · ~58% fewer tool calls benchmarks)
+> 2. `graphify` (@sentropic) CLI — `npm install -g @sentropic/graphify` (multimodal código+PDFs+CSVs+ontologia)
+> 3. `codebase-vis` CLI — `npm install -g codebase-vis` (só depgraph, 6 linguagens, 17 deps, mais leve)
+> 4. `madar` CLI — `npm install -g @lubab/madar` (TS/Node context-pack compiler, 5.28× fewer tokens)
+> 5. `graphify` Python default acima
+> 6. **Fallback final:** grep-based (sem ferramenta nenhuma instalada, menor precisão)
+>
+> Comparativo completo + comandos install:
+> → [README.md §Getting Started 3b](file:///home/laion/.trae/README.md#L38-L55)
 
 ## 0. QUANDO USAR
 
@@ -21,22 +33,33 @@ description: "Wrapper canônico e genérico do Graphify CLI (pipx package graphi
 
 ---
 
-## 1. PRÉ-REQUISITO CLI + FALLBACK
+## 1. PRÉ-REQUISITO CLI + FALLBACK CHAIN (6 engines)
 
 ```bash
-# Check rápido
-if command -v graphify >/dev/null 2>&1; then
-  GRAPH_ENGINE="graphify"
-  GRAPHIFY_V="$(graphify --version 2>/dev/null || echo unknown)"
-else
-  echo "[harness-graph] ⚠️  graphify CLI NÃO encontrado."
-  echo "  Instalar (1 comando, ~30s): pipx install graphifyy"
-  echo "  Prosseguindo com FALLBACK LEVE baseado em Grep (menor precisão, sem graph knowledge)."
+# Fallback chain declarativa: codegraph → @sentropic/graphify → codebase-vis → madar → graphify python → grep-fallback
+unset GRAPH_ENGINE; unset GRAPH_ENGINE_V
+for candidate in "codegraph:codegraph" "graphify:@sentropic" "codebase-vis:codebasevis" "madar:madar" "graphify:graphifyy"; do
+  bin="${candidate%%:*}"
+  label="${candidate##*:}"
+  if command -v "$bin" >/dev/null 2>&1; then
+    GRAPH_ENGINE="$label"
+    GRAPH_ENGINE_V="$("$bin" --version 2>/dev/null || echo unknown)"
+    break
+  fi
+done
+if [ -z "${GRAPH_ENGINE:-}" ]; then
+  echo "[harness-graph] ⚠️  Nenhuma engine de graph knowledge instalada."
+  echo "  Escolha UMA (1 comando cada, ~30s):"
+  echo "    · (Default RECOMENDADO) pipx install graphifyy       (Python · 33+ linguagens · multimodal | gráfico canônico graph.html)"
+  echo "    · (Node 1ª escolha)  npm i -g @colbymchenry/codegraph (Node · 21 linguagens · MCP + FTS5 · auto-sync incremental)"
+  echo "    · Ver lista completa no README.md §Getting Started 3b."
+  echo "  Prosseguindo com FALLBACK FINAL baseado em Grep (menor precisão, sem graph knowledge)."
   GRAPH_ENGINE="grep-fallback"
 fi
+echo "[harness-graph] Engine selecionada: $GRAPH_ENGINE v${GRAPH_ENGINE_V:-}"
 ```
 
-**Regra de blast radius:** NÃO instalar `graphifyy` automaticamente dentro do skill. Promptar o usuário para rodar `pipx install graphifyy` manualmente. (Segurança + não instalar pacotes de sistema sem OK.)
+**Regra de blast radius:** NÃO instalar automaticamente NENHUMA engine dentro do skill. Promptar o usuário para rodar UM comando de instalação de sua escolha manualmente. (Segurança + não instalar pacotes de sistema sem OK.)
 
 ---
 

@@ -37,6 +37,22 @@ corepack pnpm --dir ~/.trae install --prefer-offline
 
 # 3. (Opcional RECOMENDADO) Instala graphify CLI via pipx (knowledge graph de repositórios)
 pipx install graphifyy     # provê o comando `graphify`
+#
+# 3b. Node.js alternatives (OPCIONAL · unificar ecossistema só JS):
+#     Se preferir manter só ferramentas npm (sem Python/pipx), o harness usa
+#     como engine preferencial as alternativas abaixo (fallback chain
+#     implementado em skills/harness-graph/SKILL.md — nenhuma é mandatória,
+#     o fallback grep-based funciona SEM nenhum deles instalado):
+#
+#     · 1ª escolha · @colbymchenry/codegraph (Node 20+ · 21 linguagens · MCP + SQLite FTS5
+#                   incremental file-watcher · benchmarks ~58% fewer tool calls):
+#                   npm install -g @colbymchenry/codegraph
+#     · Ontologia multimodal · @sentropic/graphify (código + PDFs + CSVs + imagens):
+#                   npm install -g @sentropic/graphify
+#     · Mais leve, só depgraph visualização · codebase-vis (6 linguagens · 17 deps):
+#                   npm install -g codebase-vis
+#     · Context-pack compiler TS/Node only · @lubab/madar (5.28× fewer tokens em benchmarks):
+#                   npm install -g @lubab/madar
 
 # 4. Smoke rápido (OBRIGATÓRIO · 10s)
 ls ~/.trae/commands | wc -l                           # esperado >= 22
@@ -55,43 +71,39 @@ Recarregue o Trae (feche/abra ou reload window). **Pronto.**
 > **Padrão:** Graph Engineering (nós + arestas + checkpoints persistentes) e Loop Engineering (iterações limitadas, progresso explícito, falha bounded). Implementado via contracts + rules + SKILLs (equivalente a 1 LangGraph node por skill, edges = ordem obrigatória, checkpoints = `decisions.log.jsonl` + workspace artifacts). **Zero lock-in de framework:** migrar p/ LangGraph se um dia precisar é direto (1 skill = 1 node, HARNESS_RULES ordem = edges, decisions.log = checkpointer state).
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': {
-  'primaryColor':'#1E40AF', 'primaryTextColor':'#ffffff',
-  'primaryBorderColor':'#1E3A8A','lineColor':'#64748B',
-  'secondaryColor':'#0EA5E9','tertiaryColor':'#F59E0B'
-}}}%%
+%%{init: {'theme':'base'}}%%
 flowchart TD
     NewRepo([👤 Cheguei numa codebase NOVA ou voltei depois de meses])
     ProdInit([👤 Criando produto/projeto do zero])
-    NewRepo -->|1 vez por repo| XRay[/0️⃣ /harness-xray Raio-X do repositório\n(Graphify first → fallback lightweight AST scan)\nsalva project_profile no registry global/]
-    ProdInit -->|1 vez por projeto| PK[/0️⃣ /harness-project-knowledge\nregistry global: produto + arquitetura + roadmap + personas + integrações/]
+    NewRepo -->|1 vez por repo| XRay([0️⃣  harness-xray Raio-X do repositório\n(Graphify first → fallback lightweight AST scan)\nsalva project_profile no registry global])
+    ProdInit -->|1 vez por projeto| PK([0️⃣  harness-project-knowledge\nregistry global: produto + arquitetura + roadmap + personas + integrações])
     XRay & PK --> Read{Qualquer sessão a partir de AGORA\nlê registry FIRST antes de qualquer coisa}
     Read --> B([👤 Pede feature/bug/refactor])
-    B --> Spec[/1️⃣ /harness-spec SPEC 7 seções canônicas + YAML frontmatter\nApproved gate = libera escopo/]
+    B --> Spec([1️⃣  harness-spec SPEC 7 seções canônicas + YAML frontmatter\nApproved gate = libera escopo])
     Spec --> ADRGate{change_class é\narch/platform/large-migration?}
-    ADRGate -->|Sim| ADR[/adr-architecture skill\ncria ADR-XXX design doc\n(em workspace/design/)]
-    ADRGate -->|Não| SM[/2️⃣ /harness-start Scrum Master\ngates 0-1.5: binding + spec aprovado + ADR se aplicável + tasks graph + envelopes/]
+    ADRGate -->|Sim| ADR([adr-architecture skill\ncria ADR-XXX design doc\n(em workspace/design/)])
+    ADRGate -->|Não| SM([2️⃣  harness-start Scrum Master\ngates 0-1.5: binding + spec aprovado + ADR se aplicável + tasks graph + envelopes])
     ADR --> SM
     SM --> Dev{3️⃣ Dev tasks atomic}
     Dev -->|Serial T1→TN| T1[T1] --> Tn[...TN]
-    Dev -->|Paralelo Kahn waves| Parallel[/harness-parallel executor dispatcher\nfile locks + blast radius/]
+    Dev -->|Paralelo Kahn waves| Parallel([harness-parallel executor dispatcher\nfile locks + blast radius])
     Tn --> QA(QA 🔬 per-task\nbuild/lint/typecheck/test)
     Parallel --> QA
     QA --> CL(🛡 Compliance Light per-task\nPII/secrets/SQL injection)
     CL --> Done{Todas tasks DONE?}
     Done -->|Não| Dev
-    Done -->|Sim| Ship[/4️⃣ /harness-ship\n§0.9 4-GATES EXECUTÁVEIS fail-fast order:]
+    Done -->|Sim| Ship([4️⃣  harness-ship\n§0.9 4-GATES EXECUTÁVEIS fail-fast order:])
     Ship --> G1(Gate 0.9.1 🔍 SCOPE 6-checks\nAC delivered × tests × docs × env × LEAN YAGNI × SCORE=√(scope·LEAN)≥7.0)
     G1 --> G2(Gate 0.9.2 🔎 CODE-REVIEW\n0C + ≤2H → auto-remediate SEM perguntar\nany CRITICAL ou ≥3H → BLOQUEIA ship)
     G2 --> G3(Gate 0.9.3 🛡 COMPLIANCE HEAVY\nfull diff scan 0C + 0H SEM override direto)
     G3 --> G4(Gate 0.9.4 🧪 QA FINAL\nopcional --run-qa flag; detect stack)
     G4 --> PR([📤 Draft PR aberto · 1 conventional commit])
-    PR -->|human reviewer| Cmt[/harness-pr-comments triage: actionable/nit; reply drafts + implementation plan/]
-    PR -->|CI vermelho| Ci[/harness-ci-fix diagnostica + corrige até 3 planos de fix]
-    PR -->|nit, quality, blockers| Rv[/harness-review blocking: runtime/security/deps/scope]
+    PR -->|human reviewer| Cmt([harness-pr-comments triage: actionable/nit; reply drafts + implementation plan])
+    PR -->|CI vermelho| Ci([harness-ci-fix diagnostica + corrige até 3 planos de fix])
+    PR -->|nit, quality, blockers| Rv([harness-review blocking: runtime/security/deps/scope])
     Cmt & Ci & Rv --> Mergeable{PR mergable?}
     Mergeable -->|Não| PR
-    Mergeable -->|Sim Merge!| Obs[/Post-deploy checklist:\nrollback doc · observabilidade provider · SLO baseline\n(decision log entry POST_DEPLOY_CHECK)]
+    Mergeable -->|Sim Merge!| Obs([Post-deploy checklist:\nrollback doc · observabilidade provider · SLO baseline\n(decision log entry POST_DEPLOY_CHECK)])
     Obs --> End([✅ SDLC COMPLETO end-to-end])
 ```
 
@@ -142,10 +154,7 @@ flowchart TD
 ### 3.2 Camadas de precedência (3 camadas + user_rules ganha de TUDO)
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': {
-  'primaryColor':'#0f172a','primaryTextColor':'#fff',
-  'lineColor':'#475569','secondaryColor':'#7c3aed','tertiaryColor':'#0284c7'
-}}}%%
+%%{init: {'theme':'base'}}%%
 flowchart BT
     subgraph BL["🛡 BLACKLIST · INTOCÁVEL por TODAS as camadas"]
       direction LR
@@ -184,10 +193,7 @@ flowchart BT
 ### 3.3 Update Flow (como checam novas versões — 1 comando)
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': {
-  'primaryColor':'#0F766E', 'primaryTextColor':'#ffffff',
-  'lineColor':'#475569','secondaryColor':'#16A34A','tertiaryColor':'#F59E0B'
-}}}%%
+%%{init: {'theme':'base'}}%%
 flowchart TD
     A([👤 Bash 1-comando:\nself-update-harness.sh]) --> B[Passo 1:\nBaixa última versão oficial\n/tmp/trae-src-fetch.XXXXXX]
     B --> C{Passo 2:\nDetecta caso target}
@@ -412,5 +418,5 @@ cd ~/.trae && git reset --hard HEAD@{1}
 
 ---
 
-**Autor:** Time Harness Flockr (17 personas skills simuladas).  
+**Autor:** Manifesto48 (17 personas skills simuladas).  
 **Changelog recente 2026-08-31:** feat(update): self-update 1-comando · update-harness alias inteligente · install --update merge item-a-item · REGRA 7.9 nomes de testes comportamento observável.
