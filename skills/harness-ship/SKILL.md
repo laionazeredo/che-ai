@@ -1,6 +1,6 @@
 ---
 name: "harness-ship"
-description: "End-of-task ship command: atomic conventional commits on worktree, git push (creates remote branch if missing), opens DRAFT PR against default branch with structured description, assigns PR to user. Invoke ONLY after all harness tasks DONE + compliance heavy passed, or when user explicitly runs /harness-ship."
+description: "End-of-task ship command. EXECUTES 4 EXECUTABLE GATES in non-negotiable order BEFORE any git ops (fail-fast): §0.9.1 harness-scope-checker (entrega+LEAN 6-checks, APPROVED≥7.0) → §0.9.2 harness-code-review Mode B (0C + ≤2H auto-fix-and-commit SEM perguntar user; else block) → §0.9.3 harness-compliance HEAVY full scan (0C 0H) → §0.9.4 QA gate opcional flag --run-qa. Depois: atomic conventional commits on worktree, git push, opens DRAFT PR against default branch with structured description, assigns PR to user. Invoke ONLY after all harness tasks DONE, or when user explicitly runs /harness-ship."
 ---
 
 # Harness — Ship (commit + push + open PR)
@@ -23,8 +23,7 @@ It runs ONLY after the user says "I believe everything is OK" and is prepared to
 2. **`gh` CLI is available and authenticated.** Run `gh auth status` silently. If not authenticated → guide user to `gh auth login` and stop.
 3. **Worktree has uncommitted changes OR new commits ready to push.** `git status` is not clean OR branch is behind/ahead.
 4. No uncommitted `.env` / secret files being committed.
-5. (If the user ran via harness) all tasks are marked DONE in `task_graph.md` + compliance heavy report has 0 CRITICAL 0 HIGH.
-   If harness skipped these gates: log to decision.log the user's explicit override.
+5. (If the user ran via harness) all tasks are marked DONE in `task_graph.md`. Compliance + scope + review gates are EXECUTABLE CODE in §0.9.1→§0.9.4 and will run NOW before any git operation; §0.5 item 5 legacy-text compliance requirement is replaced entirely by gate §0.9.3 execution. If user explicitly passed `--skip-gates` (override flag): log EXPLICIT_OVERRIDE entry to decision.log with user verbatim justification, SKIP all 4 gates, jump directly to §1 Git Housekeeping. No other bypass path exists.
 
 If any precondition fails → report exactly which, stop execution, ask user.
 
@@ -58,6 +57,292 @@ Run BEFORE any `git status / git add / git commit / git push`. PREVENTS wrong-wo
 
 ---
 
+### 0.8 PLANNING ARTIFACTS BLACKLIST PREFLIGHT (NON-NEGOTIABLE)
+
+**Purpose:** NEVER allow harness internal planning/decision files to end up in user-code PRs. These files MUST live under `$HARNESS_SESSIONS_ROOT/<workspace>/<worktree-slug>/workspace` (contracts/harness_sessions_contract.sh L9-L21). If any bug/legacy skill accidentally creates them inside the user worktree, detect, unstage, and DELETE them before any `git add` runs.
+
+Source of truth of patterns = `~/.trae/contracts/harness-planning-artifacts-blacklist.gitignore` (single list — keep in sync across install-harness.sh §5.5 injection, .gitignore do harness, e este preflight).
+
+**BLACKLIST (any depth inside WORKTREE_ROOT):**
+```
+.trae/**                                 (legacy layout: never inside user code)
+decisions.log.jsonl  decisions.log.md  decisions.log
+decision.log.jsonl   decision.log.md   decision.log
+task_graph.md manual_test_plan.md final_summary.md
+execution_batches.md batch_execution_report.md
+merge_audit.md merge_audit.jsonl
+scope-report.md scope-report.json scope_check_report.md scope_check_report.json
+spec_*.md gh_stack_plan.md session.md envelope.md task_envelope.md
+graphify-out/**
+**/qa_evidence/** **/manual-test-screenshots/**
+harness-review-report.md harness-compliance-report.md flockr-review-report.md
+```
+
+**Runs INSIDE $WORKTREE_ROOT, in this exact order:**
+
+1. **Find all matching files (tracked OR untracked):** use find + patterns acima | sort -u. Call list `<FOUND_BLACKLIST>`.
+2. **STAGE 1 — Unstage anything staged (ALWAYS):**
+   ```bash
+   cd "$WORKTREE_ROOT" && [ -n "<FOUND_BLACKLIST>" ] && git reset HEAD -- <FOUND_BLACKLIST> 2>/dev/null || true
+   ```
+3. **STAGE 2 — Delete UNTRACKED blacklist files (they never belong here):**
+   - For each `f` in `<FOUND_BLACKLIST>` where `git ls-files --error-unmatch "$f"` exits non-zero → UNTRACKED.
+   - **DELETE them.** Backup copy preserved FIRST to `$HARNESS_WORKSPACE_SHARED/artifact_cleanup_backup/<ISO-date>/` just in case, then `rm -f <file>`.
+4. **STAGE 3 — TRACKED blacklist files = BLOCK SHIP, ask user.** They were committed by an older harness bug and are now in git history. Present EXACT options:
+   ```
+   🔴 PLANNING ARTIFACTS BLACKLIST — TRACKED FILES FOUND (committed before):
+     · <path1>
+     · <path2>
+   These are harness internal files (decisions / task_graph / manual_test_plan / spec_*.md etc)
+   and MUST NOT live in user-code git history.
+
+   Options:
+     A = Untrack them (git rm --cached each), KEEP local copies MOVED to
+         $HARNESS_WORKSPACE_SHARED/legacy_artifact_backup/<basename>  (RECOMMENDED)
+     B = I will handle manually. Cancel ship.
+   ```
+   If A → move file to backup dir → `git rm --cached <path>` → proceed.
+   If B → abort ship cleanly, 0 exit.
+5. **POST-CHECK:** Re-run find. Re-run `git status --porcelain --untracked-files=no`. ZERO blacklisted files must remain STAGED. If any remain → BLOCK SHIP.
+6. **DECISION LOG:** Append 1 single `ARTIFACT_CLEANUP` entry to `$HARNESS_DECISIONS_LOG` with list of files auto-unstaged / auto-deleted / untracked.
+
+---
+
+## 0.9 EXECUTABLE QUALITY GATES (RUN BEFORE ANY GIT OPERATION — FAIL FAST ORDER)
+
+> **CANONICAL 4-PASS ORDER (non-negotiable — fail-fast by blast radius):**
+> 1. **§0.9.1 Scope + Lean delivery** (lowest compute cost, highest blast radius if wrong — ship de coisa errada é o pior cenário)
+> 2. **§0.9.2 Code Review bugs** (depende de scope estar correto; ≤2 HIGH = auto-remediate SEM ask)
+> 3. **§0.9.3 Compliance security/PII** (já que review e scope passaram, garantimos 0C 0H)
+> 4. **§0.9.4 QA — optional `--run-qa` flag** (desligado por default por custo; ligado via flag explicita user)
+>
+> Qualquer GATE com status 🔴 BLOQUEIA o ship. Gates 0.9.1 e 0.9.3 NUNCA têm auto-fix. Apenas Gate 0.9.2 tem ramo auto-fix quando threshold ≤ 2 HIGH findings.
+
+### 0.9.1 GATE 1 — harness-scope-checker 6-checks (Modo B: Worktree local)
+
+**Purpose:** Garantir que o que vai ser commitado (1) entrega TUDO que foi prometido no escopo e (2) não tem overengineering / gordura / YAGNI violations. Executa o skill `harness-scope-checker` em Modo B.
+
+**Pré-condição interna deste gate:**
+- `$HARNESS_WORKSPACE_SHARED` resolvido via `source ~/.trae/contracts/harness_sessions_contract.sh`.
+
+**Scope source auto-discover ordem (primeiro match ganha — NÃO cascateia múltiplos sources):**
+1. **Envelope explícito** → existe `$HARNESS_WORKSPACE_SHARED/tasks/*/envelope.md`? (último task DONE no task_graph, pega seu envelope) → SCOPE_SOURCE=ENVELOPE.
+2. **Task graph local** → existe `<WORKTREE_ROOT>/task_graph.md`? → SCOPE_SOURCE=TASK_GRAPH. Lê lista de Acceptance Criteria + Tasks marcadas DONE.
+3. **Spec harness local/global** → existe `spec_*.md` em `$HARNESS_WORKSPACE_SHARED/spec_*.md` OR `<WORKTREE_ROOT>/spec_*.md`? → SCOPE_SOURCE=SPEC. Extrai Acceptance Criteria section §5.
+4. **PR body GitHub (se PR URL fornecido via flag `--pr-url`)** → usa `gh pr view <URL> --json body,title` → parseia bullet points de Acceptance Criteria. SCOPE_SOURCE=PR_BODY.
+5. **Nenhum source encontrado** → ⚠️ WARN + PERGUNTA user: "Nenhum scope source localizado. (A) Informar path spec/envelope manualmente; (B) Prosseguir SEM scope validation (risco: ship fora do escopo); (C) Cancelar ship." Se usuário escolher B → log EXPLICIT_OVERRIDE no decision.log, SKIP este gate, vai para 0.9.2.
+
+**Execução:**
+1. Invoca `harness-scope-checker` skill passando:
+   - `--worktree <WORKTREE_ROOT>`
+   - `--mode B`
+   - `--scope-source <SCOPE_SOURCE>`
+   - `--scope-path <path_do_arquivo>`
+   - `--report-out "$HARNESS_WORKSPACE_SHARED/reports/ship_scope_check_<ISO_TIMESTAMP>.md"`
+2. Aguarda retorno com `verdict` field + `final_score` field + `findings[]` (CHECK 1-6).
+
+**Verdict handling (regra EXATA do harness-scope-checker §8):**
+| Verdict scope-checker | Ação gate 0.9.1 | Próximo passo |
+|---|---|---|
+| 🟢 APPROVED (score ≥7.0 AND 0 🔴 em CHECKS 1–6) | ✅ PASS GATE 1 | Segue imediatamente para §0.9.2 |
+| 🟡 CONDICOES (score ≥7.0 mas tem algum action item não-bloqueante OU score 5.0–6.9) | ⏸️ PAUSE + PERGUNTA user | Print findings e action items ao user. Opções EXATAS: **(A) = Aplicar fixes sugeridos e re-run gate 1; (B) = Aprovar condicionalmente (justificativa obrigatória → gravada decision.log); (C) = Cancelar ship.** |
+| 🔴 REPROVADO (score <5.0 OU qualquer 🔴 em CHECK 1 Entrega / CHECK 4 Env / CHECK 3 Docs obrigatórios) | 🔴 BLOCK SHIP | Apresenta findings ao usuário. NÃO oferece opção de override direto (requer nova rodada). Sugere: corrigir → rodar /harness-scope-checker standalone → depois re-rodar /harness-ship. |
+
+**Output artifacts:**
+- `$HARNESS_WORKSPACE_SHARED/reports/ship_scope_check_<ISO_TIMESTAMP>.md` — report completo 6-checks com SCOPE × LEAN final score.
+- Append entry `SHIP_GATE_0_9_1 {verdict, score, source}` ao `$HARNESS_DECISIONS_LOG`.
+- NENHUM artifact é criado dentro de `<WORKTREE_ROOT>` (blacklist §0.8 garante limpeza).
+
+---
+
+### 0.9.2 GATE 2 — harness-code-review Mode B Local Worktree + **THRESHOLD ≤ 2 HIGH AUTO-FIX RULE (VERBATIM USER CONTRACT)**
+
+> **REGRA NÃO NEGOCIÁVEL USER VERBATIM:**
+> _"no caso do code review, no caso de <= 2 high findings, ja corrija e commit e prossiga com o ship sem nem me preguntar. Mas de resto, perfeito."_
+> **Esta regra não tem exceções.** NÃO ASKE NADA ao user no ramo ≤ 2 HIGH. Auto-remedia, commita, segue. Se CRITICAL ≥1 ou HIGH ≥3 → bloqueia e apresenta.
+
+**Purpose:** Rodar o `harness-code-review` skill em **Modo B — Local Worktree** (diff do worktree atual contra `<DEFAULT_BRANCH>` já determinado no preamble). Pos-processing do resultado com a regra do threshold ≤ 2 HIGH.
+
+**Execução Passo a Passo:**
+
+**Step 2.0 — Preparação diff base:**
+1. Re-usa o `DEFAULT_BRANCH` que já será determinado em §1.2 (caso gate 2 rode antes do §1, executa só o `gh repo view --json defaultBranchRef` silenciosamente).
+2. Base diff = `origin/<DEFAULT_BRANCH>..HEAD` (commits já feitos nesta branch) PLUS unstaged + uncommitted changes atuais no worktree. **Ambos são reviewados.** Não é só o staged.
+
+**Step 2.1 — Invocação harness-code-review:**
+1. Invoca `harness-code-review` skill com params:
+   - `--worktree <WORKTREE_ROOT>`
+   - `--mode B`
+   - `--base origin/<DEFAULT_BRANCH>`
+   - `--report-out "$HARNESS_WORKSPACE_SHARED/reports/ship_code_review_<ISO_TIMESTAMP>.md"`
+   - `--include-unstaged true`
+2. Espera resultado estruturado: `{ critical_count: N, high_count: N, medium_count: N, low_count: N, findings: [...] }`
+   - Cada finding tem: `{ severity: CRITICAL|HIGH|MEDIUM|LOW, file, line, title, suggested_fix_code_block (opcional), auto_fixable: boolean }`.
+
+**Step 2.2 — THRESHOLD BRANCHING (core user rule — IMPLEMENTAR EXATAMENTE):**
+
+```
+SE (critical_count === 0) AND (high_count <= 2):
+    → RAMO AUTO-REMEDIATE-AND-CONTINUE (SEM PERGUNTAR NADA AO USER — NUNCA ASK AQUI)
+SENÃO:
+    → RAMO BLOCK-SHIP (apresenta findings ao user)
+```
+
+---
+
+#### RAMO A: AUTO-REMEDIATE-AND-CONTINUE (0 CRITICAL + ≤ 2 HIGH)
+
+**Objetivo:** Corrigir automaticamente os HIGH findings que são `auto_fixable=true`, commitar com conventional commit, e prosseguir para gate 0.9.3 **sem qualquer interação com usuário.**
+
+**2.A.1 — Filtrar findings HIGH auto-fixáveis:**
+```
+<FIXABLE_HIGHS> = findings.filter(f => f.severity === 'HIGH' AND f.auto_fixable === true)
+<UNFIXABLE_HIGHS> = findings.filter(f => f.severity === 'HIGH' AND f.auto_fixable === false)
+```
+- `UNFIXABLE_HIGHS` (se existirem, ≤ 2 no total): **ainda assim prossegue sem ask user.** A regra é ≤2 HIGH totais, independente de serem fixáveis ou não. Loga WARNING no decision.log com cada finding unfixable listado. NÃO bloqueia.
+
+**2.A.2 — Aplicar fixes programaticamente:**
+Para cada `f` em `<FIXABLE_HIGHS>`:
+1. Lê o arquivo target (via Read tool, garantido latest content).
+2. Aplica `Edit` tool exatamente usando `f.suggested_fix_code_block` como `new_string`, substituindo o old_string correspondente.
+3. NÃO adiciona comentários nos edits. Mantém estilo do arquivo.
+4. Se algum Edit falhar (old_string não match): **aborta apenas este finding específico**, loga `AUTO_REMEDIATE_FAILED` no decision.log com file+line, continua com os outros. Não aborta ramo A.
+
+**2.A.3 — Commitar o remediation com conventional commit (SEM passar pelo §1 normal — commit especial):**
+```bash
+cd "$WORKTREE_ROOT"
+# 1. Re-roda o blacklist §0.8 stages 1-2 só por segurança (garante nenhum artifact entrou no diff):
+#    (roda os mesmos comandos do §0.8 stage 1 + 2 para unstaged)
+# 2. Staga só os arquivos modificados pelos auto-fixes:
+git add -- <arquivos_alterados_pelos_fixes>
+# 3. Conventional commit EXATO:
+N_FIXED=<total_high_fixes_applicados>
+N_TOTAL_HIGH=<high_count>
+git commit -m "fix(review): auto-remediate code review HIGH findings ($N_FIXED/$N_TOTAL_HIGH)
+
+- Applied automated remediation for ≤ 2 HIGH findings per ship gate 0.9.2 rule
+- Remediation source: harness-code-review Mode B against origin/<DEFAULT_BRANCH>
+- Unfixed HIGH (<= count) logged to decision.log as AUTO_REMEDIATE_UNFIXABLE"
+```
+
+**2.A.4 — Pós-commit:**
+- Append entry `SHIP_GATE_0_9_2 {verdict: AUTO_REMEDIATED_PASSED, critical: 0, high: N, auto_applied: X, auto_failed: Y}` ao `$HARNESS_DECISIONS_LOG`.
+- **SEGUIR IMEDIATAMENTE PARA GATE §0.9.3.** NÃO VOLTA para §1 Git Housekeeping normal. O commit especial já foi feito. O §1 normal irá rodar e contabilizar apenas os changes que sobraram (se houver).
+
+---
+
+#### RAMO B: BLOCK SHIP (CRITICAL ≥ 1 OU HIGH ≥ 3)
+
+**Regra:** Apresenta findings detalhados ao user e pede input. NÃO há auto-fix neste ramo.
+
+Opções EXATAS ao user:
+```
+🔴 SHIP GATE 0.9.2 CODE REVIEW BLOCKED
+  Summary: <critical_count> CRITICAL · <high_count> HIGH · <medium_count> MEDIUM · <low_count> LOW
+
+  (Top findings first — print só CRITICAL + HIGH ao user; medium/low vão pro report só)
+
+Options:
+  A = Quero aplicar os fixes MANUALMENTE agora. Pausa o ship, volta interactive shell.
+      (Depois de user arrumar, ele roda /harness-ship de novo)
+  B = Rejeitar findings específicos + override. Preciso: justificativa obrigatória por cada
+      finding a ser overrideado (grava decision.log).
+  C = Cancelar ship.
+```
+
+Se user escolher B (override):
+- Cada finding overrideado requer justificativa texto livre.
+- Todas salvas no decision.log como entries `REVIEW_OVERRIDE {finding_id, justification}`.
+- Muda gate verdict para PASSED_WITH_OVERRIDES.
+- **SÓ PODE FAZER OVERRIDE ATÉ 2 HIGH no total.** Se HIGH ≥3 → opção B fica desabilitada.
+- **NUNCA PERMITE OVERRIDE DE CRITICAL — opção B desabilitada se critical_count > 0.**
+
+---
+
+**Output artifacts gate 0.9.2:**
+- `$HARNESS_WORKSPACE_SHARED/reports/ship_code_review_<ISO_TIMESTAMP>.md` — report completo findings.
+- Decision log entries conforme ramo A ou B.
+- NO ramo A tem 1 commit novo no worktree prefixado `fix(review): auto-remediate...`.
+
+---
+
+### 0.9.3 GATE 3 — harness-compliance HEAVY FULL SCAN (Step 2 Pesado, não só diff)
+
+**Purpose:** Garantir 0 CRITICAL + 0 HIGH findings no **REPO INTEIRO**, não só no diff. Executa o skill `harness-compliance` em sua versão PESADA Step 2 (full-session scan, não diff-only). Esta é a regra de compliance antiga §0.5, agora virada código executável.
+
+**Execução:**
+1. Invoca `harness-compliance` skill com params:
+   - `--worktree <WORKTREE_ROOT>`
+   - `--mode HEAVY_STEP_2_FULL_SCAN`
+   - `--report-out "$HARNESS_WORKSPACE_SHARED/reports/ship_compliance_heavy_<ISO_TIMESTAMP>.md"`
+   - `--required 0_CRITICAL_AND_0_HIGH`
+2. Espera resultado: `{ critical_count: N, high_count: N, scan_categories_ran: [1..15] }`
+
+**Verdict handling:**
+| Cenário | Ação |
+|---|---|
+| `critical_count === 0 AND high_count === 0` | ✅ PASS GATE 3. Segue para 0.9.4. |
+| Qualquer `critical_count > 0` OU `high_count > 0` | 🔴 **BLOCK SHIP — NÃO HÁ OPÇÃO DE OVERRIDE DIRETO.** Apresenta lista CRITICAL + HIGH ao user com paths e linhas. Opções: (A) Corrigir manualmente e re-run /harness-ship; (B) Rodar `harness-compliance` standalone primeiro para ter output verbose, depois voltar. |
+
+**Compliance categories guaranteed to run (canônicas do skill harness-compliance Step 2 Pesado):**
+- Categoria 1: Secrets leak (hardcoded API keys sk-*, AWS, JWT em texto)
+- Categoria 2: PII exposure (log/return de email bruto, CPF, dados sensíveis)
+- Categoria 3: SQL injection patterns (string concat em SQL, sem parametrização)
+- Categoria 4: Auth / RLS bypass patterns
+- Categoria 5: Dangerous URLs (SSRF, open redirect)
+- Categorias 6-15: restantes do harness-compliance skill.
+
+**Output artifacts:**
+- `$HARNESS_WORKSPACE_SHARED/reports/ship_compliance_heavy_<ISO_TIMESTAMP>.md` — full scan report.
+- Entry `SHIP_GATE_0_9_3 {verdict, critical, high}` no decision.log.
+
+---
+
+### 0.9.4 GATE 4 (OPCIONAL FLAG — DEFAULT DISABLED) — QA Gate
+
+**Purpose:** Última linha de defesa antes do commit real. **DESLIGADO POR DEFAULT por custo de tempo (build/typecheck/lint/tests).** SÓ é executado SE usuário passou explicitamente a flag `--run-qa` no comando `/harness-ship --run-qa`.
+
+**Quando skipado:**
+- Se flag ausente → append entry `SHIP_GATE_0_9_4 {verdict: SKIPPED_FLAG_NOT_SET}` no decision.log. Segue direto para §1 Git Housekeeping. NÃO PERGUNTA NADA.
+
+**Quando executado (flag `--run-qa` presente):**
+Detecta stack do monorepo automaticamente (ordem de tentativa):
+1. **Nx workspace (pnpm + nx)** → existe `nx.json` + `pnpm-workspace.yaml`? → run:
+   ```bash
+   cd "$WORKTREE_ROOT" && corepack pnpm nx affected:typecheck --tui false
+   corepack pnpm nx affected:lint --tui false
+   corepack pnpm nx affected:test --tui false
+   ```
+2. **Generic pnpm** → existe `package.json` com `scripts.typecheck` etc? → `corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test`.
+3. **Generic npm/yarn** → adapta o package manager.
+4. **Nenhuma detecção** → WARN "Não foi possível detectar stack QA. Skip gate 4". Decision log.
+
+**Verdict handling QA:**
+- Todos os 3 comandos (typecheck, lint, test) exit code 0 → ✅ PASS GATE 4. Segue §1.
+- Qualquer comando falha (exit code != 0) → 🔴 **BLOCK SHIP**. Print tail -50 da saída com erro ao user. Opções: (A) Quero corrigir manualmente agora; (B) Override (requer justificativa forte explícita por que teste/typecheck falhado deve shipar — gravado decision.log).
+
+**Output artifacts:**
+- `$HARNESS_WORKSPACE_SHARED/reports/ship_qa_gate_<ISO_TIMESTAMP>.log` — stdout concatenado dos 3 comandos.
+- Entry `SHIP_GATE_0_9_4 {verdict, flag: boolean, typecheck: PASS/FAIL, lint: PASS/FAIL, test: PASS/FAIL}`.
+
+---
+
+### 0.9.5 ALL GATES PASSED — Transition guard
+
+**Aparece somente se 0.9.1 ✅ + 0.9.2 ✅ (qualquer ramo que passou) + 0.9.3 ✅ + 0.9.4 ✅ OU SKIPPED.**
+
+Print one-liner ANTES de iniciar §1 Git Housekeeping:
+```
+🟢 ALL 4 EXECUTABLE SHIP GATES PASSED (scope-checker 6-checks · code-review · compliance-heavy · qa[flag])
+Proceeding to Git Housekeeping §1 → atomic conventional commit → push → open DRAFT PR.
+```
+
+Append entry FINAL `ALL_SHIP_GATES_PASSED {gates: [0.9.1,0.9.2,0.9.3,0.9.4], scores: {scope}}` ao decision.log.
+
+**Pós-gates reminder de blacklist:** Todos os 4 reports acima foram escritos EXCLUSIVAMENTE em `$HARNESS_WORKSPACE_SHARED/reports/**`. O §0.8 blacklist stage 1-2 já rodou e continuará rodando em §2.2 antes de cada commit para garantir que NENHUM desses reports ou decision artifacts entram acidentalmente no diff do usuário.
+
+---
+
 ## 1. STEP 1 — Git Housekeeping (inside WORKTREE_ROOT)
 
 ### 1.1 Git sanitization check (secret scan pre-commit, extra)
@@ -86,7 +371,12 @@ This is the user's requested default: conventional commits + atomic.
 ### 2.1 Generate proposed commit plan
 
 Look at the diff. `git diff --name-only <DEFAULT_BRANCH>...HEAD` (or vs staged).
-Group changes into atomic, logical commits:
+
+**BLACKLIST FILTER — ALWAYS run BEFORE grouping:**
+From the diff-name-only output, REMOVE all files matching the patterns in §0.8 BLACKLIST (`.trae/**`, `decisions.log*`, `decision.log*`, `task_graph.md`, `manual_test_plan.md`, `final_summary.md`, `execution_batches.md`, `batch_execution_report.md`, `merge_audit.*`, `scope-report.*`, `scope_check_report.*`, `spec_*.md`, `gh_stack_plan.md`, `session.md`, `envelope.md`, `task_envelope.md`, `graphify-out/**`, `*review-report.md`).
+- If any of those files appear in the diff → §0.8 preflight SHOULD have cleaned them already. If still present → **DO NOT ADD TO ANY COMMIT.** Skip silently and add 1 note at the bottom of the commit plan: "Note: N planning-artifact files auto-skipped (never committed)."
+
+Group the remaining (filtered) changes into atomic, logical commits:
 
 - **feat(scope):** new functionality, new endpoints, new UI components
 - **fix(scope):** bug fixes — include "Fixes #TICKET" if applicable
@@ -106,20 +396,34 @@ Rule for grouping:
 - Migrations: usually `chore(db): add migration for X` separate commit.
 - Max 15 commits per ship. If > 15 → offer user option to squash into fewer + plan, or proceed with 15+.
 
-Present commit plan to the user as a **numbered list**, in order of application.
+Present commit plan to the user as a **numbered list**, in order of application. Add the "N planning artifacts skipped" note at the bottom if applicable.
 Wait for explicit user APPROVAL before running any `git commit`.
 
 ### 2.2 Execution — apply the commits (AFTER USER APPROVES plan)
 
 Run each commit:
 ```
+# BEFORE every commit: unstage ANY blacklisted files that somehow re-entered the index.
+git reset HEAD -- \
+  .trae  decisions.log.jsonl  decisions.log.md  decisions.log \
+        decision.log.jsonl   decision.log.md   decision.log \
+  task_graph.md manual_test_plan.md final_summary.md \
+  execution_batches.md batch_execution_report.md \
+  merge_audit.md merge_audit.jsonl \
+  scope-report.md scope-report.json scope_check_report.md scope_check_report.json \
+  spec_*.md gh_stack_plan.md session.md envelope.md task_envelope.md \
+  graphify-out harness-review-report.md harness-compliance-report.md flockr-review-report.md \
+  2>/dev/null || true
+
 git add <files for this commit>
 git commit -m "type(scope): imperative description in English, lowercase, max 72 chars"
 ```
 Rules:
 - NEVER run `git add .` — always add per-file or per-directory explicitly.
+- Before EVERY `git add`, run the `git reset HEAD -- <blacklist patterns>` line above. (Fail-closed — cost 1 ms per commit, prevents a whole class of PR-pollution bugs.)
 - Every commit message in ENGLISH, strict conventional commit.
 - After last commit → run `git log --oneline -20` to present final chain to user.
+- **POST-COMMIT ASSERT (after all commits applied):** `git show --name-only --pretty=format: HEAD~10..HEAD` → scan file names for §0.8 blacklist patterns. If any commit contains a blacklisted file → **STOP, DO NOT PUSH.** Report to user, offer `git reset HEAD~N` + re-apply cleanly, then continue.
 
 ### 2.3 GH_STACK_MODE=true — Group commits PER LAYER (bottom-up)
 
@@ -134,13 +438,14 @@ For each layer `L[i]` in `LAYERS[]` (bottom-up order, starting with the lowest s
    ```
 2. **Cherry-pick OR stage only files in layer scope**:
    - Strategy A (preferred when commit plan already aligns): cherry-pick only the commits relevant to this layer onto this branch from the consolidated work branch.
-   - Strategy B (simpler fallback — use when scope-per-layer is clearly file-based): from worktree state, `git add <only files matching L[i].Scope (files)>`, then create 1 or more conventional commits scoped EXCLUSIVELY to this layer (no cross-layer files in same commit).
+   - Strategy B (simpler fallback — use when scope-per-layer is clearly file-based): from worktree state, **FIRST run `git reset HEAD -- <blacklist patterns>` (same as §2.2)** then `git add <only files matching L[i].Scope (files)>`, then create 1 or more conventional commits scoped EXCLUSIVELY to this layer (no cross-layer files in same commit).
 3. Present plan of "branch → commits → scope" to user as numbered list. **Wait for explicit user APPROVAL before applying any layer commit.**
 4. After user approves: apply commits per layer. Record per-layer: final commit SHAs.
 5. After all layers done: present to user summary "Layers bottom-up (N layers): L1 → 2 commits; L2 → 3 commits; L3 → 1 commit" etc.
 
 Rule invariant for GH_STACK_MODE commits:
 - **Every file in a given layer's commit MUST be listed in L[i].Scope (files).** If a file belongs to layer L[i+1] it MUST NOT appear in commits of L[i]. Any cross-layer file → block, ask user which layer gets it.
+- **Additional GH-stack invariant:** Zero files from §0.8 BLACKLIST allowed in ANY layer's commit. If after building layer the index contains a blacklist file → `git reset HEAD -- <file>` and warn.
 
 ---
 
