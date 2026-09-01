@@ -346,6 +346,98 @@ if [ -f "${TARGET}/package.json" ]; then
 fi
 
 # ============================================================
+# Passo 5.5: Injetar snippet HARNESS BLACKLIST no .gitignore do
+#            REPO CLIENTE (se rodando install/update de dentro
+#            de uma worktree de projeto que NÃO é o próprio
+#            trae-config). Decisão tomada: fail-closed — se um
+#            projeto cliente tem decisions.log / task_graph.md
+#            aparecendo em PRs, o GIT tem que ignorar esses
+#            patterns MESMO que o harness não consiga mover eles
+#            para $HARNESS_SESSIONS_ROOT por algum bug.
+#            Injeção é IDEMPOTENTE (marker BEGIN/END + sha256).
+# ============================================================
+inject_blacklist_snippet_into_client_gitignore() {
+  local snippet_src marker_begin marker_end client_repo_root client_gitignore
+
+  snippet_src="${SOURCE_ROOT:-$TARGET}/contracts/harness-planning-artifacts-blacklist.gitignore"
+  [ -f "$snippet_src" ] || return 0
+
+  marker_begin="# >>> HARNESS PLANNING ARTIFACTS BLACKLIST BEGIN (NÃO EDITAR MANUALMENTE)"
+  marker_end="# <<< HARNESS PLANNING ARTIFACTS BLACKLIST END"
+
+  # Achar root do repo CLIENTE: se PWD/PARENT tem .git E NÃO é o próprio ~/.trae
+  local search_root="${PWD:-$HOME}"
+  client_repo_root=""
+  local d="$search_root"
+  while true; do
+    if [ -d "$d/.git" ]; then
+      case "$d" in
+        "$TARGET"|"${HOME}/.trae"|"${HOME}/.trae/") ;;  # skip: é o próprio harness
+        *) client_repo_root="$d"; break ;;
+      esac
+    fi
+    [ "$d" = "/" ] && break
+    d="$(dirname "$d")"
+  done
+  [ -n "$client_repo_root" ] || return 0
+
+  client_gitignore="${client_repo_root}/.gitignore"
+
+  # Montar bloco a ser injetado (com markers)
+  local snippet_content
+  snippet_content="$(cat "$snippet_src")"
+  local full_block="${marker_begin}
+${snippet_content}
+${marker_end}"
+
+  # Caso 1: .gitignore não existe → criar com o bloco + newline final.
+  if [ "$APPLY" -eq 1 ] && [ ! -f "$client_gitignore" ]; then
+    printf '%s\n' "$full_block" > "$client_gitignore"
+    echo "    + criar .gitignore cliente em ${client_repo_root}/.gitignore (snippet blacklist)."
+    return 0
+  fi
+  [ -f "$client_gitignore" ] || return 0
+
+  # Caso 2: já existe o marker BEGIN no arquivo → idempotente, já injetou antes.
+  if grep -qF "$marker_begin" "$client_gitignore" 2>/dev/null; then
+    # Atualiza o conteúdo do bloco existente para o snippet mais novo (caso a blacklist evolua em versões futuras do harness).
+    if [ "$APPLY" -eq 1 ]; then
+      local tmp_file
+      tmp_file="$(mktemp)"
+      awk -v marker_begin="$marker_begin" \
+          -v marker_end="$marker_end" \
+          -v block="$full_block" '
+        BEGIN          { inside = 0; printed = 0 }
+        $0 == marker_begin { inside = 1; if (!printed) { print block; printed = 1 }; next }
+        $0 == marker_end   { inside = 0; next }
+        inside == 1    { next }
+        inside == 0    { print }
+      ' "$client_gitignore" > "$tmp_file"
+      mv "$tmp_file" "$client_gitignore"
+    fi
+    return 0
+  fi
+
+  # Caso 3: não existe → APPEND no final, com 2 newlines de separador.
+  if [ "$APPLY" -eq 1 ]; then
+    local final_size
+    final_size="$(wc -c < "$client_gitignore" 2>/dev/null || echo 0)"
+    if [ "$final_size" -gt 0 ]; then
+      # Garantir newline final antes de append
+      local last_char
+      last_char="$(tail -c 1 "$client_gitignore" || echo "")"
+      [ "$last_char" = "" ] || printf '\n' >> "$client_gitignore"
+      printf '\n' >> "$client_gitignore"
+    fi
+    printf '%s\n' "$full_block" >> "$client_gitignore"
+    echo "    + injetado snippet blacklist em repo cliente: ${client_repo_root}/.gitignore"
+  else
+    echo "    [dry-run] iria injetar snippet blacklist em repo cliente: ${client_repo_root}/.gitignore"
+  fi
+}
+inject_blacklist_snippet_into_client_gitignore
+
+# ============================================================
 # Passo 6: sumário de segurança (blacklist intacta).
 # ============================================================
 echo ""
