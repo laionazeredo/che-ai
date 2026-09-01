@@ -21,4 +21,4 @@ Preflight:
 1. If worktree missing → ASK.
 2. `gh auth status` must be OK.
 3. No secret files staged (check git diff --cached for .env, keys, etc.).
-4. Then Skill: propose atomic commit plan → user APPROVES → apply commits → push → build PR description from manual_test_plan.md → open DRAFT PR → assign @me.
+4. Then Skill: propose atomic commit plan → user APPROVES → apply commits → push → build **readable PR body** (default English, 5 canonical sections, acronyms expanded first use, every change explains user impact, risks explain consequences) from manual_test_plan.md + `PR_DESCRIPTION_TEMPLATE.md` filled style reference → open DRAFT PR → assign @me.

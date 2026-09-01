@@ -218,7 +218,7 @@ Em QUALQUER loop/iterações entre agentes, a regra é:
 
 3. **Oferta de deep-dive = SÓ 1 tópico por vez**. NÃO montar cardápio de 5 opções de aprofundamento.
 
-4. **PR Body (harness-ship) lean enforcement**: esta regra complementa — PR body em 3 partes (3 paras max impl + key review points + test pointers). Corpo em `harness-ship` SKILL.
+4. **PR Body (harness-ship) READABLE enforcement** (atualizado feat(pr-body)): esta regra complementa — PR body em **5 seções canônicas** (What was implemented / Attention points / Breaking se existir / How to verify / Refs) com foco em **legibilidade para pessoa com pouco contexto**: siglas expandidas 1ª vez, cada mudança tem "por quê / impacto usuário final", riscos explicam consequência se revisão falhar, passos de verificação sem jargão. Orçamento ≤50 linhas total. Template e exemplo preenchido (refund feature) em `skills/harness-ship/references/PR_DESCRIPTION_TEMPLATE.md`. Gates de processo em `skills/harness-ship/SKILL.md §A-4.2`.
 
 ---
 

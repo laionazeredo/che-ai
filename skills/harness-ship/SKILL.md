@@ -194,26 +194,37 @@ If found ticket: extract `<TICKET-ID>` (full URL or just ID). Append `Refs: <TIC
 
 ### Path A: GH_STACK_MODE=false (single PR, standard)
 
-#### A-4.2 Build PR Description — LEAN 5 BLOCKS (ENGLISH by default, 30 lines max TOTAL)
+#### A-4.2 Build PR Description — READABLE 5 BLOCKS (ENGLISH by default, ≤50 lines TOTAL target)
 
-> **Corpo CANÔNICO / EXEMPLO com preenchimento real:** `references/PR_DESCRIPTION_TEMPLATE.md` (Layer 3 DONO do conteúdo — NÃO duplicar estrutura/corpo aqui). Abaixo só gates de processo e orçamento.
+> **Canonical body + FILLED real EXAMPLE (refund feature from screenshot, low-context readable version):** `references/PR_DESCRIPTION_TEMPLATE.md` (Layer 3 SOLE owner of structure/content + readability rules). Below only process gates + budget.
+> **Copy the STYLE of the filled example in PR_DESCRIPTION_TEMPLATE.md, not only the section names.** The filled example shows exactly how to phrase bullets, acronym expansion, user impact, and risk consequence.
 
 **LANGUAGE GATE (non-negotiable — #1 rule, before any writing):**
-- **DEFAULT = ENGLISH (EN-US / EN-UK).** Escrever TODO o corpo PR, headings, bullets, tickets refs, comandos TUDO em inglês.
-- **Só outra língua QUANDO:** mensagem DO usuário que invocou `/harness-ship` (ou instrução) contiver EXPLICITAMENTE um pedido de outra língua (ex: "escreve corpo PR em português").
-- **Nunca adivinhar / NUNCA assumir** "usuário fala PT então PR em PT". PT é SÓ para chat. PR body na ausência de menção = SEMPRE inglês.
+- **DEFAULT = ENGLISH (EN-US / EN-UK).** Write the ENTIRE PR body, headings, bullets, ticket refs, commands — EVERYTHING — in English.
+- **Other language ONLY IF:** the user's message that invoked `/harness-ship` (or the explicit instruction) contains an EXPLICIT request for another language (e.g., "write PR body in Portuguese", "corpo PR em PT-BR").
+- **Never guess / NEVER assume** "user speaks Portuguese so PR in Portuguese". Portuguese is for chat ONLY. Absent an explicit mention → PR body is ALWAYS English.
 
-**PROCESS GATES (non-negotiable, trim aggressively before writing):**
+**PROCESS GATES (non-negotiable — readable for low-context reviewers, trim only the useless, never the clear context):**
 
-1. **Block 1 — What was implemented:** bullets only, 3–6 items. No paragraphs. Each bullet = 1 concrete change. If >6 → PR too large (split gh-stack).
-2. **Block 2 — 🔍 Attention points:** bullets only, 3 IDEAL, 5 MAX. Each bullet starts with **Risk area:** `path/to/file.ts` — 1 sentence why. Risk areas = Security-sensitive / Performance / Blast-radius (DDL migration) / Cross-module / Concurrency. If >5 bullets → split gh-stack.
-3. **Block 3 — 💥 Breaking changes:** **INCLUIR SOMENTE SE HOUVER.** If NONE → DELETE o bloco INTEIRO do body (NÃO escrever "NONE", NÃO deixar section vazia). Quando incluir: heading única por breaking + Before/After/Migration bullets.
-4. **Block 4 — 🧪 How to verify:** bullets only, 1–3 items. Ordem: (a) Unit/E2E COMANDO CONCRETO apontando p/ teste específico + (b) Manual steps concretos (2–3 steps, sem vagueza) + (c) Link p/ plano completo `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md`.
-5. **Block 5 — 🔗 Refs:** Ticket Linear/Jira (ID + URL). Opcionalmente 1 link extra (Figma, PRD path).
-6. **Seções PROIBIDAS (remover SEMPRE se aparecerem):** Scope In/Out, Assumptions adopted, What/Why paragraphs, Harness gates checklist, Tables gigantes, Context intro paragraphs.
-7. **Body budget:** ≤30 linhas TOTAIS (todos 5 blocos somados, incluindo headings). Sem breaking → alvo ~20 linhas. Com breaking → alvo ~28 linhas. Se ultrapassar → TRIM, TRIM, TRIM. Breaking changes longos? Mover migration detalhada p/ doc separado e linkar 1 linha no block 3.
+1. **Block 1 — What was implemented:** bullets only, 3–8 items. No paragraphs. **MANDATORY pattern per bullet:** `feat|fix|chore(scope): <WHAT changed in plain English>. <1 short sentence WHY / end-user impact>.` **READABILITY sub-rules (from template §RULES 1-3):**
+   - **Acronyms expanded on FIRST use** inside the bullet (example: "RLS (Row-Level Security — Postgres access control)"). After first use → acronym alone is OK.
+   - **Avoid concatenating 5–10 micro-changes into 1 monster bullet.** Each `feat(scope)` line = ONE self-contained area (DB schema / entity / service / Stripe / API / UI / tests — 1 bullet each, not 8 changes jammed).
+   - **Internal jargon gets ½-line context** (example: "reverse_transfer (Stripe Connect — money moves from the connected org account back to the platform, then to the buyer)" not just "reverse_transfer=true").
+   - If >8 bullets → PR is too large (split into gh-stack, §Path B).
+2. **Block 2 — 🔍 Attention points:** bullets only, 3 IDEAL, 5 MAX. **MANDATORY pattern per bullet:** `**Risk label:** \`path/or filename\` — <what is risky, plain English>. **If review misses this:** <plain-English consequence — what actually breaks for users/devs>.` Risk labels (rename jargon to the readable versions below):
+   - ✅ Use: `Security-sensitive` · `Performance-sensitive` · `Schema change (DDL migration)` · `Cross-module change` · `Concurrency / race condition` · `Product decision`
+   - ❌ Stop using: `Blast-radius` (too vague — say what it actually hits)
+   - If >5 bullets → split gh-stack.
+3. **Block 3 — 💥 Breaking changes:** **INCLUDE ONLY IF they EXIST.** If NONE → DELETE the ENTIRE "Breaking changes" section (do NOT write "NONE", do NOT leave an empty section). When including: 1 heading per breaking change + Before / After / Migration bullets.
+4. **Block 4 — 🧪 How to verify:** bullets only, 1–3 items, IN THIS ORDER:
+   - (a) **Automated tests:** CONCRETE COMMAND pointing to a SPECIFIC test + 1 sentence what is covered + 1 expected-result sentence ("Expected: 1/1 passing green").
+   - (b) **Quick manual check:** 2–3 CONCRETE steps with numbered parens, NO assumed folder-structure knowledge, always state the EXPECTED VISIBLE outcome (not "test it works").
+   - (c) **Full plan (optional):** link to `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md`
+5. **Block 5 — 🔗 Refs:** Linear/Jira ticket (ID + URL). Optionally 1 extra link (Figma, PRD .md path, related PR number).
+6. **FORBIDDEN sections (always delete if they creep in):** Scope In/Out, Assumptions adopted, long What/Why intro paragraphs, Harness gates checklist, giant tables, 2-paragraph context intro. (The "why" lives INSIDE each Block 1 bullet, NOT as a preamble.)
+7. **Body budget:** ≤50 lines TOTAL (all 5 blocks + headings summed). No breaking → target ~30 lines. With breaking → target ~45 lines. If over → move long migration/design details into a separate linked doc + keep 1 summary line in Block 2 or 3. **Do NOT butcher acronyms/user-impact sentences to save 2 lines — save by cutting forbidden prose instead.**
 
-**Linear ticket auto-include (A-4.0 common step):** Quando ticket detectado (A-4.0), **sempre** incluir na Block 5 "Refs". Não duplicar o ref em rodapé/comment separado.
+**Linear ticket auto-include (A-4.0 common step):** When a ticket is detected (A-4.0), ALWAYS include it in Block 5 "Refs". Do NOT duplicate the ref in a separate footer/comment.
 
 #### A-4.3 Create PR (Draft, not ready for review)
 
@@ -243,17 +254,17 @@ gh pr edit <PR_URL> --add-assignee @me
 #### B-4.2 Per-layer PR body + Depends-on chain (bottom-up)
 
 For each layer `L[i]` in `LAYERS[]` (bottom-up order):
-1. Build a PR description SCOPED EXCLUSIVELY to `L[i]` — same LEAN 3-section structure as Path A (Section1 Implementation 3paras MAX + Section2 Key Review Points ≤5 bullets + Section3 How to Verify specific tests ≤3 bullets).
-   - **Depends on footer (CANONICAL gh-stack)**:
-     - If `L[i].Depends on` is non-empty → append block to **TOP of PR body**:
+1. Build a PR description SCOPED EXCLUSIVELY to `L[i]` — same **READABLE 5-block structure + readability rules from Path A §A-4.2** (acronym expansion, user-impact per bullet, risk-consequence explanation, non-jargon labels, plain-language How-to-verify). Body is SCOPED TO ONLY the layer's changes (no cross-layer leaks).
+   - **Depends on header (CANONICAL gh-stack)**:
+     - If `L[i].Depends on` is non-empty → PREPEND block to the **TOP of PR body** (before the 5 blocks):
        ```
        Depends on: #<PR-ID-of-L[i-1]>
        ---
        ```
        (Use the numeric PR ID, not the full URL.)
-     - If first layer (base, no Depends on) → skip this block.
-   - Append: related ticket footer Refs: <TICKET-ID>.
-   - NO assumptions / NO checklists. Body total ≤25 lines per layer (same budget Path A).
+     - If first layer (base, no Depends on) → skip this header.
+   - Append: related ticket footer `Refs: <TICKET-ID>` inside Block 5 (🔗 Refs).
+   - NO assumptions paragraphs / NO harness checklists. **Body total ≤35 lines per layer** (relaxed vs single PR because stack layers are smaller). Still enforce the readable style from PR_DESCRIPTION_TEMPLATE.md filled example.
 2. Write each layer body to `<tmp>_layer_<L[i].ID>_body.md`.
 
 #### B-4.3 Create each layer PR individually + gh-stack link

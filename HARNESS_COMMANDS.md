@@ -173,7 +173,7 @@ Agent action: ask confirmation first.
 
 ## `/harness-ship`
 
-**What it does:** End-of-development ship: atomic conventional commits, push (creates remote branch if missing), opens a DRAFT PR against the default branch with a structured PR description, assigns the PR to you (the user).
+**What it does:** End-of-development ship: atomic conventional commits, push (creates remote branch if missing), opens a DRAFT PR against the default branch with a **readable PR body for low-context reviewers** (5 canonical sections, acronyms expanded first use, every change includes user impact, risks explain consequences, default English), assigns the PR to you (the user).
 **When to invoke:** You finish a feature/bugfix, you're confident the worktree is correct, and you want commit + push + open PR. Can run AFTER the harness loop ends, or standalone for any worktree.
 **Agent action:**
 1. Invoke `harness-ship` skill.
@@ -182,7 +182,7 @@ Agent action: ask confirmation first.
 4. Wait for your explicit APPROVAL of the commit plan.
 5. Apply each commit individually.
 6. `git push --no-verify --set-upstream origin <branch>` (creates remote if missing).
-7. Build structured PR description (in English) from: `.trae/<task-id>/manual_test_plan.md`, PR_DESCRIPTION_TEMPLATE, top assumptions/decisions.
+7. Build readable PR body (default English; PT only if YOU explicitly request) from: `.trae/<task-id>/manual_test_plan.md` + `PR_DESCRIPTION_TEMPLATE.md` (filled style reference, follow it strictly) + relevant decisions. Enforce §A-4.2 process gates (acronyms expanded, 1 bullet = 1 change + why, risk→consequence, plain steps to verify, ≤50 lines total).
 8. Open DRAFT PR against default branch → assign to `@me` → print PR URL.
 **Syntax examples:**
 ```
