@@ -57,6 +57,20 @@ ESTE SKILL gera o esqueleto abaixo e INTERAGE com o usuário para preencher cada
 project_slug: <slug>
 last_updated: <ISO8601 UTC>
 updated_by: human (harness-project-knowledge interactive)
+lang_code: en
+lang_docs: en
+# ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
+# LANGUAGE PER-PROJECT CONFIGURATION
+# - lang_code: en (DEFAULT — quase nunca mude) → controls identifiers, variables,
+#   classes, functions, file/folder names, type names. ALWAYS English por padrão.
+#   SÓ MUDE SE usuário EXPLICITLY disser que quer código em outro idioma.
+# - lang_docs: en (DEFAULT) → controls inline comments, JSDoc, PR titles/bodies,
+#   commit messages, ADRs, README, SPEC docs.
+#   CONFIGURAÇÃO MAIS COMUM DE OVERRIDE:
+#     lang_docs: pt-BR   (código variáveis continua EN → comments/PR/commits = PT)
+# HARD RULE (verbatim user): nunca misturar linguagens. Se lang_docs = pt-BR,
+# TODO comment do arquivo TODO em PT-BR. Se lang_code = en, TODO nome variável
+# TODO em EN. Não faça metade PT metade EN.
 ---
 
 # Product Context — <Nome Amigável do Produto>

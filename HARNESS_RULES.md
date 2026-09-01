@@ -284,7 +284,7 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 
 | Sistema | Ferramenta obrigatória | Observações |
 |---|---|---|
-| GitHub | `gh` CLI + `gh-stack` (hierarquia multi-PR) | Sem navegador para API calls. Navegador só para UI de review visual se pedido. |
+| GitHub | `gh` CLI + `gh-stack` (hierarquia multi-PR) | **HARD STOP (única via permitida):** NUNCA usar HTTP/curl/fetch manual, NUNCA usar octokit/SDK direto, NUNCA fazer `git clone https://github.com/...` sem passar por gh (autenticação gerenciada, scopes, rate-limit, repos privados, 2FA, enterprise, auditoria). PR metadata/diff/comments/reviews/checks/releases/search: SEMPRE `gh pr view/create/diff/checks/review` etc. Browser só para UI visual user-facing se pedido explicitamente. |
 | Jira / Confluence | API REST via `DO_JIRA_*` / `DO_CONFLUENCE_*` env vars | Sempre checar presença de vars. |
 | Linear | GraphQL API → `LINEAR_API_KEY` env var | Sempre checar presença. |
 | Figma | Figma REST API → `LAION_FIGMA_PAT` env var | Sempre checar. |
@@ -293,6 +293,31 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 | Nx | Sempre `--tui false` para travar sem TUI interativo. | `corepack pnpm nx <cmd> --tui false` |
 | CLIs em geral | Procurar flags `-y`, `--non-interactive`, `--tui false`, `--no-tty`, `--yes` | Evitar prompts interrompidos. |
 | Browser integrado do IDE | Apenas para sites genéricos. Para Atlassian/Linear/Figma/etc usar APIs acima. | |
+
+---
+
+## 🟠 LANGUAGE CONFIGURATION PER PROJECT (4 EIXOS INDEPENDENTES — NUNCA MISTURAR)
+
+> **HARD RULE VERBATIM USER:** "nunca misturar linguagens". Cada eixo tem EXATAMENTE um idioma por projeto/sessão. Exceção 0: strings UI traduzidas são artefato de i18n e ficam em arquivos JSON de tradução (não conta como LANG_CODE).
+
+### 4 eixos (flags independentes)
+
+| Flag | Default | O que controla | Exemplos de override comum |
+|---|---|---|---|
+| `LANG_CODE` | `en` | **Identificadores de código:** variables, classes, functions, methods, constants, file names, folder names, enum members, type names, exported symbols, i18n keys. | RARO mudar. Apenas se usuário EXPLICITLY pedir. Não confundir com strings de UI traduzidas. |
+| `LANG_DOCS` | `en` | **Texto/documentação COM CÓDIGO:** comments inline non-docstring no source, JSDoc/TSDoc, PR titles + body, conventional commit messages (scope + description), repo docs / ADRs / README / SPEC body + YAML. | **COMUM override:** `LANG_DOCS = pt-BR` → comentários/PR/commits/docs em PT-BR, **mas código variáveis sempre em EN.** |
+| `LANG_CHAT` | `pt-BR` | **Respostas textuais no chat com o usuário.** | Pode ser `en` se usuário preferir. |
+| `LANG_REPORT` | `en` | **Reports estruturados harness:** code-review report, scope-checker report, QA report, merge-audit, plan/SPEC YAML frontmatter. | RARO mudar. |
+
+### Onde configurar (ordem de precedência HIGH → LOW)
+
+1. **Override de sessão (Level 1 registry.jsonl flags entry — BIND_FLAGS_UPDATE event):** Temporário só nesta sessão. `harness_registry_append_jsonl $SID FLAGS $WT '{"flags":{"LANG_DOCS":"pt-BR"}}'`.
+2. **Project registry Level 1.5 (.registry/projects/<slug>/product_context.md frontmatter):** `lang_code: en` + `lang_docs: pt-BR` (durable por projeto, compartilhado worktrees × sessões).
+3. **Default HARNESS_RULES (este arquivo):** Valores tabela acima se nenhum projeto/sessão definiu.
+
+### Backward compat flag antiga
+
+Se `LANG_PT_CHECK = DISABLED` legacy existir em flags de sessão → mapeia automaticamente para `LANG_DOCS = pt-BR` e remove a flag antiga (logging mantém por 30 dias, depois migração limpa). Usuário NÃO precisa migrar nada manualmente.
 
 ---
 

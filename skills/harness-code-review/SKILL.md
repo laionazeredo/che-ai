@@ -75,11 +75,47 @@ Preconditions (MANDATORY checks BEFORE starting review):
 
 ### Mode A (GitHub PR) → use gh CLI (no browser)
 
-#### 1.1 PR metadata
+#### 0.5 GH PREFLIGHT OBRIGATÓRIO (regra engineering-contracts §18 gh-cli-only + carregar comments do PR NO CONTEXTO)
+
+Antes de QUALQUER outra operação no Modo A (PR URL), rode este bloco para: (a) garantir gh CLI disponível e logado, (b) CARREGAR NO CONTEXTO DA REVIEW **TODOS os comentários do PR (inline review comments + general PR body discussion comments + review-level comments)** pois eles influenciam fortemente nossa análise: se um colega já levantou um ponto, não queremos reportar a mesma coisa duplicada (ou se reportarmos, cross-linkar explicitamente e explicar se concordamos/discordamos).
+
+```bash
+# (a) Preflight gh
+command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI não instalado. Rode: install via https://cli.github.com/ + gh auth login --scopes repo,read:org,workflow"; exit 6; }
+gh auth status >/dev/null 2>&1 || { echo "❌ gh CLI não autenticado. Rode: gh auth login --scopes repo,read:org,workflow"; exit 7; }
+
+# (b) CARREGAR COMMENTS 3 fontes distintas (todas são importantes):
+#     Source 1 = comments[]           → PR-LEVEL discussion comments (aba Conversation, genéricos, não atrelados a código)
+#     Source 2 = reviewComments[]     → INLINE review comments (atrelados a hunks de código específicos, com reply threads)
+#     Source 3 = reviews[]            → REVIEWS completas (APPROVED / CHANGES_REQUESTED / COMMENTED) + body do review + state
+gh pr view <PR_URL> --json comments,reviewComments,reviews > /tmp/pr-<PR_ID>-all-comments.json
+```
+
+**Regra obrigatória sobre os comentários carregados (NÃO SKIP):**
+
+1. **Ingestão e flatten:** Normalize os 3 arrays em uma única lista `PR_COMMENTS[]` onde cada item tem: `{source: "pr-comment" | "inline-review" | "review", id, path|null, line|null, author, state|null, createdAt, body, replyToId|null, resolvedStatus|null, isDraft, url}`. Ordenar por `createdAt` ASC para entender a linha do tempo de discussões.
+2. **NÃO duplique findings.** Antes de classificar uma finding nova (Category 0/1/2/3/4/5), compare contra `PR_COMMENTS[]`:
+   - **Match forte:** Se houver comentário inline (mesmo `path` + `line` ±10 linhas no mesmo diff hunk) com mesmo tema (ex: ambos falam de "missing null guard on `x.user`"), então:
+     - Se o comentário do humano é mais completo e nós não temos mais nada a adicionar: **OMITA a finding, NÃO emita duplicado**; no lugar, adicione uma seção especial no relatório: **`🎯 Existing Human Review Threads (Not Repeated)`** listando (id, path, autor, 1-line resumo do ponto, status resolvido? resolvido por quem?).
+     - Se temos informação adicional / discordamos / temos um exemplo reproduzível que o humano não colocou: **EMITA a finding normalmente mas comece com um prefixo OBRIGATÓRIO:**
+       > `[Cross-ref PR inline comment #<id> by @<author> — extends / partially agrees / respectfully disagrees because <1 line rationale>]`
+       e no final da finding adicione `→ Thread: <url>` apontando pro comentário original.
+   - **Match fraco:** comentário em conversation-level geral ("this PR needs better error handling" genérico, sem path/line específico): não é duplicação, processe normalmente mas se nosso finding cobre exatamente aquele ponto → no final do relatório em `Existing Discussions Addressed In This Review` liste os pares.
+3. **Review state aware.** Se `reviews[]` tem um `CHANGES_REQUESTED` recente de um OWNER/CODEOWNER, NÃO recomendamos `APPROVE` no final a menos que explicitamente o usuário peça override + temos 0C/0H + todos CR points foram abordados. Sempre inclua no resumo executivo uma linha: **`Current PR review state: <N> APPROVED, <M> CHANGES_REQUESTED (authors: @a, @b), <K> COMMENTED`**.
+4. **Resolved threads não countam para findings a serem repetidas**, mas countam como histórico de discussão útil para entender trade-offs do autor → leia o body.
+5. **Draft comments (`isDraft: true`)** são privados do autor e devem ser ignorados no processamento.
+
+**Resultado esperado do Step 0.5:** Você tem em memória `ALL_COMMENTS[]` e `REVIEW_STATE_STATS`, e nas seções de output do relatório SEMPRE inclui as duas seções adicionais abaixo (entre `Executive Summary` e `Category 0`):
+- `🎯 Existing Review Context (from PR comments)` — stats básicas + threads importantes ainda não resolvidas
+- `🤝 Findings Alignment with Human Comments` — uma linha por finding ≥MEDIUM indicando se: (novo / duplicação omitida / estende humano / discorda humano)
+
+#### 1.1 PR metadata + diffs
+
+> Observação: o `comments,reviews,reviewComments` já foi buscado na etapa 0.5 acima (preflight gh + comments load). Abaixo buscamos apenas os demais fields (files, commits, etc) e o diff unificado.
 
 ```bash
 gh pr view <PR_URL> --json \
-  number,title,body,state,isDraft,baseRefName,headRefName,additions,deletions,changedFiles,commits,labels,reviewDecision,mergeable,files,author,reviews
+  number,title,body,state,isDraft,baseRefName,headRefName,additions,deletions,changedFiles,commits,labels,reviewDecision,mergeable,files,author,assignees,maintainerCanModify
 ```
 
 Record:
@@ -447,6 +483,29 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md` "Appendi
    - RF13: Hidden side effect in a getter/helper = function named `getX`, `loadX`, `findX`, `formatX` that actually WRITES / MUTATES / EMITS events internally.
 
 **HARD RULE for ship integration §0.9.2 (≤2 HIGH findings auto-fix contract):** ANY Category 5 HIGH finding (RF01-RF04) counts TOWARD the same "≤ 2 HIGH total" ship-gate threshold alongside Categories 0–4 HIGHs. This means: 2 Category 5 HIGHs alone also triggers the Ask User / Request Changes path, just like Architecture HIGHs.
+
+---
+
+### Category 6: 🟡 Logging & Observability Anti-Patterns (engineering-contracts §12 + NEW §20) — HIGH for PII/raw-secret leaks, MEDIUM for verbosity/signal/levels
+
+> **Canonical source for rules:** `engineering-contracts/SKILL.md` §12 (existing Observability & Logging) + §20 (new expanded Logging & Observability Standard, written 2026-09-01). Apply this category to any diff that: (a) adds new logger calls / console calls / echo statements, (b) adds new IO flow (HTTP / DB / file / CLI script / pipeline), (c) touches shell scripts / CI workflows / scripts, or (d) changes existing logger config (formatter / level / sinks). Flag severity follows the table below; never guess — always cite the EXACT anti-pattern ID.
+
+**How to detect each anti-pattern:**
+
+1. **L6.1 🔴 CRITICAL / HIGH — Raw PII / secrets in log output.** Diff contains literal `console.log(email)` / `logger.info({ phone })` / `echo "$user_input` or any logger.* call carrying raw `email`, `phone`, `address`, `stripe_id` (without hash), credit card digits, SSN, government ID, `sk_*`, `AWS_SECRET_ACCESS_KEY`, raw JWT token string, API keys in env dump full. Rule reference §20.6. Use hash / mask / omit.
+2. **L6.2 🟠 HIGH — Wrong level: error as info or debug floods.** Examples: `logger.info(">>> ENTERING function foo` on EVERY internal call (noise); `console.error` used for expected handled branch that's NOT unrecoverable); logger.debug with full request payloads on prod default INFO level (leak volume).
+3. **L6.3 🟡 MEDIUM — Missing structured correlation fields.** Diff writes logs as free-form string `"User did X"` sem contexto. Faltam: `traceId`, `spanId`, `correlationId`, `orgId`, `userId`, idempotency key (where applicable), structured fields discriminante `operation` ou `event`.
+4. **L6.4 🟡 MEDIUM — Script / bash / CI workflow sem logging expressivo.** Shell script novo (>30 linhas) que NÃO tem echo em steps de IO ou usa um `set -x` flood SOZINHO sem mensagens semânticas. Ou tem echo sem níveis `[INFO]` / `[WARN]` / `[ERROR]` prefixados. Aplicar especialmente a scripts que escreve em bash, Makefile, GitHub Actions YAML `run:` blocos.
+5. **L6.5 🟡 MEDIUM — Flood / log em loop / hot path verbose.** Dentro de um loop for N iterações, cada iteração dá um logger.info; ou hot path (<1ms por operação normal) tem 3+ logger calls; ou faz stringify JSON FULL de listas/arrays grandes sem truncamento. Regra 20.7 "No Flood Volume".
+6. **L6.6 🟡 MEDIUM — Didn't follow repo existing logger wiring.** Repo tem um `@flockr/logger`, `@/server/logger.ts`, `OTEL provider`, `pino` configured singleton, `winston` transport, etc. — mas diff escreve `console.log` cru. Repo convention existente não foi seguida. Mesmo que o chamador não sabe, devemos detectar e usar o padrão (§20.4 "Use existing wiring first").
+7. **L6.7 🔵 LOW — Empty catch block logging sem contexto.** `catch(e) { console.log("deu ruim") sem structured error; sem error message; sem stack trace estruturado; sem ID da requisição. BOM 1-liners. Melhor: logger.error({ err, op: "refund.create" }.
+
+**Severity default:**
+- L6.1 = HIGH ou secrets raw → CRITICAL se for ambiente prod persistente log; HIGH se só dev console; HIGH anyway;
+- L6.2 / L6.5 = HIGH se a falha de nivel ruim;
+- Demais itens → MEDIUM default;
+
+**Coverage table row obrigatória (Coverage of Review /report deve incluir Category 6 checks:** Coverage of Review" com "✓ Yes — 8 categorias.
 
 ---
 

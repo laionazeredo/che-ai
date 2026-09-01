@@ -23,7 +23,7 @@
 
 ## 1. 🚀 Getting started (máquina NOVA, `~/.trae` não existe)
 
-> ⚠️ Requisitos mínimos (1 dos 2): `gh` CLI logado, OU só `git` (fallback clone HTTPS).  
+> ⚠️ Requisitos OBRIGATÓRIOS (HARD RULE): **`gh` CLI instalado E autenticado.** NÃO existe mais fallback para clone por `git https://github.com/` direto ou HTTP API manual. Todos acessos a GitHub do harness passam EXCLUSIVAMENTE por gh CLI (autenticação, scopes, rate-limit, repos privados, 2FA, enterprise).  
 > Mais: `corepack enable` (para pnpm/tsx).  
 > **Opcional (RECOMENDADO p/ onboarding e raio-X de repositórios):** `graphify` CLI (PyPI `graphifyy`, via `pipx`). Converte qualquer pasta em knowledge graph consultável (71.5× menos tokens por query vs ler arquivos raw).
 

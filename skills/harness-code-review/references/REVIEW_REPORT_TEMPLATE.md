@@ -36,6 +36,37 @@
 
 ---
 
+## 🎯 Existing Review Context (from PR comments loaded via gh CLI — Step 0.5 mandatory)
+
+> User must see that existing human review was absorbed into context BEFORE new findings are emitted. Avoid duplicate reviewer work.
+
+| Item | Value |
+|---|---|
+| **PR review state** | `<N> APPROVED · <M> CHANGES_REQUESTED (authors: @user1, @user2) · <K> COMMENTED` |
+| **Inline review threads (hunks)** | `<TOTAL_INLINE>` total · `<UNRESOLVED>` unresolved |
+| **PR-level discussion comments** | `<N>` comments |
+| **CODEOWNER / maint review status** | `Owner @<login> has CHANGES_REQUESTED open → CANNOT RECOMMEND APPROVE without 0C/0H + override justification` |
+
+### Top unresolved human threads (≥3 listed with context)
+
+1. **#comment-123456** by @octocat · `src/refund/service.ts:142` · UNRESOLVED · **"Missing idempotency key header on Stripe refund call — id collision risk if retry."**
+2. **#comment-123457** by @alice · `apps/platform/app/admin/refunds/page.tsx:88` · UNRESOLVED · **"Admin UI shows raw customer email; repo convention says use hashPII(email) in admin tables too."**
+
+---
+
+## 🤝 Findings Alignment with Human Comments (non-duplication guarantee)
+
+> Every finding ≥ MEDIUM must be classified against existing human threads. NÃO DUPLIQUE achados que humanos já levantaram (exceto para estender/discordar com justificativa explícita + cross-ref URL).
+
+| Finding # | Classification | Cross-ref (thread id + author) | Justification when extends / disagrees |
+|---|---|---|---|
+| #F-1 🔴 CRITICAL (runtime) | **NOVO (não mencionado por nenhum revisor humano)** | — | Null deref é um caso edge novo descoberto em `renderPhone()` quando profile = null. Não conflita com as threads abertas existentes. |
+| #F-2 🟠 HIGH (Security / PII) | **EXTENDS human thread #comment-123457** (concorda parcialmente) | `#comment-123457` by @alice · [thread URL] | @alice mencionou só admin UI table; extendemos PARA logger também (linha adicional `logger.info({email:...})` em `RefundService.ts:211` não comentada). A correção recomendada cobre ambos os locais. |
+| #F-3 (exemplo) | **OMITIDO (duplicata exata)** | `#comment-123456` by @octocat | Idempotency key já levantado por @octocat; nenhuma informação adicional a acrescentar. 🎯 Reportado em "Existing Review Context" acima — não duplicamos aqui. |
+| #F-4 (exemplo) | **DISCORDA parcialmente de humano** | `#comment-999999` by @bob · [thread URL] | @bob recomendou `dayjs()` → `date-fns` em 3 locais; análise mostra que `date-fns-tz` não seria necessário e que dayjs com `.tz()` plugin existente resolve. Recomendação contrária: manter dayjs + adicionar plugin tz (1 linha, sem new dep). |
+
+---
+
 ## Context Bootstrap Evidence (TRANSPARÊNCIA OBRIGATÓRIA — what files we actually read BEFORE reviewing the diff)
 
 User must be able to verify that the review was context-aware (not superficial diff-only eyeballing). Fill this section IN EVERY REPORT. If a file says "(N/A — doesn't exist in repo)" it still counts as checked; if blank = review is invalid.

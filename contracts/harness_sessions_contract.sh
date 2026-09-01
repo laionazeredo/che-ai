@@ -672,11 +672,15 @@ harness_tr_grep() {
 # ---------------------------------------------------------------------------
 # LEVEL 1 BINDING REGISTRY (GLOBAL INDEX, append-only JSONL)
 # Single source of truth = $HOME/.trae/bindings/registry.jsonl (NÃO .md, sem dual)
-# Schema v1 por linha:
+# Schema v2 por linha (BACKWARD COMPAT with v1 LANG_PT_CHECK):
 #   {ts, event: BIND_BOOTSTRAP|BIND_APPEND|BIND_FLAGS_UPDATE, session_id,
 #    status: BOUND|UNBOUND|FLAGS, worktree_root, workspace_name|null, worktree_slug|null,
 #    branch|null, friendly_name|null, harness_session_dir|null, harness_workspace_shared|null,
-#    workspace_file|null, reason|null, flags:{LANG_PT_CHECK: "ENABLED"|"DISABLED"}, _v:1}
+#    workspace_file|null, reason|null,
+#    flags:{LANG_CODE: "en"|<code>, LANG_DOCS: "en"|"pt-BR"|<code>, LANG_CHAT: "pt-BR"|<code>, LANG_REPORT: "en"|<code>, [LANG_PT_CHECK legacy migrated→LANG_DOCS=pt-BR]},
+#    _v:2}
+# Language 4-axis policy: HARNESS_RULES.md § "LANGUAGE CONFIGURATION PER PROJECT"
+# Legacy LANG_PT_CHECK=ENABLED → default LANG_DOCS=en; LANG_PT_CHECK=DISABLED → LANG_DOCS=pt-BR
 # ---------------------------------------------------------------------------
 harness_registry_path() {
   echo "$HOME/.trae/bindings/registry.jsonl"
@@ -736,6 +740,28 @@ except Exception:
 if not isinstance(payload, dict):
     payload = {"value": payload}
 
+# ── Language flags: 4-axis independent + backward compat LANG_PT_CHECK legacy ──
+legacy_pt_check = payload.pop("LANG_PT_CHECK", None)
+incoming_flags = payload.pop("flags", None) or {}
+if legacy_pt_check is None:
+    legacy_pt_check = incoming_flags.pop("LANG_PT_CHECK", None)
+
+# Defaults (HIGH precedence registry > product_context.md > HARNESS_RULES defaults aqui)
+flags = {
+    "LANG_CODE":   incoming_flags.pop("LANG_CODE",   "en"),
+    "LANG_DOCS":   incoming_flags.pop("LANG_DOCS",
+                ("pt-BR" if legacy_pt_check == "DISABLED" else "en")),
+    "LANG_CHAT":   incoming_flags.pop("LANG_CHAT",   "pt-BR"),
+    "LANG_REPORT": incoming_flags.pop("LANG_REPORT", "en"),
+}
+# Preserve extra user-passed flags unknown (forward-compat)
+for k, v in incoming_flags.items():
+    if k not in flags:
+        flags[k] = v
+# Legacy compat: se caller passou LANG_PT_CHECK explicitamente, reflete no objeto
+if legacy_pt_check is not None:
+    flags["LANG_PT_CHECK"] = legacy_pt_check
+
 entry = {
     "ts": ts,
     "event": payload.pop("event", (
@@ -754,12 +780,9 @@ entry = {
     "harness_workspace_shared": payload.pop("harness_workspace_shared", None),
     "workspace_file": payload.pop("workspace_file", None),
     "reason":         payload.pop("reason", None),
-    "flags": {
-        "LANG_PT_CHECK": payload.pop("LANG_PT_CHECK",
-                          (payload.get("flags") or {}).get("LANG_PT_CHECK", "ENABLED"))
-    },
+    "flags": flags,
     "data": payload,
-    "_v": 1
+    "_v": 2
 }
 
 line = json.dumps(entry, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
