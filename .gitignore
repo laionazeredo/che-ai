@@ -44,33 +44,3 @@ Thumbs.db
 
 # ===== Logs runtime harness =====
 *.log
-
-# ====== HARNESS PLANNING ARTIFACTS — NEVER COMMIT ======
-# (Fail-closed: mesmo que algum bug de skill legada crie esses arquivos
-#  DENTRO do repo trae-config em vez de $HARNESS_SESSIONS_ROOT, o git
-#  não stageia. Projetos clientes recebem o snippet completo via
-#  contracts/harness-planning-artifacts-blacklist.gitignore injetado
-#  no .gitignore por install-harness.sh / self-update-harness.sh.)
-.trae/
-!.trae/.gitkeep
-decisions.log.jsonl
-decisions.log.md
-decision.log.jsonl
-decision.log.md
-task_graph.md
-manual_test_plan.md
-final_summary.md
-execution_batches.md
-batch_execution_report.md
-merge_audit.md
-merge_audit.jsonl
-scope-report.md
-scope_check_report.md
-spec_*.md
-gh_stack_plan.md
-session.md
-envelope.md
-graphify-out/
-harness-review-report.md
-harness-compliance-report.md
-flockr-review-report.md

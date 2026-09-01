@@ -58,57 +58,6 @@ Run BEFORE any `git status / git add / git commit / git push`. PREVENTS wrong-wo
 
 ---
 
-### 0.8 PLANNING ARTIFACTS BLACKLIST PREFLIGHT (NON-NEGOTIABLE)
-
-**Purpose:** NEVER allow harness internal planning/decision files to end up in user-code PRs. These files MUST live under `$HARNESS_SESSIONS_ROOT/<workspace>/<worktree-slug>/workspace` (contracts/harness_sessions_contract.sh L9-L21). If any bug/legacy skill accidentally creates them inside the user worktree, detect, unstage, and DELETE them before any `git add` runs.
-
-Source of truth of patterns = `~/.trae/contracts/harness-planning-artifacts-blacklist.gitignore` (single list — keep in sync across install-harness.sh §5.5 injection, .gitignore do harness, e este preflight).
-
-**BLACKLIST (any depth inside WORKTREE_ROOT):**
-```
-.trae/**                                 (legacy layout: never inside user code)
-decisions.log.jsonl  decisions.log.md  decisions.log
-decision.log.jsonl   decision.log.md   decision.log
-task_graph.md manual_test_plan.md final_summary.md
-execution_batches.md batch_execution_report.md
-merge_audit.md merge_audit.jsonl
-scope-report.md scope-report.json scope_check_report.md scope_check_report.json
-spec_*.md gh_stack_plan.md session.md envelope.md task_envelope.md
-graphify-out/**
-**/qa_evidence/** **/manual-test-screenshots/**
-harness-review-report.md harness-compliance-report.md flockr-review-report.md
-```
-
-**Runs INSIDE $WORKTREE_ROOT, in this exact order:**
-
-1. **Find all matching files (tracked OR untracked):** use find + patterns acima | sort -u. Call list `<FOUND_BLACKLIST>`.
-2. **STAGE 1 — Unstage anything staged (ALWAYS):**
-   ```bash
-   cd "$WORKTREE_ROOT" && [ -n "<FOUND_BLACKLIST>" ] && git reset HEAD -- <FOUND_BLACKLIST> 2>/dev/null || true
-   ```
-3. **STAGE 2 — Delete UNTRACKED blacklist files (they never belong here):**
-   - For each `f` in `<FOUND_BLACKLIST>` where `git ls-files --error-unmatch "$f"` exits non-zero → UNTRACKED.
-   - **DELETE them.** Backup copy preserved FIRST to `$HARNESS_WORKSPACE_SHARED/artifact_cleanup_backup/<ISO-date>/` just in case, then `rm -f <file>`.
-4. **STAGE 3 — TRACKED blacklist files = BLOCK SHIP, ask user.** They were committed by an older harness bug and are now in git history. Present EXACT options:
-   ```
-   🔴 PLANNING ARTIFACTS BLACKLIST — TRACKED FILES FOUND (committed before):
-     · <path1>
-     · <path2>
-   These are harness internal files (decisions / task_graph / manual_test_plan / spec_*.md etc)
-   and MUST NOT live in user-code git history.
-
-   Options:
-     A = Untrack them (git rm --cached each), KEEP local copies MOVED to
-         $HARNESS_WORKSPACE_SHARED/legacy_artifact_backup/<basename>  (RECOMMENDED)
-     B = I will handle manually. Cancel ship.
-   ```
-   If A → move file to backup dir → `git rm --cached <path>` → proceed.
-   If B → abort ship cleanly, 0 exit.
-5. **POST-CHECK:** Re-run find. Re-run `git status --porcelain --untracked-files=no`. ZERO blacklisted files must remain STAGED. If any remain → BLOCK SHIP.
-6. **DECISION LOG:** Append 1 single `ARTIFACT_CLEANUP` entry to `$HARNESS_DECISIONS_LOG` with list of files auto-unstaged / auto-deleted / untracked.
-
----
-
 ## 1. STEP 1 — Git Housekeeping (inside WORKTREE_ROOT)
 
 ### 1.1 Git sanitization check (secret scan pre-commit, extra)
@@ -137,12 +86,7 @@ This is the user's requested default: conventional commits + atomic.
 ### 2.1 Generate proposed commit plan
 
 Look at the diff. `git diff --name-only <DEFAULT_BRANCH>...HEAD` (or vs staged).
-
-**BLACKLIST FILTER — ALWAYS run BEFORE grouping:**
-From the diff-name-only output, REMOVE all files matching the patterns in §0.8 BLACKLIST (`.trae/**`, `decisions.log*`, `decision.log*`, `task_graph.md`, `manual_test_plan.md`, `final_summary.md`, `execution_batches.md`, `batch_execution_report.md`, `merge_audit.*`, `scope-report.*`, `scope_check_report.*`, `spec_*.md`, `gh_stack_plan.md`, `session.md`, `envelope.md`, `task_envelope.md`, `graphify-out/**`, `*review-report.md`).
-- If any of those files appear in the diff → §0.8 preflight SHOULD have cleaned them already. If still present → **DO NOT ADD TO ANY COMMIT.** Skip silently and add 1 note at the bottom of the commit plan: "Note: N planning-artifact files auto-skipped (never committed)."
-
-Group the remaining (filtered) changes into atomic, logical commits:
+Group changes into atomic, logical commits:
 
 - **feat(scope):** new functionality, new endpoints, new UI components
 - **fix(scope):** bug fixes — include "Fixes #TICKET" if applicable
@@ -162,34 +106,20 @@ Rule for grouping:
 - Migrations: usually `chore(db): add migration for X` separate commit.
 - Max 15 commits per ship. If > 15 → offer user option to squash into fewer + plan, or proceed with 15+.
 
-Present commit plan to the user as a **numbered list**, in order of application. Add the "N planning artifacts skipped" note at the bottom if applicable.
+Present commit plan to the user as a **numbered list**, in order of application.
 Wait for explicit user APPROVAL before running any `git commit`.
 
 ### 2.2 Execution — apply the commits (AFTER USER APPROVES plan)
 
 Run each commit:
 ```
-# BEFORE every commit: unstage ANY blacklisted files that somehow re-entered the index.
-git reset HEAD -- \
-  .trae  decisions.log.jsonl  decisions.log.md  decisions.log \
-        decision.log.jsonl   decision.log.md   decision.log \
-  task_graph.md manual_test_plan.md final_summary.md \
-  execution_batches.md batch_execution_report.md \
-  merge_audit.md merge_audit.jsonl \
-  scope-report.md scope-report.json scope_check_report.md scope_check_report.json \
-  spec_*.md gh_stack_plan.md session.md envelope.md task_envelope.md \
-  graphify-out harness-review-report.md harness-compliance-report.md flockr-review-report.md \
-  2>/dev/null || true
-
 git add <files for this commit>
 git commit -m "type(scope): imperative description in English, lowercase, max 72 chars"
 ```
 Rules:
 - NEVER run `git add .` — always add per-file or per-directory explicitly.
-- Before EVERY `git add`, run the `git reset HEAD -- <blacklist patterns>` line above. (Fail-closed — cost 1 ms per commit, prevents a whole class of PR-pollution bugs.)
 - Every commit message in ENGLISH, strict conventional commit.
 - After last commit → run `git log --oneline -20` to present final chain to user.
-- **POST-COMMIT ASSERT (after all commits applied):** `git show --name-only --pretty=format: HEAD~10..HEAD` → scan file names for §0.8 blacklist patterns. If any commit contains a blacklisted file → **STOP, DO NOT PUSH.** Report to user, offer `git reset HEAD~N` + re-apply cleanly, then continue.
 
 ### 2.3 GH_STACK_MODE=true — Group commits PER LAYER (bottom-up)
 
@@ -204,14 +134,13 @@ For each layer `L[i]` in `LAYERS[]` (bottom-up order, starting with the lowest s
    ```
 2. **Cherry-pick OR stage only files in layer scope**:
    - Strategy A (preferred when commit plan already aligns): cherry-pick only the commits relevant to this layer onto this branch from the consolidated work branch.
-   - Strategy B (simpler fallback — use when scope-per-layer is clearly file-based): from worktree state, **FIRST run `git reset HEAD -- <blacklist patterns>` (same as §2.2)** then `git add <only files matching L[i].Scope (files)>`, then create 1 or more conventional commits scoped EXCLUSIVELY to this layer (no cross-layer files in same commit).
+   - Strategy B (simpler fallback — use when scope-per-layer is clearly file-based): from worktree state, `git add <only files matching L[i].Scope (files)>`, then create 1 or more conventional commits scoped EXCLUSIVELY to this layer (no cross-layer files in same commit).
 3. Present plan of "branch → commits → scope" to user as numbered list. **Wait for explicit user APPROVAL before applying any layer commit.**
 4. After user approves: apply commits per layer. Record per-layer: final commit SHAs.
 5. After all layers done: present to user summary "Layers bottom-up (N layers): L1 → 2 commits; L2 → 3 commits; L3 → 1 commit" etc.
 
 Rule invariant for GH_STACK_MODE commits:
 - **Every file in a given layer's commit MUST be listed in L[i].Scope (files).** If a file belongs to layer L[i+1] it MUST NOT appear in commits of L[i]. Any cross-layer file → block, ask user which layer gets it.
-- **Additional GH-stack invariant:** Zero files from §0.8 BLACKLIST allowed in ANY layer's commit. If after building layer the index contains a blacklist file → `git reset HEAD -- <file>` and warn.
 
 ---
 
