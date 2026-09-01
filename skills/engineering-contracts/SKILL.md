@@ -181,6 +181,15 @@ This rule turns "agilidade" from vague talk into enforceable checkpoints:
 5. **Behavior golden rule:**
    - NEVER break existing behavior without an EXPLICIT AC asking for the break.
    - If you need behavior breaking: NON-GOALS, Data Model + Migration with rollback plan, and explicit user approval.
+6. **Test-suite naming = behavior observable ONLY (REGRA 7.9 do harness).**
+   - **`describe("...")`** = module/feature/context UNDER TEST (domain grouping, not task IDs).
+     ✅ `describe("POST /api/payments/refund")`
+     ❌ `describe("FLO-513 T2 — process refund ACs 3.1-3.4")`
+   - **`it("...")` / `test("...")`** = ONE observable behavior, starts with verb (returns/allows/blocks/calculates/emits/saves…) + condition + expected outcome. ONE assert when possible.
+     ✅ `it("returns 409 Conflict when refunding an already-refunded payment")`
+     ❌ `it("Task T2.3 valida regra do §4.2 se pagamento ja foi estornado")`
+   - **NEVER embed internal IDs (FLO-XXX / task T\d+ / AC\d+ / SPEC-\w+ / §N) in the TITLE STRING.** If you need traceability to an AC/ticket/spec: use a 1-line JSDoc comment ABOVE the block OR a single `// @ac 3.1 | @task T2 | @ticket FLO-513` comment as FIRST LINE INSIDE the test block body.
+   - Suite organization: group tests BY DOMAIN / CONTEXT. Nested `describe()` = more specific context (e.g. `describe("POST /refund").describe("with currency GBP")`).
 
 ### 16. 🔴 CODE REVIEW OPTIMIZATION + COMMENT LINE LIMIT (NEW — HARD RULE)
 

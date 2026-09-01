@@ -153,6 +153,19 @@ Before production code:
 - Use the testing framework the repo already uses (Vitest, Jest, pytest, Go test, etc.)
 - If the repo has NO test infrastructure → note and ask SM/user how to proceed
 
+**MANDATORY (harness REGRA 7.9): NOMES DE TESTES = COMPORTAMENTO OBSERVÁVEL. NÃO IDs INTERNOS.**
+```
+✗ describe("FLO-513 T2 refund", () => {})
+✓ describe("POST /api/payments/refund", () => {})
+
+✗ it("Task T2.3 valida AC 4.2 já estornado", () => {})
+✓ it("returns 409 Conflict when refunding an already-refunded payment", () => {
+    // @ac 4.2 | @task T2.3 | @ticket FLO-513   ← traceability goes HERE
+  })
+```
+Anti padrões PROIBIDOS no título de `describe()` / `it()` / `test()`:
+`FLO-XXX`, `Task? T\d(\.\d+)?`, `AC? \d+`, `SPEC_XXX`, `§\d(\.\d+)?`, `REGRA \d`, `Item \d`, `Fase \d`, `Story \d+`.
+
 ### 3.3 Run tests → confirm they FAIL
 
 If tests pass without implementation → your tests are wrong. Fix them.

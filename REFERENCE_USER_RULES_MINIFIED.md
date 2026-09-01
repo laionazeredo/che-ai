@@ -244,6 +244,67 @@ harness_registry_lookup_last "sess-abc123" | jq -r '.flags.LANG_PT_CHECK // "ENA
 
 ---
 
+## 🟢 REGRA 7.9: NOMES DE TESTES (describe / it / test) = COMPORTAMENTO OBSERVÁVEL. NÃO IDs INTERNOS.
+
+**PROBLEMA que esta regra resolve:** é comum agente escrever `it("T1.2 valida token")` ou `describe("FLO-745 — auth fail closed")`. Isso invalida dois objetivos: (a) quem lê o relatório de testes em CI não entende o comportamento sem abrir a spec; (b) ids internos mudam / tasks são re-organizadas e o nome do teste passa a mentir.
+
+### 7.9.1 Formato PRESCRITO describe() e it() / test()
+
+| Elemento | O que DEVE conter | Exemplo BOM |
+|---|---|---|
+| **`describe("...")`** | **MÓDULO / FUNCIONALIDADE / CONTEXTO** sob teste. Agrupa comportamentos afins. Nunca ids. | `describe("POST /api/auth/login")` / `describe("JWT middleware — role checks")` |
+| **`it("...")` / `test("...")`** | **UM comportamento observável único**, preferencialmente começa com verbo (retorna, permite, bloqueia, calcula, emite, salva…) + condição + resultado esperado. **UM assert POR it quando possível.** | `it("returns 401 Unauthorized when Authorization header is missing")` |
+
+### 7.9.2 NÃO coloque no TÍTULO — coloque no COMENTÁRIO JSDoc ACIMA ou dentro do bloco como linha comment
+
+Anti padrões proibidos no TÍTULO (STRING de describe/it/test). Se precisar referenciar, use comentário:
+
+```
+✗ RUIM (TÍTULO):  it("Task T1.3 — REGRA 4.2 da SPEC api-fail-closed valida service role")
+✓ BOM:
+/**
+ * @task T1.3
+ * @spec spec_api-fail-closed
+ * @ac 4.2
+ */
+it("blocks non-service-role callers by returning 403 Forbidden when client uses anon key", () => { ... })
+```
+
+Outros anti padrões de TÍTULO (se bater, revise antes de PR):
+- `FLO-\d+` (ticket ids Linear/Jira)
+- `Task\s*\w+`, `T\d+(\.\d+)?`, `Item\s*\d+`, `AC\s*\d+` (task/critério ids)
+- `SPEC[_-]?\w+`, `§\s*\d+(\.\d+)?`, `REGRA\s*\d+` (spec section / rule ids)
+- `Fase\s*\d+`, `Story#?\d+`, `PRD\s*§`
+- Qualquer frase que só faz sentido para QUEM escreveu a spec e não para QUEM lê o relatório CI de testes.
+
+### 7.9.3 Como associar 1 test → 1 AC / task id SEM sujar o título
+
+3 maneiras permitidas (qualquer uma serve, não precisa das 3):
+
+1. **JSDoc comentário de bloco ACIMA** do `it()` / `describe()` (exemplo acima).
+2. **Linha comentário 1 linha DENTRO** do bloco na PRIMEIRA linha:
+   ```ts
+   it("rejects payment with amount below £0.50 minimum", () => {
+     // @ac 3.1 | @task T5 | @ticket FLO-513
+     ...
+   })
+   ```
+3. **it.todo() com descrição + comentário separado** quando for placeholder.
+
+### 7.9.4 Organização da SUITE
+
+- `describe()` agrupa POR DOMÍNIO / CONTEXTO. Ex: `describe("Checkout — 3DS2 redirect flow")`, não `describe("Fase3 refactor checkout")`.
+- Quando testar o mesmo endpoint com condições diferentes: `describe.only`/`describe` aninhados são permitidos (usar PARA CONTEXTO, não para agrupar tasks).
+- Nome do teste TEM QUE SER VERDADEIRO 6 meses depois. IDs de tasks não são. Comportamentos são.
+
+### 7.9.5 Validações automáticas no harness
+
+- **harness-compliance Stage 1 LIGHT**: scan new/edited `*.test.* / *.spec.* / __tests__/` → flag WARNING (HIGH ≥10 hits) por regexes anti padrões acima.
+- **harness-code-review Cat 4.7**: revisor avisa e pede rename no blocking comment se >5 nomes ruins no diff.
+- **QA report Stage 2.4 extra**: lint nomes nos relatórios Vitest/Jest (exibe `TOTAL suites comportamentais: 14; nomes ruins detectados: 2`).
+
+---
+
 ## 🟥 REGRA 8: SPEC + PARALELISMO (corpo em HARNESS_RULES)
 - **SPEC**: substitui PRD legacy; 4 fontes input (existente / ticket URL / PRD Flockr path / inline breve); 7 seções canônicas + YAML frontmatter required fields; gate **Approved obrigatório** ANTES scope capture no §0.5 do harness-scrum-master; override SPEC-OVERRIDE com log em decisions.
 - **Paralelismo:** Kahn waves + conflict graph coloring + file locks + single-writer shared artifacts. Cap 4 paralelo. Se overhead > serial, KISS vence.

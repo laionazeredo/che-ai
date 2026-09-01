@@ -296,6 +296,16 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 
 ---
 
+## 🟢 QA / COMPLIANCE / CODE-REVIEW GATES (SÓ TÍTULO + LINK — NÃO DUPLICAR CORPO)
+
+> **3-LAYER DEDUP INALTERÁVEL:** Corpo das regras abaixo mora em `REFERENCE_USER_RULES_MINIFIED.md` (Layer 2) + skills específicos (Layer 3). Aqui SÓ title + gate enforcement + link. Zero corpo. Hook `posttooluse-3layer-dedup.sh` bloqueia duplicação ≥4 linhas idênticas.
+
+| Gate | Regra | Local corpo canônico | Enforcement automático |
+|---|---|---|---|
+| ✅ **Test Naming Behavioral** | Nomes de `describe()/it()/test()` = comportamento observável. **PROIBIDO** colocar task id / AC / § / FLO-XXX / regra / SPEC id DIRETO no título. Traceability permitida **SÓ** via comentário JSDoc acima OU linha comentário `// @ac ... | @task ...` DENTRO do bloco. Suites = agrupamento por DOMÍNIO/contexto funcional. | **REGRA 7.9** → [REFERENCE_USER_RULES_MINIFIED.md §7.9](file:///home/laion/.trae/REFERENCE_USER_RULES_MINIFIED.md#L247-L305) | **QA Stage E** (lint scan diffs, FAIL ≥10 bad titles) · **Compliance Scan 6.5** (severidade gradiente 1-9 WARN / ≥10 HIGH) · **CR Cat 4.7** (1-4 LOW / 5-9 MEDIUM / ≥10 HIGH). Todos validam e permitem JSDoc/in-block traceability como exceção. |
+
+---
+
 ## 🟠 HARNESS ESPECÍFICOS POR TIPO DE TAREFA
 
 ### Feature (harness normal): `/harness-start` → SM + Dev + QA + Compliance

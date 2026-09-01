@@ -158,6 +158,40 @@ Scan for NEW code:
 
 ---
 
+## 6.5 SCAN CATEGORY 7 — Test Naming Behavioral Conventions (REGRA 7.9 do harness)
+
+**Aplica-se APENAS a:** arquivos novos/editados que batem `*.test.*`, `*.spec.*`, ou estão dentro de pasta `__tests__/`. Se task não mexeu com testes → SKIP essa categoria.
+
+**Objetivo:** evitar nomes de `describe()` / `it()` / `test()` que contenham apenas IDs internos, forçando que o título descreva COMPORTAMENTO OBSERVÁVEL (válido por meses, não só enquanto a task aberta).
+
+**Scan pattern:** procurar por strings dentro de `describe("...")`, `it("...")`, `test("...")` (com aspas simples ou duplas). Para cada título encontrado, verificar anti-padrões:
+
+| Anti padrão (regex case-insensitive) | Motivo | Severidade |
+|---|---|---|
+| `FLO-\d+` / `[A-Z]{2,}-\d+` | Ticket IDs Linear/Jira, valem só enquanto o ticket está aberto | WARN |
+| `Task?\s*T\d+(\.\d+)?` / `Item\s*\d+` | Task IDs do task graph do harness | WARN |
+| `AC\s*\d+` / `Critério\s*\d+` | IDs de acceptance criteria dentro de SPEC/PRD | WARN |
+| `§\s*\d+(\.\d+)?` / `REGRA\s*\d+` / `SPEC[_-]\w+` / `PRD\s*§` | Referências a seções de doc de planejamento | WARN |
+| `Fase\s*\d+` / `Story\s*#?\d+` | Phase/story IDs temporários | WARN |
+
+**Regra de severidade:**
+- 1–9 títulos ruins → **WARN** (não blocking; lista detalhada no report)
+- ≥10 títulos ruins no mesmo diff → **HIGH** (blocking; engineering-contracts deixa de ser review-friendly)
+- Títulos bons = contêm verbo de ação + condição + resultado; não têm regex acima.
+
+**Como reportar:**
+```
+## Scan 7 — Test naming (REGRA 7.9)
+Total spec files modified: 3 | Test titles inspected: 24
+Good (behavioral): 20 | Bad (contains internal IDs): 4
+  1. /src/__tests__/auth.test.ts:88 — it("Task T2.3 valida AC 4.2 service role") → BAD: "Task T2.3" + "AC 4.2"
+     Suggest rename: it("blocks non-service-role callers with 403 Forbidden when anon key used")
+     Keep traceability: inside block line 1: // @ac 4.2 | @task T2.3 | @ticket FLO-745
+  2. ...
+```
+
+---
+
 ## 7. REPORT FORMAT — Stage: findings)
 
 ### Findings report structure

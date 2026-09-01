@@ -205,12 +205,27 @@ How:
      - Ticket = "fix login 500" → PR also adds "new forgot password feature" → SCOPE CREEP, flag MEDIUM.
      - Ticket = "add event search" → PR skips the pagination AC mentioned → MISSING, flag HIGH.
 
+4. **4.7 Test-suite naming behavioral check (REGRA 7.9 do harness, MEDIUM / WARN).**
+
+   Scan test files added/modified in the diff (`*.test.*`, `*.spec.*`, files inside `__tests__/`). Detect anti-patterns **in the TITLE STRING** of `describe("...")` / `it("...")` / `test("...")`:
+   - Ticket IDs: `FLO-\d+`, ticket-codes like `ABC-123`
+   - Task/item IDs: `Task? T\d+(\.\d+)?`, `Item \d+`
+   - AC/section IDs: `AC\d+`, `§\d+(\.\d+)?`, `REGRA \d+`, `SPEC_XXX`, `PRD §`
+   - Phase/story IDs: `Fase \d+`, `Story #?\d+`
+
+   Severity:
+   - 1–4 bad titles → **LOW WARN** (non-blocking, show in "Nice-to-have" list)
+   - 5–9 bad titles → **MEDIUM** (appear in main findings; require rename before merge or explicit override comment)
+   - ≥10 bad titles → **HIGH** (blocking: relatório de CI vai ser inútil, alguém quebra essa regra em escala)
+
+   Never flag the JSDoc traceability comment ABOVE a block or a `// @ac X | @task Y | @ticket Z` line INSIDE the block as bad. Those are the RECOMMENDED way to keep traceability without polluting the display title.
+
 ---
 
 ## 3. NON-goals (we explicitly skip these — do NOT waste tokens / time)
 
 - ❌ Biome / formatting / indentation issues. (That's lint CI.)
-- ❌ Naming nitpicks: `myVar` vs `my_variable`, component naming casing. (Unless name is actively misleading to the point of causing bug, which is Category 1.)
+- ❌ Naming nitpicks: `myVar` vs `my_variable`, component naming casing. **EXCEÇÃO:** naming of test-suite `describe()` / `it()` / `test()` titles, which falls under Category 4.7 (REGRA 7.9 behavioral check), reviewed above.
 - ❌ Test coverage% alone (we check if tests MISS for CRITICAL code but won't demand lines).
 - ❌ Documentation README unless it's actively misleading about security/usage.
 - ❌ TODO/FIXME comments (unless for auth/security debt).

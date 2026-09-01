@@ -190,6 +190,37 @@ Reproduction command:
   - <exact command Dev can run to re-trigger this one failing test>
 ```
 
+### 2.5 Stage E — Test Naming Behavioral Lint (REGRA 7.9 do harness)
+
+Goal: garante que `describe()` / `it()` / `test()` descrevem COMPORTAMENTO OBSERVÁVEL, não ids internos de task/spec/regra. Roda APENAS se arquivos `*.test.*`, `*.spec.*` ou pastas `__tests__/` foram modificados nesta task.
+
+**O que detectar (regex em títulos):**
+Scan the string passed to `describe(...)`, `it(...)`, or `test(...)`:
+- Ticket IDs: `FLO-\d+`, `[A-Z]{2,}-\d+`
+- Task/item IDs: `Task?\s*T\d+(\.\d+)?`, `Item\s*\d+`
+- AC/section IDs: `AC\s*\d+`, `§\s*\d+(\.\d+)?`, `REGRA\s*\d+`, `SPEC[_-]\w+`
+- Phase/story IDs: `Fase\s*\d+`, `Story\s*#?\d+`, `PRD\s*§`
+
+**How to scan (simplest possible — grep with -E):**
+```bash
+cd <WORKTREE_ROOT>
+git diff --cached --unified=0 -- <changed spec files> | grep -E '^\s*\+' \
+  | grep -Eo '\b(describe|it|test)\s*\(\s*["'"'"'][^"'"'"']{1,240}["'"'"']' \
+  > /tmp/qa-test-names.txt 2>/dev/null || true
+Then for each title found check anti-patterns above.
+```
+
+**Report output format (WARNINGS, NEVER blocks — FAIL only if ≥10 bad names):**
+```
+Stage E — TEST NAMING (REGRA 7.9)
+Total test titles scanned: 42
+Behavioral (good): 40
+Bad titles detected (WARNING): 2
+  - <file>: it("Task T2.3 — valida AC 4.2 refund")  — BAD: contains "Task T2.3" and "AC 4.2"
+  - <file>: describe("FLO-513 refund process")       — BAD: contains "FLO-513"
+Fix guidance: rename titles to describe BEHAVIOR only. Keep traceability links (@ac, @task, @ticket) in JSDoc comment above or 1-line comment inside block.
+```
+
 ---
 
 ## 3. STEP 3 — IF ALL STAGES PASS — Success Report
@@ -203,15 +234,18 @@ Stack profile detected:
   - Lint: <Biome 1.9>
   - Typecheck: <tsc 5.6 --noEmit>
   - Tests: <Vitest 4.0 — 42 files, 318 tests>
+  - Test naming lint (Stage E): 42 scanned; bad=0 ✔
 
 Stages executed:
   - [x] Build (0 errors, 0 warnings)
   - [x] Lint  (0 errors, 3 warnings — cosmetic, accepted)
   - [x] Typecheck (0 errors)
   - [x] Tests  (0 failed; coverage diff: +0.4% lines)
+  - [x] Test naming (Stage E: clean or <N bad names → <N> warnings)
 
 Warnings for Dev to consider (non-blocking):
   - <list non-blocking issues, e.g. unused variable, TODO comment>
+  - <if Stage E bad names: repeat the list here as warnings>
 
 Approved for Compliance stage.
 ```

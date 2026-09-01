@@ -8,12 +8,12 @@
 
 ---
 
-## 0. 🚀 INSTALL — 3 comandos (fresh install)
+## 0. 🚀 INSTALL — 3 comandos (fresh install · máquina NOVA)
 
 Cenário: você abriu Trae em uma máquina NOVA, `~/.trae/` ainda não existe.
 
 ```bash
-# 1. Clona repo público direto em ~/.trae
+# 1. Clona repo público DIRETO em ~/.trae (RECOMENDADO: ~/.trae vira git repo)
 gh repo clone laionazeredo/trae-config ~/.trae -- --depth 1
 
 # 2. Instala deps TS (tsx executor zero-build + typescript strict + @types/node)
@@ -25,16 +25,93 @@ ls ~/.trae/commands | wc -l            # esperado = 17
 corepack pnpm --dir ~/.trae decisions --help 2>&1 | head -3
 ```
 
-Recarregue o Trae (ou feche/abra). Pronto.
+Recarregue o Trae (ou feche/abra). Pronto. Como ~/.trae agora É um git repo (com upstream), atualizações futuras são um comando via §0.1 (fluxo CASO 1).
 
-### Se ~/.trae/ JÁ existe (dados locais preservados)
+---
 
-Use o install script idempotente. Ele faz backup automático e **NUNCA sobrescreve** `memory/`, `user_rules/`, `bindings/registry.jsonl`:
+## 0.1 🔄 ATUALIZAR — pegar últimas versões do GitHub (SEM perder dados pessoais)
+
+> **GARANTIA FUNDAMENTAL:** Nenhum dos 3 comandos abaixo **nunca** sobrescreve, renomeia ou deleta:
+> `user_rules/*`, `bindings/registry.jsonl`, `memory/`, skills custom que VOCÊ adicionou em `skills/<sua-skill>/` que não existem no repo oficial.
+> Ver §0.2 BLACKLIST abaixo para a lista completa.
+
+### ⚡ MODO "SÓ QUERO A ÚLTIMA VERSÃO" — 1 comando, zero pensamento (RECOMENDADO para uso diário)
+
+Você **não lembra** se instalou via git clone ou zip? **Não importa.** Este comando faz TUDO automaticamente:
+1. Vai até o GitHub e baixa a ÚLTIMA versão oficial do `laionazeredo/trae-config` em `/tmp` (via `gh` se logado, via `git clone --depth 1 https://...` fallback público).
+2. Detecta sozinho se seu `~/.trae` é um git repo (CASO 1) ou não (CASO 2).
+3. Roda a estratégia correta de update para o seu caso.
+4. Apaga a pasta temporária de fetch automaticamente (trap EXIT).
+
+```bash
+# DRY-RUN (padrão): baixa última versão, mostra relatório, NÃO ALTERA NADA no seu ~/.trae.
+bash ~/.trae/scripts/self-update-harness.sh
+
+# Se o relatório parece OK → APPLY de verdade:
+bash ~/.trae/scripts/self-update-harness.sh --apply
+```
+
+Dependências mínimas (pelo menos 1, comuns em qualquer máquina dev):
+- **Preferido:** `gh` (GitHub CLI) logado → `gh auth login`. Usa API autenticada (rate limits maiores).
+- **Fallback:** `git` apenas → clone raso via HTTPS público, sem auth.
+
+---
+
+### 🟢 CAMINHO AVANÇADO 1 (target = clone git, controle granular)
+
+Se você **sabe** que `~/.trae` foi clonado DIRETO do repo oficial (possui `.git/` com upstream `laionazeredo/trae-config`):
+
+```bash
+# Primeiro: dry-run. Nada altera. Mostra commits que vão entrar e avisos.
+bash ~/.trae/scripts/update-harness.sh
+
+# Se o relatório parece OK:
+bash ~/.trae/scripts/update-harness.sh --apply
+```
+
+O que `update-harness.sh` faz para você NESTE caminho:
+1. Detecta que `~/.trae` é git repo → usa CASO 1.
+2. **Fail-closed contra alterações locais NÃO commitadas** em arquivos trackeados: se você modificou um `SKILL.md` oficial e não commitou, aborta com solução (commit ou stash).
+3. Fetch remoto + lista commits pendentes (você vê exatamente o que vai entrar).
+4. `git pull --ff-only` (NÃO cria merge automático; se divergência, aborta).
+5. Se `package.json` / `pnpm-lock.yaml` mudaram → roda `pnpm install --prefer-offline` automaticamente.
+6. `.gitignore` do repositório **automaticamente** protege `user_rules/`, `bindings/registry.jsonl`, `memory/` — esses arquivos **nunca são trackeados nem tocados pelo git pull**.
+
+### 🟡 CAMINHO FALLBACK (se você NÃO quer ~/.trae como git repo)
+
+Você baixou zip, copiou manualmente, ou por qualquer motivo `~/.trae/.git/` não existe. Update usa `install-harness.sh` em **modo --update não-destrutivo**:
+
+```bash
+# 1. Baixe a versão nova do repo oficial em uma pasta temporária
+gh repo clone laionazeredo/trae-config /tmp/trae-src -- --depth 1
+
+# 2. DRY-RUN (mostra novos arquivos e arquivos que serão atualizados com backup individual)
+bash /tmp/trae-src/scripts/install-harness.sh --update
+
+# 3. Aplica de verdade (sem --apply = nada muda)
+bash /tmp/trae-src/scripts/install-harness.sh --update --apply
+```
+
+O que `install-harness.sh --update` faz NESTE caminho:
+1. **NÃO renomeia nem deleta** `~/.trae` inteiro (comportamento antigo de fresh install).
+2. Itera CADA subitem dentro de `commands/`, `skills/`, `contracts/`, etc:
+   - Source tem, target não tem → cria novo (marcado `+ novo`).
+   - Source tem, target tem e são diferentes → primeiro `mv target/x → target/x.bak-YYYYMMDD-HHMM` (backup individual NO MESMO diretório), depois copia novo por cima (marcado `~ updt`). Rollback manual é só `mv x.bak-* x`.
+   - Source tem, target tem e idênticos → silent skip.
+   - Source **NÃO** tem, target tem → **NUNCA TOCA**. Preserva 100% skills custom, comandos novos que você criou, arquivos extras pessoais.
+3. Blacklist (user_rules, bindings/registry.jsonl, memory) → intocada, nem lida.
+4. Roda pnpm install só se package.json / pnpm-lock.yaml realmente mudaram.
+
+---
+
+### Fresh install fallback (se quiser RESET TOTAL do harness, mas preservando seus dados)
+
+Use **sem** a flag `--update`. Comportamento antigo: backup INTEIRO de `~/.trae` para `~/.trae.bak-YYYYMMDD-HHMM`, depois instala versão nova. Dados pessoais são copiados de volta automaticamente APENAS como estrutura vazia; para recuperar suas regras pessoais você copia manualmente da pasta `.bak-*`. Use só se quiser "zerar tudo" e recomeçar limpo.
 
 ```bash
 gh repo clone laionazeredo/trae-config /tmp/trae-src -- --depth 1
-bash /tmp/trae-src/scripts/install-harness.sh --dry-run                      # primeiro confere
-bash /tmp/trae-src/scripts/install-harness.sh --apply                         # executa de verdade
+bash /tmp/trae-src/scripts/install-harness.sh --dry-run
+bash /tmp/trae-src/scripts/install-harness.sh --apply
 ```
 
 ### O que este repositório tem (capacidades)
@@ -46,7 +123,7 @@ bash /tmp/trae-src/scripts/install-harness.sh --apply                         # 
 | **3 hooks automáticos** | binding scissor (bloqueia path fora worktree), 3-layer dedup, lang-pt-check warn-only | 3 `.sh` |
 | **CLI decisions TS** | 4 modos: summary / filter / tail / export csv\|tsv | `contracts/decisions-query.cli.ts` |
 | **Contracts único** | path binding + 5 heurísticas token reduction + 4 helpers registry JSONL + 3 helpers decisions append | `contracts/harness_sessions_contract.sh` (17 helpers) |
-| **Install script** | dry-run default, backup automático, whitelist/blacklist estrita | `scripts/install-harness.sh` |
+| **Install + Update scripts** | `install-harness.sh` (fresh ou update não-destrutivo) + `update-harness.sh` (alias inteligente git vs zip) + `self-update-harness.sh` (⚡ 1-comando: baixa última versão do GitHub + auto-detecta caso) | 3 `.sh` |
 
 ### ⚠️ Blacklist — o que NÃO está versionado (dados LOCAIS por máquina)
 
