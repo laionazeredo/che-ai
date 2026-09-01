@@ -20,13 +20,29 @@ It is invoked by `harness-developer` FIRST, and its rules **trump local repo con
 
 ## PRECEDENCE ORDER (1 = highest, hard stop; 18 = lowest)
 
-### 1. 🔴 KISS + YAGNI + BLAST RADIUS REDUCTION (above ALL other rules)
+### 1. 🔴 KISS + YAGNI + BLAST RADIUS REDUCTION + NO ACCIDENTAL COMPLEXITY (above ALL other rules)
 
 > These are not "nice to have". They are hard constraints. If any other rule on this list would force you to violate one of these — **VIOLATE THE LOWER RULE, NOT THESE.**
 
 - **KISS (Keep It Simple, Stupid):** If there are two ways and one is simpler (less indirection, fewer files, fewer abstractions), **pick the simpler one always.**
 - **YAGNI (You Ain't Gonna Need It):** Do NOT add infrastructure, abstraction, configuration, module, parameter, feature, OR extensibility point "because future use will need it." Only code what the current, explicit Acceptance Criteria DEMAND.
 - **Blast radius reduction:** Change as few files and as few lines as strictly necessary. Prefer editing 1 function in 1 file to creating 3 files + a pattern. If a PR has >10 files touched → STOP and re-evaluate.
+- **🔴 NO ACCIDENTAL COMPLEXITY HARD RULE (aplica-se ANTES de escrever 1ª linha):**
+  - **Definição:** Complexidade = Essencial (do domínio, inevitável) vs Acidental (nossa culpa — abstração desnecessária, indireção inútil, configuração genérica prematura, framework X só porque "mundo usa", wrapper por wrapper, etc).
+  - **Hard stop processo:** Antes de criar QUALQUER nova abstração / classe / módulo / dependência / CLI flag, você deve se perguntar e responder (registrado mentalmente ou 1 linha em decisions se task for complexa):
+    1. "Isso resolve complexidade ESSENCIAL do domínio do negócio / problema atual?"
+    2. "Consigo resolver o problema atual SEM isso, com 1 wrapper simples / função inline / parâmetro a mais na função existente?"
+    3. "Se eu não fizer isso AGORA, quanto trabalho vai dar para adicionar DEPOIS quando REALMENTE precisar? (≤3 linhas → SEMPRE faça depois; ≤1 dia trabalho → provavelmente também depois)"
+  - **Lista VERMELHA de complexidade acidental (qualquer 1 item é motivo para STOP + re-design):**
+    - ✋ Interface / Protocol / Abstract class com APENAS 1 implementação concreta HOJE (se não tem 2 implementações hoje, não precisa da abstração ainda)
+    - ✋ Dependency Injection container / IoC para ≤5 services (construa manualmente — fábrica de 3 linhas)
+    - ✋ Strategy pattern com ≤2 estratégias E a 2ª é "default que quase nunca muda"
+    - ✋ Event bus / PubSub interno com ≤2 subscribers (chame direto)
+    - ✋ Config / yaml / toml de ambiente para ≤3 flags fixas (env var única basta)
+    - ✋ Micro-serviço splitado sem necessidade de deploy independente provada (monólito modular primeiro)
+    - ✋ Framework novo inteiro só para 1 feature (ex: instalar LangGraph só para loop que já existe via contracts + gates)
+    - ✋ N camadas a mais de indireção "porque arquitetura limpa manda" sem que nenhuma delas resolva um problema real do produto
+    - ✋ Função genérica `<T>` quando só existe 1 tipo concreto sendo passado hoje
 
 ### 2. 🔴 SECURITY & PII COMPLIANCE (hard stop)
 
@@ -121,27 +137,45 @@ Granularity:
 - If ACs are not clearly defined → **STOP coding** and go back to Scrum Master / ask user for clarification.
 - Know exactly "when am I done" before writing line 1.
 
-### 12. 🟢 OBSERVABILITY & LOGGING
+### 12. 🟢 OBSERVABILITY & LOGGING (Pointer)
 
-Establish logging points for every flow that has:
-- IO (HTTP request, DB read/write, file system)
-- Long running / complex pipeline
-- State transitions that could fail
+> **Regras completas expandidas (HARD RULE):** Veja **§19 🔴 LOGGING & OBSERVABILITY STANDARD** nesta mesma skill (depois de §18 GitHub).
+> Este §12 é um pointer p/ evitar forward-reference chaos. NÃO DUPLIQUE regras aqui.
+> TL;DR rápido daqui: (1) repo pattern first NÃO invente roda; (2) wiring existente primeiro (OTel/pino singleton); (3) 5 níveis (trace/debug/info/warn/error); (4) SEM PII raw; (5) scripts bash = echo prefixado expressivo. Detalhes + volume heurística + anti-patterns em §19.
 
-Logging conventions (use what the repo exposes):
-- `info` — start/end of flow
-- `debug` — important inputs, decisions, branching paths
-- `warn` — handled but unusual state (not failure, but noteworthy)
-- `error` — truly unrecoverable / escalation-needed (with structured context, NOT full stack dump to stdout by default)
+### 13. 🟢 LANGUAGE CONFIGURATION — 4 EIXOS INDEPENDENTES (por projeto/sessão, NUNCA MISTURAR)
 
-Always sanitize PII: hash, mask, or omit. Never log raw email/phone/PII fields.
+> **HARD RULE VERBATIM USER (contractual):** "nunca misturar linguagens". Cada eixo abaixo tem EXATAMENTE 1 idioma configurado por arquivo/sessão/projeto. Strings UI traduzidas = artefato de i18n em JSON separado (não conta como LANG_CODE).
 
-### 13. 🟢 LANGUAGE & CONTENT FORMAT
+**Precedência de configuração (HIGH → LOW):**
+1. **Override sessão Level 1 registry flags** (`harness_registry_append_jsonl … FLAGS … '{"flags":{"LANG_DOCS":"pt-BR"}}'`) — temporário, só esta sessão.
+2. **Project registry Level 1.5** `.registry/projects/<slug>/product_context.md` frontmatter `lang_code:` + `lang_docs:` — durável por projeto, compartilhado worktrees × sessões.
+3. **Defaults ABAIXO** se nenhum dos dois acima definiu.
 
-- **All source code:** English identifiers, English comments, English string literals for messages.
-- **All git commit messages:** English only, conventional commits (see §14).
-- **All conversational responses to the user:** Portuguese.
-- **Internal harness docs (task_graph, envelopes, decisions, summaries, gh_stack_plan):** English.
+**Os 4 eixos:**
+
+| Eixo | Flag | Default | O que controla — 1 idioma TODO o eixo, sem mistura |
+|---|---|---|---|
+| **CÓDIGO** | `LANG_CODE` | `en` (INGLÊS OBRIGATÓRIO default) | Identificadores: variables, classes, functions, methods, constants, file names, folder names, enum members, type names, exported symbols, i18n keys. **SÓ MUDE se usuário EXPLICITLY pedir por projeto.** Não confundir com strings UI traduzidas (arquivos JSON i18n separados). |
+| **DOCUMENTAÇÃO CÓDIGO + PR/COMMITS** | `LANG_DOCS` | `en` (default) | Comments inline non-docstring no source, JSDoc/TSDoc, PR titles + body, conventional commit scope + description, repo docs / ADRs / README / SPEC body + YAML. **CONFIGURAÇÃO MAIS COMUM override = `LANG_DOCS = pt-BR`** → comentários/PR/commits/docs em PT-BR mas variáveis de código SEMPRE em EN (LANG_CODE stays `en`). |
+| **CHAT COM USUÁRIO** | `LANG_CHAT` | `pt-BR` (default hoje) | Respostas textuais no chat direto com o usuário. |
+| **REPORTS ESTRUTURADOS** | `LANG_REPORT` | `en` (default) | Reports harness: code-review, scope-checker, QA report, merge-audit, spec YAML frontmatter. |
+
+**Backward compat legacy:** Flag binária antiga `LANG_PT_CHECK=ENABLED|DISABLED` é migrada automaticamente: `LANG_PT_CHECK=DISABLED → LANG_DOCS=pt-BR`. Usuário NÃO precisa fazer migration manual.
+
+**Exemplos corretos:**
+```typescript
+// ✅ BOM — LANG_CODE=en + LANG_DOCS=pt-BR (nunca mistura)
+// Calcula o valor do cashback em GBP usando regra progressiva por tier de comprador.
+function calculateLoyaltyCashback(orderTotalPence: number, tier: BuyerTier): number {
+  const basePct = tier === "GOLD" ? 0.05 : tier === "SILVER" ? 0.02 : 0.01;
+  return Math.floor(orderTotalPence * basePct);
+}
+
+// ❌ RUIM — MISTURA: comentário PT mas nome variável PT também (viola LANG_CODE=en)
+// calcula cashback...
+function calculaCashbackFidelidade(valorTotalCentavos: number, nivel: NivelComprador): number {...}
+```
 
 ### 14. 🟢 ATOMIC COMMITS + CONVENTIONAL COMMITS (default; override only if repo defines own)
 
@@ -276,11 +310,187 @@ Canonical output:
 
 ---
 
-### 19. 🔴 WORKTREE SESSION BINDING — One Session = One Worktree. Doubt = Ask.
+### 18. 🔴 GITHUB ACCESS — gh CLI ONLY (HARD STOP. Single allowed path.)
+
+> **Motivation:** Uniform authentication, scopes, rate-limiting, 2FA token flow, Enterprise SSO, private-repo access, audit trail, `gh auth status` single-truth. Every alternative (HTTP curl/fetch to api.github.com, direct `git clone https://github.com/...`, octokit/SDK-js/python, raw PAT in Authorization header) causes leaks, wrong auth, 403s on private repos, PAT rotation fragility.
+
+This rule applies to **every operation the harness does that touches GitHub (clone, PRs, diffs, comments, reviews, checks, releases, issues, search, repo metadata, branch listing, tag listing, file content, Actions logs)**. It applies to ALL skills (code-review, scope-checker, diff-context, ship, pr-comments, ci-fix, harness-git-ops, direct chat ops) and direct user requests ("pega a PR #123 pra mim").
+
+**6 NON-NEGOTIABLES:**
+
+1. **UNIQUE ENTRYPOINT.** Every GitHub access goes through the official `gh` CLI.
+   - ✅ Allowed: `gh pr view <url> --json ...`, `gh pr diff <url>`, `gh pr view --json comments,reviews`, `gh pr checks`, `gh pr create`, `gh pr review`, `gh run view`, `gh release view`, `gh repo clone <owner>/<name>`, `gh issue list`, `gh api repos/<o>/<r> --jq ...` (REST wrapper com auth herdada do gh).
+   - ❌ NEVER: `curl https://api.github.com/... -H "Authorization: Bearer $PAT"` ou qualquer variante HTTP manual.
+   - ❌ NEVER: `git clone https://github.com/<o>/<r>.git` direto (sem passar por `gh repo clone`). Fallback por HTTPS público NÃO EXISTE mais; se gh não logar → erro + instruções `gh auth login`.
+   - ❌ NEVER: octokit.js / octokit.py / PyGithub / github3.py em código de script do harness ou em implementação de skills. Se você precisar de uma operação que `gh` não tem built-in → use `gh api <rest-endpoint>` (que herda auth/scopes corretos).
+2. **PREFLIGHT EM TODA OPERAÇÃO.** Antes de 1ª chamada gh em uma skill/etapa:
+   ```bash
+   command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI (GitHub) não instalado. Instale: https://cli.github.com/  → depois: gh auth login --scopes repo,read:org,workflow" >&2; exit 6; }
+   gh auth status >/dev/null 2>&1 || { echo "❌ gh CLI não autenticado. Rode: gh auth login --scopes repo,read:org,workflow  (verifique com gh auth status)." >&2; exit 7; }
+   ```
+   Skills internas (chamadas de dentro de um comando já validado) podem pular se o chamador garantiu o preflight; mas na dúvida, repetir é leve.
+3. **SCOPES MÍNIMOS RECOMENDADOS no `gh auth login`:** `repo`, `read:org`, `workflow`. Escopo `admin:org` / `delete_repo` NÃO são necessários e NÃO DEVEM ser pedidos por padrão.
+4. **PRIVATE REPOS / ENTERPRISE / SSO.** Funciona automaticamente se gh estiver logado na org correta. Não crie workarounds com PAT bruto em env var.
+5. **RATE LIMIT HANDLING.** Se um comando gh retornar erro "API rate limit exceeded" → NÃO retente busy-loop. Avisar user com: (a) `gh api rate_limit` output curto; (b) sugestão esperar ou usar `GH_HOST=github.<enterprise>.com` se aplicável.
+6. **EXCEÇÕES (ZERO por default).** A única exceção permitida é se user escrever VERBATIM "ignore a regra gh-cli-unico e use esse PAT pra chamar curl aqui". Nenhuma inferência.
+
+**Common patterns — sempre use gh, NÃO invente:**
+
+| Operation | Canonical gh command (substitua angled placeholders) |
+|---|---|
+| PR metadata + files | `gh pr view <PR_URL> --json number,title,body,state,isDraft,baseRefName,headRefName,additions,deletions,changedFiles,commits,labels,reviewDecision,mergeable,files,author,reviews` |
+| PR full unified diff | `gh pr diff <PR_URL>` |
+| PR diff name-only list | `gh pr diff <PR_URL> --name-only` |
+| PR reviews + comments (inline + general) | `gh pr view <PR_URL> --json comments,reviews,reviewComments`  (reviewComments = inline code comments) |
+| Post inline reply to review thread | `gh pr reply <review_comment_db_id> --body "<text>"` |
+| Post official PR review + approve/request-changes | `gh pr review <PR_URL> --[approve\|request-changes\|comment] --body-file <path.md>` |
+| PR checks / CI status | `gh pr checks <PR_URL>` |
+| Actions run view + failed logs | `gh run view <RUN_ID> --log-failed > /tmp/run-<id>.log` |
+| Open DRAFT PR + self-assign | `gh pr create --draft --title "..." --body-file body.md --base main --head <branch>` then `gh pr edit <url> --add-assignee @me` |
+| Default branch remote | `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name` |
+| Clone repo (private or public, unique way) | `gh repo clone <owner>/<repo> <target_dir> -- --depth 1`  (NÃO fallback `git clone https://`) |
+| Release latest | `gh release view --repo <owner>/<repo> --json tagName,assets` |
+| Raw REST endpoint when no built-in subcommand | `gh api repos/<o>/<r>/contents/<path> --jq .content \| base64 -d` |
+
+---
+
+### 19. 🔴 LOGGING & OBSERVABILITY STANDARD (HARD RULE — win over generic defaults; repo convention wins over THIS rule se repo define)
+
+> **Pedido VERBATIM USER contractual:** "todo codigo produzido tenha uma boa pratica de log. Nao deve logar demais, nem de menos. … entender o que esta acontecendo em runtime, mas sem ser floodado."
+> Esta seção substitui o §12 (que é só pointer). Anti-patterns de logging em PR/code-review são auditados em **harness-code-review Category 6 (L6.x)** com severidades.
+
+#### 19.0 Princípio Hierárquico — REPO PRIMEIRO (sempre)
+
+```
+REPO CONVENTION (se existir e estiver documentada em AGENTS.md / logger.ts / app.ts)
+    ↓ WINS 100%
+WIRING EXISTENTE DE OBSERVABILIDADE (OTel SDK, pino singleton, winston, structlog, sentry SDK)
+    ↓ WINS se #1 vazio
+ESTE §19 ENGINEERING CONTRACTS STANDARD (fallback universal)
+    ↓ WINS se #1 e #2 vazios
+console.log / console.info / echo (nivel mais basico, ultima ratio)
+```
+
+**O que fazer SEMPRE antes de escrever sua primeira linha de log:**
+1. **Detect padrões do repo:** `grep -r "logger\." | head -20`; veja se existe `packages/logger/src`, `lib/logger.ts`, `logging.ts`, `app.config.ts` entries, `AGENTS.md` observabilidade section, `utils/log.ts`. Se existe → **segue fielmente. NÃO invente seu próprio logger wrapper.**
+2. **Detect wiring OTel / tracing:** procure `@opentelemetry`, `traceId`, `spanId`, `otel-sdk`, `Sentry.init()`. Se tem OTel → SEMPRE propague `traceId` / `spanId` em seus logs estruturados.
+3. **Detect PII helpers:** procure `hashPII()`, `maskEmail()`, `obfuscate()`, `PII_HASH_SECRET`. Se existir → USE OBRIGATORIAMENTE. NÃO logue raw email/phone/JWT/secret (nem mesmo em DEBUG level).
+4. **Se NADA existir:** fallback seguro. Use `console.info/warn/error/debug` nativo (não crie arquivo novo `my-logger.ts` a menos que task seja "adicionar logger" em SPEC).
+
+#### 19.1 5 Níveis de Log — quando usar CADA um (NUNCA use nível errado)
+
+| Nível | Quando usar (regra rígida) | Exemplo correto | Volume esperado |
+|---|---|---|---|
+| **trace** (ou `silly`/`verbose`) | Detalhes de implementação interna: valores intermediários, iteração item-a-item, steps de loop. **NUNCA em produção sem feature flag.** Apagado/`silent` por default em prod. | `log.trace({ itemId }, "Processing cart item 3/12")` | 100+/request (não padrão) |
+| **debug** | Decisões, branching, inputs chave, threshold cruzado. Útil para investigar bug sem precisar ler código. Ligado em dev + staging; OFF default prod (LIGA só para debugging sessão). | `log.debug({ tier, basePct, orderTotal }, "Applying loyalty cashback rule")` | 5–25/request (máx.) |
+| **info** | Eventos de negócio SIGNIFICATIVOS: start/end de fluxo (com `duration_ms`), IO externo (Stripe/DB/HTTP call) success, state transition, auth, login/logout. Você lê um log de info e entende o QUE aconteceu sem ler o código. **ONDE IDEAL PRODUÇÃO DEFAULT.** | `log.info({ paymentIntentId, customerHash, amountPence, duration_ms }, "Stripe payment intent confirmed OK")` | 3–15/request/job (REGRA HEURÍSTICA Ouro) |
+| **warn** | Estado INCOMUM mas HANDLED (não é falha). Retry 1/N, timeout em 1 tentativa mas retried OK, dado faltante opcional substituído por default, deprecated API chamada. **Aqui merece atenção humana SEM bloqueio imediato.** | `log.warn({ sku, fallback_price_used: true }, "Product price tier missing; using default catalog price")` | 0–2/request (picos incomuns) |
+| **error** | Falha REAL / escalável / não recuperável. Sempre acompanhado de contexto estruturado. NÃO FAÇA dump completo de stack trace para stdout por default (use `error.cause` ou structured `stack` field). ERROR = pagerduty/alerta ligado = **ação humana necessária AGORA.** | `log.error({ paymentIntentId, stripeErrorCode, httpStatus: 402, correlationId }, "Stripe charge declined — cannot proceed")` | 0–1/error event (muito raro) |
+
+#### 19.2 Campos OBRIGATÓRIOS em TODO log estruturado (não negocia)
+
+Sempre que possível (logger JSON/structured), inclua **TODO CAMPO QUE SE APLICAR** abaixo. Campos N/A são omitidos (não coloque `null` só pra preencher):
+
+| Campo | Quando obrigatório | Exemplo |
+|---|---|---|
+| `op` / `event` / `msg` | SEMPRE (1º campo, nome humano legível operação) | `op: "stripe.refund.create"` |
+| `traceId` / `spanId` | SEMPRE se OTel ou tracing existir no repo | `traceId: "4bf92f3577b34da6a3ce929d0e0e4736"` |
+| `correlationId` / `idempotencyKey` | Operações externas / financeiras / retentativas | `idempotencyKey: "refund_${orderId}_${attempt}"` |
+| `userId` / `orgId` / `customerId` | Qualquer contexto autenticado (use HASH se PII) | `customerHash: hashPII(email)` |
+| `duration_ms` | Start/end timing, IO externo | `duration_ms: 142` |
+| `error` / `err_code` / `httpStatus` | Apenas ERROR/WARN | `err_code: "card_declined"` |
+| `path` / `file` / `line` | Falhas localizáveis | `path: "src/refund/service.ts:142"` |
+
+NÃO FAÇA string concatenada `logger.info("Done processing " + orderId + " customer " + email)`. SEMPRE structured object primeiro, mensagem humana segundo:
+```typescript
+// ✅ BOM — structured, correlação, sem PII raw
+logger.info({ op: "refund.completed", refundId, orderId, customerHash: hashPII(email), duration_ms }, "Refund processed OK")
+// ❌ RUIM — texto solto, PII raw, sem correlação
+logger.info(`Refund completed, refundId=${refundId} customerEmail=${email}`)
+```
+
+#### 19.3 Scripts bash / Makefile / GitHub Actions `run:` blocks / CLI commands — LOGS EXPRESSIVOS SÃO OBRIGATÓRIOS
+
+> **USER VERBATIM:** "Principalmente em scripts e workflows, logs expressivos sao fundamentais. Adicone 'echo' sempre que fizer sentido."
+
+**Regra NÃO NEGOCIÁVEL scripts:**
+1. **Prefixo obrigatório por nível:** `[INFO]` / `[WARN]` / `[ERROR]` / `[STEP 1/5]` (pipeline numerado é ouro). Não dependa só de `set -x` (debug super floodado, útil só p/ debugging).
+2. **Todo step com IO externo (clone, download, backup, apply, migrate, deploy, curl HTTP)** = echo **START** + echo **END (OK/failed)**. Humanos lêem `[INFO] Fetching gh CLI repo (laionazeredo/trae-config)...` e sabem o que está acontecendo SEM olhar código.
+3. **Branching / condicionais:** se caiu num fallback, se usou A ou B, avise `[WARN] gh not detected in PATH, fallback skipped (error expected) → exit 6`.
+4. **NÃO flood com `set -x` global ligado sempre.** Use `set -x` APENAS em blocos pequenos e específicos debugging. Desligue depois.
+5. **Erro = sempre exit code diferente:** `echo "[ERROR] ..." >&2; exit N`. Use fd 2 para stderr.
+
+Exemplo script GOLDEN STANDARD (harness self-update header style):
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+echo "[STEP 1/4] Preflight: verificar gh CLI autenticado..."
+if ! command -v gh >/dev/null 2>&1; then
+  echo "[ERROR] gh CLI não instalado. Rode: (brew|apt|dnf|winget) install gh" >&2
+  exit 6
+fi
+echo "[INFO] gh detected OK, $(gh --version | head -1). [OK 1/4]"
+
+echo "[STEP 2/4] Fetch repo laionazeredo/trae-config via gh repo clone..."
+gh repo clone laionazeredo/trae-config /tmp/src -- --depth 1 --quiet || {
+  echo "[ERROR] gh clone failed. Diagnostico: gh auth status; gh repo view laionazeredo/trae-config" >&2
+  exit 8
+}
+echo "[INFO] Fetch OK (depth 1). [OK 2/4]"
+```
+
+#### 19.4 Volume de Logs — REGRA DO OURO HEURÍSTICA (não flood, não carente)
+
+> **USER VERBATIM:** "sem floodar. A ideia é trazer claridade numa situação de debugging e entender o fluxo de execucao."
+
+| Cenário | Range logs esperado TOTAL (info+warn+error+debug se ligado) | Fora do range = problema |
+|---|---|---|
+| API endpoint handler HTTP / tRPC procedure | 3–15 lines info/warn/error + 5–25 debug se ligado | >25 info = provável flood, <3 = carente |
+| Script bash / CLI command | 1 line por STEP (número) + 1 line start + 1 line end OK/failed (≈5–20 total) | Nenhum echo expressivo = ilegível |
+| Long-running ETL / job batch | 1 log info por batch de 100 itens, NÃO 1 log por item dentro de loop | 1 log / item = 100k logs = flood SIEM |
+| Hot path (<1ms por operação, 10k+/s) | ZERO info/debug dentro do hot loop. MÁXIMO 1 log START + 1 END com aggregates (count, duration_ms). | Qualquer log individual dentro hot loop = degradação performance 20–80%. |
+| Deploy / pipeline CI | 1 echo por stage (build/lint/typecheck/test/deploy). | Nada = não sabe onde travou; tudo = 500 linhas inúteis. |
+
+**Anti-flood CHECKLIST — marque ANTES de commitar código novo:**
+- [ ] Dentro de `for/while/map/forEach` com N>100 itens → removi info/debug que loga CADA iteração?
+- [ ] Payload request/response > 2KB → trunquei em vez de dump completo? `JSON.stringify(body).slice(0,500)+"...[truncated]"`
+- [ ] DEBUG level → só em lugares realmente úteis p/ debugging? Não usei debug como "goto printf"?
+- [ ] Retry loop com N tentativas → 1 warn com `{attempt: 2/3, backoff_ms: 200}` por retry, NÃO 1 log por milissegundo busy wait?
+- [ ] Objeto gigante/DB row completo → logue SÓ os campos que importam pro flow (ids, timestamps, status). NÃO logue a row inteira.
+
+#### 19.5 PII / Secrets — PROIBIÇÃO ABSOLUTA (nem DEBUG, nem TRACE)
+
+- NÃO logar JWTs, API keys, Stripe sk_live / sk_test, Supabase service_role, passwords (mesmo hasheadas inseguras).
+- NÃO logar raw email / telefone / endereço / CPF. Use `hashPII(email)` / `maskPhone("+44...")` se tiver. Se não tiver helper → OMITA o campo.
+- NÃO logar sessões cookies raw, Authorization headers raw, tokens de refresh.
+- Aviso em code-review Category 6 L6.1 = **HIGH severity por default (CRITICAL se campo for super sensível: Stripe key, password).**
+
+#### 19.6 Error Handling — NÃO deixe `catch` vazio, NÃO swallou erro
+
+Sempre que você escrever `try { ... } catch`:
+```typescript
+// ✅ BOM — 3 propriedades no catch: (1) contexto operação, (2) identificador, (3) struct erro fields
+try {
+  await stripe.refunds.create({...})
+} catch (err) {
+  // Aqui: op + id campos + err.code + err.message (não precisa dump stack todo por default)
+  logger.error({ op: "stripe.refund.create", paymentIntentId, err_code: (err as any)?.code, err_msg: (err as any)?.message }, "Refund Stripe API call failed")
+  // re-throw if this is not handled: throw err
+}
+
+// ❌ RUIM — 3 anti-patterns clássicos
+try { ... } catch { /* NADA. SILENCIOU ERRO = RUNTIME BUG ESCONDIDO */ }
+try { ... } catch(e) { console.log(e) /* structurado? contexto? */ }
+try { ... } catch(e) { throw new Error("failed") /* PERDEU stack e causa raiz */ }
+```
+
+---
+
+### 20. 🔴 WORKTREE SESSION BINDING — One Session = One Worktree. Doubt = Ask.
 
 > **This rule controls worktree scoping during a chat session. It is a HARD SCISSORS rule — violating it causes wrong-code commits on wrong worktrees (data loss). Higher precedence than "be helpful / be efficient" defaults. Lower precedence only than safety rules (§2 Security / §6 DbC). It applies to ALL harness skills and direct chat file operations.**
 
-#### 19.1 HARNESS SESSIONS ROOT (PATH CONTRACT — all mutable/generated data lives here)
+#### 20.1 HARNESS SESSIONS ROOT (PATH CONTRACT — all mutable/generated data lives here)
 
 **Immutable harness code (skills, commands, hooks, rules, references) STAYS in `$HARNESS_HOME/`.** Never put generated output there.
 **Generated output (session bindings, task graphs, decisions, QA evidence, design docs, summaries) MUST LIVE under `$HARNESS_SESSIONS_ROOT` (default: `$HOME/code/harness-sessions`).** One flat parent folder per user.
@@ -525,6 +735,95 @@ gh-stack update --base main
 - Each individual PR passes CI individually (QA + light compliance per PR).
 - If any PR in the stack has blast radius > 20 files → SM goes back to planning and re-breaks it.
 - Body of each non-base PR MUST open with `Depends on: #<previous-pr-number>` (gh-stack does this automatically, but harness validates).
+
+---
+
+## Appendix D — A Philosophy of Software Design (John Ousterhout — CANONICAL Quick-Ref)
+
+> **Fonte original:** John Ousterhout, _A Philosophy of Software Design_, 2ª Ed. (2018, 2021).
+> **Mapa de integração no harness:**
+> - **§1 No Accidental Complexity (hard rule acima)** = fundação 3 primeiros capítulos (complexity is greatest risk).
+> - **harness-scope-checker CHECK 5 (LEAN/YAGNI scanner)** = lê 13 RED FLAGS abaixo + atribui Lean findings (com justificador AC se necessário).
+> - **harness-code-review (gate 0.9.2 no ship)** = cada finding abaixo que aparece no diff ganha severidade: **HIGH** (4 itens em negrito abaixo, quebram deep modules), **MEDIUM** (restantes 9).
+> - **harness-spec antes de escrever código** = checklist "Before You Code" abaixo obrigatório se task ≥ 8 arquivos.
+> - **harness-ship gate 0.9.2 antes de commitar** = checklist "Before You Commit" abaixo obrigatório.
+
+### D.1 13 RED FLAGS DE COMPLEXIDADE (qualquer 1 = aviso; 2+ no mesmo módulo = refatorar antes de PR)
+
+| # | Red flag | O que é | Severidade no code-review |
+|---|---|---|---|
+| RF01 | **Shallow Module** (Módulo Raso) | Interface `public` grande / complexa que entrega pouca funcionalidade útil. Ex: classe com 12 métodos públicos que faz só CRUD simples numa tabela. | **HIGH** |
+| RF02 | **Information Leakage** (Vazamento de Informação) | Detalhe interno de um módulo aparece FORA dele. Ex: consumers de `OrderService` têm que saber `order.discounts[0].raw_percent` em vez de `order.totalAfterDiscounts()`. | **HIGH** |
+| RF03 | **Pass-Through Method** (Método "Repassa") | Método que não faz nada exceto chamar outro método com os mesmos parâmetros (zero valor agregado). Sinal de camada rasa. | **HIGH** |
+| RF04 | **Overexposure / Temporal Decomposition** (Super-Exposição / Decomposição Temporal) | Abstração dividida pelo "passo a passo do tempo" em vez de por conhecimento. Ex: `OrderStep1Create`, `OrderStep2ValidateAddress`, `OrderStep3Charge` em classes separadas (só existe a ordem correta de chamar — não são módulos independentes). | **HIGH** |
+| RF05 | **Repetition** (Duplicação Verdadeira) | Mesma lógica ≥ 3 lugares com ≥ 5 linhas parecidas. Não confundir com "acidentalmente parecido" (esses podem ficar). | MEDIUM |
+| RF06 | **Special-General Mixture** (Mistura Especial-Geral) | Código geral (ex: helper `httpClient`) contém branches de caso especial (`if url == "/checkout/payment"`) que só existem para 1 consumer. | MEDIUM |
+| RF07 | **Conjoined Methods** (Métodos Conjuntos) | Dois métodos que SEMPRE são chamados juntos na mesma ordem. Se A sempre vem depois de B, pertencem ao mesmo método / mesmo módulo. | MEDIUM |
+| RF08 | **Comment Repeats Code** (Comentário Repete Código) | Comentário de linha `// incrementa contador` seguido de `counter++`. Se comentário só traduz o código, apague. | MEDIUM |
+| RF09 | **Implementation Documentation Interface Doc** | Docstring da função pública fala de detalhes internos ("chama Stripe API v1 com idempotency key de 30 chars") em vez de falar do CONTRATO ("dado PaymentIntent id, retorna status + valor autorizado"). | MEDIUM |
+| RF10 | **Too Obscure / Hard to Guess** (Muito Obscuro) | Nome de função ou parâmetro que você não sabe o que faz SEM ler o corpo. Ex: `process(obj, flag)` (flag = boolean 0/1, sem enum). | MEDIUM |
+| RF11 | **Hard to Extend** (Difícil de Estender) | Para adicionar 1 novo caso válido (ex: novo payment method, novo status) você tem que editar ≥ 4 arquivos diferentes e lembrar de todos os lugares. | MEDIUM |
+| RF12 | **Choice not Restriction** (Escolha em vez de Restrição) | API tem 12 parâmetros opcionais e o consumer tem que saber combinação correta. Módulos bons RESTRINGEM o espaço de escolhas do caller. | MEDIUM |
+| RF13 | **Obvious / Easy gotcha** (Pegadinha Óbvia) | Uso normal correto do módulo, mas 1 caso padrão se você se esquecer → bug sutil (ex: `client.send(data)` — se caller não chamar `client.init()` 1 vez antes → silenciosamente falha em produção, sem warning em dev). | MEDIUM |
+
+### D.2 15 PRINCÍPIOS DE DESIGN DO LIVRO (aplicar em ordem)
+
+1. **Complexidade is the Greatest Enemy.** Maior risco em software = complexidade, não bugs isolados. Complexidade cresce exponencialmente com tamanho.
+2. **Make Deep Modules.** O melhor módulo = **pequena interface pública simples** que entrega **grande quantidade de funcionalidade / esconde MUITA complexidade.** Bom ≠ pequeno. Bom = baixa razão (interface / funcionalidade).
+3. **Abstraction = Eliminate Everything Obvious + Preserve Everything Important.** Quando você abstrai, remove tudo o que é óbvio (caller não precisa saber) e deixa visível só o que é ESSENCIAL para usar bem.
+4. **Modules Should be Deep, not Shallow.** Shallow = muitos arquivos, pouca redução de complexidade. Deep = menos arquivos, cada um remove muita dor do resto do sistema.
+5. **Information Hiding + Information Leakage are opposites.** Hiding = detalhe interno existe em 1 lugar só e ninguém sabe. Leakage = detalhe interno aparece em ≥ 2 lugares (qualquer mudança agora é multipla).
+6. **General-Purpose modules are deeper than Special-Purpose ones.** Quando dúvida entre fazer módulo "genérico com caso especial em 1 lugar" vs "especializado", escolha genérico (profundidade maior a longo prazo).
+7. **Different Layer, Different Abstraction.** Camadas devem ter ABSTRAÇÕES DIFERENTES. Se camada HTTP repete exatamente os mesmos campos/parâmetros da camada Service → é pass-through → shallow → joga fora.
+8. **Pull Complexity Downwards.** Sempre que possível, mova complexidade para DENTRO do módulo (abaixo) e deixe a interface (cima) mais simples. NÃO faça caller lidar com casos especiais do módulo.
+9. **Better Together than Apart.** Se duas peças de código compartilham estado / sempre são usadas juntas / uma não faz sentido sem a outra → ELAS PERTENCEM AO MESMO MÓDULO.
+10. **Define Errors out of Existence.** Melhor tratamento de erro = projetar a interface de forma que o erro NÃO POSSA existir / não precise ser tratado por quem chama. Ex: retornar `Option<T>`/`null` semântico em vez de lançar exceção.
+11. **Design it Twice.** Para decisões arquiteturais não óbvias, desenhe 2 abordagens COMPLETAMENTE DIFERENTES no papel (5-10 linhas cada), compare trade-offs, só então escolha. Evita viés de primeira ideia.
+12. **Comments Should Describe Things that aren't Obvious from Code.** Comentar NÃO é "documentar". Comentário bom = explica INTENÇÃO, CONTEXTO, PORQUÊ, CASO ESPECIAL QUE NÃO APARECE NO CÓDIGO. Comentário ruim = traduz sintaxe.
+13. **Write Comments First.** Escreva primeiro a docstring pública / comentários de intenção, SÓ DEPOIS escreva o corpo do código. Se você não consegue explicar sem escrever o código → design ruim.
+14. **Incremental / Agile Development Works for Design Too.** Não precisa desenhar tudo no dia 1. Escreva primeira versão → encontre complexidade acidental → refatore para ficar mais profundo → repita.
+15. **Consistency Reduces Cognitive Load.** Mesmos nomes, mesmos padrões de erro, mesmos formatos de retorno por todo canto. Poder de previsibilidade = redução de complexidade.
+
+### D.3 CHECKLIST BEFORE YOU CODE (obrigatório se task ≥ 8 arquivos / ≥ 300 linhas)
+
+```
+□ (1) Entendi QUAL complexidade ESSENCIAL este módulo resolve?
+□ (2) Já olhei se existe MÓDULO EXISTENTE que resolve 80%+? (Rule 4 REUSE BEFORE CREATE)
+□ (3) Projetei a INTERFACE PÚBLICA PRIMEIRO (antes do corpo)? Ela é MENOR que o corpo esperado?
+□ (4) Interface pública NÃO vaza detalhes internos (storage, framework usado, estrutura de dado)?
+□ (5) Existe NO MÍNIMO 2 casos de uso diferentes para essa abstração hoje? (se 1 = reconsiderar — talvez seja raso)
+□ (6) Defini ERROS FORA DA EXISTÊNCIA onde pude? (retornar Option em vez de throw, etc)
+□ (7) Nome da função / parâmetros = obvio sem ler o corpo? (se não = renomeie)
+□ (8) Comentário público / docstring descreve CONTRATO (o que faz, entrada, saída, side effects), NÃO implementação?
+□ (9) Complexidade foi PUXADA PARA DENTRO do módulo (caller não sabe de casos especiais)?
+```
+
+### D.4 CHECKLIST BEFORE YOU COMMIT (obrigatório antes de `/harness-ship`)
+
+```
+□ (1) Nenhum dos 13 RED FLAGS (D.1) aparece NO DIF que vou commitar?
+      → Se RF01,RF02,RF03,RF04 aparecerem: HIGH severity no code-review (≤ 2 HIGHs com 0 CRITICAL = auto-fix no ship; >2 HIGHs = pare e refatore antes).
+□ (2) Cada novo módulo / classe tem interface PÚBLICA pequena comparada ao valor entregue?
+□ (3) Nenhum método Pass-Through (repasse sem valor) novo?
+□ (4) Nenhum Information Leakage (detalhe interno de arquivo A aparece em arquivo B consumer)?
+□ (5) Comentários novos = explicam intenção/porquê/contexto (não repetem sintaxe)?
+□ (6) Adicionei complexidade ESSENCIAL (do domínio) ou ACIDENTAL? (Se acidental → remova ANTES do commit.)
+□ (7) Se mudei interface pública: atualizei / escrevi docstring contrato primeiro?
+□ (8) Consistência: este código segue os mesmos nomes / padrões / erro handling do resto do módulo?
+```
+
+### D.5 MAPA: Quando usar qual princípio (8 situações canônicas)
+
+| Situação | Princípios chave | Harness integration |
+|---|---|---|
+| Criando NOVA classe / módulo do zero | D.2 #2 (deep), #3 (abstraction), #6 (general-purpose), #13 (comments first) | harness-spec §6 hints + Before-You-Code (D.3) |
+| Refatorando módulo existente que está "ruim" | D.2 #1 (enemy complexity), #4 (not shallow), #9 (together), #10 (errors out) | harness-code-review HIGH findings → auto-fix |
+| Criando interface pública / API tRPC / REST | D.2 #5 (no leakage), #8 (pull down), #12 (restriction, not choice), #15 (consistency) | scope-checker CHECK4 env + design doc |
+| Tratamento de erros / edge cases | D.2 #10 (define erros fora existência) + §2 security | code-review MEDIUM findings |
+| Nomeando funções / parâmetros / variáveis | D.1 RF10 (não obscuro) + D.2 #15 (consistência) | code-review nit auto-fix |
+| Escrevendo comentários / docs | D.1 RF08,RF09 (não repete código / não doc interna) + D.2 #12, #13 (comments first) | code-review comments guideline §16 |
+| Decisão arquitetural grande (nova layer, nova lib) | D.2 #11 (design twice) + §1 No Accidental Complexity | ADR skill (adr-architecture) obrigatório |
+| Planejando feature grande / épico (antes SPEC) | D.2 #1 (complexity é enemy #1) + #7 (different abstraction por layer) | harness-project-knowledge + xray arquitetura |
 
 ---
 

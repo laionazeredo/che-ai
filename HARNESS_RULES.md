@@ -1,6 +1,6 @@
 ---
 name: "HARNESS GLOBAL RULES"
-description: "Global rules (process + flow) for the Flockr harness. Loaded as user_rules on every session. Defines worktree-first enforcement, .trae/<task-id>/ output directory, agile BDD process, GitHub/ship + gh-stack, parallelism and SPEC GATE RULES (4 input sources + 7 canonical sections + YAML frontmatter validation + Approved gate before scope capture). Pure engineering rules (precedence 1-14, DbC, TDD, SOLID, strong typing, security, conventional commits, RLS, code review optimization) now live in the engineering-contracts SKILL and must NOT be duplicated here."
+description: "Global rules (process + flow) for the universal agent harness. Loaded as user_rules on every session. Defines worktree-first enforcement, .trae/<task-id>/ output directory, agile BDD process, GitHub/ship + gh-stack, parallelism and SPEC GATE RULES (4 input sources + 7 canonical sections + YAML frontmatter validation + Approved gate before scope capture). Pure engineering rules (precedence 1-14, DbC, TDD, SOLID, strong typing, security, conventional commits, RLS, code review optimization) now live in the engineering-contracts SKILL and must NOT be duplicated here."
 ---
 
 # 🌍 Harness — Global Process & Flow Rules (Always-On)
@@ -11,7 +11,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 > **Conteúdo deste arquivo (PROCESSO + FLUXO apenas — NÃO duplica regras de engenharia pura):**
 > - Regras de operação do harness: worktree-first, .trae output, ordem do time ágil, gates, timeouts
 > - Paralelismo (Kahn + conflict graph + locks)
-> - SPEC GATE RULES: 4 fontes input + 7 seções canônicas + validação frontmatter YAML obrigatório + gate Approved ANTES scope capture. Compatibilidade: PRD Flockr nativo aceito como FONTE C via harness-spec (parse headings automático).
+> - SPEC GATE RULES: 4 fontes input + 7 seções canônicas + validação frontmatter YAML obrigatório + gate Approved ANTES scope capture. Compatibilidade: PRD legado de qualquer projeto (estilo headings padrão) aceito como FONTE C via harness-spec (parse headings automático).
 > - GitHub integration + ship + **gh-stack multi-PR hierárquico**
 > - Ferramentas preferenciais por integração
 >
@@ -53,7 +53,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
        - `decisions.log.jsonl` — append a cada decisão não óbvia / trade-off (1 por worktree, não 1 por task)
        - `manual_test_plan.md` — no final, quando todas tasks forem DONE
        - `gh_stack_plan.md` — (OPCIONAL, se múltiplos PRs) plano hierárquico gh-stack
-       - `design/` — ADRs / design docs harness locais
+       - `design/` — ADRs / design docs harness locais (SALVAR AQUI POR DEFAULT, NÃO no workspace do usuário). Cópia manual para `docs/adr/` ou `architecture/decisions/` no repo de produto é OPCIONAL e só acontece se usuário pedir explicitamente — por padrão ADR neste momento é REFERÊNCIA do pipeline para validar trade-offs e escopo.
        - `tasks/<TASK_ID>/` — envelope/scope/ac, UM subdiretório por tarefa
      - `$HARNESS_SESSION_DIR/` — **EFÊMERO** (esta sessão só):
        - `binding.md` — Level2 detail (fora da worktree user, nunca commitado)
@@ -80,7 +80,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 
 Para QUALQUER implementação de feature / bugfix com mais de um passo:
 1. **SCRUM MASTER (`harness-scrum-master`):**
-   - **Preflight 0.5 (SPEC GATE — substitui PRD legado)** — Valida se já existe **SPEC Approved** em `$HARNESS_WORKSPACE_SHARED/` (glob `spec_*.md` → parse YAML `status: Approved`). Se 0 → **invoca skill `harness-spec` interativo automaticamente** (4 fontes input: existente / ticket URL / PRD Flockr path / descrição breve). Captura 2 linhas retorno: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → libera §1 scope capture; `Draft` → oferece (A) Override sem Approved append `[SPEC-OVERRIDE] <razão>` em `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` ou (B) Parar, terminar SPEC depois via `/harness-spec` standalone.
+   - **Preflight 0.5 (SPEC GATE — substitui PRD legado)** — Valida se já existe **SPEC Approved** em `$HARNESS_WORKSPACE_SHARED/` (glob `spec_*.md` → parse YAML `status: Approved`). Se 0 → **invoca skill `harness-spec` interativo automaticamente** (4 fontes input: existente / ticket URL / legacy-project PRD .md path / descrição breve). Captura 2 linhas retorno: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → libera §1 scope capture; `Draft` → oferece (A) Override sem Approved append `[SPEC-OVERRIDE] <razão>` em `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` ou (B) Parar, terminar SPEC depois via `/harness-spec` standalone.
    - **Entende escopo → valida ACs →** (se grande) **planeja gh-stack multi-PR** → monta TASK GRAPH (ou aprova lista existente) → cria TASK ENVELOPE por task.
 2. **DEVELOPER (`harness-developer`):** SOMENTE chamado por SM, com ENVELOPE formal.
    - Primeiro invoca `engineering-contracts`.
@@ -284,7 +284,7 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 
 | Sistema | Ferramenta obrigatória | Observações |
 |---|---|---|
-| GitHub | `gh` CLI + `gh-stack` (hierarquia multi-PR) | Sem navegador para API calls. Navegador só para UI de review visual se pedido. |
+| GitHub | `gh` CLI + `gh-stack` (hierarquia multi-PR) | **HARD STOP (única via permitida):** NUNCA usar HTTP/curl/fetch manual, NUNCA usar octokit/SDK direto, NUNCA fazer `git clone https://github.com/...` sem passar por gh (autenticação gerenciada, scopes, rate-limit, repos privados, 2FA, enterprise, auditoria). PR metadata/diff/comments/reviews/checks/releases/search: SEMPRE `gh pr view/create/diff/checks/review` etc. Browser só para UI visual user-facing se pedido explicitamente. |
 | Jira / Confluence | API REST via `DO_JIRA_*` / `DO_CONFLUENCE_*` env vars | Sempre checar presença de vars. |
 | Linear | GraphQL API → `LINEAR_API_KEY` env var | Sempre checar presença. |
 | Figma | Figma REST API → `LAION_FIGMA_PAT` env var | Sempre checar. |
@@ -293,6 +293,31 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 | Nx | Sempre `--tui false` para travar sem TUI interativo. | `corepack pnpm nx <cmd> --tui false` |
 | CLIs em geral | Procurar flags `-y`, `--non-interactive`, `--tui false`, `--no-tty`, `--yes` | Evitar prompts interrompidos. |
 | Browser integrado do IDE | Apenas para sites genéricos. Para Atlassian/Linear/Figma/etc usar APIs acima. | |
+
+---
+
+## 🟠 LANGUAGE CONFIGURATION PER PROJECT (4 EIXOS INDEPENDENTES — NUNCA MISTURAR)
+
+> **HARD RULE VERBATIM USER:** "nunca misturar linguagens". Cada eixo tem EXATAMENTE um idioma por projeto/sessão. Exceção 0: strings UI traduzidas são artefato de i18n e ficam em arquivos JSON de tradução (não conta como LANG_CODE).
+
+### 4 eixos (flags independentes)
+
+| Flag | Default | O que controla | Exemplos de override comum |
+|---|---|---|---|
+| `LANG_CODE` | `en` | **Identificadores de código:** variables, classes, functions, methods, constants, file names, folder names, enum members, type names, exported symbols, i18n keys. | RARO mudar. Apenas se usuário EXPLICITLY pedir. Não confundir com strings de UI traduzidas. |
+| `LANG_DOCS` | `en` | **Texto/documentação COM CÓDIGO:** comments inline non-docstring no source, JSDoc/TSDoc, PR titles + body, conventional commit messages (scope + description), repo docs / ADRs / README / SPEC body + YAML. | **COMUM override:** `LANG_DOCS = pt-BR` → comentários/PR/commits/docs em PT-BR, **mas código variáveis sempre em EN.** |
+| `LANG_CHAT` | `pt-BR` | **Respostas textuais no chat com o usuário.** | Pode ser `en` se usuário preferir. |
+| `LANG_REPORT` | `en` | **Reports estruturados harness:** code-review report, scope-checker report, QA report, merge-audit, plan/SPEC YAML frontmatter. | RARO mudar. |
+
+### Onde configurar (ordem de precedência HIGH → LOW)
+
+1. **Override de sessão (Level 1 registry.jsonl flags entry — BIND_FLAGS_UPDATE event):** Temporário só nesta sessão. `harness_registry_append_jsonl $SID FLAGS $WT '{"flags":{"LANG_DOCS":"pt-BR"}}'`.
+2. **Project registry Level 1.5 (.registry/projects/<slug>/product_context.md frontmatter):** `lang_code: en` + `lang_docs: pt-BR` (durable por projeto, compartilhado worktrees × sessões).
+3. **Default HARNESS_RULES (este arquivo):** Valores tabela acima se nenhum projeto/sessão definiu.
+
+### Backward compat flag antiga
+
+Se `LANG_PT_CHECK = DISABLED` legacy existir em flags de sessão → mapeia automaticamente para `LANG_DOCS = pt-BR` e remove a flag antiga (logging mantém por 30 dias, depois migração limpa). Usuário NÃO precisa migrar nada manualmente.
 
 ---
 

@@ -43,9 +43,14 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
-# Step 1: Check session-level disable flag from Level 1 registry JSONL
+# Step 1: Check session-level language flags from Level 1 registry JSONL
+# Nova regra 4-axis: HOOK DISPARA (warn se PT detectado) SOMENTE QUANDO LANG_DOCS == "en"
+#   - LANG_DOCS = en      → comportamento default: AVISAR se encontrar PT em comments/arquivos
+#   - LANG_DOCS = pt-BR   → SKIP: NÃO avisar se encontrar PT (é configuração desejada)
+#   - LANG_DOCS = outros  → SKIP por segurança (ainda não temos dicionários de outras línguas)
+# Backward compat: legacy LANG_PT_CHECK=DISABLED é tratado como LANG_DOCS=pt-BR
 REGISTRY_FILE="$HOME/.trae/bindings/registry.jsonl"
-PT_CHECK_ENABLED=true
+LANG_DOCS="en"
 if [ -n "$SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
   PY_SCRIPT='import json,sys
 p, sid = sys.argv[1:3]
@@ -59,16 +64,24 @@ with open(p) as f:
         if e.get("session_id") == sid:
             last = e
 if last is None:
-    print("true"); sys.exit(0)
+    print("en"); sys.exit(0)
 flags = last.get("flags") or {}
-enabled = flags.get("LANG_PT_CHECK", "ENABLED") == "ENABLED"
-print("true" if enabled else "false")'
-  PT_CHECK_ENABLED=$(python3 -c "$PY_SCRIPT" "$REGISTRY_FILE" "$SESSION_ID" 2>/dev/null || echo true)
+# Nova flag preferencial
+ld = flags.get("LANG_DOCS")
+if ld is None or ld == "":
+    # Backward compat legacy flag binária
+    pt_check = flags.get("LANG_PT_CHECK", "ENABLED")
+    if pt_check == "DISABLED":
+        ld = "pt-BR"
+    else:
+        ld = "en"
+print(ld)'
+  LANG_DOCS=$(python3 -c "$PY_SCRIPT" "$REGISTRY_FILE" "$SESSION_ID" 2>/dev/null || echo "en")
 fi
 
-if [ "$PT_CHECK_ENABLED" != "true" ]; then
-  jq -nc --arg sess "$SESSION_ID" \
-        '{decision:"allow", reason: ("Hook3 lang-pt: SKIP per session Level1 registry.jsonl flags.LANG_PT_CHECK=DISABLED for sessionId=" + $sess)}'
+if [ "$LANG_DOCS" != "en" ]; then
+  jq -nc --arg sess "$SESSION_ID" --arg ld "$LANG_DOCS" \
+        '{decision:"allow", reason: ("Hook3 lang-pt: SKIP per session LANG_DOCS=" + $ld + " (≠en). sessionId=" + $sess + ". PT-BR text ALLOWED porque este projeto tem LANG_DOCS configurado p/ outro idioma.")}'
   exit 0
 fi
 
@@ -110,10 +123,10 @@ fi
 # Step 4: WARN the agent (never block)
 REASON="PT-BR text detected in written file (stopword_hits=$PT_HITS, diacritic_lines=$DIACRITIC_LINES). Signal only — NO auto-correction performed."
 ADDL="ACTION REQUIRED by AGENT: AskUserQuestion to user BEFORE PROCEEDING further: Texto em português detectado no arquivo $FILE_PATH.
-Padrão Flockr: código/docs/PR body em inglês por padrão. O que deseja fazer?
-(A) Traduzir conteúdo detectado para inglês (recomendado)
-(B) Manter em português (justificar e confirmar)
-(C) Desabilitar checagem de PT NESTA SESSÃO (adiciona via helper `harness_registry_append_jsonl` com `"flags":{"LANG_PT_CHECK":"DISABLED"}` no Level 1 registry.jsonl + Level 2 detail file)
+Current project LANG_DOCS=en (padrão). O que deseja fazer?
+(A) Traduzir conteúdo detectado para inglês (recomendado p/ manter LANG_DOCS=en)
+(B) Manter em português — NESTE ARQUIVO ESPECÍFICO (justificar, e se for padrão novo aplicar em (C))
+(C) CONFIGURAR ESTE PROJETO/SESSÃO com LANG_DOCS=pt-BR (TODO comments/PR/commits/docs em PT-BR mas variáveis código = EN). This is the permanent recommended option if the whole project is in portuguese docs. Adiciona via helper `harness_registry_append_jsonl` com `"flags":{"LANG_DOCS":"pt-BR"}` Level 1 registry.jsonl. Backward compat flag LANG_PT_CHECK=DISABLED adicionado também.
 Sample lines: $SAMPLE_LINES
 File analyzed: $FILE_PATH"
 

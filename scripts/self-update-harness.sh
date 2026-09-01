@@ -18,9 +18,10 @@
 # O que este script FAZ AUTOMATICAMENTE, ZERO CONFIGURAÇÃO:
 #   1) Valida que ~/.trae (TARGET) já existe (não é fresh install).
 #   2) Faz fetch AUTÔNOMO da ÚLTIMA versão oficial de github.com/laionazeredo/trae-config:
-#        PRIORIDADE A: se `gh` CLI está logado → `gh repo clone ... --depth 1` em /tmp/tmpXXXXXX.
-#        PRIORIDADE B: senão, se `git` disponível → `git clone --depth 1 https://github.com/...` em /tmp/tmpXXXXXX.
-#        NENHUMA DAS DUAS → fail-fast com instruções instalar gh OU git.
+#        UNICA VIA PERMITIDA (HARD RULE do harness): `gh` CLI logado (GitHub CLI oficial).
+#          → gh repo clone ... --depth 1 em /tmp/tmpXXXXXX.
+#        NÃO EXISTE MAIS fallback git clone HTTPS. Motivo: autenticacao/scopes/rate-limit
+#          /repos privados/enterprise/2FA token flow/auditoria uniforme via gh auth login.
 #   3) Detecta AUTOMATICAMENTE qual é o caso do target:
 #        CASO 1 — TARGET é um git repo com upstream setado.
 #          → executa: bash scripts/update-harness.sh --[apply] (git pull --ff-only no TARGET MESMO;
@@ -47,10 +48,11 @@
 #     qualquer item custom target-only.
 #   * Rollback manual instruído em cada caso (1: git reset HEAD@{1}; 2: mv item.bak-* item).
 #
-# DEPENDÊNCIAS OBRIGATÓRIAS (pelo menos 1 dos 2 fetchers):
-#   - `gh` (GitHub CLI) — preferido, já loga + autentica. OU
-#   - `git` (fallback) — clone raso HTTPS público.
-# Ambas são comuns. Se nenhuma estiver disponível, script diz exatamente qual instalar.
+# DEPENDÊNCIAS OBRIGATÓRIAS (fetch oficial da source):
+#   - `gh` (GitHub CLI) — OBRIGATÓRIO E ÚNICO. Regra hard stop harness 2026-09-01:
+#     NÃO existe mais fallback git clone HTTPS público. Todos acessos a GitHub no
+#     harness (PRs, diffs, comments, releases, clone) passam EXCLUSIVAMENTE por gh CLI.
+#     Instalar: https://cli.github.com/   Autenticar: gh auth login --scopes repo,read:org,workflow
 
 set -euo pipefail
 
@@ -154,43 +156,46 @@ else
   TMP_SRC=$(mktemp -d /tmp/trae-src-fetch.XXXXXXXXXX)
   echo "    Baixando última versão oficial em pasta temporária: ${TMP_SRC}"
 
-  # 2A) gh CLI se disponível E logado.
-  if command -v gh >/dev/null 2>&1; then
-    GH_USER=""
-    if GH_USER=$(gh api user --jq .login 2>/dev/null) && [ -n "$GH_USER" ]; then
-      echo "    → gh CLI disponível e logado como @${GH_USER}. Usando gh repo clone --depth 1."
-      if gh repo clone "$GH_REPO" "$TMP_SRC" -- --depth 1 --quiet 2>/dev/null; then
-        FETCH_OK=1
-        FETCH_METHOD="gh-clone"
-      else
-        echo "    ⚠ gh clone falhou. Vou tentar método B (git clone HTTPS público)."
-      fi
-    else
-      echo "    ℹ gh CLI existe mas NÃO está logado. Pulando para git clone HTTPS (fallback)."
-    fi
+  # 2A) gh CLI OBRIGATÓRIO (HARD RULE do harness: nenhuma interacao GitHub por HTTP/git clone manual.
+  #     Motivos: autenticacao gerenciavel, scopes, rate-limit, API enterprise, 2FA token flow,
+  #     auditoria, repos privados. Nunca usar fallback git clone https://github.com direto.)
+  if ! command -v gh >/dev/null 2>&1; then
+    echo ""
+    echo "❌ GitHub CLI (gh) NÃO ESTÁ INSTALADO. Harness NÃO suporta mais fallback git clone HTTPS público (regra hard stop)." >&2
+    echo "   Instale gh CLI + autentique:" >&2
+    echo "        https://cli.github.com/" >&2
+    echo "        gh auth login --scopes repo,read:org,workflow" >&2
+    echo "   Depois rode novamente: bash ~/.trae/scripts/self-update-harness.sh" >&2
+    exit 6
   fi
 
-  # 2B) git clone HTTPS público se gh falhou ou não existe.
-  if [ "$FETCH_OK" -eq 0 ] && command -v git >/dev/null 2>&1; then
-    echo "    → git disponível. Usando git clone --depth 1 via HTTPS público (sem auth)."
-    if git clone --depth 1 --quiet "https://github.com/${GH_REPO}.git" "$TMP_SRC" 2>/dev/null; then
-      FETCH_OK=1
-      FETCH_METHOD="git-clone-https"
-    else
-      echo "    ⚠ git clone HTTPS também falhou."
-    fi
+  GH_USER=""
+  if ! GH_USER=$(gh api user --jq .login 2>/dev/null) || [ -z "$GH_USER" ]; then
+    echo ""
+    echo "❌ GitHub CLI (gh) existe mas NÃO está autenticado. Regra hard stop: não há fallback para clone HTTPS público." >&2
+    echo "   Autentique primeiro:" >&2
+    echo "        gh auth login --scopes repo,read:org,workflow" >&2
+    echo "   Verifique: gh auth status" >&2
+    echo "   Depois rode novamente." >&2
+    exit 7
+  fi
+
+  echo "    → gh CLI disponível e logado como @${GH_USER}. Usando gh repo clone --depth 1."
+  if gh repo clone "$GH_REPO" "$TMP_SRC" -- --depth 1 --quiet 2>/dev/null; then
+    FETCH_OK=1
+    FETCH_METHOD="gh-clone"
+  else
+    echo "    ⚠ gh clone falhou. Verifique network / permissões de repo. (NÃO há fallback para git clone HTTPS, regra hard stop.)" >&2
   fi
 
   if [ "$FETCH_OK" -eq 0 ]; then
     echo ""
-    echo "❌ Falha ao fazer fetch da última versão oficial. Nenhuma das ferramentas disponíveis." >&2
-    echo "   Instale UMA das dependências abaixo e rode novamente:" >&2
-    echo "    • GitHub CLI (recomendado, loga em sua conta):" >&2
-    echo "         https://cli.github.com/   → depois rode  gh auth login" >&2
-    echo "    • Git (sem auth, clone público):" >&2
-    echo "         sudo apt install git   # debian/ubuntu" >&2
-    echo "         brew install git       # macos" >&2
-    exit 7
+    echo "❌ Falha ao fazer fetch da última versão oficial via gh CLI. Nenhuma outra via permitida." >&2
+    echo "   Diagnóstico rápido:" >&2
+    echo "        gh auth status" >&2
+    echo "        gh repo view ${GH_REPO}" >&2
+    echo "        gh api repos/${GH_REPO} --jq .full_name" >&2
+    exit 8
   fi
 fi
 

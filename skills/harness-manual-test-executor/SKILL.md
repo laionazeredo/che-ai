@@ -209,7 +209,7 @@ The chat message user sees uses condensed §18 shape. It DOES NOT dump the full 
 
 ## 7. General execution rules / safety
 
-1. **NEVER interact with production URLs**: If URL in plan contains `.prod.` / `app.flockr.uk` without explicit `test` subdomain or user says explicitly "this is prod" → BLOCK. Ask for confirmation TWICE before proceeding to touch a production-looking URL. Use `NODE_ENV=test` guard.
+1. **NEVER interact with production URLs**: If URL in plan contains `.prod.` / `.production.` / known production TLD+domain without explicit `test`/`staging`/`dev` subdomain, or user says explicitly "this is prod" → BLOCK. Ask for confirmation TWICE before proceeding to touch a production-looking URL. Use `NODE_ENV=test` guard. Detect via heuristic: `/(^|\.)prod(uction)?\./` or match against production domains listed in `$HARNESS_PROJECT_DIR/product_context.md` (if registry exists).
 2. **Never log secrets**: If login requires credentials → user provides them via chat (or the skill uses environment variables loaded into Playwright header if known). **Never echo credentials in execution.log / screenshots (redact if form field visible? Best-effort; default: do not screenshot password fields filled).**
 3. **AC Isolation**: After last step of each AC → `playwright_close` + new `playwright_navigate` to clean base URL on next AC. Do not share browser session state between ACs unless steps explicitly say "continue logged in from previous AC".
 4. **Ambiguity rule (engineering-contracts §19 doubt = ask)**: If step text is ambiguous / selector not clear / which button? → ASK user. Never guess CSS selector.
