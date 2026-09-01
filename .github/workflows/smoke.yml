@@ -26,10 +26,10 @@ jobs:
       - name: pnpm install (tsx + typescript + @types/node)
         run: pnpm install --prefer-offline --frozen-lockfile
 
-      - name: structure counts (17 commands / 3 hooks / ≥2 contracts / scripts exists)
+      - name: structure counts (19 commands / 3 hooks / ≥2 contracts / scripts exists)
         run: |
           set -euo pipefail
-          test "$(ls -1 commands | wc -l)" = "17"
+          test "$(ls -1 commands | wc -l)" = "19"
           test "$(ls -1 hooks    | wc -l)" = "3"
           test "$(ls -1 contracts | wc -l)" -ge 2
           test -f contracts/harness_sessions_contract.sh
