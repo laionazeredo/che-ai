@@ -80,8 +80,8 @@
 - **Início (especificação):** `/harness-spec` → SPEC otimizado p/ agente + harness (4 fontes: existente/ticket URL/PRD Flockr/inline). 7 seções + YAML frontmatter + gate Approved ANTES scope capture.
 - **Implementação feature/longa:** `/harness-start` (auto serial vs parallel) OU `/harness-parallel` (force parallel-or-bust). SM invoca `/harness-spec` automaticamente no preflight §0.5 se não houver Approved.
 - **Bug fix:** `/harness-fix` (loop científico; reproduz ANTES)
-- **Ship:** `/harness-ship` (commits atômicos conventional, push --no-verify, PR DRAFT + gh-stack se múltiplos PRs)
-- **Review/comments/CI:** `/harness-review`, `/harness-pr-comments`, `/harness-ci-fix`
+- **Ship:** `/harness-ship` (commits atômicos conventional, push --no-verify, PR DRAFT + gh-stack se múltiplos PRs). **PRÉ-REQUISITO GATE FAIL-CLOSED:** `/harness-scope-check` com 4 verdicts. Qualquer 🔴 bloqueia abertura do Draft PR até resolver.
+- **Review/comments/CI/auditoria escopo:** `/harness-review` (BLOCKING runtime/PII/deps/scope), `/harness-pr-comments`, `/harness-ci-fix`, **`/harness-scope-check` (4-checks audit: entrega+testes+docs+env vars a partir de PRD/ticket/task-graph)**
 - **Operações leves:** `/harness-status`, `/harness-skip`, `/harness-decisions`, `/harness-summary`, `/harness-abort` (inline, NÃO viram skill)
 
 - **Corpo completo, sintaxe e exemplos:** `HARNESS_COMMANDS.md` (canônico; 14 comandos total)
@@ -302,6 +302,7 @@ Outros anti padrões de TÍTULO (se bater, revise antes de PR):
 - **harness-compliance Stage 1 LIGHT**: scan new/edited `*.test.* / *.spec.* / __tests__/` → flag WARNING (HIGH ≥10 hits) por regexes anti padrões acima.
 - **harness-code-review Cat 4.7**: revisor avisa e pede rename no blocking comment se >5 nomes ruins no diff.
 - **QA report Stage 2.4 extra**: lint nomes nos relatórios Vitest/Jest (exibe `TOTAL suites comportamentais: 14; nomes ruins detectados: 2`).
+- **harness-scope-checker TODOS 4 checks**: 🔍 Entrega (entrega_de_escopo_completo_para_ac_<slug>), 🧪 Testes (cobertura_de_teste_unitario_ou_e2e_para_<comportamento>), 📘 Docs (atualizacao_documental_para_<mudanca>_em_<doc>), 🔐 Env Vars (declaracao_env_var_no_parser_para_<VAR>).
 
 ---
 

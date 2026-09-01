@@ -303,6 +303,7 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 | Gate | Regra | Local corpo canônico | Enforcement automático |
 |---|---|---|---|
 | ✅ **Test Naming Behavioral** | Nomes de `describe()/it()/test()` = comportamento observável. **PROIBIDO** colocar task id / AC / § / FLO-XXX / regra / SPEC id DIRETO no título. Traceability permitida **SÓ** via comentário JSDoc acima OU linha comentário `// @ac ... | @task ...` DENTRO do bloco. Suites = agrupamento por DOMÍNIO/contexto funcional. | **REGRA 7.9** → [REFERENCE_USER_RULES_MINIFIED.md §7.9](file:///home/laion/.trae/REFERENCE_USER_RULES_MINIFIED.md#L247-L305) | **QA Stage E** (lint scan diffs, FAIL ≥10 bad titles) · **Compliance Scan 6.5** (severidade gradiente 1-9 WARN / ≥10 HIGH) · **CR Cat 4.7** (1-4 LOW / 5-9 MEDIUM / ≥10 HIGH). Todos validam e permitem JSDoc/in-block traceability como exceção. |
+| ✅ **4-Checks Scope Delivery Audit** | **Antes de Draft PR ou ao revisar worktree/PR:** varredura OBRIGATÓRIA de 4 pilares usando fonte PRD/ticket/task-graph/scope: (1) toda AC/entrega tem file evidence no diff mapeada por keyword comportamental, (2) comportamento esperado coberto por testes unit/e2e com nomes REGRA7.9, (3) documentos obrigatórios atualizados (README, AGENTS, runbooks, .env.example) quando trigger heurística aplicar, (4) NENHUMA env var NOVA usada sem declaration em parser (zod schema, env.ts, .env.example, terraform/vercel/railway). Nomes de report REGRA7.9: nao `implementado_bem` mas `entrega_de_escopo_completo_para_ac_<slug>`. | **REGRA 8.2** → [harness-scope-checker SKILL §2..§5](file:///home/laion/.trae/skills/harness-scope-checker/SKILL.md#L60-L250) · comandos: [/harness-scope-check](file:///home/laion/.trae/commands/harness-scope-check.md) | **GATE SHIP (FAIL-CLOSED):** `/harness-ship` invoca automaticamente antes de abrir Draft PR. Verdict 🔴 bloqueia abertura do PR até action items resolvidos. Audit manual: `/harness-scope-check` standalone a qualquer momento. |
 
 ---
 
@@ -343,6 +344,20 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 - Verificar localmente equivalente. Push + re-trigger opcional.
 - NUNCA desabilitar um teste ou job com `continue-on-error` para "mascarar" falha sem aprovação.
 - Limite 3 planos (ver timeouts).
+
+### Scope Check Audit: `/harness-scope-check` (PR ou worktree) — 4 checks OBRIGATÓRIOS
+- **Fontes ESCOPO (pelo menos 1 — combinação permitida):** `--prd=/path/prd.md` (headings ACs) · `--ticket=<Linear/Jira URL>` (GraphQL/REST) · `--task-graph=/path/task_graph.md` (tasks DONE) · `--scope="texto livre"` · **PR body** (auto extraído Modo A).
+- **2 MODOS (igual harness-code-review):**
+  - **Modo A (PR):** PR URL → `gh pr view --json` para metadata/files/patches. PR body = scope source adicional.
+  - **Modo B (Worktree local):** `--worktree <path>` + base branch auto-detect (ask if ambiguous).
+- **4 Checks OBRIGATÓRIOS (todos aplicáveis, sempre roda os 4):**
+  1. **🔍 Entrega escopo completo:** AC × arquivo diff keyword match → 🟢 DELIVERED / 🟡 PARCIAL / 🔴 MISSING. Evidence por linha (file path:range).
+  2. **🧪 Cobertura testes:** test runners detect → arquivos testes no diff mapeados p/ comportamento AC REGRA7.9 → 🟢 TESTED / 🟡 PARCIAL / 🔴 NOT TESTED.
+  3. **📘 Docs atualizadas:** trigger heurística (novo command/skill → README §5; nova premissa arquitetura → AGENTS.md; nova env → .env.example; breaking API → docs) → 🟢 DOCUMENTADO / 🟡 PARCIAL / 🔴 NÃO DOCUMENTADO.
+  4. **🔐 Novas env vars declaradas:** diff scan regex env var usage × cross-check declarations (zod schemas env.ts, .env.example, terraform/railway/vercel vars) → 🟢 DECLARADA / 🟡 FALTA VALIDAÇÃO / 🔴 NÃO DECLARADA.
+- **Verdict cálculo FAIL-CLOSED:** Qualquer item 🔴 → 🔴 BLOCKED (Ship NÃO prossegue p/ Draft PR até action items). Nenhum 🔴, qualquer 🟡 → 🟡 CONDICOES. Tudo 🟢 → 🟢 APPROVED.
+- **Registro output:** `$HARNESS_WORKSPACE_SHARED/scope-check_<slug>_<YYYYMMDD>.md` — sempre header summary tabela 4 checks + action items ordenados + detalhes 4 tabelas REGRA7.9 por item.
+- **Integração SHIP:** `/harness-ship` invoca SCOPE-CHECK **antes de Draft PR aberto.** 🔴 = BLOCK SHIP até resolver.
 
 ---
 
@@ -394,7 +409,7 @@ KISS ganha sempre. Parallel é OTIMIZAÇÃO, não OBRIGATORIEDADE.
 >
 > Visão rápida (14 comandos total):
 > - 9 **pesados (workflow)** → wrapper de validação preflight + `Skill(...)`:
->   `/harness-spec` | `/harness-start` | `/harness-parallel` | `/harness-ship` | `/harness-fix` | `/harness-review` | `/harness-diff` | `/harness-manual-test` | `/harness-pr-comments` | `/harness-ci-fix` | `/harness-design`
+>   `/harness-spec` | `/harness-start` | `/harness-parallel` | `/harness-ship` | `/harness-fix` | `/harness-review` | `/harness-diff` | `/harness-manual-test` | `/harness-pr-comments` | `/harness-ci-fix` | `/harness-design` | `/harness-figma` | `/harness-scope-check`
 > - 5 **leves (operação em arquivo)**: inline, NÃO viram skill (ler/escrever markdown, KISS → não criar skill de 3 linhas):
 >   `/harness-status` | `/harness-skip` | `/harness-decisions` | `/harness-summary` | `/harness-abort`
 > - Contagem atualizada: consultar `HARNESS_COMMANDS.md` §Architecture Commands vs Skills para Category A (heavy) + Category B (light) exata.

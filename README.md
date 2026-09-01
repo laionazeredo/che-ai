@@ -2,7 +2,7 @@
 
 > **Repo oficial (público):** [`laionazeredo/trae-config`](https://github.com/laionazeredo/trae-config)  
 > **O que é:** Um time ágil simulado inteiro que roda **dentro da sua IDE Trae**.  
-> **17 comandos · 37 skills · 3 hooks automáticos · 3 scripts install/update/self-update**  
+> **18 comandos · 38 skills · 3 hooks automáticos · 3 scripts install/update/self-update**  
 > **Premissas não negociáveis:** KISS + YAGNI + blast radius mínimo + fail-closed + default dry-run.
 
 ---
@@ -13,8 +13,8 @@
 2. ⚡ **Runbook do dia-a-dia** — os 4 comandos que você usa sempre
 3. 🏗️ **Arquitetura** — 3 diagramas Mermaid + premissas + precedência 3 camadas
 4. 🛡️ **Garantias** — BLACKLIST intocável · defaults · backups · o que NUNCA fazemos
-5. 🧭 **17 Comandos** — referência compacta tabela
-6. 📝 **Cheatsheet** — copy-paste CLI (bindings · decisions · token reduction)
+5. 🧭 **18 Comandos** — referência compacta tabela
+6. 📝 **Cheatsheet** — copy-paste CLI (scope-check · bindings · decisions · token reduction)
 7. 🔧 **Troubleshooting** — 3 casos comuns + rollback
 8. ❌ **O que NÃO existe (YAGNI)** · como pedir features novas
 
@@ -34,7 +34,7 @@ corepack enable
 corepack pnpm --dir ~/.trae install --prefer-offline
 
 # 3. Smoke rápido (OBRIGATÓRIO · 10s)
-ls ~/.trae/commands | wc -l                           # esperado = 17
+ls ~/.trae/commands | wc -l                           # esperado = 18
 corepack pnpm --dir ~/.trae decisions --help | head -2  # CLI decisions TS funciona?
 ```
 
@@ -185,8 +185,8 @@ flowchart TD
 ├── HARNESS_RULES.md          ← Gates obrigatórios, SPEC approval, paralelismo
 ├── REFERENCE_USER_RULES_MINIFIED.md  ← Versão bolso p/ agente
 │
-├── commands/     (17 .md)    ← LEVES (inline) + HEAVIES (skill wrapper + gates)
-├── skills/       (37 pastas) ← 17 personas ágeis + 20 domínio (Stripe/Next/Supabase…)
+├── commands/     (18 .md)    ← LEVES (inline) + HEAVIES (skill wrapper + gates)
+├── skills/       (38 pastas) ← 18 personas ágeis + 20 domínio (Stripe/Next/Supabase…)
 ├── contracts/                 ← SINGLE SOURCE OF TRUTH · 17 helpers shell + CLI TS
 │   ├── harness_sessions_contract.sh   # paths + decisions + registry + H1-H5 token
 │   └── decisions-query.cli.ts         # 4 modos: summary · filter · tail · export
@@ -241,7 +241,7 @@ Rollback manual de 1 item: `mv item.bak-20260831-231503 item`. Nada de restaurar
 
 ---
 
-## 5. 🧭 17 Comandos (tabela compacta)
+## 5. 🧭 18 Comandos (tabela compacta)
 
 | # | Comando | Tipo | Quando usar |
 |---|---|---|---|
@@ -263,6 +263,7 @@ Rollback manual de 1 item: `mv item.bak-20260831-231503 item`. Nada de restaurar
 | 15 | `/harness-figma <link Figma>` | HEAVY UI | Dev-mode exato → reuso componentes → implementa 1ª tentativa → pixel-check. |
 | 16 | `/harness-decisions [summary\|filter\|tail\|export]` | Skill | Query JSONL decisions. Summary PT-BR default. |
 | 17 | **`/harness-ship`** | HEAVY FINAL | Gate final. 1 conventional commit → push → Draft PR. |
+| 18 | **`/harness-scope-check --prd=\|--ticket=\|--task-graph=\|--scope=<X> [PR URL \| --worktree <p>]`** | HEAVY AUDIT | **4-checks audit:** 1 entrega escopo completo (ACs mapped), 2 testes cobrem comportamento, 3 docs atualizados (AGENTS/README/runbooks), 4 novas env vars declaradas + parsers. Verdict 🟢🟡🔴. Gate antes de /harness-ship. |
 
 ---
 
@@ -272,6 +273,22 @@ Rollback manual de 1 item: `mv item.bak-20260831-231503 item`. Nada de restaurar
 # ====== Atualizar harness (diário de manhã) ======
 bash ~/.trae/scripts/self-update-harness.sh          # dry-run, veja relatório
 bash ~/.trae/scripts/self-update-harness.sh --apply  # apply real
+
+# ====== 🔍 SCOPE CHECK (antes de /harness-ship ou revisar PR) ======
+# 4-checks audit: 1 entrega escopo | 2 cobertura testes | 3 docs | 4 env vars declaradas
+# Modo A: revisar PR do GitHub + PRD (ou ticket, task-graph, scope free-text)
+/harness-scope-check \
+  --prd=/abs/path/docs/prd-refund.md \
+  https://github.com/owner/repo/pull/123
+
+# Modo B: revisar worktree local antes de commitar
+/harness-scope-check \
+  --ticket=https://linear.app/team/issue/FLO-732 \
+  --worktree=/home/laion/code/flockr/Lumos.worktrees/feat-FLO-732-abc
+
+# Modo B com base branch explícita (default: auto-detect main/dev)
+/harness-scope-check --scope="adiciona filtros dashboard admin + export CSV" \
+  --worktree=/abs/wt --base=origin/dev
 
 # ====== Registry Binding (não use Edit/Write manual) ======
 source ~/.trae/contracts/harness_sessions_contract.sh
