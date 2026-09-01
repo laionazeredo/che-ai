@@ -53,7 +53,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
        - `decisions.log.jsonl` — append a cada decisão não óbvia / trade-off (1 por worktree, não 1 por task)
        - `manual_test_plan.md` — no final, quando todas tasks forem DONE
        - `gh_stack_plan.md` — (OPCIONAL, se múltiplos PRs) plano hierárquico gh-stack
-       - `design/` — ADRs / design docs harness locais
+       - `design/` — ADRs / design docs harness locais (SALVAR AQUI POR DEFAULT, NÃO no workspace do usuário). Cópia manual para `docs/adr/` ou `architecture/decisions/` no repo de produto é OPCIONAL e só acontece se usuário pedir explicitamente — por padrão ADR neste momento é REFERÊNCIA do pipeline para validar trade-offs e escopo.
        - `tasks/<TASK_ID>/` — envelope/scope/ac, UM subdiretório por tarefa
      - `$HARNESS_SESSION_DIR/` — **EFÊMERO** (esta sessão só):
        - `binding.md` — Level2 detail (fora da worktree user, nunca commitado)

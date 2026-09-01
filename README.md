@@ -81,7 +81,7 @@ flowchart TD
     Read --> B["👤 Pede feature/bug/refactor"]
     B --> Spec["1️⃣  harness-spec SPEC 7 seções canônicas + YAML frontmatter<br/>Approved gate = libera escopo"]
     Spec --> ADRGate{"change_class é<br/>arch/platform/large-migration?"}
-    ADRGate -->|"Sim"| ADR["adr-architecture skill<br/>cria ADR-XXX design doc<br/>(em workspace/design/)"]
+    ADRGate -->|"Sim"| ADR["adr-architecture skill<br/>cria ADR-XXX design doc<br/>(salva em harness workspace_shared/design/<br/>cópia manual p/ workspace só se usuário quiser)"]
     ADRGate -->|"Não"| SM["2️⃣  harness-start Scrum Master<br/>gates 0-1.5: binding + spec aprovado + ADR se aplicável + tasks graph + envelopes"]
     ADR --> SM
     SM --> Dev{"3️⃣ Dev tasks atomic"}
