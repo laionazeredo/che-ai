@@ -25,7 +25,7 @@ We ONLY flag things that actually break production or waste $$$ or risk users.
 
 Run THIS BEFORE deciding mode or starting any review context gathering.
 
-1. **Read Level1 Global Index FIRST:** Read `$HOME/.trae/bindings/registry.jsonl`. Find LAST STATUS=BOUND entry with current SESSION_ID. Use its WORKTREE_ROOT for the session.
+1. **Read Level1 Global Index FIRST:** Read `harness_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `harness_current_session_id`. Use its WORKTREE_ROOT for the session.
 2. **Mode B mismatch check (CRITICAL):**
    - If user passed --worktree <path>: confirm Level1 registry WORKTREE_ROOT EXISTS and is DIFFERENT than <path> → BLOCK.
    - Ask: "You asked review on worktree X but Level1 GLOBAL session is BOUND to Y. Options: (A = X, override binding; B = Switch binding switch first; C = Cancel review). NEVER silent override. If no Level1 entry → binding not made; proceed to decision flow to create binding (§19.2 only if user continues."

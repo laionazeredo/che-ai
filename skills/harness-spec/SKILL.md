@@ -7,7 +7,7 @@ description: "Generate or validate a Harness Execution Specification (SPEC). 4 i
 
 > **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
 > - Full contracts (precedence 1-18, DbC, BDD incremental, etc): `engineering-contracts` skill
-> - Path resolution (WORKSPACE_NAME, WORKTREE_SLUG, HARNESS_WORKSPACE_SHARED, HARNESS_SESSION_DIR): `source ~/.trae/contracts/harness_sessions_contract.sh`, call `harness_compute_paths WT SID CWD`
+> - Path resolution (WORKSPACE_NAME, WORKTREE_SLUG, HARNESS_WORKSPACE_SHARED, HARNESS_SESSION_DIR): `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`, call `harness_compute_paths WT SID CWD`
 > - Worktree binding 2-LEVEL (Level1 registry, Level2 sessions dir): engineering-contracts §19
 
 Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~60–120 lines, 7 sections). Replaces project-specific legacy PRD artifacts. Gate before scope capture in `/harness-start` and standalone runnable via `/harness-spec`.
@@ -30,11 +30,11 @@ On completion this skill **returns to the caller** two values printed in the las
 
 Fail if any step fails. Stop before proceeding with user.
 
-1. **Binding check:** Read `$HOME/.trae/bindings/registry.jsonl`, find LAST entry with current `SESSION_ID` + `STATUS=BOUND`. If missing AND user did not provide `--worktree` → ASK for absolute worktree, perform full §19 binding (Level1 append + Level2 write + FRIENDLY_NAME prompt).
+1. **Binding check:** Read `harness_registry_path`, find LAST entry with the effective session id from `harness_current_session_id` + `STATUS=BOUND`. If missing AND user did not provide `--worktree` → ASK for absolute worktree, perform full §19 binding (Level1 append + Level2 write + FRIENDLY_NAME prompt).
 2. **Paths:**
    ```bash
-   source ~/.trae/contracts/harness_sessions_contract.sh
-   harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+   source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
+   harness_compute_paths "$WORKTREE_ROOT" "$(harness_current_session_id)" "$PWD"
    harness_ensure_session_dirs
    ```
 3. **Slug:** If user passed `--slug`, use it as-is (sanitize to `[a-z0-9_-]+`). Otherwise derive from `ticket_ref` or `change_class+why`.

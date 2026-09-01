@@ -15,7 +15,7 @@ description: "Executes the manual_test_plan.md step-by-step using Playwright MCP
 
 | Concern | `harness-qa` | This skill `harness-manual-test-executor` |
 |---|---|---|
-| Scope | lint / typecheck / build / unit / E2E commands (CI-style) | **Manual Test Plan steps** written in `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` (via `source ~/.trae/contracts/harness_sessions_contract.sh`) — DURÁVEL, compartilhado entre sessões nesta worktree. |
+| Scope | lint / typecheck / build / unit / E2E commands (CI-style) | **Manual Test Plan steps** written in `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` (via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`) — DURÁVEL, compartilhado entre sessões nesta worktree. |
 | Driver | Shell commands (pnpm/vitest/playwright CLI) | **Playwright MCP** (open tab, navigate, click, fill, screenshot) + **HTTP driver** (curl-style via playwright_get/post/put/patch/delete). |
 | Evidence | Command exit codes + stdout/stderr | **PNG screenshots per step**, visible text assertions, HTTP response bodies, browser console logs. |
 | Output | Per-pass/fail command line summary | **Per-AC pass/fail report** with evidence links + environment checks pass/fail + smoke check summary. |
@@ -32,7 +32,7 @@ description: "Executes the manual_test_plan.md step-by-step using Playwright MCP
    - Option B (standalone): user passes explicit file path to a Markdown file containing the AC sections below.
 3. If neither exists → STOP. Ask user to provide task-id or the manual_test_plan.md path.
 4. **Worktree Session Binding preflight (engineering-contracts §19):**
-   - Resolve paths via `source ~/.trae/contracts/harness_sessions_contract.sh` + `harness_compute_paths`.
+   - Resolve paths via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"` + `harness_compute_paths`.
    - Check `$HARNESS_SESSION_DIR/binding.md` Level2 entry if present (EFÊMERO per-session).
    - Mismatch with provided WORKTREE_ROOT → BLOCK. Ask override/switch/cancel.
    - Missing binding → follow §19 canonical binding flow (global registry Level1 + Level2), ask user confirm once.
@@ -67,7 +67,7 @@ If zero `### AC-` headers → STOP. Report: "manual_test_plan.md doesn't have AC
 
 ## 2. STEP 1 — Evidence directory pre-creation
 
-Create this directory structure immediately after parsing succeeds (before any browser/curl). Use `source ~/.trae/contracts/harness_sessions_contract.sh` + `harness_ensure_session_dirs` first.
+Create this directory structure immediately after parsing succeeds (before any browser/curl). Use `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"` + `harness_ensure_session_dirs` first.
 
 ```
 $HARNESS_SESSION_DIR/qa/              ← EFÊMERO per-session (generated evidence, never in user code)

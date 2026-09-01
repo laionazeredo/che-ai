@@ -1,7 +1,7 @@
 # MANUAL TEST PLAN TEMPLATE
 
 > Created by Scrum Master after all tasks are DONE and both Compliance stages passed.
-> Resolve ALL paths via `source $HOME/.trae/contracts/harness_sessions_contract.sh && harness_compute_paths WORKTREE_ROOT`. NEVER inside `<WORKTREE_ROOT>/.trae/*`.
+> Resolve ALL paths via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh" && harness_compute_paths WORKTREE_ROOT`. NEVER inside `<WORKTREE_ROOT>/.trae/*`.
 > File location: `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` (durable; shared across sessions for same worktree)
 > Purpose: step-by-step human or automated-click verification of every acceptance criterion.
 > Language: English (per harness rules). User communication about this plan is in Portuguese.

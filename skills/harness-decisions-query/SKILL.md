@@ -1,3 +1,8 @@
+---
+name: "harness-decisions-query"
+description: "Queries, filters, summarizes, exports, and audits Harness decisions.log.jsonl history for a worktree using the canonical session contracts. Use when the user asks to inspect decision history or when another Harness skill needs programmatic decision lookup."
+---
+
 # harness-decisions-query — Global Skill
 
 **Use when:** User asks to see / filter / summarize / audit decisions from a worktree's `decisions.log.jsonl` (single source of truth JSONL format, v1 schema). Also use when any skill/harness skill needs to query decision history programmatically.
@@ -14,7 +19,7 @@
 2. **`decisions.log.jsonl` exists?** If file doesn't exist → say "Nenhuma decisão registrada nesta worktree ainda." Stop.
 3. **Source contracts first** before calling the helper CLI wrapper below:
    ```bash
-   source ~/.trae/contracts/harness_sessions_contract.sh
+   source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
    PATH_FILE=$(harness_decisions_path "<WORKTREE_ROOT>")
    ```
 
@@ -50,10 +55,10 @@ Common event types:
 ## 2. Query modes (use the smallest scope needed)
 
 Run queries via the TypeScript CLI runner (zero-build, tsx executor):
-`corepack pnpm --dir ~/.trae exec tsx ~/.trae/contracts/decisions-query.cli.ts <path> <mode> [args]`.
+`corepack pnpm --dir "$HARNESS_HOME" exec tsx "$HARNESS_HOME/contracts/decisions-query.cli.ts" <path> <mode> [args]`.
 
 Shortcut via package.json script:
-`corepack pnpm --dir ~/.trae decisions <path> <mode> [args]`.
+`corepack pnpm --dir "$HARNESS_HOME" decisions <path> <mode> [args]`.
 
 ### MODE: `summary` (DEFAULT when user says "mostra as decisões")
 

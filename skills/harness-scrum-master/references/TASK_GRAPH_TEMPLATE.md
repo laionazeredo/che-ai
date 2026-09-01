@@ -1,6 +1,6 @@
 # TASK GRAPH TEMPLATE
 
-> Resolve path via `source $HOME/.trae/contracts/harness_sessions_contract.sh && harness_compute_paths WORKTREE_ROOT`. NEVER inside `<WORKTREE_ROOT>/.trae/*`.
+> Resolve path via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh" && harness_compute_paths WORKTREE_ROOT`. NEVER inside `<WORKTREE_ROOT>/.trae/*`.
 > File location: `$HARNESS_WORKSPACE_SHARED/task_graph.md` (durable, shared across sessions for same worktree)
 > Updated by Scrum Master as tasks progress through stages.
 > Language: English.

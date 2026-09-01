@@ -16,7 +16,7 @@
 #   HARNESS_WORKSPACE_DIR  = $HARNESS_SESSIONS_ROOT/$HARNESS_WORKSPACE_NAME
 #   HARNESS_WORKTREE_DIR   = $HARNESS_WORKSPACE_DIR/$HARNESS_WORKTREE_SLUG
 #   HARNESS_WORKSPACE_SHARED  = $HARNESS_WORKTREE_DIR/workspace  (dados duráveis per-worktree)
-#   HARNESS_SESSION_DIR        = $HARNESS_WORKTREE_DIR/sessions/$SESSION_ID  (efêmero per-session)
+#   HARNESS_SESSION_DIR        = $HARNESS_WORKTREE_DIR/sessions/<effective-session-id>  (efêmero per-session)
 #   HARNESS_LEVEL2_BINDING     = $HARNESS_SESSION_DIR/binding.md  (§19 Level 2 detail)
 #   HARNESS_DECISIONS_LOG      = $HARNESS_WORKSPACE_SHARED/decisions.log.jsonl  (single source of truth, append-only JSONL)
 #   ——— NÍVEL 1.5 NOVO (compartilhado worktrees × sessões do MESMO projeto) ———
@@ -50,6 +50,18 @@
 #       One-shot migration helper. Não deleta o .md antigo; chamador decide.
 
 set -euo pipefail
+
+# Runtime-neutral harness root.
+# Trae compatibility: default continua sendo $HOME/.trae.
+# Outros consumidores (ex: Codex) podem definir HARNESS_HOME explicitamente.
+export HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+
+# Session ID resolver.
+# HARNESS_SESSION_ID tem precedência para runtimes neutros.
+# SESSION_ID permanece como fallback compatível com a IDE Trae.
+harness_current_session_id() {
+  printf '%s\n' "${HARNESS_SESSION_ID:-${SESSION_ID:-}}"
+}
 
 export HARNESS_SESSIONS_ROOT="${HARNESS_SESSIONS_ROOT:-$HOME/code/harness-sessions}"
 
@@ -98,8 +110,8 @@ harness_assert_outside_worktree() {
   │  Como corrigir:                                                          │
   │   - NÃO construa paths com \$PWD/.trae/ nem \$WORKTREE_ROOT/.trae/.      │
   │   - Sempre use:                                                          │
-  │       source \$HOME/.trae/contracts/harness_sessions_contract.sh        │
-  │       harness_compute_paths \$WORKTREE_ROOT \$SESSION_ID                 │
+  │       source \$HARNESS_HOME/contracts/harness_sessions_contract.sh     │
+  │       harness_compute_paths \$WORKTREE_ROOT "$(harness_current_session_id)" │
   │   - Depois use \$HARNESS_WORKSPACE_SHARED (garantido FORA worktree).     │
   │                                                                          │
   │   Se foi um script/harness que chegou aqui, aborte imediatamente.        │
@@ -262,7 +274,8 @@ harness_project_registry_path()   { harness_project_registry_dir "$@" | xargs -I
 
 harness_compute_paths() {
   local worktree_root="${1:-$WORKTREE_ROOT}"
-  local session_id="${2:-${SESSION_ID:-unknown-session}}"
+  local session_id="${2:-$(harness_current_session_id)}"
+  session_id="${session_id:-unknown-session}"
   local cwd_override="${3:-$PWD}"
 
   [ -n "$worktree_root" ] || { echo "harness_compute_paths: WORKTREE_ROOT not set" >&2; return 2; }
@@ -363,7 +376,9 @@ harness_append_decision_jsonl() {
   fi
 
   local spec_id_val="${SPEC_ID:-null}"
-  local session_id_val="${SESSION_ID:-null}"
+  local session_id_val
+  session_id_val="$(harness_current_session_id)"
+  session_id_val="${session_id_val:-null}"
   [ "$spec_id_val" = "NONE" ] && spec_id_val="null"
 
   python3 - "$out_path" "$ts_iso" "$event_type" "$worktree_root" "$spec_id_val" "$session_id_val" "$payload_json" <<'PYEOF'
@@ -671,7 +686,7 @@ harness_tr_grep() {
 
 # ---------------------------------------------------------------------------
 # LEVEL 1 BINDING REGISTRY (GLOBAL INDEX, append-only JSONL)
-# Single source of truth = $HOME/.trae/bindings/registry.jsonl (NÃO .md, sem dual)
+# Single source of truth = $HARNESS_HOME/bindings/registry.jsonl (NÃO .md, sem dual)
 # Schema v2 por linha (BACKWARD COMPAT with v1 LANG_PT_CHECK):
 #   {ts, event: BIND_BOOTSTRAP|BIND_APPEND|BIND_FLAGS_UPDATE, session_id,
 #    status: BOUND|UNBOUND|FLAGS, worktree_root, workspace_name|null, worktree_slug|null,
@@ -683,7 +698,7 @@ harness_tr_grep() {
 # Legacy LANG_PT_CHECK=ENABLED → default LANG_DOCS=en; LANG_PT_CHECK=DISABLED → LANG_DOCS=pt-BR
 # ---------------------------------------------------------------------------
 harness_registry_path() {
-  echo "$HOME/.trae/bindings/registry.jsonl"
+  echo "$HARNESS_HOME/bindings/registry.jsonl"
 }
 
 harness_registry_append_jsonl() {
@@ -799,7 +814,7 @@ PYEOF
 }
 
 harness_registry_lookup_last() {
-  local session_id="${1:-${SESSION_ID:-}}"
+  local session_id="${1:-$(harness_current_session_id)}"
   [ -n "$session_id" ] || { echo "harness_registry_lookup_last: session_id empty" >&2; return 2; }
   local out_path
   out_path="$(harness_registry_path)"
@@ -907,6 +922,32 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   echo "== harness_sessions_contract.sh self-test smoke =="
   echo "HARNESS_SESSIONS_ROOT = $HARNESS_SESSIONS_ROOT"
   echo "resolve_workspace_name($PWD) = $(harness_resolve_workspace_name "$PWD")"
+
+  echo
+  echo "== Runtime-neutral session smoke =="
+
+  unset HARNESS_SESSION_ID SESSION_ID
+  [ "$(harness_current_session_id)" = "" ] || {
+    echo "SESSION empty fallback = FAIL"
+    exit 1
+  }
+
+  export SESSION_ID="sess-trae-smoke"
+  [ "$(harness_current_session_id)" = "sess-trae-smoke" ] || {
+    echo "SESSION_ID Trae fallback = FAIL"
+    exit 1
+  }
+  echo "SESSION_ID Trae fallback = PASS"
+
+  export HARNESS_SESSION_ID="sess-codex-smoke"
+  [ "$(harness_current_session_id)" = "sess-codex-smoke" ] || {
+    echo "HARNESS_SESSION_ID precedence = FAIL"
+    exit 1
+  }
+  echo "HARNESS_SESSION_ID precedence = PASS"
+
+  unset HARNESS_SESSION_ID
+  export SESSION_ID="sess-smoke"
 
   # Slug smoke:
   testdir="$(mktemp -d)"

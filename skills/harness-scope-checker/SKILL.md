@@ -20,7 +20,7 @@ Auditor persona com **2 modos mutuamente exclusivos** (escolher EXATAMENTE 1). *
 
 Run ANTES de decidir o modo.
 
-1. **Ler Level1 Global Index PRIMEIRO:** Read `$HOME/.trae/bindings/registry.jsonl`. Find LAST `STATUS=BOUND` entry with current `SESSION_ID`. Use its `WORKTREE_ROOT` como sessão default.
+1. **Ler Level1 Global Index PRIMEIRO:** Read `harness_registry_path`. Find LAST `STATUS=BOUND` entry using the effective session id from `harness_current_session_id`. Use its `WORKTREE_ROOT` como sessão default.
 2. **Mode B mismatch check:** user passed `--worktree <path>` E Level1 registry WORKTREE_ROOT existe AND é DIFERENTE → BLOCK. Perguntar: "Scope check pedido em `<path>` mas binding Level1 global BOUND em `<y>`. Opções: (A) usa `<path>` e override binding temporariamente para este audit, (B) switch binding primeiro, (C) cancelar audit." **NUNCA silent override.**
 3. **Mode A PR URL conflito binding:** PR branch = worktree branch de algum binding já existente e user também passou `--worktree` apontando outro → BLOCK. Perguntar qual é o alvo.
 

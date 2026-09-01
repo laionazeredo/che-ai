@@ -29,7 +29,7 @@ If any precondition fails → report exactly which, stop execution, ask user.
 
 ### 0.6 gh-stack mode detection (N4 hierarchical PR stack)
 
-1. Check if file exists: `$HARNESS_WORKSPACE_SHARED/gh_stack_plan.md` (via `source ~/.trae/contracts/harness_sessions_contract.sh`).
+1. Check if file exists: `$HARNESS_WORKSPACE_SHARED/gh_stack_plan.md` (via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`).
 2. If it exists:
    - Read it. Validate it has a field `Status: APPROVED` at the top.
    - Check `gh` extension installed: run `gh extension list 2>/dev/null | grep -i "stack"` silently.
@@ -42,11 +42,11 @@ If any precondition fails → report exactly which, stop execution, ask user.
 
 Run BEFORE any `git status / git add / git commit / git push`. PREVENTS wrong-worktree commits.
 
-1. **Level 1 Global Index (AUTHORITY):** Read `$HOME/.trae/bindings/registry.jsonl`. Find LAST STATUS=BOUND entry for current `SESSION_ID`. Extract WORKTREE_ROOT from that entry.
+1. **Level 1 Global Index (AUTHORITY):** Read `harness_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `harness_current_session_id`. Extract WORKTREE_ROOT from that entry.
    - If NO entry: SHIP BLOCKED NOW. Ask "No Level1 binding for this session. Create before ship? (A = Select worktree; B = Cancel ship)." NEVER ship unbound.
    - If found BOUND entry: confirm WORKTREE_ROOT from registry **MUST EQUAL** WORKTREE_ROOT precondition 1.
    - MISMATCH → **BLOCK SHIP NOW.** Ask: "Level 1 GLOBAL registry binding says worktree = X, ship was invoked on Y. Which one actually ships? (A = X per binding; B = Y override binding + rebind; C = Cancel ship)." Never silent-continue.
-2. **Level 2 Detail File (optional audit):** Verify `$HARNESS_SESSION_DIR/binding.md` exists (via `source ~/.trae/contracts/harness_sessions_contract.sh`). If missing → warn decision.log entry (SM skipped Level 2 write). Do NOT block ship (Level 1 is the authority).
+2. **Level 2 Detail File (optional audit):** Verify `$HARNESS_SESSION_DIR/binding.md` exists (via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`). If missing → warn decision.log entry (SM skipped Level 2 write). Do NOT block ship (Level 1 is the authority).
 3. **Scissor check staging + file ops:**
    - EVERY file staged/committed → path MUST start with WORKTREE_ROOT from Level1 registry.
    - Generated files under `$HARNESS_SESSIONS_ROOT/**` are NEVER staged; they live outside user code by design.
