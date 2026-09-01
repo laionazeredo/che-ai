@@ -1,3 +1,8 @@
+---
+name: "harness-decisions-query"
+description: "Queries, filters, summarizes, exports, and audits Harness decisions.log.jsonl history for a worktree using the canonical session contracts. Use when the user asks to inspect decision history or when another Harness skill needs programmatic decision lookup."
+---
+
 # harness-decisions-query — Global Skill
 
 **Use when:** User asks to see / filter / summarize / audit decisions from a worktree's `decisions.log.jsonl` (single source of truth JSONL format, v1 schema). Also use when any skill/harness skill needs to query decision history programmatically.
