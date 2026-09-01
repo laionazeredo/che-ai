@@ -2,7 +2,7 @@
 
 > **Repo oficial (público):** [`laionazeredo/trae-config`](https://github.com/laionazeredo/trae-config)  
 > **O que é:** Um time ágil simulado inteiro que roda **dentro da sua IDE Trae**.  
-> **18 comandos · 38 skills · 3 hooks automáticos · 3 scripts install/update/self-update**  
+> **19 comandos · 39 skills · 3 hooks automáticos · 3 scripts install/update/self-update**  
 > **Premissas não negociáveis:** KISS + YAGNI + blast radius mínimo + fail-closed + default dry-run.
 
 ---
@@ -13,8 +13,8 @@
 2. ⚡ **Runbook do dia-a-dia** — os 4 comandos que você usa sempre
 3. 🏗️ **Arquitetura** — 3 diagramas Mermaid + premissas + precedência 3 camadas
 4. 🛡️ **Garantias** — BLACKLIST intocável · defaults · backups · o que NUNCA fazemos
-5. 🧭 **18 Comandos** — referência compacta tabela
-6. 📝 **Cheatsheet** — copy-paste CLI (scope-check · bindings · decisions · token reduction)
+5. 🧭 **19 Comandos** — referência compacta tabela
+6. 📝 **Cheatsheet** — copy-paste CLI (scope-check · merge-resolve · bindings · decisions · token reduction)
 7. 🔧 **Troubleshooting** — 3 casos comuns + rollback
 8. ❌ **O que NÃO existe (YAGNI)** · como pedir features novas
 
@@ -34,7 +34,7 @@ corepack enable
 corepack pnpm --dir ~/.trae install --prefer-offline
 
 # 3. Smoke rápido (OBRIGATÓRIO · 10s)
-ls ~/.trae/commands | wc -l                           # esperado = 18
+ls ~/.trae/commands | wc -l                           # esperado = 19
 corepack pnpm --dir ~/.trae decisions --help | head -2  # CLI decisions TS funciona?
 ```
 
@@ -119,7 +119,7 @@ flowchart BT
 
     subgraph Layers["Camadas de Precedência (↑ = ganha)"]
       direction BT
-      L3["🥉 Layer 3 — Skills / personas\n(37 pastas: 17 personas ágeis + 20 domínio)"]
+      L3["🥉 Layer 3 — Skills / personas\n(38 pastas: 18 personas ágeis + 20 domínio)"]
       L2["🥈 Layer 2 — Contracts + Regras\ncontracts/ · HARNESS_RULES.md · REFERENCE_USER_RULES_MINIFIED.md"]
       L1["🥇 Layer 1 — Hooks automáticos · enforcement\n(3 hooks: pretooluse binding · post 3layer-dedup · post lang-pt)"]
     end
@@ -185,8 +185,8 @@ flowchart TD
 ├── HARNESS_RULES.md          ← Gates obrigatórios, SPEC approval, paralelismo
 ├── REFERENCE_USER_RULES_MINIFIED.md  ← Versão bolso p/ agente
 │
-├── commands/     (18 .md)    ← LEVES (inline) + HEAVIES (skill wrapper + gates)
-├── skills/       (38 pastas) ← 18 personas ágeis + 20 domínio (Stripe/Next/Supabase…)
+├── commands/     (19 .md)    ← LEVES (inline) + HEAVIES (skill wrapper + gates)
+├── skills/       (39 pastas) ← 19 personas ágeis + 20 domínio (Stripe/Next/Supabase…)
 ├── contracts/                 ← SINGLE SOURCE OF TRUTH · 17 helpers shell + CLI TS
 │   ├── harness_sessions_contract.sh   # paths + decisions + registry + H1-H5 token
 │   └── decisions-query.cli.ts         # 4 modos: summary · filter · tail · export
@@ -241,7 +241,7 @@ Rollback manual de 1 item: `mv item.bak-20260831-231503 item`. Nada de restaurar
 
 ---
 
-## 5. 🧭 18 Comandos (tabela compacta)
+## 5. 🧭 19 Comandos (tabela compacta)
 
 | # | Comando | Tipo | Quando usar |
 |---|---|---|---|
@@ -264,6 +264,7 @@ Rollback manual de 1 item: `mv item.bak-20260831-231503 item`. Nada de restaurar
 | 16 | `/harness-decisions [summary\|filter\|tail\|export]` | Skill | Query JSONL decisions. Summary PT-BR default. |
 | 17 | **`/harness-ship`** | HEAVY FINAL | Gate final. 1 conventional commit → push → Draft PR. |
 | 18 | **`/harness-scope-check --prd=\|--ticket=\|--task-graph=\|--scope=<X> [PR URL \| --worktree <p>]`** | HEAVY AUDIT | **4-checks audit:** 1 entrega escopo completo (ACs mapped), 2 testes cobrem comportamento, 3 docs atualizados (AGENTS/README/runbooks), 4 novas env vars declaradas + parsers. Verdict 🟢🟡🔴. Gate antes de /harness-ship. |
+| 19 | **`/harness-merge [--worktree <p>] [--strategy ours\|theirs] [--path <dir\|file>]`** | HEAVY RESOLVER | Resolve merge conflicts **1 hunk por vez** (MIN BLAST RADIUS). DEFAULT favorece worktree atual (ours). 3 casos: 🟢 trivial auto (ws/imports) · 🟡 clash pergunta 2 opções com justificativa agente · 🔴 ambiguidade NUNCA decide sozinho, pede user. Cada hunk logado decisions.
 
 ---
 
@@ -289,6 +290,16 @@ bash ~/.trae/scripts/self-update-harness.sh --apply  # apply real
 # Modo B com base branch explícita (default: auto-detect main/dev)
 /harness-scope-check --scope="adiciona filtros dashboard admin + export CSV" \
   --worktree=/abs/wt --base=origin/dev
+
+# ====== 🔀 MERGE RESOLVE (quando Git trava com <<<<<<< markers) ======
+# Resolver todos conflitos 1 hunk por vez, default OURS (worktree atual wins incoming loses)
+/harness-merge --worktree=/abs/wt
+
+# Modo mais restrito: só resolver conflitos dentro de packages/db (menor blast radius)
+/harness-merge --worktree=/abs/wt --path=packages/db
+
+# Quiser favorecer branch incoming ao invés worktree
+/harness-merge --strategy=theirs --worktree=/abs/wt
 
 # ====== Registry Binding (não use Edit/Write manual) ======
 source ~/.trae/contracts/harness_sessions_contract.sh

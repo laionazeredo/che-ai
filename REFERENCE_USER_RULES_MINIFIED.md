@@ -81,7 +81,7 @@
 - **Implementação feature/longa:** `/harness-start` (auto serial vs parallel) OU `/harness-parallel` (force parallel-or-bust). SM invoca `/harness-spec` automaticamente no preflight §0.5 se não houver Approved.
 - **Bug fix:** `/harness-fix` (loop científico; reproduz ANTES)
 - **Ship:** `/harness-ship` (commits atômicos conventional, push --no-verify, PR DRAFT + gh-stack se múltiplos PRs). **PRÉ-REQUISITO GATE FAIL-CLOSED:** `/harness-scope-check` com 4 verdicts. Qualquer 🔴 bloqueia abertura do Draft PR até resolver.
-- **Review/comments/CI/auditoria escopo:** `/harness-review` (BLOCKING runtime/PII/deps/scope), `/harness-pr-comments`, `/harness-ci-fix`, **`/harness-scope-check` (4-checks audit: entrega+testes+docs+env vars a partir de PRD/ticket/task-graph)**
+- **Review/comments/CI/auditoria escopo/**merge conflito**:`/harness-review` (BLOCKING runtime/PII/deps/scope), `/harness-pr-comments`, `/harness-ci-fix`, **`/harness-scope-check` (4-checks audit: entrega+testes+docs+env vars a partir de PRD/ticket/task-graph)**, **`/harness-merge` (resolve conflitos merge hunk-a-hunk default OURS, ask em ambiguidade, 0 blast-radius min)**.
 - **Operações leves:** `/harness-status`, `/harness-skip`, `/harness-decisions`, `/harness-summary`, `/harness-abort` (inline, NÃO viram skill)
 
 - **Corpo completo, sintaxe e exemplos:** `HARNESS_COMMANDS.md` (canônico; 14 comandos total)

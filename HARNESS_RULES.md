@@ -361,6 +361,21 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 
 ---
 
+### 🔀 Merge Conflict Resolver: `/harness-merge` — hunk-a-hunk, default OURS, PERGUNTA na ambiguidade
+
+Quando existem arquivos `UU | AA | DD | AU | UA | DU | UD` (git status unmerged):
+
+- **DEFAULT STRATEGY NON-NEGOTIABLE = OURS:** worktree atual que está rodando vence; incoming branch perde POR HUNK. Só use outra se user passou `--strategy=THEIRS | MANUAL_ASK_ALL` explicitamente.
+- **MIN BLAST RADIUS 1 hunk por vez:** NUNCA `git checkout --ours <FILE>` (arquivo inteiro). NUNCA `-X ours` global. Resolve hunk-a-hunk em loop alfabético.
+- **3 casos canônicos por hunk:**
+  1. 🟢 **TRIVIAL AUTO:** diferença só whitespace / ordem imports / newlines (sem mudar semântica). Resolve sozinho sem ask.
+  2. 🟡 **CLASH:** 2 lados com mudanças código diferentes mas ambas 2 alternativas claras. Exibe preview 5 linhas + **justificativa curta agente POR LADO (nunca recomendar)** + pergunta EXATA 2 opções + optional COMBINAR se aplicável (ex: concatenação sem duplicação). Espera resposta.
+  3. 🔴 **AMBIGUIDADE (nunca decide sozinho):** ≥3 alternativas válidas OU reescreveu função jeitos diferentes OU ordem side-effects importa OU afeta tipos/zod/RLS/contratos API. Agent declara bullets da razão ambiguidade + oferece A=OURS B=THEIRS C="eu edito manual, continue depois". Espera.
+- **Cada hunk → 1 `MERGE_RESOLVE` entry no decisions.log.jsonl.** Audit completo.
+- **Arquivos fora da lista unmerged inicial → NUNCA toca.**
+
+---
+
 ## 🔴 PARALELISMO — Regras Obrigatórias (Não Negocia)
 
 ### 🚀 Quando paralelizar é seguro (TODOS devem ser true)
@@ -409,7 +424,7 @@ KISS ganha sempre. Parallel é OTIMIZAÇÃO, não OBRIGATORIEDADE.
 >
 > Visão rápida (14 comandos total):
 > - 9 **pesados (workflow)** → wrapper de validação preflight + `Skill(...)`:
->   `/harness-spec` | `/harness-start` | `/harness-parallel` | `/harness-ship` | `/harness-fix` | `/harness-review` | `/harness-diff` | `/harness-manual-test` | `/harness-pr-comments` | `/harness-ci-fix` | `/harness-design` | `/harness-figma` | `/harness-scope-check`
+>   `/harness-spec` | `/harness-start` | `/harness-parallel` | `/harness-ship` | `/harness-fix` | `/harness-review` | `/harness-diff` | `/harness-manual-test` | `/harness-pr-comments` | `/harness-ci-fix` | `/harness-design` | `/harness-figma` | `/harness-scope-check` | `/harness-merge`
 > - 5 **leves (operação em arquivo)**: inline, NÃO viram skill (ler/escrever markdown, KISS → não criar skill de 3 linhas):
 >   `/harness-status` | `/harness-skip` | `/harness-decisions` | `/harness-summary` | `/harness-abort`
 > - Contagem atualizada: consultar `HARNESS_COMMANDS.md` §Architecture Commands vs Skills para Category A (heavy) + Category B (light) exata.
