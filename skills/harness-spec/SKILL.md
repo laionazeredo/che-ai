@@ -54,9 +54,9 @@ Present choices when input arg is missing or ambiguous. First match wins, never 
 
 ---
 
-## §3 SPEC DRAFT STRUCTURE (7 sections, canonical)
+## §3 SPEC DRAFT STRUCTURE (9 sections — SbE CENTRIC, canonical)
 
-Write the draft in-memory first. File starts with YAML frontmatter, THEN 7 markdown sections.
+Write the draft in-memory first. File starts with YAML frontmatter, THEN 9 markdown sections (§1-§9). **§4 SbE is the MANDATORY CENTRAL SECTION** (behaviors observable, NOT implementation). Ordem fixa — NÃO reordenar.
 
 ### §HEAD — YAML Frontmatter (REQUIRED fields — validate all present)
 ```yaml
@@ -69,6 +69,8 @@ domain: engineering                  # valores aceitos: engineering | product | 
                                       # default = engineering (retrocompat total com specs/sessões/skills antigas sem esse campo)
                                       # se != engineering → SM §0.3 auto-carrega domains/<domain>/profile.md + playbook.md
                                       # se != engineering → ship §0.9.5 executa gates obrigatórios playbook
+risk_level: low|medium|high           # NOVO SbE. default = low. Se medium/high → gatilho §4.4 Mermaid obrigatório.
+source_merge_order: [user_prompt, prd_file, linear_ticket, implementer_hints]   # NOVO SbE CANÔNICO. NÃO reordenar sem EXPLICIT_OVERRIDE + decision log.
 status: Draft
 estimated_files_max: <integer; default 15; hard stop per §15>
 estimated_max_lines_add: <integer; default 400; trigger for gh-stack>
@@ -80,6 +82,11 @@ bound_agent_lang: default|pt-BR|en
 flags: LANG_PT_CHECK=ENABLED[, RLS_MANDATORY=NO]
 approver: ""
 approved_at: ""
+# Contadores SbE auto-calculados (VAL09-V10 validation cross-check) — opcional, preencher no final do draft:
+b_count: 0                            # NOVO: quantidade de B-IDs na §4.2 Behavior Table (auto-count)
+ab_count: 0                           # NOVO: quantidade de AB-IDs na §4.3 Anti-Behavior Table (auto-count)
+erd_required: false                   # NOVO: gatilho ERD. true SE E SOMENTE SE: (a) cria entidade DB NOVA; (b) altera cardinalidade FK ON DELETE/UPDATE; (c) adiciona ≥3 campos com constraints UNIQUE/UK/CHECK.
+mermaid_required: false               # NOVO: gatilho diagrams. true SE E SOMENTE SE: b_count>=8 OR atores_publicos>=3 OR risk_level in {medium, high}.
 ---
 ```
 
@@ -106,42 +113,171 @@ Header: `## §3 CONTRACTS (Design by Contract)`
 - `### POSTconditions (after all tasks DONE — assertion-ready)` — ≥3 bullets, ≤8. Each bullet = a statement you can run a single test against; use `==`, `∈ {x,y}`, or plain assert verbs.
 - `### INVARIANTS (never break, even temporarily)` — ≥1, ≤5. Last INV if empty add: `INV-<N>: Files listed in CANNOT TOUCH §2 remain byte-for-byte unchanged git diff.`
 
-### §4 ACCEPTANCE CRITERIA (MoSCoW + Given-When-Then + TEST_METHOD per line)
-Header: `## §4 ACCEPTANCE CRITERIA (MoSCoW + GWT + HOW TO TEST)`
-Format per bullet — ONE AC per line (strict):
-```
-- [MUST|SHOULD|MAY] AC-<id> GIVEN <setup> WHEN <action> THEN <assertion> | TEST=<Vitest unit|Playwright login+curl|curl local|manual QA visual|Postman collection|Vitest e2e|DB query|tRPC assert>
-```
-Rules:
-- ≥3 MUST; ≥1 SHOULD; ≥0 MAY. ≤10 total.
-- Every `THEN` assertion is **falsifiable in 1 operation** (no vague wording like "improve UX").
-- TEST= must match one of the provided tokens above, followed by any 1-line qualifier. Do not invent new tokens without logging exception in decision.
+### §4 SPECIFICATION BY EXAMPLE (SbE — CENTRAL OBRIGATÓRIO)
+Header: `## §4 SPECIFICATION BY EXAMPLE (SbE — Public Behaviors Observable)`
 
-### §5 TEST STRATEGY (layers + PASS/FAIL thresholds + Rollback)
-Header: `## §5 TEST STRATEGY (QA orchestration)`
-Four subsections, ≤3 bullets each:
-- `### Execution order (FAIL FAST):` Phase 1 SMOKE (3 core MUSTs — run via `test_spec_smoke.md`); Phase 2 UNIT per task; Phase 3 API E2E or Playwright; Phase 4 REGRESSION GUARDS INVARIANTS.
-- `### PASS/FAIL thresholds:` Dev handoff Vitest per MUST unit ≥1 pass; QA 100% MUST + ≥80% SHOULD; Ship gate INVARIANTS 2 runs.
-- `### Rollback trigger (when to abort):` Single trigger sentence. E.g. "If INV-1 fails at ANY phase → revert last 1 commit, open follow-up SPEC for root cause."
-- `### Evidence location:` — Reminder (auto-filled): `$HARNESS_SESSION_DIR/qa/screenshots/*` + `$HARNESS_SESSION_DIR/qa/logs/*`; manual_test_plan DURÁVEL em `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md`.
+> **CANONICAL SOURCE MERGING ORDER quando construir as tabelas abaixo (não reordenar sem EXPLICIT_OVERRIDE + decision.log):**
+>   1st HIGHEST — **User Prompt VERBATIM** atual desta sessão
+>   2nd — **Legacy PRD (.md)** (se source = C)
+>   3rd — **Ticket Linear / ClickUp / GitHub Acceptance Criteria BRUTOS** (ac → 1 B-pos + 1 AB-neg mínimo)
+>   4th LOWEST — Implementer hints (só preenche lacunas NÃO conflitantes)
+>
+> No final do draft §4, SEMPRE pergunte ao usuário:
+> > "Tem mais edge case NEGATIVO (AB-) ou POSITIVO (B-) que devo adicionar às tabelas? Principais lacunas: (listar 2-3 missing behaviors da categoria mais crítica do user prompt)."
 
-### §6 IMPLEMENTATION HINTS (opt-in, only if re-use exists or gotchas)
-Header: `## §6 IMPLEMENTATION HINTS`
-- 2–5 bullets only. Empty section OK = skip. Each bullet: 1 reference to existing function/class/commit hash or 1 gotcha about runtime (Edge restrictions, build-time files, DI rules).
+#### §4.1 KEY RULES (R1..RN — máx 8)
+Header: `### §4.1 KEY RULES (Non-negotiable invariants 1–8)`
+- MÁXIMO 8 bullets. Derivado das fontes acima, NÃO de implementação.
+- NOME curto único R1..RN + 1 frase ação + impacto negócio.
+- Exemplos:
+  - R1: Refunds SEMPRE usam Stripe `reverse_transfer=true, refund_application_fee=false` (destination charges invariant).
+  - R2: Nenhum email bruto persistido em logs admin (PII convention).
+  - R3: Duplo clique no botão Confirm Refund NUNCA cria 2 refund (idempotency key dedup).
+
+#### §4.2 BEHAVIOR EXAMPLE TABLE (B-IDs positivos — máx 10, 1st verification anchor)
+Header: `### §4.2 POSITIVE BEHAVIOR EXAMPLES (B-ID 1..≤10)`
+
+**Tabela Markdown OBRIGATÓRIA. Cada coluna = NÃO VAZIA (exceto UI Selector quando Playwright não marcado).**
+| B-ID | Given (Setup Concreto) | When (Ação Única Pública) | Then (Observable Public Behavior ONLY — sem palavras "correctly"/"works" — valores literais / HTTP codes / textos UI / side effects observáveis externos) | Test Layers [Unit ✅|Integ ✅|API-E2E ✅|Playwright ✅|Manual ✅] — marcar ✅ CAMADA CASO-A-CASO, NÃO obrigar todas | UI Selector Contract (só se Playwright ✅) — data-testid 3-parties `<domain>__<component>__<action>`, kebab duplo `__` | Confidence target % | Risks se OMITIR camada marcada ⚠️ |
+|---|---|---|---|---|---|---|---|
+| B-1 | Given booking_id=BK-123 exists, status=pending_payment, stripe_capture=succeeded, amount=2000p | When creator POST /api/bookings/:id/refund reason="Duplicate" | Then (HTTP 201 refund.id=RF-456 · booking.status=REFUNDED · customer.emailHash=sha256(..) recebe refundConfirmation template · Stripe dashboard refund.amount=2000 with reverse_transfer=true) | [✅Integ ✅API-E2E ✅Manual] | `creator__bookings-row__refund-btn--BK-123` + `refund__action-btn__confirm` | 98% | Sem Integ: omissão Stripe params causa webhook race → dupla dedução balance. Sem Manual: UX loading state falha visualmente em 3G. |
+| B-2 | ... | ... | ... | [...✅] | `...` | ... | ... |
+
+Rules enforcement desta tabela:
+1. **MÁXIMO 10 B-IDs TOTAIS** (se mais gh-stack 2 PRs).
+2. **Then coluna DEVE ser PÚBLICO OBSERVÁVEL:** status HTTP, UI texto literal, email tipo, Stripe/DB campo público. PROIBIDO Then: "o service chama método X internamente" (implementation bias).
+3. **Test Layers coluna:** HONEYCOMB PYRAMID. CASO-A-CASO. Marque ✅ só camadas que realmente resolva o behavior. Regras padrão:
+   - Algoritmo puro isolado (math, formatter, hash): só ✅Unit.
+   - Query/mutation REST+tRPC+DB (no UI): ✅Integ + ✅API-E2E (máx 2 camadas).
+   - UI componente interativo (botão, formulário, loading): ✅Playwright + ✅Manual (2 camadas).
+   - Regra de negócio transfronteiriça (3+ serviços): ✅Unit + ✅Integ + ✅API-E2E (3 camadas).
+4. **Risks if omitir coluna:** DESCREVA NEGÓCIO impacto (não "coverage cai"). Ex: "Dupla dedução Stripe Connect balance $2k".
+5. **UI Selector Contract coluna:** Se Playwright=✅ → OBRIGATÓRIO pelo menos 2 ids por behavior (trigger action + result verify). **Gatilho enforcement G8 Category 8 code-review (ONDA1) contra fragilidade XPath/classes.**
+6. **Mapping Ticket AC → B-ID:** Cada Acceptance Criteria do ticket Linear → 1 B-ID positivo + 1 AB- anti (abaixo §4.3). No final do draft, mostrar lista: `AC-T1 → B-3 + AB-2`.
+
+#### §4.3 ANTI-BEHAVIOR EXAMPLE TABLE (AB-IDs negativos — MÍNIMO 33% DE B-IDs)
+Header: `### §4.3 ANTI-BEHAVIOR EXAMPLES (AB-ID 1..≥ceil(B_COUNT/3))`
+
+Tabela idêntica a §4.2, mas **Then = comportamento proibido que NUNCA deve acontecer.**
+| AB-ID | Given (Setup IDENTICO a B-ID correspondente — MESMO Given) | When (Ação PERIGOSA / inválida / duplicada / race) | Then PROIBIDO (public observável — o que NÃO ACONTECE, com valores literais) | Test Layers obrigatórios (≥1 camada ✅ por AB) | UI Selector (se Playwright) | Confidence target % | Risks se OMITIR teste AB |
+|---|---|---|---|---|---|---|---|
+| AB-1 | Given BK-123 pending_payment capture=succeeded amount=2000p idempotency_key=IK-XYZ | When DOUBLE-POST /api/bookings/:id/refund (2x paralelo com MESMO idempotency_key) | Then (HTTP 200 idempotent replay SAME RF-456 · booking.status NÃO transita · Stripe refund_count=1 · balance 1 movimento apenas) | [✅Integ ✅API-E2E] | `refund__action-btn__confirm` (double click rate limit check) | 99,5% | Não testar → 5% dos refund em click duplo geram transfer reversal negativo e dispute. |
+| AB-2 | ... | ... | Then NÃO... | [...✅] | ... | ... | ... |
+
+Rules enforcement desta tabela:
+1. **MÍNIMO 33% RATIO: `AB_COUNT ≥ ceil( B_COUNT / 3 )`** (validação V10). Ex: B=9→AB≥3; B=1→AB≥1; B=4→AB≥2.
+2. **Given DEVE ser o MESMO setup de um B-ID positivo correspondente** (mesma linha Given). Prova que o sistema resiste ao lado ruim do happy path.
+3. **When = ação que o usuário faria ERRADO ou atacante exploraria.** Double click, race condition, auth bypass, campo negativo, id já processado, etc.
+4. **Then NÃO pode ser vago.** Valores literais. Then coluna SEMPRE começa com a palavra "Then NÃO" ou "Then (HTTP 4xx ... NÃO altera booking.status)".
+
+#### §4.4 MERMAID DIAGRAMS (CONDICIONAL OBRIGATÓRIO — se gatilho disparado)
+Header: `### §4.4 MERMAID DIAGRAMS (skip or mandatory — based on triggers)`
+
+**Gatilho §4.4.1 + §4.4.2 OBRIGATÓRIOS SE E SOMENTE SE:**
+`(B_COUNT >= 8) OR (COUNT(public_actors_distinct) >= 3) OR (risk_level in ["medium", "high"]) OR (frontmatter.mermaid_required = true)`
+→ Se NENHUM: escrever exatamente `> ⚠️ Skipped (low complexity): B_COUNT=X<8 · public_actors=Y<3 · risk=low`.
+
+**Gatilho §4.4.3 ERDiagram OBRIGATÓRIO SE E SOMENTE SE:**
+`(nova_entidade_DB = true) OR (altera_cardinalidade_FK_ON_DELETE = true) OR (campos_novos_com_constraint_UNIQUE_CHECK >= 3) OR (frontmatter.erd_required = true)`
+
+Mermaid rules HARD (parser crash se violar — validação V13):
+- Shapes SÓ rectangle `ID["label"]`, diamond `ID{"?"}`, edge labels `|"txt"|`. NÃO stadium shapes.
+- Quebras linha NO internamente aos labels SÓ `<br/>` HTML. NÃO literal `\n`.
+- Atores SÓ PÚBLICOS (ex: Creator, Attendee, StripeWebhook, AdminUI). NÃO nome services interno (ex: RefundService, StripeClient). Proibido.
+- TODOS nós e setas DEVEM ter referência `B-X` ou `AB-Y` no label. Ex: `Creator["Creator (B-1, B-2)"]`.
+
+Sub-seções se gatilho disparar:
+- **§4.4.1 sequenceDiagram** — Ordem atores e mensagens. Cada mensagem = B-ID ou AB-ID.
+- **§4.4.2 flowchart TD** — Branches: (a) Happy path solid edge; (b) Sad/Error path dashed edge; (c) Rollback edge `--ROLLBACK-->` tracejado vermelho label. Nós = B-AB-IDs.
+- **§4.4.3 erDiagram** (se ERD gatilho) — Cardinalidade Mermaid oficial: `| = exactly 1; o| = 0 or 1; }o = 0 or N; }| = 1 or N`. Cada FK ou campo novo com B-ID correspondente no comment. Constraints UK/CHECK/UNIQUE listadas explicitamente com o número B-ID do behavior que a usa.
+
+### §5 VERIFICATION MATRIX (Bilateral B-ID ↔ Test File ↔ Evidence)
+Header: `## §5 VERIFICATION MATRIX (Bilateral — B → Test → B)`
+
+> **Purpose:** TODO checklist vivo que o harness atualiza AUTOMATICAMENTE em cada loop do SM/Developer/QA.
+> **Ancoras bilateral:** (1) Spec §4 B-ID → (2) Comentário `// @ac B-X` 1ª linha dentro do `it()`/`test()` → (3) Resultado/evidence sha256.
+> **Scope-checker CHECK2 (ONDA2 próximo bloco) valida o reverso: (2) → (1) + (3).**
+
+Tabela Markdown OBRIGATÓRIA (B-IDs first, depois AB-IDs abaixo):
+| Anchor (B or AB) | Status (Planned|Written|Passed|Failed|Skipped) | Test file ABSOLUTE PATH (real path dentro worktree bound) | Evidence sha256 (hash stdout/err ou screenshot png hash) | QA Owner Assigned | Notes |
+|---|---|---|---|---|---|
+| B-1 | Planned | `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts` L:78-111 | | Developer (SM) | // @ac B-3 | @ticket FLO-513 anchor |
+| B-2 | Planned | ... | ... | ... | ... |
+| AB-1 | Planned | `packages/platform/server/__tests__/integration/refundIdempotency.integ.test.ts` | | QA | Double click — Playwright extra step após integ |
+| AB-2 | ... | ... | ... | ... | ... |
+
+Atualização AUTOMÁTICA desta matriz EM CADA LOOP:
+- Developer termina task → atualiza `Status=Written` + `Test file path`.
+- QA run → atualiza `Status=Passed|Failed|Skipped` + append Evidence SHA256 (gerar via `sha256sum stdout.log | cut -d' ' -f1`).
+- Failed → nova linha Notes "Reproduce: command X".
+
+### §6 MANUAL SMOKE TEST PLAN (Staging + Prod HUMAN — OBRIGATÓRIO SEMPRE)
+Header: `## §6 MANUAL SMOKE TEST PLAN (HUMAN — Staging + Prod)`
+
+> **User requirement VERBATIM: "Além dos testes e2e, devemos ter um plano de testes manual ... também deve ser pensado desde o inicio o teste manual quando for pra produção."**
+> Mínimo 3 passos STAGING + 2 passos PROD.
+
+#### §6.1 Ambiente STAGING (post-deploy pre-PR merge — 3..8 steps)
+| Step # | Role (Creator|Attendee|Admin|Staff Scanner) | Ação Manual Concreta 1-clique / 1-tela | Expected Result (literal, public observável — matches Then de B-ID correspondente) | Anchor B-ID |
+|---|---|---|---|---|
+| S1 | Creator | Login staging; navegar Bookings → linha BK-123 → botão Refund → modal → Confirm. | (1) Toast verde "Refund RF-456 created"; (2) Status da linha → "Refunded"; (3) Email staging inbox → assunto "Your refund is on its way". | B-1 |
+| S2 | ... | ... | ... | B-2 |
+| S3 | Creator | Repetir Step S1 DUPLO CLIQUE rápido no botão Confirm | (1) Apenas 1 toast; (2) 1 entrada Refunds history; (3) Stripe dashboard staging → 1 refund only. | AB-1 |
+
+#### §6.2 Ambiente PROD (post deploy live — 2..5 steps MÍNIMO NON-DESTRUCTIVE)
+| Step # | Role | Ação Manual SEGURA (NÃO tocar dado produção real — usar dummy canary event se possível) | Expected Result Canary | Anchor B-ID |
+|---|---|---|---|---|
+| P1 | Admin | Acessar `/admin/health` → aba "Refund health check" (criar se não existir) → Executar canary refund de 0.01 GBP em sandbox connected account CA-TEST-ONLY. | Canary result: Stripe reverse_transfer=true; response 200; DB canary_refund_audit table 1 row. | B-1 |
+| P2 | Admin | Visualizar Logs produção últimos 15 min → filtro `service=refund` | Nenhum ERROR / stacktrace após deploy. | B-4 |
+
+#### §6.3 UI ONLY Extra Steps (se Playwright marcado em qualquer B-ID OU risk≥medium)
+→ Se gatilho falso → escrever: `> ⚠️ Skipped: nenhum behavior com Playwright layer AND risk=low`.
+→ Se gatilho verdadeiro → adicionar tabela steps UI cross-browser (Chrome/Firefox/Safari iOS 17):
+| Step | Device/Browser | Ação | Expected UI visual | Anchor |
+|---|---|---|---|---|
+| UI-1 | Chrome Desktop 128, 125% zoom | 3G throttled. Confirm Refund → loading spinner → toast. | Spinner aparece ≥500ms ≤2s. Toast verde text match literal. Sem layout shift. | B-1 loading. |
+
+### §7 IMPLEMENTATION HINTS (opt-in, only if re-use exists or gotchas — 2..5 bullets MAX)
+Header: `## §7 IMPLEMENTATION HINTS (Optional — reference existing code only)`
+- Bullet 1: Reference existing function/class/commit hash or existing pattern from graphify-out community hub ou `packages/platform/server/providers/stripe/StripeClient.ts createRefund` params.
+- Bullet 2: Gotcha runtime. Ex: "Vercel edge runtime: NÃO usar setImmediate para envio email; usar queues/await direto ou webhook."
+- NÃO adicionar implementação sketch aqui → seções §4 SbE já definem comportamento público. Isso é só acelerador de contexto.
+
 
 ---
 
-## §4 VALIDATION PASS (auto-run on draft)
+## §4 VALIDATION PASS (auto-run on draft — SbE rules V9..V15 NEW)
 
-Reject draft and loop back to §2 source if ANY fails:
-1. YAML frontmatter all REQUIRED keys present; parseable as YAML.
-2. `estimated_files_max ≤ 20` (§15 engineering-contracts KISS); if >20 → force user to reduce scope or trigger gh-stack immediately.
-3. §1 WHY bullets ≤ 5.
-4. §2 CAN TOUCH count ≤ 10 literal files or glob entries.
-5. §3 ≥3 POSTconditions, ≥1 INVARIANT.
-6. §4 ACs: ≥3 MUST. Every bullet contains literal `GIVEN` and `WHEN` and `THEN` and `| TEST=`.
-7. §5 rollback trigger: exactly 1 trigger sentence, non-empty.
-8. (OPTIONAL, só validar SE `domain:` fornecido DIFERENTE de default `engineering`) → value MUST be in enum EXATA os 7 slugs canônicos: `engineering | product | ux | devops | copywriting | social | seo-analytics`. Se digitado errado (typo, slug não reconhecido), valor vazio mas diferente de engineering, ou cross-domínio 2+ valores → **REJECT draft com mensagem clara**: "Campo `domain: <valor_invalido>` inválido. Valores aceitos: engineering | product | ux | devops | copywriting | social | seo-analytics. Default omissão = engineering (retrocompat). Corrija o frontmatter ou remova o campo para usar default." Loop back usuário corrigir antes de Approved gate.
+Reject draft and loop back to §2 source if ANY check fails. Run in order.
+
+### Legacy baseline checks (V1-V8)
+1. **V1** YAML frontmatter all REQUIRED keys present; parseable as YAML.
+2. **V2** `estimated_files_max ≤ 20` (§15 engineering-contracts KISS); if >20 → force user to reduce scope or trigger gh-stack immediately.
+3. **V3** §1 WHY bullets ≤ 5.
+4. **V4** §2 CAN TOUCH count ≤ 10 literal files or glob entries.
+5. **V5** §3 ≥3 POSTconditions, ≥1 INVARIANT.
+6. **V6** (legacy supercedido por V9-V15 mas ainda run para specs antigas sem SbE) → se spec NÃO contém header `## §4 SPECIFICATION BY EXAMPLE` ainda: §4 ACs ≥3 MUST, cada bullet contém GIVEN/WHEN/THEN/TEST literal. Else SKIP this check gracefully (SbE drafts NÃO usam mais MoSCoW ACs).
+7. **V7** (legacy, skip se SbE draft) §5 rollback trigger = exactly 1 trigger sentence, non-empty.
+8. **V8** (optional, always run se domain preenchido diferente default) → `domain:` MUST estar no EXATO 7-slugs enum canônico: `engineering | product | ux | devops | copywriting | social | seo-analytics`. Se typo/fora enum → **REJECT draft with clear msg**: "Campo `domain: <valor_invalido>` inválido. Valores aceitos: engineering | product | ux | devops | copywriting | social | seo-analytics. Default omissão = engineering (retrocompat). Corrija frontmatter ou remova o campo. Default é engineering."
+
+### SbE MANDATORY checks (V9-V15 — run SOMENTE se header `## §4 SPECIFICATION BY EXAMPLE` existe no draft. Hoje = SEMPRE, porque SbE = default.)
+9.  **V9 B-IDs max 10:** Contar linhas na §4.2 POSITIVE BEHAVIOR TABLE cuja 1ª coluna começa exatamente com `B-` e tem dígitos após (`B-1`, `B-10`). `B_COUNT = COUNT`. Se `B_COUNT > 10` → REJECT: "Positive behaviors (B-IDs) = $B_COUNT. MÁXIMO permitido = 10. Reduza scope ou use gh-stack para 2 PRs independentes (ver engineering-contracts §15 gh-stack multi-PR reference)."
+10. **V10 Anti-behavior ratio min 33%:** Contar AB-IDs na §4.3 ANTI-BEHAVIOR TABLE → `AB_COUNT = COUNT`. Calcular `EXPECTED_AB_MIN = ceil(B_COUNT / 3)`. Se `AB_COUNT < EXPECTED_AB_MIN` → REJECT: "Anti-behaviors (AB-IDs) faltantes. B_COUNT=$B_COUNT, AB_COUNT=$AB_COUNT, MÍNIMO ESPERADO = ceil($B_COUNT/3) = $EXPECTED_AB_MIN. Adicione pelo menos ($EXPECTED_AB_MIN - $AB_COUNT) AB- negativos (race/edge/inválido/ataque) na tabela §4.3."
+11. **V11 Cada B-ID tem ≥1 Test Layer marcado ✅:** Parse cada linha B- na tabela §4.2 coluna "Test Layers" — se NÃO contém caractere literal `✅` pelo menos 1 vez → REJECT: "B-XX coluna Test Layers não tem NENHUMA camada marcada ✅ (Unit/Integ/API-E2E/Playwright/Manual). Marque pelo menos 1 camada CASO-A-CASO (honeycomb pyramid; não obrigue todas)."
+12. **V12 UI Selector Contract regex validation:** Para cada linha B-ID onde coluna "Test Layers" CONTÉM literal `Playwright` → extrair ids da coluna "UI Selector Contract". Cada data-testid DEVE bater REGEX canônico Category 8 G8.3: `^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*(--[a-z0-9][a-z0-9-]*)?$`. Se NÃO bater → REJECT: "B-XX data-testid=`<id>` fora convenção 3-partes `<domain>__<component>__<action>[--unique-suffix]`. Regex esperado: `^[a-z0-9-]+__[a-z0-9-]+__[a-z0-9-]+(--[a-z0-9-]+)?$`."
+13. **V13 Mermaid diagrams trigger compliance:**
+    a. Calcular GATILHO_MERMAID = `(B_COUNT >= 8) OR (risk_level == "medium") OR (risk_level == "high") OR (mermaid_required == true) OR (atores_publicos_distintos >= 3)`.
+    b. Se GATILHO_MERMAID == TRUE → validar que o draft CONTÉM os 2 headings exatos: `### §4.4.1 sequenceDiagram` E `### §4.4.2 flowchart TD`. Se faltar QUALQUER um → REJECT: "Gatilho Mermaid disparado (B=$B_COUNT, risk=$risk_level). §4.4.1 sequenceDiagram e §4.4.2 flowchart TD AMBOS obrigatórios. Falta X."
+    c. Calcular GATILHO_ERD = `(erd_required == true) OR (nova_entidade_DB detectada pela palavra CREATE TABLE/ TypeORM Entity() nova em §2 CAN CREATE) OR (campos_novos >= 3 palavras UNIQUE|CHECK|UK em §2 SCOPE)`.
+    d. Se GATILHO_ERD == TRUE → validar que o draft CONTÉM heading exato `### §4.4.3 erDiagram`. Se faltar → REJECT: "Gatilho ERD disparado (nova entidade DB ou alteração FK/cardinalidade ou ≥3 campos constraints). §4.4.3 erDiagram obrigatório."
+    e. (Anti-crash parser Mermaid) Se §4.4 contiver mermaid code blocks: validar que NENHUM nó contém shapes stadium `[/` ou `([` ou `\]/` ou `)]`. Se tiver stadium shape → WARNING (não fatal mas recomenda correção antes de Approved): "Warning: Mermaid stadium shapes ( [/label/] ou ([label]) ) colidem com chars ()/ no label texto → parser crash 10.x+ Mermaid. Trocar por rectangle quoted `ID[\"label\"]`."
+14. **V14 §6 Manual Smoke Plan staging minimum 3 steps e prod minimum 2 steps:** Contar linhas da tabela §6.1 Staging coluna Step # com S-1,S-2,S-3 → se `< 3 passos` → REJECT: "Manual Smoke Plan STAGING (§6.1) tem $N passos. MÍNIMO 3 passos obrigatórios." Contar passos §6.2 Prod P-1,P-2 → se `< 2 passos` → REJECT: "Manual Smoke Plan PROD (§6.2) tem $N passos. MÍNIMO 2 passos obrigatórios NON-DESTRUCTIVE."
+15. **V15 Frontmatter counters match actual tables:** Se b_count ou ab_count estão preenchidos no YAML (≠ 0 ou empty) → validar `frontmatter.b_count == B_COUNT real da tabela §4.2` AND `frontmatter.ab_count == AB_COUNT real da tabela §4.3`. Se divergir → WARNING não fatal: "Warning: frontmatter.b_count=$front ab_count=$front != tabela real B=$realB AB=$realAB. Auto-fix before Approved."
+
+### Cross-ref scope-checker CHECK2 bilateral (ONDA2 próximo bloco)
+When this VALIDATION PASS runs GREEN (all pass), the harness also prints a 1-line footer:
+> `SbE spec valid: B=$B_COUNT AB=$AB_COUNT AB_ratio=$RATIO% Mermaid=$TRIG ERD=$ERD_TRIG.`
+This line is parsed by `harness-scope-checker` CHECK2 (ONDA2) before performing bilateral B-ID ↔ test file cross-validation.
 
 ---
 
