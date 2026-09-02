@@ -26,10 +26,10 @@ jobs:
       - name: pnpm install (tsx + typescript + @types/node)
         run: pnpm install --prefer-offline --frozen-lockfile
 
-      - name: structure counts (22 commands / 3 hooks / ≥2 contracts / scripts exists)
+      - name: structure counts (23 commands / 3 hooks / ≥2 contracts / scripts exists)
         run: |
           set -euo pipefail
-          test "$(ls -1 commands | wc -l)" = "22"
+          test "$(ls -1 commands | wc -l)" = "23"
           test "$(ls -1 hooks    | wc -l)" = "3"
           test "$(ls -1 contracts | wc -l)" -ge 2
           test -f contracts/harness_sessions_contract.sh
@@ -68,3 +68,12 @@ jobs:
           T=$(mktemp -d)
           bash scripts/install-harness.sh --source "$PWD" --target "$T"
           rm -rf "$T"
+
+      - name: portable Trae hooks protocol
+        run: bash tests/hooks-portability-smoke.sh
+
+      - name: generic worktree binding guard
+        run: bash tests/worktree-binding-smoke.sh
+
+      - name: design source backend routing
+        run: bash tests/design-source-routing-smoke.sh

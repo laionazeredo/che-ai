@@ -110,6 +110,12 @@ if [ ! -f "${SOURCE}/HARNESS_RULES.md" ]; then
   exit 2
 fi
 
+case "$TARGET" in
+  /*) : ;;
+  *) TARGET="${PWD}/${TARGET}" ;;
+esac
+TARGET="${TARGET%/}"
+
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 MODE_LABEL="[dry-run]"
 [ "$APPLY" -eq 1 ] && MODE_LABEL="[apply]"
@@ -246,8 +252,25 @@ backup_if_exists_and_diff() {
 # Passo 2: copia whitelist arquivos raiz com merge inteligente.
 # ============================================================
 NEEDS_PNPM_INSTALL=0
+RENDERED_HOOKS_JSON="$(mktemp)"
+trap 'rm -f "$RENDERED_HOOKS_JSON"' EXIT
+python3 - "${SOURCE}/hooks.json" "$RENDERED_HOOKS_JSON" "$TARGET" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+source_path, output_path, target = map(Path, sys.argv[1:])
+config = json.loads(source_path.read_text())
+for event_hooks in config.get("hooks", {}).values():
+    for hook in event_hooks:
+        command = hook.get("command")
+        if isinstance(command, str):
+            hook["command"] = command.replace("__HARNESS_TARGET__", str(target))
+Path(output_path).write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n")
+PY
 for f in "${WHITELIST_ROOT_FILES[@]}"; do
   SRC="${SOURCE}/${f}"
+  [ "$f" = "hooks.json" ] && SRC="$RENDERED_HOOKS_JSON"
   DST="${TARGET}/${f}"
   ret=0
   backup_if_exists_and_diff "$SRC" "$DST" "root/${f}" || ret=$?
@@ -291,6 +314,10 @@ for d in "${WHITELIST_DIRS[@]}"; do
     shopt -u dotglob nullglob
   fi
 done
+
+if [ "$APPLY" -eq 1 ] && [ -d "${TARGET}/hooks" ]; then
+  chmod +x "${TARGET}"/hooks/*.sh
+fi
 
 # ============================================================
 # Passo 4: BLACKLIST — garantia de estrutura mínima VÁZIA (sempre).

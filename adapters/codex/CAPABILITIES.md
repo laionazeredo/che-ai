@@ -13,6 +13,7 @@ This file documents runtime mappings between the shared Harness and Codex.
 | GitHub | gh | gh |
 | Worktree binding | canonical contract | canonical contract |
 | Durable artifacts | `$HARNESS_SESSIONS_ROOT` | `$HARNESS_SESSIONS_ROOT` |
+| Figma design backend | Runtime integration | Figma MCP may be available; detect effective capability per session |
 | SPEC | `/harness-spec` | `$harness-spec` |
 | Start/orchestration | `/harness-start` | `$harness-scrum-master` |
 | QA | Harness QA | `$harness-qa` |
@@ -29,6 +30,9 @@ Use:
 - `HARNESS_HOME` for the Harness installation root.
 - `harness_current_session_id` for the effective session identifier.
 - canonical contracts for generated artifact paths.
+
+Figma capability is session-dependent. Until a real smoke test proves the
+active integration, do not claim read, write or export support.
 
 Trae compatibility remains available through:
 

@@ -7,7 +7,7 @@ description: "Onboarding raio-X de repositório NOVO. Detecta stack, linguagem, 
 
 > **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
 > - Full engineering contracts (precedence 1-18, DbC, KISS, No Accidental Complexity, Ousterhout): `engineering-contracts` skill
-> - Path resolution + project registry Nível 1.5 helpers: `source ~/.trae/contracts/harness_sessions_contract.sh`
+> - Path resolution + project registry Nível 1.5 helpers: `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`
 > - Knowledge graph AST: `/harness-graph refresh` (wrapper graphify CLI pipx: `graphifyy`)
 > - Complemento humano contexto produto: `/harness-project-knowledge`
 
@@ -28,11 +28,12 @@ description: "Onboarding raio-X de repositório NOVO. Detecta stack, linguagem, 
 
 ```bash
 # 1. Carrega contracts helpers
-source ~/.trae/contracts/harness_sessions_contract.sh
-
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+source "$HARNESS_HOME/contracts/harness_sessions_contract.sh"
 WORKTREE_ROOT="${WORKTREE_ROOT:?WORKTREE_ROOT obrigatório para xray}"
-SESSION_ID="${SESSION_ID:-xray-standalone-$(date -u +%Y%m%d-%H%M%S)}"
-harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+XRAY_SESSION_ID="$(harness_current_session_id)"
+XRAY_SESSION_ID="${XRAY_SESSION_ID:-xray-standalone-$(date -u +%Y%m%d-%H%M%S)}"
+harness_compute_paths "$WORKTREE_ROOT" "$XRAY_SESSION_ID" "$PWD"
 harness_ensure_session_dirs "$WORKTREE_ROOT"
 
 # 2. Double-guard: registry NÃO pode cair dentro worktree

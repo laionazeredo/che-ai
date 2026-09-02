@@ -20,7 +20,8 @@
 
 set -euo pipefail
 
-CONTRACTS_SH="${HOME}/.trae/contracts/harness_sessions_contract.sh"
+HARNESS_ROOT="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACTS_SH="$HARNESS_ROOT/contracts/harness_sessions_contract.sh"
 if [ -f "$CONTRACTS_SH" ]; then
   # shellcheck disable=SC1090
   source "$CONTRACTS_SH"
@@ -28,7 +29,7 @@ fi
 
 INPUT_JSON="$(cat)"
 
-SESSION_ID=$(jq -r '.sessionId // empty' <<<"$INPUT_JSON" 2>/dev/null || echo "")
+TRAE_SESSION_ID=$(jq -r '.sessionId // empty' <<<"$INPUT_JSON" 2>/dev/null || echo "")
 TOOL_NAME=$(jq -r '.toolName // ""' <<<"$INPUT_JSON" 2>/dev/null || echo "")
 
 TOOLS_TO_GUARD="Read|Glob|Grep|Edit|Write|RunCommand|DeleteFile|LS|SearchCodebase"
@@ -54,18 +55,13 @@ extract_paths() {
 
 mapfile -t CANDIDATE_PATHS < <(extract_paths)
 
-# Early allow: qualquer path candidato começa com HARNESS_SESSIONS_ROOT → permitido
-for p in "${CANDIDATE_PATHS[@]}"; do
-  if [[ "$p" == "$HARNESS_SESSIONS_ROOT"/* ]]; then
-    echo '{"decision":"allow","reason":"§19 EXCEÇÃO HARNESS_SESSIONS_ROOT: path alvo é pasta de dados gerados/efêmeros harness (fora código usuário). Scissor bypassed by design."}'
-    exit 0
-  fi
-done
-
 # --- LEVEL 1 LOOKUP JSONL (chicken-and-egg solved: lookup by SESSION_ID) ---
-REGISTRY_FILE="$HOME/.trae/bindings/registry.jsonl"
+REGISTRY_FILE=""
+if declare -F harness_registry_path >/dev/null 2>&1; then
+  REGISTRY_FILE="$(harness_registry_path)"
+fi
 BOUND_ROOT=""
-if [ -n "$SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
+if [ -n "$TRAE_SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
   PY_SCRIPT='import json,sys
 p, sid = sys.argv[1:3]
 last = None
@@ -80,7 +76,7 @@ with open(p) as f:
 if last is None:
     sys.exit(1)
 print(last.get("worktree_root") or "")'
-  BOUND_ROOT=$(python3 -c "$PY_SCRIPT" "$REGISTRY_FILE" "$SESSION_ID" 2>/dev/null) || true
+  BOUND_ROOT=$(python3 -c "$PY_SCRIPT" "$REGISTRY_FILE" "$TRAE_SESSION_ID" 2>/dev/null) || true
 fi
 
 if [ -z "$BOUND_ROOT" ]; then
@@ -88,35 +84,54 @@ if [ -z "$BOUND_ROOT" ]; then
   exit 0
 fi
 
-WORKTREE_PREFIXES=()
-for p in "${CANDIDATE_PATHS[@]}"; do
-  if [[ "$p" == */Lumos || "$p" == */Lumos/* || "$p" == */Lumos.worktrees/* ]]; then
-    prefix=$(sed -E 's|^(.*/Lumos\.worktrees/[^/]+)(/.*)?$|\1|; t; s|^(.*/Lumos)(/.*)?$|\1|' <<<"$p")
-    WORKTREE_PREFIXES+=("$prefix")
-  fi
-done
+git_worktree_root_for_path() {
+  local candidate="$1"
+  local probe="$candidate"
 
-if [ ${#WORKTREE_PREFIXES[@]} -eq 0 ]; then
-  echo '{"decision":"allow","reason":"Nenhum path de worktree nos tool args (fora Lumos/Lumos.worktrees escopo). Scissor check allow."}'
-  exit 0
-fi
+  [ -n "$probe" ] || return 1
+  if [ -f "$probe" ]; then
+    probe="$(dirname "$probe")"
+  fi
+  while [ ! -d "$probe" ]; do
+    local parent
+    parent="$(dirname "$probe")"
+    [ "$parent" != "$probe" ] || return 1
+    probe="$parent"
+  done
+
+  git -C "$probe" rev-parse --show-toplevel 2>/dev/null
+}
+
+BOUND_NORMALIZED="$(git_worktree_root_for_path "$BOUND_ROOT" || true)"
+[ -n "$BOUND_NORMALIZED" ] || BOUND_NORMALIZED="${BOUND_ROOT%/}"
 
 VIOLATIONS=()
-BOUND_NORMALIZED="${BOUND_ROOT%/}"
-for p in "${WORKTREE_PREFIXES[@]}"; do
-  normalized="${p%/}"
-  if [ "$normalized" != "$BOUND_NORMALIZED" ]; then
-    VIOLATIONS+=("$normalized")
+PROJECT_PATHS=0
+SESSION_ARTIFACT_PATHS=0
+for p in "${CANDIDATE_PATHS[@]}"; do
+  if [ "$p" = "$HARNESS_SESSIONS_ROOT" ] || [[ "$p" == "$HARNESS_SESSIONS_ROOT"/* ]]; then
+    SESSION_ARTIFACT_PATHS=$((SESSION_ARTIFACT_PATHS + 1))
+    continue
+  fi
+
+  project_root="$(git_worktree_root_for_path "$p" || true)"
+  if [ -z "$project_root" ]; then
+    continue
+  fi
+
+  PROJECT_PATHS=$((PROJECT_PATHS + 1))
+  if [ "${project_root%/}" != "$BOUND_NORMALIZED" ]; then
+    VIOLATIONS+=("${project_root%/}")
   fi
 done
 
 if [ ${#VIOLATIONS[@]} -gt 0 ]; then
   UNIQ=$(printf "%s\n" "${VIOLATIONS[@]}" | sort -u | paste -sd "," -)
-  REASON_BLOCK="§19 WORKTREE SESSION BINDING VIOLATION (Level 1 Registry). sessionId=$SESSION_ID is BOUND in Level 1 registry ($REGISTRY_FILE) to WORKTREE_ROOT=$BOUND_NORMALIZED. Tool=$TOOL_NAME tentou acessar paths FORA worktree vinculada: $UNIQ. Action: (1) cancelar; (2) AskUserQuestion re-bind explícito (old entry STATUS=RELEASED + new BOUND append registry); (3) confirmação one-off opção A."
+  REASON_BLOCK="§19 WORKTREE SESSION BINDING VIOLATION (Level 1 Registry). sessionId=$TRAE_SESSION_ID is BOUND in Level 1 registry ($REGISTRY_FILE) to WORKTREE_ROOT=$BOUND_NORMALIZED. Tool=$TOOL_NAME tentou acessar paths FORA worktree vinculada: $UNIQ. Action: (1) cancelar; (2) AskUserQuestion re-bind explícito (old entry STATUS=RELEASED + new BOUND append registry); (3) confirmação one-off opção A."
   jq -nc --arg r "$REASON_BLOCK" '{decision:"block", reason: $r}'
   exit 2
 fi
 
-REASON_ALLOW="§19 OK Level 1 Registry: tool args worktree paths match BOUND_WORKTREE_ROOT=$BOUND_NORMALIZED"
+REASON_ALLOW="§19 OK Level 1 Registry: all detected project paths match BOUND_WORKTREE_ROOT=$BOUND_NORMALIZED (project_paths=$PROJECT_PATHS session_artifact_paths=$SESSION_ARTIFACT_PATHS)"
 jq -nc --arg r "$REASON_ALLOW" '{decision:"allow", reason: $r}'
 exit 0

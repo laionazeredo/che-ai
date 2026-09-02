@@ -11,8 +11,15 @@
 
 set -euo pipefail
 
-TRAE_ROOT="$HOME/.trae"
-SKILLS_DIR="$TRAE_ROOT/skills"
+HARNESS_ROOT="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACTS_SH="$HARNESS_ROOT/contracts/harness_sessions_contract.sh"
+if [ -f "$CONTRACTS_SH" ]; then
+  # shellcheck disable=SC1090
+  source "$CONTRACTS_SH"
+fi
+HARNESS_HOME="${HARNESS_HOME:-$HARNESS_ROOT}"
+TRAE_ROOT="$HARNESS_HOME"
+SKILLS_DIR="$HARNESS_HOME/skills"
 
 INPUT_JSON="$(cat)"
 TOOL_NAME=$(jq -r '.toolName // ""' <<<"$INPUT_JSON" 2>/dev/null || echo "")
