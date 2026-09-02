@@ -194,12 +194,19 @@ Reproduction command:
 
 Goal: garante que `describe()` / `it()` / `test()` descrevem COMPORTAMENTO OBSERVÁVEL, não ids internos de task/spec/regra. Roda APENAS se arquivos `*.test.*`, `*.spec.*` ou pastas `__tests__/` foram modificados nesta task.
 
-**O que detectar (regex em títulos):**
+**🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça):**
+> ❌ **ERRADO:** Reportar WARN / FAIL porque um título de teste NÃO CONTÉM `FLO-xxx` / `T<N>` / `AC<N>`.
+> ✅ **CORRETO:** Ter esses IDs NO TÍTULO é BAD = finding. NÃO TER e descrever comportamento é GOOD = compliant = NUNCA reporte finding por ausência de ID.
+>
+> **Decisão 1-sentence:** `title contains FLO-ID → BAD finding. title does NOT contain FLO-ID → GOOD (no finding).`
+> **Traceabilidade correta** (NÃO viola, sempre OK): comentário JSDoc `/** @ticket FLO-714 · @ac 3.1 */` ACIMA do bloco OU linha `// @ticket FLO-714 | @ac 3.1 | @task T1.2` 1ª linha DENTRO do bloco.
+
+**O que detectar (regex SÓ NO TÍTULO STRING — comentários ignorados):**
 Scan the string passed to `describe(...)`, `it(...)`, or `test(...)`:
-- Ticket IDs: `FLO-\d+`, `[A-Z]{2,}-\d+`
-- Task/item IDs: `Task?\s*T\d+(\.\d+)?`, `Item\s*\d+`
-- AC/section IDs: `AC\s*\d+`, `§\s*\d+(\.\d+)?`, `REGRA\s*\d+`, `SPEC[_-]\w+`
-- Phase/story IDs: `Fase\s*\d+`, `Story\s*#?\d+`, `PRD\s*§`
+- Ticket IDs in TITLE: `FLO-\d+`, `[A-Z]{2,}-\d+`
+- Task/item IDs in TITLE: `Task?\s*T\d+(\.\d+)?`, `Item\s*\d+`
+- AC/section IDs in TITLE: `AC\s*\d+`, `§\s*\d+(\.\d+)?`, `REGRA\s*\d+`, `SPEC[_-]\w+`
+- Phase/story IDs in TITLE: `Fase\s*\d+`, `Story\s*#?\d+`, `PRD\s*§`
 
 **How to scan (simplest possible — grep with -E):**
 ```bash
@@ -207,18 +214,18 @@ cd <WORKTREE_ROOT>
 git diff --cached --unified=0 -- <changed spec files> | grep -E '^\s*\+' \
   | grep -Eo '\b(describe|it|test)\s*\(\s*["'"'"'][^"'"'"']{1,240}["'"'"']' \
   > /tmp/qa-test-names.txt 2>/dev/null || true
-Then for each title found check anti-patterns above.
+Then for each title found check anti-patterns ABOVE only. Ignore JSDoc comments + body comments.
 ```
 
-**Report output format (WARNINGS, NEVER blocks — FAIL only if ≥10 bad names):**
+**Report output format (WARNINGS only when BAD titles PRESENT — NEVER flag "missing FLO prefix"):**
 ```
 Stage E — TEST NAMING (REGRA 7.9)
 Total test titles scanned: 42
-Behavioral (good): 40
-Bad titles detected (WARNING): 2
-  - <file>: it("Task T2.3 — valida AC 4.2 refund")  — BAD: contains "Task T2.3" and "AC 4.2"
-  - <file>: describe("FLO-513 refund process")       — BAD: contains "FLO-513"
-Fix guidance: rename titles to describe BEHAVIOR only. Keep traceability links (@ac, @task, @ticket) in JSDoc comment above or 1-line comment inside block.
+Behavioral (good, NO internal IDs in TITLE): 40
+Bad titles detected (WARNING — have internal IDs IN TITLE STRING): 2
+  - <file>: it("Task T2.3 — valida AC 4.2 refund")  — BAD in TITLE: contains "Task T2.3" and "AC 4.2"
+  - <file>: describe("FLO-513 refund process")       — BAD in TITLE: contains "FLO-513"
+Fix guidance: rename TITLES to describe BEHAVIOR only. Keep traceability links (@ac / @task / @ticket) in JSDoc comment above or 1-line comment inside block.
 ```
 
 ---

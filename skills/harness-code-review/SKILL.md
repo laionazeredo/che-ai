@@ -427,16 +427,25 @@ How:
    - Fix: OU (1) wire o handler corretamente: chamar o tRPC mutation com o idempotencyKey gerado, gate visibility com getEligibility/service call, ou (2) prominentemente label o componente como DEMO e separar de shipping code path (ex: mover para `components/demo/*` + comentário `// TODO REMOVE BEFORE SHIP` no topo).
 5. **4.7 Test-suite naming behavioral check (REGRA 7.9 do harness, MEDIUM / WARN).**
 
-   Scan test files added/modified in the diff (`*.test.*`, `*.spec.*`, files inside `__tests__/`). Detect anti-patterns **in the TITLE STRING** of `describe("...")` / `it("...")` / `test("...")`:
-   - Ticket IDs: `FLO-\d+`, ticket-codes like `ABC-123`
+   **🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça isso):**
+   > ❌ **ERRADO:** Reclamar que um teste NÃO tem `FLO-xxx` / `T<N>` / `AC<N>` no título.
+   > ✅ **CORRETO:** Ter essas referências NO TÍTULO é ANTI-PADRÃO (ruim). Não tê-los e descrever APENAS comportamento observável é BOM / COMPLIANT.
+   >
+   > **Regra de decisão 1-sentence:** `Título contém FLO-ID? → BAD = FINDING. Título NÃO contém FLO-ID? → GOOD = NUNCA reporte finding por isso.`
+   > **Traceabilty correta (NÃO viola REGRA 7.9):** comentário JSDoc `/** @ticket FLO-714 */` ACIMA do bloco, OU linha `// @ticket FLO-714 | @ac 3.2 | @task T1.4` COMO 1ª LINHA DENTRO do bloco. JAMAIS na string de título.
+
+   Scan test files added/modified in the diff (`*.test.*`, `*.spec.*`, files inside `__tests__/`). Detect anti-patterns **EXCLUSIVAMENTE in the TITLE STRING** of `describe("...")` / `it("...")` / `test("...")`:
+   - Ticket IDs: `FLO-\d+`, ticket-codes like `ABC-123` (qualquer prefixo 2+ letras + hífen + número no TÍTULO = BAD)
    - Task/item IDs: `Task? T\d+(\.\d+)?`, `Item \d+`
    - AC/section IDs: `AC\d+`, `§\d+(\.\d+)?`, `REGRA \d+`, `SPEC_XXX`, `PRD §`
    - Phase/story IDs: `Fase \d+`, `Story #?\d+`
 
-   Severity:
+   Severity (FINDING = BAD title = contém os patterns ACIMA):
    - 1–4 bad titles → **LOW WARN** (non-blocking, show in "Nice-to-have" list)
    - 5–9 bad titles → **MEDIUM** (appear in main findings; require rename before merge or explicit override comment)
    - ≥10 bad titles → **HIGH** (blocking: relatório de CI vai ser inútil, alguém quebra essa regra em escala)
+
+   **❌ NUNCA gere finding por "ausência de FLO-xxx no título"** → Isso é o comportamento DESEJADO, compliant. Qualquer relatório que flagge ausência de task-id no título é uma REGRESSÃO na review skill, invalida essa seção do report.
 
    Never flag the JSDoc traceability comment ABOVE a block or a `// @ac X | @task Y | @ticket Z` line INSIDE the block as bad. Those are the RECOMMENDED way to keep traceability without polluting the display title.
 6. **4.8 Route-level / failure-path test gap check (MEDIUM if missing)**. If Category 0 found a new webhook route event type → require 1 route-level signed-payload POST test (not just svc.handleEvent direct). If Category 0.3 flagged a tx pattern → require 1 failure path test: Stripe 5xx → tx rolls back + retry with same idempotency key → no double-effect. MEDIUM severity (waivable only with PR body sign-off override).

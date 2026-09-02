@@ -216,6 +216,12 @@ This rule turns "agilidade" from vague talk into enforceable checkpoints:
    - NEVER break existing behavior without an EXPLICIT AC asking for the break.
    - If you need behavior breaking: NON-GOALS, Data Model + Migration with rollback plan, and explicit user approval.
 6. **Test-suite naming = behavior observable ONLY (REGRA 7.9 do harness).**
+
+   **🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça ao contrário):**
+   > ❌ **ERRADO:** Escrever `it("FLO-714 T1.2 valida AC 3.1 deploy")` → IDs NO TÍTULO = antinômio da regra.
+   > ❌ **AINDA MAIS ERRADO:** Reclamar / corrigir um teste porque o título NÃO contém FLO/T/AC. Isso é o comportamento ESPERADO / BOM / COMPLIANT.
+   > ✅ **CORRETO:** Título DESCREVE comportamento observável, IDs vão em comentário trace acima / 1ª linha dentro do bloco.
+
    - **`describe("...")`** = module/feature/context UNDER TEST (domain grouping, not task IDs).
      ✅ `describe("POST /api/payments/refund")`
      ❌ `describe("FLO-513 T2 — process refund ACs 3.1-3.4")`

@@ -162,29 +162,41 @@ Scan for NEW code:
 
 **Aplica-se APENAS a:** arquivos novos/editados que batem `*.test.*`, `*.spec.*`, ou estão dentro de pasta `__tests__/`. Se task não mexeu com testes → SKIP essa categoria.
 
-**Objetivo:** evitar nomes de `describe()` / `it()` / `test()` que contenham apenas IDs internos, forçando que o título descreva COMPORTAMENTO OBSERVÁVEL (válido por meses, não só enquanto a task aberta).
+**Objetivo:** evitar nomes de `describe()` / `it()` / `test()` que contenham APENAS IDs internos, forçando que o título descreva COMPORTAMENTO OBSERVÁVEL (válido por meses, não só enquanto a task aberta).
+
+**🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça isso):**
+> ❌ **ERRADO:** Reclamar / reportar finding por um teste NÃO TER `FLO-xxx` / `T<N>` / `AC<N>` na string de título.
+> ✅ **CORRETO:** Ter essas referências NO TÍTULO é ANTI-PADRÃO (ruim = finding). Não tê-los e descrever comportamento observável é BOM / COMPLIANT.
+>
+> **Decisão 1-sentence:** `title contains FLO-ID? → BAD = FINDING. title does NOT contain FLO-ID? → GOOD = NUNCA gere finding por ausência de ID.`
 
 **Scan pattern:** procurar por strings dentro de `describe("...")`, `it("...")`, `test("...")` (com aspas simples ou duplas). Para cada título encontrado, verificar anti-padrões:
 
 | Anti padrão (regex case-insensitive) | Motivo | Severidade |
 |---|---|---|
-| `FLO-\d+` / `[A-Z]{2,}-\d+` | Ticket IDs Linear/Jira, valem só enquanto o ticket está aberto | WARN |
-| `Task?\s*T\d+(\.\d+)?` / `Item\s*\d+` | Task IDs do task graph do harness | WARN |
-| `AC\s*\d+` / `Critério\s*\d+` | IDs de acceptance criteria dentro de SPEC/PRD | WARN |
-| `§\s*\d+(\.\d+)?` / `REGRA\s*\d+` / `SPEC[_-]\w+` / `PRD\s*§` | Referências a seções de doc de planejamento | WARN |
-| `Fase\s*\d+` / `Story\s*#?\d+` | Phase/story IDs temporários | WARN |
+| `FLO-\d+` / `[A-Z]{2,}-\d+` | Ticket IDs Linear/Jira no TÍTULO. Válidos só enquanto ticket aberto; invalida relatório CI em 6 meses. | WARN |
+| `Task?\s*T\d+(\.\d+)?` / `Item\s*\d+` | Task IDs do task graph do harness no TÍTULO. Rearranjo de tasks quebra nome. | WARN |
+| `AC\s*\d+` / `Critério\s*\d+` | IDs de acceptance criteria de SPEC/PRD no TÍTULO. | WARN |
+| `§\s*\d+(\.\d+)?` / `REGRA\s*\d+` / `SPEC[_-]\w+` / `PRD\s*§` | Referências a seções de doc planejamento NO TÍTULO. | WARN |
+| `Fase\s*\d+` / `Story\s*#?\d+` | Phase/story IDs temporários no TÍTULO. | WARN |
 
-**Regra de severidade:**
+**Traceabilidade correta (NÃO gera finding, NÃO é anti-padrão — use estas):**
+1. JSDoc comentário ACIMA do bloco: `/** @ticket FLO-714 · @ac 3.2 · @task T1.4 */`
+2. Linha comentário DENTRO bloco 1ª linha: `// @ticket FLO-714 | @ac 3.2 | @task T1.4`
+
+**Regra de severidade (FINDING só se BAD patterns ACIMA presentes no TÍTULO):**
 - 1–9 títulos ruins → **WARN** (não blocking; lista detalhada no report)
 - ≥10 títulos ruins no mesmo diff → **HIGH** (blocking; engineering-contracts deixa de ser review-friendly)
-- Títulos bons = contêm verbo de ação + condição + resultado; não têm regex acima.
+- Títulos bons = contêm verbo de ação + condição + resultado; NÃO têm regexes acima. Um título BOM não ter FLO-xxx nem Task-id. ISSO É O ESPERADO.
+
+**❌ NUNCA gere finding por ausência de FLO/T/AC no título** → isso é default correto. Se seu relatório tem linha tipo "missing FLO prefix in title" é REGRESSÃO desta categoria, descarte a linha antes do output.
 
 **Como reportar:**
 ```
 ## Scan 7 — Test naming (REGRA 7.9)
 Total spec files modified: 3 | Test titles inspected: 24
-Good (behavioral): 20 | Bad (contains internal IDs): 4
-  1. /src/__tests__/auth.test.ts:88 — it("Task T2.3 valida AC 4.2 service role") → BAD: "Task T2.3" + "AC 4.2"
+Good (behavioral, NO internal IDs): 20 | Bad (contains internal IDs in TITLE STRING): 4
+  1. /src/__tests__/auth.test.ts:88 — it("Task T2.3 valida AC 4.2 service role") → BAD in title: "Task T2.3" + "AC 4.2"
      Suggest rename: it("blocks non-service-role callers with 403 Forbidden when anon key used")
      Keep traceability: inside block line 1: // @ac 4.2 | @task T2.3 | @ticket FLO-745
   2. ...

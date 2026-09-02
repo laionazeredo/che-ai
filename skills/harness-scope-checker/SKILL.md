@@ -133,9 +133,16 @@ Do patch cumulativo, filtrar:
 
 REGRA7.9: Nomes de suites/testes DEVEM ser comportamento observável. Nomes ruins (FLO-123, test(), it1, shouldWork) não contam como evidence coverage.
 
+**🔴 HARD RULE — INVERSÃO PROIBIDA: NÃO PENALIZE títulos SEM task-id:**
+> ❌ **ERRADO:** "Título não tem FLO-714 como prefixo → evidence inválida / desconta pontos". **ISTO É UMA REGRESSÃO.**
+> ✅ **CORRETO:** Título descreve comportamento observável + NÃO tem FLO/T/AC na STRING → BOM, compliant, conta como evidence.
+>
+> **O que INVALIDA evidence (ruim):** a STRING do título contém anti-padrões `FLO-\d+` / `Task? T\d+` / `AC\d+` / `§\d+` / `SPEC_XXX`.
+> **O que VALIDA evidence (bom):** título contém keywords da AC (verbs + nouns do comportamento) + não tem IDs. Traceabilidade via comentário `// @ac 2.1 | @ticket FLO-732` DENTRO do bloco = também BOM e não penaliza.
+
 Raciocínio por AC:
 - Para cada AC comportamental tipo "usuário consegue aplicar refund stripe connect" → procurar nos testes strings como: `refund`, `stripe connect`, `connected account`, `refund succeeded`, `refund failed`
-- Se descreve comportamento = 🟢 TESTED
+- Se descreve comportamento = 🟢 TESTED (mesmo que não mencione FLO/T/AC — é o comportamento DESEJADO)
 - Se tem arquivo de teste pro módulo MAS nenhum caso acerta keyword da AC → 🟡 PARCIAL (quais testes existem vs falta qual comportamento específico)
 - Se SUT foi alterado e ZERO arquivo de teste alterado pra área → 🔴 NOT TESTED (qual behavior, qual file test criar)
 
