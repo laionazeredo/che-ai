@@ -44,19 +44,28 @@ install_target "$TARGET_B"
 ! rg -q "$TARGET_A" "$TARGET_B/hooks.json"
 ! rg -q "$TARGET_B" "$TARGET_A/hooks.json"
 
-mkdir -p "$TARGET_A/bindings" "$TEST_ROOT/Lumos.worktrees/feature-a" "$TEST_ROOT/Lumos.worktrees/feature-b"
+MAIN_REPO="$TEST_ROOT/project-alpha"
+BOUND_WORKTREE="$TEST_ROOT/project-alpha-wt-feature"
+git init -q "$MAIN_REPO"
+git -C "$MAIN_REPO" config user.email hooks@example.test
+git -C "$MAIN_REPO" config user.name "Hooks Test"
+touch "$MAIN_REPO/tracked.txt"
+git -C "$MAIN_REPO" add tracked.txt
+git -C "$MAIN_REPO" commit -qm initial
+git -C "$MAIN_REPO" worktree add -qb feature "$BOUND_WORKTREE"
+mkdir -p "$TARGET_A/bindings"
 cat > "$TARGET_A/bindings/registry.jsonl" <<EOF
-{"session_id":"trae-event","status":"BOUND","worktree_root":"$TEST_ROOT/Lumos.worktrees/feature-a","flags":{"LANG_DOCS":"pt-BR"}}
-{"session_id":"inherited-codex","status":"BOUND","worktree_root":"$TEST_ROOT/Lumos.worktrees/feature-b","flags":{"LANG_DOCS":"en"}}
-{"session_id":"legacy-trae","status":"BOUND","worktree_root":"$TEST_ROOT/Lumos.worktrees/feature-a","flags":{"LANG_PT_CHECK":"DISABLED"}}
+{"session_id":"trae-event","status":"BOUND","worktree_root":"$BOUND_WORKTREE","flags":{"LANG_DOCS":"pt-BR"}}
+{"session_id":"inherited-codex","status":"BOUND","worktree_root":"$MAIN_REPO","flags":{"LANG_DOCS":"en"}}
+{"session_id":"legacy-trae","status":"BOUND","worktree_root":"$BOUND_WORKTREE","flags":{"LANG_PT_CHECK":"DISABLED"}}
 EOF
 
 PRE_HOOK="$TARGET_A/hooks/pretooluse-worktree-binding.sh"
-ALLOW_PAYLOAD=$(printf '{"event":"PreToolUse","sessionId":"trae-event","toolName":"Read","toolArgs":{"file_path":"%s/file.ts"}}' "$TEST_ROOT/Lumos.worktrees/feature-a")
+ALLOW_PAYLOAD=$(printf '{"event":"PreToolUse","sessionId":"trae-event","toolName":"Read","toolArgs":{"file_path":"%s/file.ts"}}' "$BOUND_WORKTREE")
 ALLOW_OUTPUT=$(HARNESS_HOME="$TARGET_A" HARNESS_SESSION_ID="inherited-codex" "$PRE_HOOK" <<<"$ALLOW_PAYLOAD")
 test "$(jq -r .decision <<<"$ALLOW_OUTPUT")" = "allow"
 
-BLOCK_PAYLOAD=$(printf '{"event":"PreToolUse","sessionId":"trae-event","toolName":"Read","toolArgs":{"file_path":"%s/file.ts"}}' "$TEST_ROOT/Lumos.worktrees/feature-b")
+BLOCK_PAYLOAD=$(printf '{"event":"PreToolUse","sessionId":"trae-event","toolName":"Read","toolArgs":{"file_path":"%s/file.ts"}}' "$MAIN_REPO")
 set +e
 BLOCK_OUTPUT=$(HARNESS_HOME="$TARGET_A" HARNESS_SESSION_ID="inherited-codex" "$PRE_HOOK" <<<"$BLOCK_PAYLOAD")
 BLOCK_EXIT=$?

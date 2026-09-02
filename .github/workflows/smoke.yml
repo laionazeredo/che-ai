@@ -71,3 +71,6 @@ jobs:
 
       - name: portable Trae hooks protocol
         run: bash tests/hooks-portability-smoke.sh
+
+      - name: generic worktree binding guard
+        run: bash tests/worktree-binding-smoke.sh

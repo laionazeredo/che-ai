@@ -55,14 +55,6 @@ extract_paths() {
 
 mapfile -t CANDIDATE_PATHS < <(extract_paths)
 
-# Early allow: qualquer path candidato começa com HARNESS_SESSIONS_ROOT → permitido
-for p in "${CANDIDATE_PATHS[@]}"; do
-  if [[ "$p" == "$HARNESS_SESSIONS_ROOT"/* ]]; then
-    echo '{"decision":"allow","reason":"§19 EXCEÇÃO HARNESS_SESSIONS_ROOT: path alvo é pasta de dados gerados/efêmeros harness (fora código usuário). Scissor bypassed by design."}'
-    exit 0
-  fi
-done
-
 # --- LEVEL 1 LOOKUP JSONL (chicken-and-egg solved: lookup by SESSION_ID) ---
 REGISTRY_FILE=""
 if declare -F harness_registry_path >/dev/null 2>&1; then
@@ -92,25 +84,44 @@ if [ -z "$BOUND_ROOT" ]; then
   exit 0
 fi
 
-WORKTREE_PREFIXES=()
-for p in "${CANDIDATE_PATHS[@]}"; do
-  if [[ "$p" == */Lumos || "$p" == */Lumos/* || "$p" == */Lumos.worktrees/* ]]; then
-    prefix=$(sed -E 's|^(.*/Lumos\.worktrees/[^/]+)(/.*)?$|\1|; t; s|^(.*/Lumos)(/.*)?$|\1|' <<<"$p")
-    WORKTREE_PREFIXES+=("$prefix")
-  fi
-done
+git_worktree_root_for_path() {
+  local candidate="$1"
+  local probe="$candidate"
 
-if [ ${#WORKTREE_PREFIXES[@]} -eq 0 ]; then
-  echo '{"decision":"allow","reason":"Nenhum path de worktree nos tool args (fora Lumos/Lumos.worktrees escopo). Scissor check allow."}'
-  exit 0
-fi
+  [ -n "$probe" ] || return 1
+  if [ -f "$probe" ]; then
+    probe="$(dirname "$probe")"
+  fi
+  while [ ! -d "$probe" ]; do
+    local parent
+    parent="$(dirname "$probe")"
+    [ "$parent" != "$probe" ] || return 1
+    probe="$parent"
+  done
+
+  git -C "$probe" rev-parse --show-toplevel 2>/dev/null
+}
+
+BOUND_NORMALIZED="$(git_worktree_root_for_path "$BOUND_ROOT" || true)"
+[ -n "$BOUND_NORMALIZED" ] || BOUND_NORMALIZED="${BOUND_ROOT%/}"
 
 VIOLATIONS=()
-BOUND_NORMALIZED="${BOUND_ROOT%/}"
-for p in "${WORKTREE_PREFIXES[@]}"; do
-  normalized="${p%/}"
-  if [ "$normalized" != "$BOUND_NORMALIZED" ]; then
-    VIOLATIONS+=("$normalized")
+PROJECT_PATHS=0
+SESSION_ARTIFACT_PATHS=0
+for p in "${CANDIDATE_PATHS[@]}"; do
+  if [ "$p" = "$HARNESS_SESSIONS_ROOT" ] || [[ "$p" == "$HARNESS_SESSIONS_ROOT"/* ]]; then
+    SESSION_ARTIFACT_PATHS=$((SESSION_ARTIFACT_PATHS + 1))
+    continue
+  fi
+
+  project_root="$(git_worktree_root_for_path "$p" || true)"
+  if [ -z "$project_root" ]; then
+    continue
+  fi
+
+  PROJECT_PATHS=$((PROJECT_PATHS + 1))
+  if [ "${project_root%/}" != "$BOUND_NORMALIZED" ]; then
+    VIOLATIONS+=("${project_root%/}")
   fi
 done
 
@@ -121,6 +132,6 @@ if [ ${#VIOLATIONS[@]} -gt 0 ]; then
   exit 2
 fi
 
-REASON_ALLOW="§19 OK Level 1 Registry: tool args worktree paths match BOUND_WORKTREE_ROOT=$BOUND_NORMALIZED"
+REASON_ALLOW="§19 OK Level 1 Registry: all detected project paths match BOUND_WORKTREE_ROOT=$BOUND_NORMALIZED (project_paths=$PROJECT_PATHS session_artifact_paths=$SESSION_ARTIFACT_PATHS)"
 jq -nc --arg r "$REASON_ALLOW" '{decision:"allow", reason: $r}'
 exit 0
