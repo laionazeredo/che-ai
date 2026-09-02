@@ -168,9 +168,9 @@ pr_comments/**  pr-comments-*.md  pr-comments-*.json  # triage PR comments draft
 > 1. **§0.9.1 Scope + Lean delivery** (lowest compute cost, highest blast radius if wrong — ship de coisa errada é o pior cenário)
 > 2. **§0.9.2 Code Review bugs** (depende de scope estar correto; ≤2 HIGH = auto-remediate SEM ask)
 > 3. **§0.9.3 Compliance security/PII** (já que review e scope passaram, garantimos 0C 0H)
-> 4. **§0.9.4 QA — optional `--run-qa` flag** (desligado por default por custo; ligado via flag explicita user)
+> 4. **§0.9.4 QA — DEFAULT ON, 3 profiles: minimal / normal / full** (sem flag = profile `minimal`; flag `--qa=<profile>` seleciona; único bypass = EXPLICIT_OVERRIDE user logado em decision.log)
 >
-> Qualquer GATE com status 🔴 BLOQUEIA o ship. Gates 0.9.1 e 0.9.3 NUNCA têm auto-fix. Apenas Gate 0.9.2 tem ramo auto-fix quando threshold ≤ 2 HIGH findings.
+> Qualquer GATE com status 🔴 BLOQUEIA o ship. Gates 0.9.1 e 0.9.3 NUNCA têm auto-fix. Apenas Gate 0.9.2 tem ramo auto-fix quando threshold ≤ 2 HIGH findings. Gate 0.9.4 NÃO tem flag `--no-run-qa`. A única forma de bypassar é EXPLICIT_OVERRIDE user.
 
 ### 0.9.1 GATE 1 — harness-scope-checker 6-checks (Modo B: Worktree local)
 
@@ -356,37 +356,49 @@ Se user escolher B (override):
 
 ---
 
-### 0.9.4 GATE 4 (OPCIONAL FLAG — DEFAULT DISABLED) — QA Gate
+### 0.9.4 GATE 4 — QA Gate (DEFAULT ON — profile `minimal` se nenhuma flag passada)
 
-**Purpose:** Última linha de defesa antes do commit real. **DESLIGADO POR DEFAULT por custo de tempo (build/typecheck/lint/tests).** SÓ é executado SE usuário passou explicitamente a flag `--run-qa` no comando `/harness-ship --run-qa`.
+**Purpose:** Última linha de defesa antes do commit real. **LIGADO POR DEFAULT — SEMPRE roda, a menos que user passe EXPLICIT_OVERRIDE justificado.** 3 profiles de velocidade/abrangência. NÃO existe mais flag `--no-run-qa`.
 
-**Quando skipado:**
-- Se flag ausente → decision log entry helper: `harness_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=SKIPPED_FLAG_NOT_SET"`. Segue direto para §1 Git Housekeeping. NÃO PERGUNTA NADA.
+**Profile resolution (non-negotiable precedence):**
+1. User passou `--skip-qa` no comando → **REQUIRE EXPLICIT_OVERRIDE verbatim do user** gravado em decisions.log. Sem override escrito → **BLOCK SHIP NOW, pergunte user justificativa.**
+2. User passou `--qa=full` → **PROFILE_FULL** (tudo, ~5-15min)
+3. User passou `--qa=normal` → **PROFILE_NORMAL** (affected typecheck+lint+test, ~1-3min)
+4. **DEFAULT** (nenhuma flag QA) → **PROFILE_MINIMAL** (só testes unit/integ afetados, ~30s-2min)
 
-**Quando executado (flag `--run-qa` presente):**
+**Quando skipado (SÓ caminho 1):**
+- Se `--skip-qa` presente AND EXPLICIT_OVERRIDE `QA_SKIP` gravado via `harness_append_decision_jsonl "SHIP_GATE_0_9_4_OVERRIDE" "verbatim=<user justification>"` → SKIP, segue §1.
+- **QUALQUER OUTRO caminho de skip (sem override logado) → BLOQUEIA SHIP.**
+
+**Profile specs (execução stack-detect):**
+
 Detecta stack do monorepo automaticamente (ordem de tentativa):
-1. **Nx workspace (pnpm + nx)** → existe `nx.json` + `pnpm-workspace.yaml`? → run:
-   ```bash
-   cd "$WORKTREE_ROOT" && {
-     echo "===== QA GATE: typecheck $(date -Iseconds) ====="
-     corepack pnpm nx affected:typecheck --tui false 2>&1
-     echo "===== QA GATE: lint $(date -Iseconds) ====="
-     corepack pnpm nx affected:lint --tui false 2>&1
-     echo "===== QA GATE: test $(date -Iseconds) ====="
-     corepack pnpm nx affected:test --tui false 2>&1
-   } | harness_write_file_atomic "$SHIP_QA_GATE_LOG"
-   ```
-2. **Generic pnpm** → existe `package.json` com `scripts.typecheck` etc? → `{ echo typecheck; corepack pnpm typecheck 2>&1; echo lint; corepack pnpm lint 2>&1; echo test; corepack pnpm test 2>&1; } | harness_write_file_atomic "$SHIP_QA_GATE_LOG"`.
-3. **Generic npm/yarn** → adapta o package manager.
-4. **Nenhuma detecção** → WARN "Não foi possível detectar stack QA. Skip gate 4". Decision log helper: `harness_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=SKIPPED_STACK_NOT_DETECTED"`.
+1. **Nx workspace (pnpm + nx)** → existe `nx.json` + `pnpm-workspace.yaml`:
+   | Profile | Command chain | Target duration |
+   |---|---|---|
+   | 🟢 **MINIMAL (default)** | `cd "$WORKTREE_ROOT" && corepack pnpm nx affected:test --tui false --exclude=e2e 2>&1` (só testes unit/integ AFETADOS pelos arquivos dirty — SEM typecheck, SEM lint, SEM playwright/e2e) | ~30s-2min monorepo |
+   | 🟡 **NORMAL (--qa=normal)** | `cd "$WORKTREE_ROOT" && { echo "===== QA GATE NORMAL: typecheck $(date -Iseconds) ====="; corepack pnpm nx affected:typecheck --tui false 2>&1; echo "===== QA GATE NORMAL: lint $(date -Iseconds) ====="; corepack pnpm nx affected:lint --tui false 2>&1; echo "===== QA GATE NORMAL: test $(date -Iseconds) ====="; corepack pnpm nx affected:test --tui false --exclude=e2e 2>&1; }` — affected: typecheck + lint + unit/integ tests | ~1-3min monorepo |
+   | 🔴 **FULL (--qa=full)** | `cd "$WORKTREE_ROOT" && { echo "===== QA GATE FULL: typecheck $(date -Iseconds) ====="; corepack pnpm nx run-many --target=typecheck --tui false 2>&1; echo "===== QA GATE FULL: lint $(date -Iseconds) ====="; corepack pnpm nx run-many --target=lint --tui false 2>&1; echo "===== QA GATE FULL: unit+integ tests $(date -Iseconds) ====="; corepack pnpm nx run-many --target=test --tui false 2>&1; echo "===== QA GATE FULL: E2E tests $(date -Iseconds) ====="; corepack pnpm nx run-many --target=e2e --tui false 2>&1; }` — all: typecheck+lint+unit+integ+e2e+playwright | ~5-15min monorepo |
+   Toda output de qualquer profile é gravada via pipe: `| harness_write_file_atomic "$SHIP_QA_GATE_LOG"`
+
+2. **Generic pnpm/npm/yarn (sem Nx)** → existe `package.json`:
+   - MINIMAL: heuristic find matching test files: `grep` diff paths → run only `*.test.*` / `*.spec.*` files matching changed file dirs via `corepack pnpm vitest run <matched_paths>` (sem typecheck, sem lint)
+   - NORMAL: `{ echo typecheck; corepack pnpm typecheck 2>&1; echo lint; corepack pnpm lint 2>&1; echo test; corepack pnpm test 2>&1; }`
+   - FULL: tudo NORMAL + `corepack pnpm test:e2e 2>&1` (se script existir; senão WARN e pula)
+
+3. **Nenhuma detecção** → WARN "Não foi possível detectar stack QA. MINIMAL fallback: tenta rodar comando de teste documentado em AGENTS.md. Se não houver → WARN + SKIP gate com decision.log entry SKIPPED_STACK_NOT_DETECTED".
 
 **Verdict handling QA:**
-- Todos os 3 comandos (typecheck, lint, test) exit code 0 → ✅ PASS GATE 4. Segue §1.
-- Qualquer comando falha (exit code != 0) → 🔴 **BLOCK SHIP**. Print tail -50 da saída com erro ao user. Opções: (A) Quero corrigir manualmente agora; (B) Override (requer justificativa forte explícita por que teste/typecheck falhado deve shipar — gravada via helper decision.log).
+- **MINIMAL profile:** only test command — exit code 0 → ✅ PASS. exit code != 0 → 🔴 BLOCK SHIP.
+- **NORMAL profile:** exit code 0 EM TODOS os 3 (typecheck + lint + test) → ✅ PASS. Qualquer falha → 🔴 BLOCK.
+- **FULL profile:** exit code 0 EM TODOS → ✅ PASS. Qualquer falha → 🔴 BLOCK.
+- **Em qualquer BLOCK (0.9.4):** Print tail -80 da saída com erro ao user. Opções EXATAS:
+  - (A) Quero corrigir manualmente agora → pausa ship, volta interactive shell (depois user re-roda /harness-ship).
+  - (B) Override (REQUIRE EXPLICIT_OVERRIDE user texto literal justificando POR QUE typecheck/lint/teste com falha DEVE SHIPAR agora — gravado em decision.log; override só permitido se (i) o count de failures for ≤2 testes FLAKY conhecidos E (ii) a justificativa cita uma issue/ticket).
 
 **Output artifacts:**
-- `$SHIP_QA_GATE_LOG` — stdout concatenado dos 3 comandos. Estrutura final: `$HARNESS_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-qa-gate.log` (ordenado, agrupado). Write atômico via `harness_write_file_atomic` stdin pipe.
-- Decision log entry helper: `harness_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=${verdict} flag=TRUE typecheck=${tc_status} lint=${lint_status} test=${test_status} log=${SHIP_QA_GATE_LOG}"`.
+- `$SHIP_QA_GATE_LOG` — stdout concatenado do profile selecionado. Estrutura final: `$HARNESS_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-qa-gate.log` (timestamp ordenável, agrupado). Write atômico via `harness_write_file_atomic` stdin pipe.
+- Decision log entry via helper: `harness_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=${verdict} profile=${MINIMAL|NORMAL|FULL} tc_status=${status} lint_status=${status} test_status=${status} e2e_status=${status|N/A} override_logged=${yes|no} log=${SHIP_QA_GATE_LOG}"`.
 
 ---
 
@@ -440,7 +452,7 @@ Execution steps (ordem fixa):
 
 Print one-liner ANTES de iniciar §1 Git Housekeeping:
 ```
-🟢 ALL 5 EXECUTABLE SHIP GATES PASSED (scope-checker 6-checks · code-review · compliance-heavy · qa[flag] · domain-gates[<slug or skipped>])
+🟢 ALL 5 EXECUTABLE SHIP GATES PASSED (scope-checker 6-checks · code-review · compliance-heavy · qa[minimal|normal|full] · domain-gates[<slug or skipped>])
 Proceeding to Git Housekeeping §1 → atomic conventional commit → push → open DRAFT PR.
 ```
 

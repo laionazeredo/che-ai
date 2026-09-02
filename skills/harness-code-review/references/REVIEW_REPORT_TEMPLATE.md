@@ -27,12 +27,20 @@
 | 🟢 **APPROVE** | No blocking issues detected. LGTM. |
 
 ### Blocker tally
-| Severity | Count |
-|---|---|
-| 🔴 CRITICAL | `N` |
-| 🟠 HIGH | `N` |
-| 🟡 MEDIUM (non-blocking unless scope policy) | `N` |
-| 🔵 LOW | `N` |
+| Severity | Count | Notes |
+|---|---|---|
+| 🔴 CRITICAL | `N` | Category 1 Runtime breakage / Category 2 Security PII |
+| 🟠 HIGH — TOTAL (soma das linhas abaixo) | `N` | **Blocking threshold = this line; ≤2 HIGH = auto-fix per ship gate §0.9.2** |
+| 🟠 · Category 1 Runtime / Crash-safety HIGH | `N` | Subcount |
+| 🟠 · Category 2 Security / PII / Authz HIGH | `N` | Subcount |
+| 🟠 · Category 3 Architecture / Migration HIGH | `N` | Subcount |
+| 🟠 · Category 4 Scope / Demo leak HIGH | `N` | Subcount |
+| 🟠 · Category 5 Lean / Overengineering HIGH | `N` | Subcount (future) |
+| 🟠 · Category 6 Logging / Observability HIGH | `N` | Subcount (future) |
+| 🟠 · **Category 7 Testing Gaps HIGH (G7.1 / G7.2)** | `N` | New — 20+ln src no test / new API-UI without integ or Playwright |
+| 🟠 · **Category 8 UI Selector Hygiene HIGH (G8.1 / G8.2)** | `N` | New — interactive UI fragility or fragile test selectors |
+| 🟡 MEDIUM (non-blocking unless scope policy) | `N` | Includes G7.3, G8.3 |
+| 🔵 LOW | `N` | Includes G7.4, G8.4 |
 
 ---
 
@@ -147,6 +155,60 @@ return user.profile.phone;
 
 ---
 
+### #F-5 🟡 MEDIUM — Category: Testing Gaps (G7.3) — `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts:78-111`
+
+**Why it matters:**
+- New test case `"refund pending booking with settled Stripe capture"` (lines 78-111) does **NOT** have the mandatory traceability comment as the first line inside the `it()` block. SbE verification matrix §5 (ONDA2) relies on regex match `// @(ac|ticket|task|bug) B-\d+|FLO-\d+` inside every new/modified `it()` body to prove B-ID → test file bilateral coverage. Without it, scope-checker CHECK2 flags the behavior as "implemented but unverified" and score drops.
+- Isolated bug: 1 of 6 new test blocks missing the anchor — not systemic.
+
+**Diff snippet:**
+```diff
+@@ -78,6 +78,7 @@ it("refund pending booking with settled Stripe capture", async () => {
++    // @ac B-3 | @ticket FLO-513
+     const { booking } = await seedBooking({ status: "pending_settlement" })
+```
+
+**Recommended fix (1-line drop-in):**
+```typescript
+it("refund pending booking with settled Stripe capture", async () => {
+  // @ac B-3 | @ticket FLO-513
+  // @bug regression: v2.1.4 allow double-capture edge
+  const { booking } = await seedBooking({ status: "pending_settlement" })
+  // ... rest unchanged
+```
+
+---
+
+### #F-6 🟠 HIGH — Category: UI Selector Contract Hygiene (G8.1) — `packages/platform/components/creator/creator-bookings/RefundBookingAction.tsx:55-72`
+
+**Why it matters (HIGH — affects perenidade de UI Playwright tests):**
+- New `RefundConfirmButton` (icon-only spinner button, lines 55-72) is rendered **without `aria-label` + without `data-testid`**. Because it's: (a) an icon button (ByRole('button') has no accessible name — TextNode = undefined, empty string); (b) mounts a spinner overlay (LoadingSpinner = renders same role during async); (c) sits inside a table row where 4 other sibling action buttons exist (edit / resend ticket / cancel / refund). This is the exact G8.1 case where Testing Library priority order breaks: **no stable selector exists.** A Playwright or RTL test will fallback to `.getAllByRole('button')[3]` — which is fragile (G8.2 anti-pattern) and silently breaks the moment someone adds a 5th sibling action (e.g. `print invoice`) next sprint.
+
+**Kent Dodds Testing Library priority applied to this exact button:**
+1. ❌ ByRole('button', { name: /confirm/i }) — no name, icon-only.
+2. ❌ ByLabelText — not a form field.
+3. ❌ ByPlaceholderText — N/A.
+4. ❌ ByText('Confirm refund') — JSX conditional hides label when loading.
+5. ❌ ByDisplayValue/AltText/Title — none present.
+6. ✅ ByTestId = only stable option here → but **missing in current diff**.
+
+**Recommended fix (G8.1 compliant: aria-label FIRST [screen readers] + data-testid SECOND [tests]):**
+```diff
+@@ -60,8 +60,11 @@
+   : (
+     <button
++      aria-label="Confirm refund"
++      data-testid="refund__action-btn__confirm"
+       onClick={handleConfirm}
+       className="flex items-center gap-1"
+     >
+```
+
+**Note on isenções:**
+- This finding CANNOT be exempted via QA_OVERRIDE because it's an icon button in a table row with multiple siblings (3/3 G8.1 HIGH triggers simultaneously). If user wants override, they must sign `QA_OVERRIDE=G8.1 FLO-513: action button only appears once per screen today with no plan to add siblings` in the PR body, explicitly.
+
+---
+
 ## Coverage of Review (transparency — what we checked)
 
 User should trust we actually ran the full process:
@@ -159,6 +221,8 @@ User should trust we actually ran the full process:
 | 2. Security / PII / Compliance (LIGHT level + **per-procedure READ/WRITE split** authz audit 2.8-2.10 — cookie org check + assertCan cache threading + authz BEFORE writes) | ✅ Yes | Each procedure audit: `trpc.ts:46-49`, `context.ts:51` + `bookingRouter` 3 procedures scanned SEPARATELY |
 | 3. Architecture layering / Repo boundary **(per-procedure direct repo instantiation check)** + **Migration Hygiene (timestamps fabricated/intra-branch patch/RLS TO PUBLIC defaults)** + Entity dupe + deps scope | ✅ Yes | Router business logic + direct repo instantiation scanned per procedure; 5 migration files scanned for fabricated timestamps/intra-branch enum patch |
 | 4. Scope deviation / **UI demo 5-pass scan** (fake latency + random fail + discarded idempotencyKey + toast no API call + demo data imports) / test naming rules / 4.8 route-level test gaps | ✅ Yes — ACs mapped to changed files | RefundBookingAction.tsx 5-pass demo check applied; test behavioral naming rules validated |
+| **🟢 7. Testing Gaps & Regression Lock (G7.1 HIGH src 20+ln no test / G7.2 HIGH API+UI new without integ or Playwright / G7.3 MEDIUM @ac/@ticket traceability comment missing / G7.4 LOW skip without TODO)** | ✅ Yes — diff matched dirty src vs test files | 42 src lines added in `RefundService.ts` + 2 tests written (`refundFlow.api.test.ts` + `RefundBookingAction.spec.ts`) · traceability comments G7.3 validated in every new `it()` block |
+| **🟣 8. UI Selector Contract Hygiene & data-testid 3-part (G8.1 HIGH interactive no data-testid fragile / G8.2 HIGH test selector XPath/nth/css-class / G8.3 MEDIUM non-standard regex / G8.4 LOW map-loop no unique suffix)** | ✅ Yes — every interactive component checked | Kent C. Dodds Testing Library priority order enforced; 5 new data-testids created (`refund__action-btn__confirm`, `refund__status-toast__success` etc); XPath/nth-child not used once; 0 duplicates in ticket line-item map |
 | Non-goals (style / formatting / naming / coverage %) | ⚠️ Skipped intentionally — that's CI/lint job | |
 
 ---
