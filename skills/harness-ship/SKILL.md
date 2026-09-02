@@ -398,7 +398,7 @@ Detecta stack do monorepo automaticamente (ordem de tentativa):
 
 **Output artifacts:**
 - `$SHIP_QA_GATE_LOG` — stdout concatenado do profile selecionado. Estrutura final: `$HARNESS_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-qa-gate.log` (timestamp ordenável, agrupado). Write atômico via `harness_write_file_atomic` stdin pipe.
-- Decision log entry via helper: `harness_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=${verdict} profile=${MINIMAL|NORMAL|FULL} tc_status=${status} lint_status=${status} test_status=${status} e2e_status=${status|N/A} override_logged=${yes|no} log=${SHIP_QA_GATE_LOG}"`.
+- Decision log entry via helper: `harness_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=${verdict} profile=${MINIMAL|NORMAL|FULL} tc_status=${status} lint_status=${status} test_status=${status} e2e_status=${status|N/A} override_logged=${yes|no} log=${SHIP_QA_GATE_LOG} evidence_manifest_sha256=${QA_EVIDENCE_MANIFEST_SHA:-N/A} evidence_workspace_path=${QA_EVIDENCE_MANIFEST_PATH:-N/A}"`.
 
 ---
 

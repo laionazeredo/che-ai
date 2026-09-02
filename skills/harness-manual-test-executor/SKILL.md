@@ -59,6 +59,41 @@ description: "Executes the manual_test_plan.md step-by-step using Playwright MCP
    - Missing binding → follow §19 canonical binding flow (global registry Level1 + Level2), ask user confirm once.
    - **HARD RULE A PARTIR DAQUI:** NUNCA construa path manualmente. Todo screenshot, todo log, todo report = obrigatoriamente via `harness_output_path "qa" ...`. Nenhum arquivo PNG/LOG/MD cai dentro worktree. MORATÓRIA.
 
+### 0.1 EVIDENCE RETENTION POLICY (ONDA4 — DOIS LOCAIS, NUNCA NA WORKTREE USUÁRIO)
+
+```bash
+# =============================================================
+# POLÍTICA DUPLO LOCAL — MORATÓRIA §20 engineering-contracts:
+# NENHUM evidence/manifest é escrito dentro de WORKTREE_ROOT/*
+# por padrão. Override = usuário pedir VERBATIM.
+# =============================================================
+
+# --- LOCAL 1 — EFÊMERO / SESSION-SCOPE (pesados, TTL 30 dias) ---
+# Screenshots FULL-size CADA step, logs brutos browser console,
+# HTTP response bodies, get_visible_text capture. Fica na sessão.
+# Handoff limpeza: sessões mais antigas que 30 dias = TTL.
+MANUAL_SESSION_EVIDENCE_DIR="$HARNESS_SESSION_DIR/qa"
+mkdir -p "$MANUAL_SESSION_EVIDENCE_DIR/screenshots" "$MANUAL_SESSION_EVIDENCE_DIR/logs" "$MANUAL_SESSION_EVIDENCE_DIR/api"
+
+# --- LOCAL 2 — DURÁVEL / WORKSPACE-SHARED (audit trail LEVE) ---
+# Path canonico via contract helper type=qa scope=workspace related_id=commit_7char.
+# SÓ CONTÉM:
+#   (i)   evidence_manifest_<SHA16_MANIFEST>.json
+#   (ii)  1 thumbnail JPEG/PNG FINAL por AC PASS ≤200KB
+CURRENT_COMMIT_7CHAR="${CURRENT_COMMIT_7CHAR:-$(cd "$WORKTREE_ROOT" && git rev-parse --short=7 HEAD 2>/dev/null || echo "HEAD-detached")}"
+MANUAL_WORKSPACE_AUDIT_DIR="$(harness_output_path "qa" "audit" "commit-${CURRENT_COMMIT_7CHAR}" "workspace" "tmp")"
+MANUAL_WORKSPACE_AUDIT_DIR="$(dirname -- "$MANUAL_WORKSPACE_AUDIT_DIR")"
+mkdir -p "$MANUAL_WORKSPACE_AUDIT_DIR"
+harness_assert_outside_worktree "$MANUAL_WORKSPACE_AUDIT_DIR" "$WORKTREE_ROOT" "MANUAL_WORKSPACE_AUDIT_DIR (durable hash manifest)"
+```
+
+**Manifest JSON Schema OBRIGATÓRIO (mesmo schema harness-qa):** mesmas keys `generated_at_utc / commit_7char / session_id / qa_run_passed / per_test_file_sha256 / per_evidence_sha256 / per_behavior_result / thumbnail_path` (ver harness-qa §-0.1.1 para formato canônico). Para esta skill, `per_behavior_result` mapeia AC-IDs manual (ex: `AC-001 → PASS`).
+
+**Per-AC Screenshot Rules (HARD):**
+1. **Cada screenshot FULL via playwright_screenshot** → sempre salvo em `LOCAL1 Session` (Session TTL30). Calcula SHA256 do arquivo → insere em `per_evidence_sha256`.
+2. **Após THEN verificado (último step da AC):** gerar thumbnail width=800px JPEG quality=75%. **SALVA SÓ O THUMBNAIL em LOCAL2 Workspace.** Se PNG → reduzir dimensões até ≤200KB. Se não couber → thumbnail=null.
+3. **NÃO salva screenshot FULL em LOCAL2 (moratória tamanho).** Apenas SHA256 dele no manifest.
+
 ---
 
 ## 1. STEP 0 — Parse the Manual Test Plan into executable steps
@@ -223,6 +258,20 @@ Report sections:
    - Overall: ✅ All BLOCKER/HIGH ACs PASS → go / ship-ready
    - Overall: ❌ ≥1 BLOCKER or ≥2 HIGH FAIL → not ship-ready
    - Overall: ⚠️ Some PARTIAL + low-severity FAIL → conditional (human review pending items)
+9. **Evidence retention (ONDA4 — MANIFEST + THUMBNAIL RULES):**
+   - Workspace audit manifest SHA256  = <MANUAL_EVIDENCE_MANIFEST_SHA>
+   - Manifest JSON path              = <MANUAL_EVIDENCE_MANIFEST_PATH>
+   - Session full evidence (TTL 30d) = $HARNESS_SESSION_DIR/qa/
+
+### 6.1 STEP FINAL OBRIGATÓRIO — Gerar Evidence Manifest SHA256 (Local2 Workspace Audit)
+
+Após salvar o report final (§6), **antes de retornar**, gere o manifest usando o MESMO algoritmo de harness-qa §0.2:
+- SHA256 de CADA evidence salvo em Local1 (Session) → entry em `per_evidence_sha256`.
+- SHA256 de CADA screenshot FINAL_ASSERT por AC PASS → thumbnail ≤200KB em Local2 (Workspace) usando convert width=800 quality=75.
+- `per_behavior_result` mapeia cada AC-ID → PASS/FAIL/PARTIAL/SKIP.
+- `per_test_file_sha256` = vazio `{}` para esta skill (não executa spec files).
+- Calcula SHA256 do manifest → nome arquivo `evidence_manifest_<SHA16>.json`; salva via `harness_write_file_atomic`.
+- Decision log entry: `MANUAL_TEST_EVIDENCE_MANIFEST` com commit_7char, manifest_sha256, manifest_path, workspace_audit_dir, session_evidence_dir.
 
 ### Chat delivery rule (§18 contracts)
 The chat message user sees uses condensed §18 shape. It DOES NOT dump the full report. Chat summary contains:

@@ -39,6 +39,76 @@ Fail if any step fails. Stop before proceeding with user.
    ```
 3. **Slug:** If user passed `--slug`, use it as-is (sanitize to `[a-z0-9_-]+`). Otherwise derive from `ticket_ref` or `change_class+why`.
 
+### §1.4 Feature Flag Provider Preflight Check (MANDATORY if risk_level ≥ medium)
+
+> **Motivo ONDA4:** NÃO inventar feature flags do zero se o projeto não tiver infraestrutura definida a priori. Só perguntar ao usuário sobre flags SE um provider for detectado. Default fallback = rollback nativo da plataforma de deploy.
+
+**GATILHO de execução (HARD RULE):**
+- SE `risk_level === low` (frontmatter §HEAD L72) → **SKIP bloco INTEIRO, 0 linhas log, não pergunta nada ao usuário.**
+- SE `risk_level === medium OU risk_level === high` → **EXECUTAR 3 passos ABAIXO, ordem fixa. NÃO pular nenhum passo.**
+
+```bash
+# DETECTED flag state inicial
+FLAG_PROVIDER_DETECTED="none"
+FLAG_PROVIDER_NAME=""
+
+# PASSO 1 — SCAN WORKTREE feature libs conhecidas (maxdepth 5, evita node_modules)
+echo "[PREFLIGHT §1.4 PASSO1/3] Scaneando worktree por libs feature flags..."
+FLAG_LIBS_FOUND="$(cd "$WORKTREE_ROOT" && find . -maxdepth 5 -type f \( -iname 'feature.ts' -o -iname 'flags.ts' -o -iname '*.flags.ts' -o -iname 'feature-flags.ts' -o -iname 'feature.js' -o -iname 'flags.js' \) -not -path '*/node_modules/*' -not -path '*/.next/*' -not -path '*/dist/*' 2>/dev/null | tr '\n' ';')"
+if [ -n "$FLAG_LIBS_FOUND" ] && [ "$FLAG_LIBS_FOUND" != ";" ]; then
+  FLAG_PROVIDER_DETECTED="worktree_lib"
+  FLAG_PROVIDER_NAME="worktree-files:${FLAG_LIBS_FOUND%;}"
+  echo "[INFO §1.4] DETECTADO PASSO1: arquivos feature flags em worktree → pode recomendar flags se risco justificar."
+fi
+
+# PASSO 2 — SCAN ENV PATTERNS providers conhecidos (8 patterns canônicos)
+if [ "$FLAG_PROVIDER_DETECTED" = "none" ]; then
+  echo "[PREFLIGHT §1.4 PASSO2/3] Scaneando .env.example e afins por patterns provider feature flags..."
+  ENV_CANDIDATES=".env.example .env.local.example .env.development.example .env.production.example .env"
+  ENV_PATTERNS='^(export )?(FLAG_|FEATURE_FLAG_|LD_|UNLEASH_|STATSIG_|EDGE_CONFIG_|OPENFEATURE_|SPLITIO_)'
+  FLAG_ENV_FOUND=""
+  for envf in $ENV_CANDIDATES; do
+    if [ -f "$WORKTREE_ROOT/$envf" ]; then
+      MATCHES="$(grep -rE "$ENV_PATTERNS" "$WORKTREE_ROOT/$envf" 2>/dev/null | head -5 | tr '\n' ';')"
+      if [ -n "$MATCHES" ]; then
+        FLAG_ENV_FOUND="${FLAG_ENV_FOUND}${envf}:${MATCHES};"
+      fi
+    fi
+  done
+  if [ -n "$FLAG_ENV_FOUND" ]; then
+    FLAG_PROVIDER_DETECTED="env_pattern"
+    FLAG_PROVIDER_NAME="env-patterns:${FLAG_ENV_FOUND%;}"
+    echo "[INFO §1.4] DETECTADO PASSO2: env pattern provider feature flags → pode recomendar flags."
+  fi
+fi
+
+# PASSO 3 — PRODUCT CONTEXT FRONTMATTER feature_flag_provider: (Level 1.5 registry)
+if [ "$FLAG_PROVIDER_DETECTED" = "none" ]; then
+  echo "[PREFLIGHT §1.4 PASSO3/3] Verificando product_context.md frontmatter feature_flag_provider..."
+  PC_FILE="$HARNESS_WORKSPACE_SHARED/projects/${PROJECT_SLUG:-default}/product_context.md"
+  if [ -f "$PC_FILE" ]; then
+    PC_FLAG_PROVIDER="$(grep -E '^feature_flag_provider:\s*' "$PC_FILE" | head -1 | sed -E 's/^feature_flag_provider:\s*//' | tr -d '"' | tr -d "'" | xargs || true)"
+    if [ -n "$PC_FLAG_PROVIDER" ] && [ "$PC_FLAG_PROVIDER" != "" ] && [ "$PC_FLAG_PROVIDER" != "none" ] && [ "$PC_FLAG_PROVIDER" != "null" ]; then
+      FLAG_PROVIDER_DETECTED="product_context"
+      FLAG_PROVIDER_NAME="product_context:${PC_FLAG_PROVIDER}"
+      echo "[INFO §1.4] DETECTADO PASSO3: provider declarado em product_context.md → pode recomendar flags."
+    fi
+  fi
+fi
+```
+
+**BRANCH DE RESULTADOS (HARD POLÍTICA, NÃO NEGOCIÁVEL):**
+
+| Caso | Condição | Ação no draft da SPEC |
+|---|---|---|
+| **A — QUALQUER DETECTADO** | `FLAG_PROVIDER_DETECTED != none` (qualquer passo 1, 2 OU 3 achou) | NADA MUDANÇA ESPECIAL. Fluxo normal §3 + §4. PODE recomendar feature flag em §3 Contracts / §5 Risks se risco justificar (medium/high). Não pergunta nada ao usuário sobre flags (automático). |
+| **B — NENHUM DETECTADO + risk ≥ med/high** | `FLAG_PROVIDER_DETECTED = none` AND `risk_level ∈ {medium, high}` | **HARD RULE: NÃO PODE obrigar feature flag em NENHUMA seção da spec (§3 PRE/POST, §4 SbE, §5 Verification, §6 Risks).** INSERIR LINHA OBRIGATÓRIA no draft §3 CONTRACTS → PREconditions bloco (último bullet PRE): <br>`- PRE-FF: Feature flags NOT AVAILABLE (nenhum provider detectado preflight §1.4). Fallback rollback default = plataforma deploy nativa: <Vercel Instant Rollback <30s \| Railway redeploy \| Supabase branch revert \| manual>` <br>Adicionar nota em §5 VERIFICATION (seção "Rollback trigger" se existir, senão como último bullet): <br>`Rollback default usa deploy nativo da plataforma (feature flags indisponíveis nesta worktree — nenhum provider detectado preflight §1.4).` <br>NÃO pergunta ao usuário se quer usar flags. NÃO cria configuração de flag. |
+
+**EXCEÇÃO ÚNICA PERMITIDA (override user VERBATIM):**
+- ÚNICO jeito de contornar Branch B (forçar obrigatoriedade de flag SEM provider detectado) = usuário digitar ANTES do spec gerar o literal EXATO: **`EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE`** seguido de justificativa 1-linha. Exemplo usuário:
+  > `EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE: vamos lançar essa feature crítica numa sexta 22h, vou criar lib flags manualmente agora mesmo nesta PR`
+- Se usuário digitou o literal → salvar como decision.log: `harness_append_decision_jsonl "SPEC_PREFLIGHT_OVERRIDE" "preflight=§1.4_feature_flags type=EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE rationale=<1-linha user verbatim> risk_level=${risk_level}"`. Depois PODE obrigar flags em seções da spec normalmente. Se NÃO digitou literal → Branch B é HARD STOP, não há discussão.
+
 ---
 
 ## §2 SOURCE SELECTION (4 inputs)
