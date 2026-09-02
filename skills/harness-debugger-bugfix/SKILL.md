@@ -159,12 +159,26 @@ Append to `$BUGFIX_SESSION_MD`:
 | ✅ Test written, FAIL confirmed, evidence saved | **ADVANCE to Step 1.3 → build hypotheses.** Gate unlocked. |
 | ⚠️ Cannot write automated repro (e.g. visual-only bug that requires GPU rendering / prod-specific race / third-party-UI-outside-our-code) | **HARD STOP — DO NOT ADVANCE.** Ask user verbatim: *"Não consegui escrever um teste automatizado que reproduza o bug. Motivo: <1-linha explicação técnica, sem jargão>. Para eu avançar, preciso de um EXPLICIT_OVERRIDE seu confirmando que esta exceção é aceitável. Por favor confirme digitando EXPLICIT_OVERRIDE_DEBUGGER_REPRO=YES + justificativa 1-linha por que não pode ser automatizado."* Log the override VERBATIM into decisions.log.jsonl via `harness_append_decision_jsonl` BEFORE advancing. |
 
-**POST-FIX MIRROR CHECK — performed at Phase 2 Step 3.3 (verify the lock flipped):**
+**POST-FIX MIRROR CHECK — performed at Phase 2 Step 3.3 (verify the lock flipped):
 After root cause fix is applied, run the EXACT SAME `repro_test_run_command`. Assert:
 1. exit_code === 0 (green now — lock flipped)
 2. Any NEW tests added for expected-behavior (happy paths / edge cases) also PASS
 3. NO previously-passing test in the same module NOW FAILS (regression)
 Append "✅ REPRO LOCK FLIPPED — same test now PASSES + exit_code=0 + sha256=<new>" line to the Phase 2 verification section of bugfix_session.md.
+
+**[NOTA G5 — REGRESSION LOCK LOCATION POLICY (OBLIGATÓRIA NO FINAL DO STEP 3.3:**
+- **DEFAULT 95% CASOS (Fix Every Bug Twice — Stripe Playbook):** o teste de regressão (repro lock + behavior tests) DEVE ficar **NA PASTA DA FEATURE/DOMÍNIO ONDE O BUG OCORREU** junto com os demais testes daquela área. **NÃO colocar ticket ID no nome do arquivo.**
+- **Exemplo:** Bug FLO-513 Refund: `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts` (pasta padrão refund / server tests) com **PRIMEIRA LINHA DENTRO DO BLOCO `it()`** (NÃO no título):
+  ```typescript
+  it('confirms a full refund succeeds with reason and shows correct status row', async () => {
+    // @ticket FLO-513 @bug reproduces refund amount not reversed on row status @ac B-3
+    // ... resto do teste
+  });
+  ```
+- **CASO ESPECIAL EXCEÇÃO (< 5% CROSS-CUTTING ≥4 DOMÍNIOS):** Teste regression atravessa **≥4 domínios independentes** (ex: auth + billing + notification + db migration) **OU** é infra-estrutura pura sem domínio específico (ex: worker queue, CI script deploy)) → **PERMITIDO** criar `tests/regression/<TICKET_ID>--<slug>.test.ts` com ID no nome do arquivo. **MAS OBRIGATÓRIO:**
+  1. Ter `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER` logado VERBATIM em `decisions.log.jsonl` com 1-linha justificando ≥4 domínios / infra pura.
+  2. Incluir entrada na coluna Notes da Verification Matrix da SbE spec com o caminho absoluto.
+  3. Se NÃO houver override logado, code-review G7.3 sobe automaticamente para **HIGH severity** (blocking se ≤2 HIGH auto-fix).
 
 ### Step 1.3 Build the initial hypothesis list
 

@@ -541,12 +541,14 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md` "Appendi
    - **Exemptions (waive only with explicit confirmation):** Component is explicitly marked DEMO/SCAFFOLD in filename (ex: `*Demo*.tsx`, `*Scaffold*.tsx`) + PR body has the warning. OR route is strictly internal / health-check (`/healthz` route).
    - **Fix:** Add 1 route-level test (for API branch A) calling `trpcClient.xxx(...)` or `POST /api/xxx` with signed payload + valid auth; for UI add 1 RTL spec calling `fireEvent.click` + assertions.
 
-3. **G7.3 🟡 MEDIUM — New/modified test WITHOUT traceability comment linking to SbE behavior or ticket.**
+3. **G7.3 🟡 MEDIUM → 🟠 HIGH UPGRADE SEVERIDADE CROSS-CUTTING REGRESSION FOLDER (G5 policy):**
+   - **Nome atual MEDIUM default:** New/modified test WITHOUT traceability comment linking to SbE behavior or ticket.
    - Scope: scan EVERY test file (`*.test.*`, `*.spec.*`) NEW or MODIFIED in the diff. For each `it(...)` / `test(...)` block body, check the FIRST 3 non-empty lines inside the curly braces (or the JSDoc comment `/** ... */` IMMEDIATELY above the nearest enclosing `describe()`).
    - Look for a comment line MATCHING the regex: `^\s*//\s*@(ac|ticket|task|bug)\s+(B-\d+|FLO-\d+|AC\d+(\.\d+)?|T\d+(\.\d+)?|AB-\d+)` or equivalent JSDoc tag `@ticket`, `@ac`, `@task`.
-   - If the test block has ZERO such comment inside (or JSDoc above nearest describe missing it) → **MEDIUM G7.3 = NO TRACEABILITY from behavior table to test body.**
+   - If the test block has ZERO such comment inside (or JSDoc above nearest describe missing it) → **MEDIUM G7.3 default = NO TRACEABILITY from behavior table to test body.**
    - **Exception (waive G7.3):** It's a pure test infrastructure refactor (rename, package.json updates, moving files across folders, jest/vitest config only). OR it's a well-known canonical test (ex: `it("sums 2+2")` = unrelated to SbE scope).
    - **Fix:** Add 1 line as FIRST executable line inside the `it()/test()` block: `// @ac B-3 | @ticket FLO-123` (or JSDoc block for describe). This is the canonical SbE traceability anchor used by scope-checker CHECK2 bilateral verification.
+   - **🔴 UPGRADE AUTOMÁTICO SEVERIDADE PARA HIGH (G5 cross-cutting exceção):** SE (o teste está localizado em **`tests/regression/<TICKET_ID>--<slug>.test.ts` (com ticket ID no nome do arquivo) E NÃO EXISTIR `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER logada em decisions.log.jsonl justificando ≥4 domínios independentes OU infra-estrutura pura**) → **G7.3 automaticamente vira 🟠 HIGH severity** (contabiliza no contador ≤2 HIGH do ship gate §0.9.2 auto-fix rule). Se o teste está na pasta da feature com comment anchor correto → sem upgrade.
 
 4. **G7.4 🔵 LOW — `.skip()` / `xit()` / `it.todo()` used WITHOUT a follow-up ticket reference.**
    - Scan test blocks for `.skip(` or `xit(` or `it.todo(` or `test.skip(` or `test.todo(`.

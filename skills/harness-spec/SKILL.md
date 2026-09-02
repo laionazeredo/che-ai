@@ -210,6 +210,10 @@ Atualização AUTOMÁTICA desta matriz EM CADA LOOP:
 - Developer termina task → atualiza `Status=Written` + `Test file path`.
 - QA run → atualiza `Status=Passed|Failed|Skipped` + append Evidence SHA256 (gerar via `sha256sum stdout.log | cut -d' ' -f1`).
 - Failed → nova linha Notes "Reproduce: command X".
+- **G5 Regression Location (linha Notes OBRIGATÓRIA para testes regression/repro lock):**
+  Notes também deve indicar explicitamente **LOCATION do arquivo regression:
+  - DEFAULT: ✅ `[colocated na pasta da feature / domínio — @ticket FLO-123` (regra padrão).
+  - EXCEÇÃO (apenas se cross-cutting ≥4 domínios / infra pura): ⚠️ `[tests/regression/FLO-123--refund-idempotency.test.ts] — EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER decisions.log entry: auth+billing+notification+db ≥4 domínios — justificativa 1-linha`. Se o teste for o testes está em tests/regression com ticket ID no nome arquivo SEM entrada Notes vazia → scope-checker CHECK2 bilateral marca warning SCOPE_score -2 penalty).
 
 ### §6 MANUAL SMOKE TEST PLAN (Staging + Prod HUMAN — OBRIGATÓRIO SEMPRE)
 Header: `## §6 MANUAL SMOKE TEST PLAN (HUMAN — Staging + Prod)`
