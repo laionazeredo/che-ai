@@ -28,6 +28,20 @@
 - `feat(platform): new API endpoint (tRPC bookingRouter.refundOrder) + creator dashboard UI button.` Why: lets event organizers click a button "Refund order" on an existing booking. A confirmation pop-up checks eligibility (order must be paid, event must be refundable) before proceeding.
 - `feat(platform): Refund confirmation email via Resend + full E2E test (refundFlow.api.test.ts).` Why: customer receives a confirmation email after refund. The E2E test (using a real Postgres via Testcontainers) creates a booking → requests refund → verifies final status → confirms duplicate webhook is ignored. Test passes 1/1.
 
+## 🧭 SbE Traceability Matrix
+
+> **Auto-preenchida quando SPEC SbE for aprovado e `// @ac B-X` anchors forem extraídos do diff. Se for spec legado (sem B-IDs) → REMOVER ESTA SEÇÃO INTEIRA no PR real.**
+>
+> Cada linha = um behavior B-ID ou anti-behavior AB-ID aprovado na §4.2 Behavior Table da SbE spec. Coverage < 70% → ver action items do scope-checker CHECK2 bilateral.
+
+| Behavior ID (B ou AB) | Test file path (extraído de `// @ac B-X` anchors no diff — include :line-range se for bloco it()) |
+|---|---|
+| B-1 | `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts:112-145` |
+| B-3 | `packages/payments/services/__tests__/RefundService.unit.test.ts:45-60` |
+| AB-2 | `packages/platform/server/__tests__/integration/refundIdempotency.integ.test.ts:22-38` |
+
+> **Coverage audit rule:** Se a §4.2 Behavior Table da SbE listar 10 B-IDs e esta tabela só tiver 6 → coverage = 60% → warning G7.3 em Category7 do code-review (upgrade para HIGH se ≤2 HIGH gate).
+
 ## 🔍 Attention points
 
 <!-- What reviewers MUST pay attention to. 3 bullets ideal, 5 max.

@@ -1,6 +1,6 @@
 ---
 name: "harness-graph"
-description: "Wrapper canônico e genérico do Graphify CLI (pipx package graphifyy = tree-sitter AST knowledge graph 100% local, 33 linguagens). Subcomandos: refresh, query 'pergunta', path A B, stats. Produz graphify-out/ na raiz do worktree (gitignored). Suporta fallback chain de engines Node.js alternativos (CodeGraph npm, @sentropic/graphify, codebase-vis, @lubab/madar) e fallback final leve grep-based se nenhum instalado. Integração com harness-xray (auto refresh durante onboarding)."
+description: "Wrapper canônico e genérico do Graphify CLI (pipx package graphifyy = tree-sitter AST knowledge graph 100% local, 33 linguagens). Subcomandos: refresh, query 'pergunta', path A B, stats. Output cache FICA FORA WORKTREE em $HARNESS_WORKSPACE_SHARED/graphify/<related_id>/. Suporta fallback chain de engines Node.js alternativos (CodeGraph npm, @sentropic/graphify, codebase-vis, @lubab/madar) e fallback final leve grep-based se nenhum instalado. Integração com harness-xray (auto refresh durante onboarding). NÃO cria artefatos NEM edita .gitignore na worktree do usuário."
 ---
 
 # Harness Graph — Knowledge Graph AST (Engine Wrapper com fallback chain)
@@ -8,7 +8,41 @@ description: "Wrapper canônico e genérico do Graphify CLI (pipx package graphi
 > **Canonical default tool:** Graphify CLI (PyPI: `graphifyy`, double `y`)
 > **Instalar (RECOMENDADO default):** `pipx install graphifyy`
 > **Version tested:** 0.9.x+
-> **Onde gera output:** `$WORKTREE_ROOT/graphify-out/` (sempre gitignored global, commitar nunca)
+> **Onde gera output:** `$HARNESS_WORKSPACE_SHARED/graphify/<related_id>/` (FORA worktree do usuário; nunca commita; não precisa de .gitignore)
+
+---
+
+## -0.1 STORAGE BOUNDARY PREFLIGHT (OBRIGATÓRIO ANTES DE TUDO)
+
+```bash
+# 1. Carrega contrato de sessões
+source ~/.trae/contracts/harness_sessions_contract.sh
+
+# 2. Resolve WORKTREE_ROOT + SESSION_ID
+WORKTREE_ROOT="${WORKTREE_ROOT:-$(pwd)}"
+SESSION_ID="${SESSION_ID:-graph-standalone-$(date -u +%Y%m%d-%H%M%S)}"
+
+# 3. Calcula paths canônicos + assegura dirs
+harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+harness_ensure_session_dirs "$WORKTREE_ROOT"
+
+# 4. Double-guard: outputs NUNCA dentro worktree
+harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR"
+harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED"
+
+# 5. Constrói UMA VEZ paths de output do graph (todos FORA worktree)
+WORKTREE_SLUG_CANONICAL="$(basename "$WORKTREE_ROOT" | sed 's/[^A-Za-z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')"
+GRAPHIFY_RELATED_ID="${GRAPHIFY_RELATED_ID:-graphify-${WORKTREE_SLUG_CANONICAL}}"
+
+# Truque: gerar um filename dummy via helper, dirname() nos dá a subpasta canônica
+GRAPHIFY_OUTPUT_ROOT="$(dirname -- "$(harness_output_path "graphify" ".keep" "${GRAPHIFY_RELATED_ID}" "workspace" "md")")"
+harness_assert_outside_worktree "$GRAPHIFY_OUTPUT_ROOT" "$WORKTREE_ROOT" "GRAPHIFY_OUTPUT_ROOT"
+mkdir -p "$GRAPHIFY_OUTPUT_ROOT"
+
+GRAPH_REPORT_PATH="${GRAPHIFY_OUTPUT_ROOT}/GRAPH_REPORT.md"
+```
+
+**NÃO INVENTE:** Nenhum outro caminho nesta skill. Todo cache, index, artefato do graphify fica ABAIXO de `$GRAPHIFY_OUTPUT_ROOT`. Se for necessário outros subfiles (graph.db, index.sqlite, nodes.json) → `$GRAPHIFY_OUTPUT_ROOT/<nome>`. `harness_cleanup_legacy_artifacts_in_worktree` já remove `graphify-out/` se caiu por engano em worktree antiga.
 
 > **Alternativas 100% Node.js (OPCIONAL · unificar ecossistema só JS):**
 > O harness usa a primeira engine encontrada nesta ordem (fallback chain declarativa):
@@ -65,26 +99,31 @@ echo "[harness-graph] Engine selecionada: $GRAPH_ENGINE v${GRAPH_ENGINE_V:-}"
 
 ## 2. SUBCOMANDOS
 
-### 2.1 `refresh` (atualiza graphify-out/)
+### 2.1 `refresh` (atualiza knowledge graph cache)
 
-Execução canônica:
+Execução canônica. **TODOS outputs ficam em `$GRAPHIFY_OUTPUT_ROOT` FORA worktree. NÃO usamos `graphify-out/` padrão dentro worktree.**
+
 ```bash
-cd "$WORKTREE_ROOT"
-
-# Se é a 1ª vez (não existe graphify-out/GRAPH_REPORT.md) → full scan
-# Senão → incremental scan (só arquivos modificados desde último ts)
+# Garantimos diretório de output FORA worktree (já criado no PREFLIGHT)
+[ -n "${GRAPHIFY_OUTPUT_ROOT:-}" ] || { echo "[harness-graph refresh] ❌ PREFLIGHT NÃO rodou. GRAPHIFY_OUTPUT_ROOT vazio." >&2; exit 99; }
+harness_assert_outside_worktree "$GRAPHIFY_OUTPUT_ROOT" "$WORKTREE_ROOT" "GRAPHIFY_OUTPUT_ROOT"
 
 if [ "$GRAPH_ENGINE" = "graphify" ]; then
-  if [ -f graphify-out/GRAPH_REPORT.md ]; then
-    # Incremental (mais rápido ~50%)
-    graphify . --update 2>&1 | tail -n 5
+  if [ -f "$GRAPH_REPORT_PATH" ]; then
+    # Incremental (mais rápido ~50%). --output-dir garante cache FORA worktree.
+    graphify "$WORKTREE_ROOT" --update --output-dir "$GRAPHIFY_OUTPUT_ROOT" 2>&1 | tail -n 5
   else
-    # Primeira vez
-    graphify . 2>&1 | tail -n 5
+    # Primeira vez. --output-dir garante cache FORA worktree, NÃO gera nada dentro $WORKTREE_ROOT.
+    graphify "$WORKTREE_ROOT" --output-dir "$GRAPHIFY_OUTPUT_ROOT" 2>&1 | tail -n 5
   fi
   RESULT=$?
+elif [ "$GRAPH_ENGINE" = "codegraph" ] || [ "$GRAPH_ENGINE" = "codebasevis" ] || [ "$GRAPH_ENGINE" = "madar" ] || [ "$GRAPH_ENGINE" = "@sentropic/graphify" ]; then
+  # Fallback engines Node.js: sempre passe output-dir fora worktree.
+  # Se engine não suportar --output-dir, CD para $GRAPHIFY_OUTPUT_ROOT e rode de lá apontando para $WORKTREE_ROOT
+  ( cd "$GRAPHIFY_OUTPUT_ROOT" && "${GRAPH_ENGINE%%:*}" scan "$WORKTREE_ROOT" 2>&1 | tail -n 5 )
+  RESULT=$?
 else
-  # Fallback: estrutura de pastas + extensões top-N (não gera arquivo, só imprime resumo)
+  # Fallback final: estrutura de pastas + extensões top-N (não gera arquivo, só imprime resumo)
   echo "[harness-graph refresh] fallback grep-based scan:"
   find "$WORKTREE_ROOT" -maxdepth 3 -type d -not -path '*/node_modules*' -not -path '*/.git*' -not -path '*/.next*' | head -40
   find "$WORKTREE_ROOT" -type f -not -path '*/node_modules*' -not -path '*/.git*' \
@@ -92,13 +131,12 @@ else
   RESULT=0
 fi
 
-# Audit trail (sempre append registry.jsonl se existir)
-if [ -n "${HARNESS_PROJECT_REGISTRY:-}" ] && [ -f "$HARNESS_PROJECT_REGISTRY" ]; then
-  echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"event\":\"GRAPH_REFRESH\",\"project_slug\":\"${HARNESS_PROJECT_SLUG:-unknown}\",\"data\":{\"engine\":\"$GRAPH_ENGINE\",\"version\":\"${GRAPHIFY_V:-n/a}\",\"ok\":$RESULT}}" \
-    >> "$HARNESS_PROJECT_REGISTRY"
-fi
+# Audit trail (sempre append decision log FORA worktree — usando helper oficial)
+harness_append_decision_jsonl "GRAPH_REFRESH" "{\"related_id\":\"${GRAPHIFY_RELATED_ID}\",\"engine\":\"${GRAPH_ENGINE}\",\"version\":\"${GRAPHIFY_V:-n/a}\",\"ok\":${RESULT},\"output_root\":\"${GRAPHIFY_OUTPUT_ROOT}\"}"
 
 [ $RESULT -eq 0 ] || { echo "[harness-graph refresh] ❌ falhou. Verifique graphify --version." >&2; exit 1; }
+
+# NÃO editamos .gitignore do usuário. Como cache está FORA worktree, nunca aparece em git status.
 ```
 
 ### 2.2 `query "<pergunta>"` (pergunta NL)
@@ -155,19 +193,7 @@ Sempre formato estável (scripts parseiam):
 
 ---
 
-## 3. .gitignore OBRIGATÓRIO NO WORKTREE
-
-`graphify-out/` **NUNCA vai para PR / commit.**
-
-Se o worktree não tiver `.gitignore` com graphify-out, este skill adiciona NO FINAL do `.gitignore` do worktree 1 linha:
-```
-graphify-out/
-```
-**Regra hard:** NÃO adiciona essa linha se `.gitignore` já tem ela (idempotente). Usa grep para checar antes.
-
----
-
-## 4. INTEGRAÇÕES DO ECOSSISTEMA HARNESS
+## 3. INTEGRAÇÕES DO ECOSSISTEMA HARNESS
 
 Que skills usam harness-graph:
 1. **harness-xray (onboarding)** — chama `/harness-graph refresh` como Passo 1 do pipeline de scan; absorve `stats` + top hubs no `project_profile.md`.
@@ -178,8 +204,9 @@ Que skills usam harness-graph:
 
 ---
 
-## 5. VERSIONAMENTO + ROLLBACK
+## 4. VERSIONAMENTO + ROLLBACK
 
 - **graphify CLI versões:** pin para >= 0.9.x se instalar via pipx. Ousterhout + Graph knowledge graph versão API pode mudar em 1.0.
 - **Rollback:** Se graphify der crash em algum projeto, é só desinstalar → harness-graph cai automaticamente no fallback grep-based. Nada quebra. Reversível.
-- **Cache:** `graphify-out/` pode ser apagado a qualquer momento (`rm -rf graphify-out/`). Próximo `refresh` recria do zero sem side effects.
+- **Cache (TODOS FORA WORKTREE):** `$GRAPHIFY_OUTPUT_ROOT` pode ser apagado a qualquer momento (`rm -rf "$GRAPHIFY_OUTPUT_ROOT"`). Próximo `refresh` recria do zero sem side effects.
+- **Legacy cleanup:** `harness_cleanup_legacy_artifacts_in_worktree` já move `graphify-out/` antigo (caiu dentro worktree por bug) para backup seguro em `$HARNESS_WORKSPACE_SHARED/legacy_cleanup/`.

@@ -216,6 +216,12 @@ This rule turns "agilidade" from vague talk into enforceable checkpoints:
    - NEVER break existing behavior without an EXPLICIT AC asking for the break.
    - If you need behavior breaking: NON-GOALS, Data Model + Migration with rollback plan, and explicit user approval.
 6. **Test-suite naming = behavior observable ONLY (REGRA 7.9 do harness).**
+
+   **🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça ao contrário):**
+   > ❌ **ERRADO:** Escrever `it("FLO-714 T1.2 valida AC 3.1 deploy")` → IDs NO TÍTULO = antinômio da regra.
+   > ❌ **AINDA MAIS ERRADO:** Reclamar / corrigir um teste porque o título NÃO contém FLO/T/AC. Isso é o comportamento ESPERADO / BOM / COMPLIANT.
+   > ✅ **CORRETO:** Título DESCREVE comportamento observável, IDs vão em comentário trace acima / 1ª linha dentro do bloco.
+
    - **`describe("...")`** = module/feature/context UNDER TEST (domain grouping, not task IDs).
      ✅ `describe("POST /api/payments/refund")`
      ❌ `describe("FLO-513 T2 — process refund ACs 3.1-3.4")`
@@ -537,7 +543,21 @@ Runtime portability:
   - ensure dirs: harness_ensure_session_dirs
 ```
 
-MORATÓRIA (hard stop): NENHUM arquivo `.md` ou `.json` ou `.png` gerado pelo harness é escrito em `<WORKTREE_ROOT>/.trae/*` a partir de agora. Isso evita git status sujo / commit acidental de evidências de QA / decisions / etc.
+MORATÓRIA (HARD STOP — EXPANDIDA PARA TODA WORKTREE DO USUÁRIO):
+> **REGRA VERBATIM USUÁRIO:** "Nenhum asset do trabalho do harness deve ser criado na worktree. Apenas quando solicitado. tudo deve ser organizado no harness-sessions."
+>
+> NENHUM arquivo `.md` / `.json` / `.jsonl` / `.csv` / `.png` / `.pdf` / `.html` / `.log` / **qualquer extensão** gerado pelo harness é escrito em **QUALQUER LUGAR** dentro de `<WORKTREE_ROOT>/*` por padrão. Isso INCLUI e ULTRAPASSA: `.trae/*`, `reports/`, `docs/`, raiz do repo, `packages/*/`, `apps/*/`, qualquer subpasta do código do usuário.
+>
+> ÚNICA EXCEÇÃO (não tem grey area): usuário pedir VERBATIM, EXPLICITAMENTE, que um arquivo específico seja salvo dentro da worktree. Sem pedido verbal explícito e claro, default = **FORA WORKTREE, em `$HARNESS_SESSIONS_ROOT` via helper `harness_output_path`.**
+>
+> Isso evita: (1) `git status` permanentemente sujo; (2) commit acidental de evidências QA, decisions, reports; (3) colisão de nomenclatura entre sessões paralelas; (4) poluição do diff do usuário com lixo do pipeline.
+>
+> Enforcer canônico = `harness_assert_outside_worktree` do contract. Chamado automaticamente pelo helper único `harness_output_path` (DUVIDA? CHAMA ELE. NUNCA construa paths manualmente).
+>
+> Output path helper canônico OBRIGATÓRIO para TODO write:
+>   `harness_output_path <type=report|review|qa|...> <slug=harness-code-review> <related_id=pr-382|""> <scope=session|workspace> <ext=md|json> [suffix]`
+>
+>   Garante: (a) timestamp UTC prefix no filename ↔ sort alfabético = cronológico; (b) subpastas `<type>/<related_id>/` ↔ arquivos relacionados mesma PR/task ficam juntos; (c) assert outside automático em baixo nível; (d) atomic writes via `harness_write_file_atomic`.
 
 Binding contract:
 
@@ -617,6 +637,64 @@ Binding contract:
 
 ---
 
+### 21. 🔴 EXTERNAL CONNECTORS ONLY OFFICIAL CLI/MCP (Generalização §18 GitHub para TODAS integrações externas. HARD STOP.)
+
+> **This rule generalizes §18 GITHUB ACCESS gh-only to EVERY external SaaS / self-hosted tool integration. It applies to: Figma, PenPot, Linear, ClickUp, Jira, Sentry, Grafana, Datadog, Stripe, Resend, Supabase, Railway, Vercel, Lighthouse CI, axe-core, SEO tools, social media scheduling, Google Search Console, GA4, GTM, Meta Pixel, etc. If the integration lives outside the user's runtime — this rule applies.**
+>
+> **Higher precedence than "it's faster to write 5 lines of fetch". Lower precedence only than Safety §2, DbC §6, Worktree binding §20.** Violação = CRITICAL issue no §0.9.2 CODE-REVIEW. Não abafa.
+
+#### 21.1 CANAL PERMITIDO (2 canais, ORDEM DE PRECEDÊNCIA FIXA)
+
+**Sempre use o canal mais alto disponível nesta ordem. Pular canal = violação.**
+
+| Prioridade | Canal | Descrição / Exemplos |
+|---|---|---|
+| **P1 (SEMPRE PRIMEIRO SE EXISTIR)** | **MCP Oficial (Model Context Protocol)** | Server MCP mantido oficialmente pelo vendor OU maintainer reconhecido pela comunidade (>= 500 stars ou selo verified). Exemplos: `mcp_open-pencil` Figma oficial, `penpot-mcp` oficial, `mcp_flockr-linear`, `mcp_laion-railway`, `mcp_Playwright`, `mcp_Sequential_Thinking`, `integrated_browser` (MCP browser não-curl). |
+| **P2 (FALLBACK SE P1 NÃO EXISTIR)** | **CLI Oficial (vendor ou community-maintained ≥1000 downloads/semana npm/pip/cargo)** | Instalado via package manager padrão (corepack pnpm / pipx / cargo). Autenticação igual `gh auth login` — fluxo CLI interativo OU OAuth flow via browser, token salvo em `$XDG_CONFIG_HOME/<vendor>/credentials.json` (NUNCA commitar). Exemplos: `gh` (GitHub §18), `figma-cli`, `@axe-core/cli` (Deque), `@lhci/cli` (Lighthouse), `sentry-cli` (Sentry), `grafana-cli`, `datadog-ci`, `jira-cli` (Atlassian), `clickup-cli`, `linear-cli`. |
+
+#### 21.2 CANAIS PROIBIDOS ABSOLUTOS (HARD FAIL se usado)
+
+1. ❌ **`curl` / `wget` / HTTP raw request escrito manualmente.** Qualquer coisa que seja `fetch()` inline no agente, `axios.get()` s/ wrapper, `requests.get()` Python solto. Exceção ÚNICA: se já existe um wrapper CLI P2 que INTERNAMENTE faz HTTP e nós só chamamos o CLI (que gerencia auth, retries, rate limit). Nós NUNCA escrevemos HTTP.
+2. ❌ **Direct SDK sem wrapper CLI oficial.** Exemplo: SDK npm `@linear/sdk` chamado direto. Só aceito se houver CLI P2 `linear-cli` que usa o mesmo SDK internamente e nós chamamos o CLI.
+3. ❌ **PAT / API Key hardcoded inline no código ou em `.env` commited.** Toda chave de API fica em: (a) `credentials.json` XDG_CONFIG (CLI) OU (b) Secret Manager runtime criptografado (Vercel Env Crypt / Railway Variables / GitHub Encrypted Secrets). NUNCA texto plano commitado.
+4. ❌ **Third-party SaaS intermediário ("proxy").** Nenhum Zapier / Make.com / n8n como camada extra agente → vendor. Chamada direta agente → MCP oficial ou agente → CLI oficial. Zero camadas a mais.
+5. ❌ **"Eu vou escrever um client HTTP rápido porque é só 1 endpoint."** Não escreve. Usa P1 ou P2. Se não existir P1/P2 hoje → considera que a integração NÃO EXISTE. Não implementa. Se é tão importante assim → abre issue no vendor MCP oficial, ou espera fase 2.
+
+#### 21.3 Autenticação (igual pattern §18 gh CLI)
+
+1. OAuth flow browser-first SEMPRE que possível. NUNCA copiar-colar PAT de página do vendor.
+2. Tokens salvos localmente em `$HOME/.config/<vendor>/credentials.json` (0600 permissions). NUNCA `$HOME/.env`.
+3. CI / runtime remoto: **apenas** `Secrets Manager` da plataforma. Ex: Vercel Env Crypt, Railway Variables criptografadas, GitHub Actions Encrypted Secrets (não texto plano no workflow YAML).
+4. Audit trail: `[STEP N/M] Authenticated <vendor> via CLI (scope: <read/write>). User ID: <hash-email> (PII hash NÃO raw email).` Log §19 standard. NUNCA loga o token literal. NUNCA loga body response se contiver dados de usuário.
+
+#### 21.4 Retry + Rate Limit (igual §18 gh CLI)
+
+1. **NUNCA retry cego loop while true.** Sempre bounded 3 tentativas com exponential backoff (1s → 2s → 4s).
+2. Se 429 Too Many Requests / rate limit: **espera Retry-After header se fornecido, senão 60s mínimo.** Não faz busy wait. Loga entry `[RATE-LIMIT-SLEEP] vendor=X duration_s=Y reason="..."` em decisions.log.
+3. Qualquer erro 5xx vendor = retry bounded. Qualquer erro 4xx (exceto 429) = **falha imediata, não retry.** A menos que seja 401 token expirado e o CLI tem comando `refresh`.
+
+#### 21.5 Exemplo Tabela Mapeamento Concreto (Domínios 7 categorias)
+
+| Domínio 7-slug | Integração | P1 MCP Oficial (usa primeiro) | P2 CLI Oficial (fallback) |
+|---|---|---|---|
+| `engineering` | GitHub | ✅ `mcp_github` MCP oficial + `gh` CLI | `gh` CLI npm-corepack (padrão §18) |
+| `ux` | Figma | ✅ `mcp_open-pencil` (Figma Dev Mode) | `figma-cli` npm |
+| `ux` | PenPot open-source | ✅ `penpot-mcp` official maintainer | N/A (P1 existe) |
+| `ux` | Axe-core WCAG 2.2 AA | MCP `axe-core-mcp` (se disponível) | `@axe-core/cli` npm Deque oficial |
+| `product` | Linear | ✅ `mcp_flockr-linear` MCP | `linear-cli` npm |
+| `product` | ClickUp | ✅ `mcp_laion-clickup` MCP | `clickup-cli` npm |
+| `product` | Jira | MCP Atlassian (se disponível) | `jira-cli` Atlassian npm |
+| `devops` | Sentry | Verificar `sentry-mcp` | `sentry-cli` pipx oficial |
+| `devops` | Grafana | Verificar `grafana-mcp` | `grafana-cli` oficial |
+| `devops` | Datadog | Verificar `datadog-mcp` | `datadog-ci` npm oficial |
+| `seo-analytics` | Lighthouse CI | MCP lighthouse (se tem) | `@lhci/cli` npm oficial |
+| `seo-analytics` | GA4 / GSC | MCP Google official (se tem) | NENHUM (se não tem P1/P2 → NÃO integra hoje. Espera fase 2 vendor lançar.) |
+| `social` / `copywriting` | (futuro fase 2) | A definir por domínio, sempre P1/P2 | Mesma regra |
+
+> **Se a célula P1 e P2 para uma integração estão ambas VAZIAS = NÃO IMPLEMENTA A INTEGRAÇÃO HOJE.** Não inventa. Não usa raw curl. Abre issue no vendor para official MCP ou official CLI. Volta quando tiver P1 ou P2. KISS + YAGNI §1 wins sempre.
+
+---
+
 ## Appendix A — Hard Conflict Resolution Table (CANONICAL)
 
 If you face a trade-off where two rules seem to pull opposite directions:
@@ -635,6 +713,7 @@ If you face a trade-off where two rules seem to pull opposite directions:
 | Code Review Opt max 2 lines comment (§16) vs trade-off explanation | May do 3+ LINES ONLY with logged exception in decision.log | No log = violation. Usually a more clearly-named function is enough. |
 | Supabase RLS default (§17) vs "table is tiny, public enum only" | RLS default (§17). Skip ONLY with TWO approvals: Non-Goals + decision.log user approval. | See §17 exceptions. |
 | Worktree §19 binding vs "worktree B seems to have the code I want so let me just touch it" | §19 wins. ASK before switching. Never silent cross-worktree file ops. | AskUserQuestion. User confirms → §19.3 re-binding steps. |
+| §21 External Connectors ONLY P1/P2 official vs "só 1 endpoint, vou escrever 5 linhas fetch rápido" | §21 wins ABSOLUTO. NUNCA raw HTTP. Se não tem MCP/CLI hoje → NÃO integra. Espera ou abre issue vendor. | Se caso de vida ou morte real → EXPLICIT_OVERRIDE VERBATIM user logado em decisions.log com justificativa detalhada + data de expiração para migrar para P1/P2.
 
 ---
 

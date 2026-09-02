@@ -98,22 +98,93 @@ $HARNESS_SESSION_DIR       (ephemeral per-session, FORA worktree)
 Where:
 - `<task-id>` slug now goes inside `HARNESS_WORKSPACE_SHARED/tasks/<task-id>/` subdir when needed (not a folder inside worktree).
 - Before ANY file writes: resolve paths via contract: `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"` then `harness_compute_paths "$WORKTREE_ROOT" "$(harness_current_session_id)" "$PWD"`. Never hardcode.
-- Run `harness_ensure_session_dirs WORKTREE_ROOT` immediately after binding decision. Creates 2 directory trees **strictly outside user's worktree** — `harness_assert_outside_worktree` HARD-STOPs (exit 99) se qualquer path resolvido cair dentro da worktree (por exemplo se usuário setou HARNESS_SESSIONS_ROOT errado). MORATORIUM: never write generated files under `<WORKTREE_ROOT>/.trae/*`.
+- Run `harness_ensure_session_dirs WORKTREE_ROOT` immediately after binding decision. Creates 2 directory trees **strictly outside user's worktree** — `harness_assert_outside_worktree` HARD-STOPs (exit 99) se qualquer path resolvido cair dentro da worktree (por exemplo se usuário setou HARNESS_SESSIONS_ROOT errado). MORATORIUM: never write generated files under `<WORKTREE_ROOT>/.trae/*` — and NEVER write generated files under ANY OTHER path inside `<WORKTREE_ROOT>` (toda a raiz da worktree, não só `.trae/`). Exceção ÚNICA: usuário pedir VERBATIM EXPLICITAMENTE que um arquivo específico seja salvo lá.
+
+### 0.2.1 STORAGE PREFLIGHT OBRIGATÓRIO (run imediatamente após binding decision 0.1, ANTES do primeiro write)
+
+ANTES de escrever QUALQUER arquivo (binding.md, task_graph, decisions, envelope, qualquer report), execute EXATAMENTE estes 5 passos UMA VEZ por sessão:
+
+```bash
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"; CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+[ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ $CONTRACT missing; exit 98"; exit 98; }
+SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-sm-session}"
+if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
+  harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+  harness_ensure_session_dirs "$WORKTREE_ROOT"
+  harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR (root efêmeros)"
+  harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "WORKSPACE_SHARED (root duráveis)"
+fi
+```
+
+**Depois do preflight acima, CONSTRUIR TODOS paths de output UMA VEZ e armazenar em variáveis reutilizáveis (NÃO construir manualmente depois):**
+```bash
+TASK_SLUG="${TASK_ID:-global-scope}"
+RELATED_ID="${TASK_SLUG}"
+
+SESSION_MD_PATH="$(harness_output_path "session" "session-metadata" "${RELATED_ID}" "session" "md")"
+TASK_GRAPH_PATH="$(harness_output_path "task" "task-graph" "${RELATED_ID}" "workspace" "md")"
+GH_STACK_PLAN_PATH="$(harness_output_path "gh_stack" "gh-stack-plan" "${RELATED_ID}" "workspace" "md")"
+MANUAL_TEST_PLAN_PATH="$(harness_output_path "qa" "manual-test-plan" "${RELATED_ID}" "workspace" "md")"
+FINAL_SUMMARY_PATH="$(harness_output_path "summary" "session-final" "${RELATED_ID}" "session" "md")"
+TEST_SPEC_SMOKE_PATH="$(harness_output_path "qa" "test-spec-smoke" "${RELATED_ID}" "workspace" "md")"
+DISPATCHER_CONFIG_PATH="$(harness_output_path "config" "dispatcher-config" "${RELATED_ID}" "workspace" "json")"
+DISPATCHER_BATCHES_PATH="$(harness_output_path "report" "dispatcher-execution-batches" "${RELATED_ID}" "session" "md")"
+DISPATCHER_BATCH_REPORT_PATH="$(harness_output_path "report" "dispatcher-batch-final" "${RELATED_ID}" "session" "md")"
+
+# Per-task paths (repetir a cada TASK_ID no loop):
+TASK_ENVELOPE_PATH_Tn="$(harness_output_path "task" "task-envelope" "T${TASK_N}-${TASK_SLUG}" "workspace" "md")"
+MERGE_AUDIT_PATH_Tn="$(harness_output_path "merge_audit" "merge-audit" "batch-${BATCH_N}-${RELATED_ID}" "session" "md")"
+```
+
+**Regra de atomicidade:** TODO write (qualquer arquivo) usa `harness_write_file_atomic "$PATH"` com stdin pipe, exceto decisions.log que usa `harness_append_decision_jsonl` helper oficial (já atômico internamente).
 
 **MANDATORY files created by this skill:**
 
-| File | Location | When created | Purpose |
+| File | Location (all resolved via `harness_output_path` helper; timestamp UTC prefix + `<type>/<related_id>/` structure) | When created | Purpose |
 |---|---|---|---|
-| `registry.jsonl` entries + `binding.md` (2-LEVEL) | Level1 = `harness_registry_path` (GLOBAL append-only JSONL, entry por session. ÚNICO writer = helper `harness_registry_append_jsonl`, NÃO Edit/Write manual). Level2 = `$HARNESS_SESSION_DIR/binding.md` (per session, OUTSIDE user worktree — never committed). | Immediately preflight 0.1 after binding decision (before ANY scope). | **Session ↔ worktree.** Resolve chicken-and-egg (Level1: `SESSION_ID → WORKTREE_ROOT`). Level1 payload JSONL fields: `friendly_name`, `flags.LANG_PT_CHECK=ENABLED|DISABLED`, `workspace_name`, `worktree_slug`, `branch`, `harness_session_dir`, `harness_workspace_shared`, `workspace_file`, `reason`. |
-| `spec_<slug>.md` | `$HARNESS_WORKSPACE_SHARED/` | §0.5 BEFORE scope capture. Generated by harness-spec skill (4 inputs: existing/ticket/Flockr PRD/inline). Durable: shared across sessions; Approved status = GATE unlock. | **Execution contract.** 7 sections + YAML frontmatter (change_class, blast radius, DbC PRE/POST/INV, MoSCoW GWT AC + TEST_METHOD per AC, test strategy thresholds, hints, approved_at). Replaces legacy PRD. |
-| `session.md` | `$HARNESS_SESSION_DIR/` | Start session | Session metadata: task-id, worktree path, start time, goals. |
-| `task_graph.md` | `$HARNESS_WORKSPACE_SHARED/` | After scope capture | Full list tasks, deps, status, DONE criteria. Durable: shared across sessions on same worktree. |
-| `task_envelope_<id>.md` | `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/` | One per task before Dev handoff | Formal contract per task. Subdir per task in durable workspace area. |
-| `decisions.log.jsonl` | `$HARNESS_WORKSPACE_SHARED/` | Append during execution (single shared file per worktree) | Trade-off / non-obvious decision rationale. Multi-session durable: not fragmented per task-id. |
-| `manual_test_plan.md` | `$HARNESS_WORKSPACE_SHARED/` | After all tasks DONE | Step-by-step manual verification plan. Durable (reusable in future sessions on same worktree). |
-| `final_summary.md` | `$HARNESS_SESSION_DIR/` | End of session | Delivered content, risks, stats for THIS run only. |
-| `gh_stack_plan.md` | `$HARNESS_WORKSPACE_SHARED/` | After TASK GRAPH (Phase 1.4) only if trigger ≥3 tasks or >15 files | gh-stack hierarchical PR plan. APPROVED status before `/harness-ship` consumes. Durable. |
-| `test_spec_smoke.md` | `$HARNESS_WORKSPACE_SHARED/tasks/<task-id>/` | Phase 1.5 (before ANY task envelope handed to Dev) | 1-page BDD test contract: 3–5 core Given-When-Then behaviors. |
+| `registry.jsonl` entries + `binding.md` (2-LEVEL) | Level1 = `harness_registry_path` (GLOBAL append-only JSONL, ÚNICO writer = `harness_registry_append_jsonl` — NÃO Edit/Write manual). Level2 = `harness_output_path "session" "binding" "${RELATED_ID}" "session" "md"` → `$HARNESS_SESSION_DIR/sessions/<slug>/YYYYMMDD-HHMMSS-binding.md` (assert outside automático). | Immediately preflight 0.1 after binding decision (before ANY scope). | **Session ↔ worktree.** Resolve chicken-and-egg (Level1: `SESSION_ID → WORKTREE_ROOT`). Level1 payload: `friendly_name`, `flags.LANG_PT_CHECK`, `workspace_name`, `worktree_slug`, `branch`, etc. |
+| `spec_<slug>.md` | `harness_output_path "spec" "spec" "${SPEC_SLUG}" "workspace" "md"` → `$HARNESS_WORKSPACE_SHARED/specs/<slug>/YYYYMMDD-HHMMSS-spec.md` (durable, ordenado por timestamp). | §0.5 BEFORE scope capture. Generated by harness-spec skill (4 inputs). Durable: shared across sessions; Approved status = GATE unlock. | **Execution contract.** 7 sections + YAML frontmatter (PRE/POST/INV, GWT AC + TEST_METHOD per AC, thresholds). Replaces legacy PRD. |
+| `session.md` | `$SESSION_MD_PATH` (variável do preflight §0.2.1) → `$HARNESS_SESSION_DIR/sessions/<slug>/YYYYMMDD-HHMMSS-session-metadata.md` | Start session | Session metadata: task-id, worktree path, start time, goals. |
+| `task_graph.md` | `$TASK_GRAPH_PATH` (variável do preflight §0.2.1) → `$HARNESS_WORKSPACE_SHARED/tasks/<slug>/YYYYMMDD-HHMMSS-task-graph.md` (ordenado por timestamp; múltiplas revisões = múltiplos arquivos). | After scope capture | Full list tasks, deps, status, DONE criteria. Durable: shared across sessions on same worktree. |
+| `task_envelope_<id>.md` | `harness_output_path "task" "task-envelope" "T${TASK_ID}-${RELATED_ID}" "workspace" "md"` → `$HARNESS_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope.md` (um envelope por task, sub-aninhado por task id). | One per task before Dev handoff | Formal contract per task. Blast radius + DONE criteria explicitados. |
+| `decisions.log.jsonl` | `harness_decisions_path` (helper oficial do contrato, já roda outside assert) → `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (único shared file worktree, append via `harness_append_decision_jsonl` only). | Append durante execução (atômico, helper oficial) | Trade-off / non-obvious decision rationale. Multi-session durable. |
+| `manual_test_plan.md` | `$MANUAL_TEST_PLAN_PATH` (variável do preflight §0.2.1) → `$HARNESS_WORKSPACE_SHARED/qa/<slug>/YYYYMMDD-HHMMSS-manual-test-plan.md` | After all tasks DONE | Step-by-step manual verification plan. Durable (reusable em sessões futuras mesma worktree). |
+| `final_summary.md` | `$FINAL_SUMMARY_PATH` (variável do preflight §0.2.1) → `$HARNESS_SESSION_DIR/summary/<slug>/YYYYMMDD-HHMMSS-session-final.md` | End of session | Delivered content, risks, stats for THIS run only. |
+| `gh_stack_plan.md` | `$GH_STACK_PLAN_PATH` (variável do preflight §0.2.1) → `$HARNESS_WORKSPACE_SHARED/gh_stack/<slug>/YYYYMMDD-HHMMSS-gh-stack-plan.md` (threshold trigger ≥3 tasks or >15 files). | After TASK GRAPH (Phase 1.4) if trigger TRUE | gh-stack hierarchical PR plan. APPROVED status before `/harness-ship` consumes. Durable. |
+| `test_spec_smoke.md` | `$TEST_SPEC_SMOKE_PATH` (variável do preflight §0.2.1) → `$HARNESS_WORKSPACE_SHARED/qa/<slug>/YYYYMMDD-HHMMSS-test-spec-smoke.md` | Phase 1.5 (before ANY task envelope handed to Dev) | 1-page BDD test contract: 3–5 core Given-When-Then behaviors. |
+
+---
+
+### 0.3 Domain Context Auto-Load (NOVO · Three-Layer Domains v2)
+
+Runs **AFTER** binding 0.1 + contract path resolution, **BEFORE** §0.5 Approved SPEC gate and §1 scope capture.
+
+Purpose: If the current feature/spec belongs to a non-engineering domain (ux/product/devops/copywriting/social/seo-analytics), automatically load the domain persona/rules and playbook into session context BEFORE asking any scope capture questions. This guarantees domain-specific hard rules (WCAG, design tokens, SEO thresholds, copy length) are enforced from minute 0, not retroactively at ship gate.
+
+Execution logic (in order — STOP at first match):
+1. **Parse SPEC candidate domain:** Read the SPEC YAML frontmatter (from §0.5 gate or user-provided existing SPEC path). Extract field `domain:`.
+2. **Fallback project registry domains array:** If `domain:` field is empty/null/absent in SPEC, read the Level 1.5 registry `domains: [ ]` array at `$HARNESS_HOME/bindings/project_registry.json` (if it exists) for the bound worktree project. Take the FIRST non-null, non-engineering entry if present.
+3. **Default fallback:** If both 1 and 2 returned `null` OR `engineering` → **SKIP THIS STEP COMPLETELY AND SILENTLY (ZERO log lines, ZERO output)**. Session proceeds EXACTLY with the legacy pre-v2 behavior. 100% backward compatibility for all existing sessions/branches/skills (default implicit engineering = skip).
+4. **If domain != engineering (one of: ux | product | devops | copywriting | social | seo-analytics):**
+   a. Check if folders exist: `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/` → MUST exist. If not → WARN "Domain <slug> referenced but folder domains/<slug>/ doesn't exist yet (fase 2 rollout). Skipping domain load." → skip rest.
+   b. **Read and inject profile.md:** Read `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/profile.md`. Append full content verbatim to session context preamble (same level as engineering-contracts §1-21). Agent MUST follow all Forbidden Patterns + Hard Rules in profile with same precedence as §14 Conventional Commits.
+   c. **Read and inject playbook.md:** Read `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/playbook.md`. Append to session context. Steps listed in playbook (e.g. UX 5 phases Brief→Wire→Hi-fi→Gates→Handoff) are treated as REQUIRED PRECONDITIONS before §1 scope capture for domain-specific tasks. If playbook says "Need Brief Approved Gate literal 'Approved' before wireframes", agent enforces it.
+   d. **Register mandatory gates list for downstream §0.9.5 ship:** Parse playbook frontmatter YAML key `gate_files_required: [ ... ]`. Store in session state `SESSION_DOMAIN_GATES = array`. This list is consumed AUTOMATICALLY by harness-ship §0.9.5 DOMAIN GATES later.
+   e. **Mandatory decision.log entry (1 single line):** NÃO append manual. Use HELPER OFICIAL ÚNICO:
+      ```bash
+      harness_append_decision_jsonl "DOMAIN-LOAD" "session=${SESSION_ID} worktree=<wt_slug> domain=<slug> profile=LOADED playbook=LOADED mandatory_gates=<n> gates_list=[<comma-sep>]"
+      ```
+      (Helper já garante: append atômico, JSON seguro, fora worktree por construção via `harness_decisions_path` + outside assert.)
+5. **Nunca carrega 2 domínios simultâneos:** Se SPEC `domain:` e registry `domains[0]` forem diferentes → usa SPEC `domain:` SEMPRE (SPEC tem maior precedência que registry global). NUNCA carrega profile + playbook de 2 domínios na mesma sessão. Se realmente precisa cross-domain → SM cria 2 tasks SEPARADAS no task graph cada uma com seu domínio.
+
+### 0.4 Project Knowledge Level 1.5 Reuse (auto-load, mesmo padrão §0.3)
+
+Runs **immediately after §0.3, before §0.5**. Reuses pre-existing hard rule from CLAUDE.md: "If `graphify-out/GRAPH_REPORT.md` exists, read first. Then read relevant area doc docs/platform.md, docs/scanner.md, docs/packages.md, docs/decisions.md, docs/overview.md."
+
+Execution logic (no breaking change — adds 2 more reads only):
+1. Se `$HARNESS_HOME/bindings/project_registry.json` existir e tiver entry para o projeto da worktree atual → ler e injetar no contexto: `product_context` + `architecture` + `roadmap` + `personas` + `integrations_external`.
+2. Sempre lê `docs/packages.md` + `docs/decisions.md` se existirem no bound worktree root (caminhos absolutos). Precedência menor que SPEC aprovada, maior que "intuition" do agente.
+3. If no file exists → **SKIP silently**. Zero output. Zero log. Compat 100% projetos antigos sem docs/.
 
 ---
 
@@ -136,7 +207,11 @@ This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and 
 4. **Gate enforcement:**
    - If `SPEC_STATUS=Approved` (either existing or freshly approved by user) → unlock scope capture §1.1. Set `SESSION_SPEC_PATH=<path>` for downstream skills.
    - If `SPEC_STATUS=Draft` after harness-spec finishes (user cancelled Approval) → offer: "(A) Run scope capture WITHOUT approved SPEC (log override to decisions) / (B) Stop here, finish SPEC later via /harness-spec".
-5. **Case A (override without Approved SPEC):** Append entry to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` → `[SPEC-OVERRIDE] scope capture started without Approved SPEC — user confirmed. Reason: <user typed reason or "cancel-approval" exit>`. Proceed to §1.
+5. **Case A (override without Approved SPEC):** NÃO append manual. Use HELPER OFICIAL:
+   ```bash
+   harness_append_decision_jsonl "SPEC-OVERRIDE" "scope capture started without Approved SPEC — user confirmed. Reason: <user typed reason or cancel-approval exit>"
+   ```
+   Proceed to §1.
 
 ### 1.1 Input validation
 
@@ -163,7 +238,12 @@ If user said "decompose into tasks" or did not provide a list:
 
 ### 1.3 Build TASK GRAPH
 
-Write `$HARNESS_WORKSPACE_SHARED/task_graph.md` (resolved via `harness_compute_paths` — durable, shared across sessions on this worktree):
+Write to `$TASK_GRAPH_PATH` (variável do §0.2.1 preflight, já resolvida com timestamp UTC prefix + assert outside worktree — durable, shared across sessions on this worktree; múltiplas revisões = múltiplos arquivos ordenados pelo prefixo timestamp). Use atomic write helper:
+```bash
+harness_write_file_atomic "$TASK_GRAPH_PATH" <<'TASK_GRAPH_EOF'
+   ... conteúdo abaixo ...
+TASK_GRAPH_EOF
+```
 
 ```markdown
 # TASK GRAPH — <task-id>
@@ -218,7 +298,12 @@ If `needs_gh_stack = FALSE` → SKIP. Mark in session.md: `gh-stack: NOT NEEDED 
 If `needs_gh_stack = TRUE` → Step B.
 
 **Step B — Build gh_stack_plan.md:**
-Group the TASK GRAPH tasks into "PR layers" (semantic groups). Bottom layers = contracts/types/data-model. Top layers = UI/routes/integration tests. Write to `$HARNESS_WORKSPACE_SHARED/gh_stack_plan.md` (durable area):
+Group the TASK GRAPH tasks into "PR layers" (semantic groups). Bottom layers = contracts/types/data-model. Top layers = UI/routes/integration tests. Write to `$GH_STACK_PLAN_PATH` (variável §0.2.1 preflight — durable area; timestamp prefix garante ordenação versões). Use atomic write:
+```bash
+harness_write_file_atomic "$GH_STACK_PLAN_PATH" <<'GHSTACK_EOF'
+   ... conteúdo abaixo ...
+GHSTACK_EOF
+```
 
 ```
 # GH STACK PLAN — <task-id>
@@ -252,7 +337,11 @@ Present gh_stack_plan.md to user + ask (Portuguese):
 
 If user chooses A → set Status APPROVED + user date in plan. Mark in session.md: `gh-stack: APPROVED (N PRs)`. Proceed.
 If user chooses B → re-plan Step B until A.
-If user chooses C → mark: `gh-stack: DECLINED BY USER (single PR)`. Log entry decision.log: `[gh-stack DECLINED] user chose single PR for large scope <task-id> (N tasks, X est. files)`. Delete gh_stack_plan.md OR save it with status = DECLINED.
+If user chooses C → mark: `gh-stack: DECLINED BY USER (single PR)`. NÃO append manual decision.log; use HELPER OFICIAL:
+```bash
+harness_append_decision_jsonl "gh-stack-DECLINED" "user chose single PR for large scope <task-id> (N tasks, X est. files)"
+```
+NÃO delete o arquivo. Reescreva `$GH_STACK_PLAN_PATH` (atomic write helper) com a primeira linha atualizada: `Status: DECLINED BY USER`.
 
 Also add `gh_stack_plan.md` to the mandatory files list (OPTIONAL; present only when needs_gh_stack triggered).
 
@@ -264,7 +353,7 @@ Also add `gh_stack_plan.md` to the mandatory files list (OPTIONAL; present only 
 
 Who does it: SM runs in QA mindset (or invokes harness-qa for this specific step if separate QA agent slot is available).
 
-Output file: `$HARNESS_WORKSPACE_SHARED/tasks/<task-id>/test_spec_smoke.md` (ONE file for the whole feature/task, NOT per-task per envelope. Durable area: reusable, survives session cleanup.)
+Output file: `$TEST_SPEC_SMOKE_PATH` (variável §0.2.1 preflight — ONE file for the whole feature/task, NOT per-task per envelope. Durable area: reusable, survives session cleanup; timestamp prefix = versionamento ordenado.) Use atomic write: `harness_write_file_atomic "$TEST_SPEC_SMOKE_PATH" <<'EOF' ... EOF`.
 
 ### 1.5.1 Content (5 mandatory bullets, ≤15 lines TOTAL):
 
@@ -312,11 +401,13 @@ No change in behavior.
 ### 2.0.3 If ALL parallel preconditions PASS → fan out via `harness-executor-dispatcher`
 
 1. Write the per-task envelopes FIRST (same as Phase 2.1 in serial, but for all TODO tasks now), so dispatcher has all file lists.
-2. Write an optional user-overridable `dispatcher.config.json` in `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/`:
-   ```json
+2. Write an optional user-overridable dispatcher config to `$DISPATCHER_CONFIG_PATH` (variável §0.2.1 preflight — já resolvida com assert outside worktree):
+   ```bash
+   harness_write_file_atomic "$DISPATCHER_CONFIG_PATH" <<'EOF'
    {"max_parallel": 3}
+   EOF
    ```
-   (default: min(cpu_cores, 3); hard cap 4). Resolve via `harness_compute_paths`; NEVER inside `<WORKTREE_ROOT>`.
+   (default: min(cpu_cores, 3); hard cap 4). NÃO colocar dentro `<WORKTREE_ROOT>` de forma alguma.
 3. **Ask user explicit confirmation** before fanning out. Message template (Portuguese):
    > 🚀 Modo paralelo detectado! 
    > - Tasks totais: N 
@@ -326,11 +417,12 @@ No change in behavior.
    > 
    > Confirmar execução paralela via dispatcher? (sim / não → serial)
 4. If user says NÃO (serial fallback) → go to original Phase 1-6 serial loop.
-5. If user says SIM → call `harness-executor-dispatcher` skill with full context (worktree, task-id, task_graph, envelope paths, max_parallel, dispatcher.config.json path).
-6. Dispatcher returns (all resolved via `harness_compute_paths`, NEVER inside worktree):
-   - `$HARNESS_SESSION_DIR/reports/execution_batches.md`
-   - `$HARNESS_SESSION_DIR/reports/merge_audit_Bx_My.md` per batch
-   - `$HARNESS_SESSION_DIR/reports/BATCH_EXECUTION_REPORT.md` with per-task final status (DONE / FAIL).
+5. If user says SIM → call `harness-executor-dispatcher` skill with full context (worktree, task-id, task_graph, envelope paths, max_parallel, dispatcher.config.json path = `$DISPATCHER_CONFIG_PATH`).
+6. Dispatcher returns (all resolved via `harness_output_path` helper no dispatcher skill, NEVER inside worktree):
+   - `$DISPATCHER_BATCHES_PATH` (§0.2.1) → `$HARNESS_SESSION_DIR/report/<slug>/YYYYMMDD-HHMMSS-dispatcher-execution-batches.md`
+   - `$MERGE_AUDIT_PATH_Tn` (per batch, §0.2.1) → `$HARNESS_SESSION_DIR/merge_audit/batch-<B>-<slug>/YYYYMMDD-HHMMSS-merge-audit.md`
+   - `$DISPATCHER_BATCH_REPORT_PATH` (§0.2.1) → `$HARNESS_SESSION_DIR/report/<slug>/YYYYMMDD-HHMMSS-dispatcher-batch-final.md` (per-task final status DONE / FAIL).
+   (Todos arquivos têm prefixo timestamp UTC → ls | sort = ordem cronológica; agrupados por `<type>/<related_id>/` → busca trivial por PR/task.)
 7. SM post-processes the report:
    - **All DONE, 0 FAIL, 0 CONFLICT**: proceed to Phase 7 (Compliance HEAVY + manual_test_plan + final_summary) as usual.
    - **Any failures (SCOPE / QA / COMPLIANCE_LIGHT / HIGH conflict rollback)**: SM takes the failed tasks back into **SERIAL mode** one-by-one, re-running them through Phase 1-6 serially (de-scoped, not parallel — since they already showed instability/conflict). Then proceed to Phase 7 once all individually DONE.
@@ -346,9 +438,14 @@ For EACH task in the TASK GRAPH, in dependency order:
 
 ### 2.1 TASK ENVELOPE (before calling Developer)
 
-Create `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/task_envelope_<TASK_ID>.md`
-using the template in `references/TASK_ENVELOPE_TEMPLATE.md`.
-Resolve the path via `harness_compute_paths` + `harness_ensure_session_dirs`; NEVER inside `<WORKTREE_ROOT>`.
+Create per-task envelope using the template in `references/TASK_ENVELOPE_TEMPLATE.md`. Construa path UMA VEZ por task no loop usando helper canônico (já tem outside assert + timestamp prefix ordenado):
+```bash
+TASK_ENVELOPE_PATH="$(harness_output_path "task" "task-envelope" "T${TASK_ID}-${TASK_SLUG}" "workspace" "md")"
+harness_write_file_atomic "$TASK_ENVELOPE_PATH" <<'ENVEOF'
+   ... conteúdo envelope ...
+ENVEOF
+```
+Output final = `$HARNESS_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope.md`. NUNCA dentro `<WORKTREE_ROOT>` (helper trava exit 99 se path cair lá).
 
 **CRITICAL fields that prevent scope creep:**
 - **Blast radius**: explicit list of files / directories that MAY be touched. If Dev needs to touch something outside → must come back to SM for approval, logged to `decisions.log.jsonl`.
@@ -415,8 +512,8 @@ This scans the ENTIRE worktree diff (not just per-task), checks for:
 
 ### 3.2 Generate MANUAL_TEST_PLAN.md
 
-Create `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` using the template (durable, shared across sessions for the same worktree).
-Resolve via `harness_compute_paths`; NEVER inside `<WORKTREE_ROOT>`.
+Create to `$MANUAL_TEST_PLAN_PATH` (variável §0.2.1 preflight, durable, shared across sessions for the same worktree; timestamp prefix ordena revisões). Use atomic write helper: `harness_write_file_atomic "$MANUAL_TEST_PLAN_PATH" <<'EOF' ... EOF`.
+Path final = `$HARNESS_WORKSPACE_SHARED/qa/<slug>/YYYYMMDD-HHMMSS-manual-test-plan.md`. NUNCA dentro worktree.
 It must have:
 - One section per Acceptance Criteria (from the whole PRD)
 - GIVEN / WHEN / THEN structure
@@ -425,7 +522,8 @@ It must have:
 
 ### 3.3 Generate FINAL_SUMMARY.md
 
-Create `$HARNESS_SESSION_DIR/final_summary.md` (ephemeral per-session; resolved via `harness_compute_paths`, NEVER inside worktree):
+Create to `$FINAL_SUMMARY_PATH` (variável §0.2.1 preflight — ephemeral per-session; assert outside worktree já feito na construção do path; timestamp prefix ordena múltiplas rodadas). Use atomic write: `harness_write_file_atomic "$FINAL_SUMMARY_PATH" <<'EOF' ... EOF`.
+Path final = `$HARNESS_SESSION_DIR/summary/<slug>/YYYYMMDD-HHMMSS-session-final.md`. NUNCA dentro worktree.
 
 ```markdown
 # Final Summary — <task-id>
@@ -458,11 +556,15 @@ Create `$HARNESS_SESSION_DIR/final_summary.md` (ephemeral per-session; resolved 
 Print a concise, human-readable summary in Portuguese:
 - Quais tasks foram entregues
 - Stats principais
-- Onde encontrar os artefatos (todos FORA worktree, via `harness_compute_paths`):
-  - Task envelopes + dispatcher config → `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/`
-  - Manual test plan → `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md`
-  - Decisions log → `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl`
-  - Final summary + parallel reports → `$HARNESS_SESSION_DIR/` (`final_summary.md`, `reports/*`)
+- Onde encontrar os artefatos (todos FORA worktree, via `harness_output_path` helper centralizado — prefixo timestamp UTC + agrupamento `<type>/<related_id>/` = busca + ordenação triviais):
+  - Task envelopes → `$HARNESS_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope.md` (variável por task `$TASK_ENVELOPE_PATH`)
+  - Dispatcher config → `$DISPATCHER_CONFIG_PATH` (§0.2.1)
+  - Manual test plan → `$MANUAL_TEST_PLAN_PATH` (§0.2.1) → `qa/<slug>/YYYYMMDD-HHMMSS-manual-test-plan.md`
+  - Test spec smoke → `$TEST_SPEC_SMOKE_PATH` (§0.2.1)
+  - Decisions log → `harness_decisions_path` (helper contrato) → `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (append só via `harness_append_decision_jsonl`)
+  - Final summary → `$FINAL_SUMMARY_PATH` (§0.2.1) → `summary/<slug>/YYYYMMDD-HHMMSS-session-final.md`
+  - Parallel dispatcher reports → `$DISPATCHER_BATCHES_PATH`, `$MERGE_AUDIT_PATH_Tn`, `$DISPATCHER_BATCH_REPORT_PATH` (§0.2.1)
+  - Task graph + gh-stack plan → `$TASK_GRAPH_PATH`, `$GH_STACK_PLAN_PATH` (§0.2.1)
 - Avisar que está pronto para `/harness-ship` ou validação manual
 
 ---

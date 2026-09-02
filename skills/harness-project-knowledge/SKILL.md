@@ -1,6 +1,6 @@
 ---
 name: "harness-project-knowledge"
-description: "Registro humano compartilhado (Nível 1.5 registry) de contexto do PRODUTO + ARQUITETURA MANUAL + ROADMAP + PESSOAS. Complemento de harness-xray (automático): este skill é o lado HUMANO. O harness SEMPRE lê product_context.md + architecture.md ANTES de gerar QUALQUER SPEC via harness-spec. Gate obrigatório ANTES de /harness-spec em projetos que nunca passaram por aqui."
+description: "Registro humano compartilhado (Nível 1.5 registry) de contexto do PRODUTO + ARQUITETURA MANUAL + ROADMAP + PESSOAS. Complemento de harness-xray (automático): este skill é o lado HUMANO. O harness SEMPRE lê product_context.md + architecture.md ANTES de gerar QUALQUER SPEC via harness-spec. Gate obrigatório ANTES de /harness-spec em projetos que nunca passaram por aqui. Registry FICA FORA worktree user em $HARNESS_SESSIONS_ROOT/.registry/projects/<slug>/. NÃO cria nada na worktree a menos que usuário peça VERBATIM."
 ---
 
 # Harness Project Knowledge — Registry Humano do Projeto
@@ -9,6 +9,43 @@ description: "Registro humano compartilhado (Nível 1.5 registry) de contexto do
 > - Auto-onboarding complementar: `/harness-xray` (este skill não substitui xray)
 > - Paths: `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`
 > - Regras de complexidade acidental + deep modules: `engineering-contracts` §1 + Appendix D (Ousterhout)
+
+---
+
+## -0.1 STORAGE BOUNDARY PREFLIGHT (OBRIGATÓRIO ANTES DO PRIMEIRO WRITE)
+
+```bash
+# 1. Carrega contrato de sessões (registry helpers + paths)
+source ~/.trae/contracts/harness_sessions_contract.sh
+
+# 2. WORKTREE_ROOT obrigatório para resolver PROJECT_SLUG canônico
+WORKTREE_ROOT="${WORKTREE_ROOT:-$(pwd)}"
+SESSION_ID="${SESSION_ID:-project-knowledge-$(date -u +%Y%m%d-%H%M%S)}"
+
+# 3. Paths canônicos + assegura dirs (cria HARNESS_PROJECT_DIR abaixo .registry/projects)
+harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+harness_ensure_session_dirs "$WORKTREE_ROOT"
+
+# 4. Double-guard: registry FICA FORA worktree (por construção .registry/ está em HARNESS_SESSIONS_ROOT)
+[ -n "${HARNESS_PROJECT_DIR:-}" ] || { echo "[harness-project-knowledge] ❌ HARNESS_PROJECT_DIR não definido. compute_paths falhou?" >&2; exit 99; }
+harness_assert_outside_worktree "$HARNESS_PROJECT_DIR" "$WORKTREE_ROOT" "HARNESS_PROJECT_DIR"
+harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED"
+
+# 5. Constrói UMA VEZ os 4 paths canônicos do registry via helper type=project_registry
+PROJECT_REGISTRY_DIR="$(dirname -- "$(harness_output_path "project_registry" ".keep" "${HARNESS_PROJECT_SLUG:-unknown}" "workspace" "md")")"
+# Se helper gerou subpath abaixo WORKSPACE_SHARED mas registry canônico usa HARNESS_PROJECT_DIR → use HARNESS_PROJECT_DIR
+[ -d "$HARNESS_PROJECT_DIR" ] || mkdir -p "$HARNESS_PROJECT_DIR"
+
+PROJECT_PROFILE_PATH="${HARNESS_PROJECT_DIR}/project_profile.md"
+PRODUCT_CONTEXT_PATH="${HARNESS_PROJECT_DIR}/product_context.md"
+ARCHITECTURE_PATH="${HARNESS_PROJECT_DIR}/architecture.md"
+ROADMAP_PATH="${HARNESS_PROJECT_DIR}/roadmap.md"
+PROJECT_REGISTRY_JSONL="${HARNESS_PROJECT_DIR}/registry.jsonl"
+```
+
+**NÃO INVENTE paths:** Os 4 arquivos do registry + audit jsonl ficam SEMPRE abaixo de `$HARNESS_PROJECT_DIR`. NUNCA crie `./docs/product_context.md` dentro worktree. Se usuário pedir VERBATIM "salve também na worktree para comitar", isso é exceção; mas a fonte canônica SEMPRE fica em `$HARNESS_PROJECT_DIR`.
+
+---
 
 ## 0. POR QUE EXISTE (Lean Motivation)
 
@@ -35,15 +72,29 @@ Sem este skill: o harness gera specs tecnicamente corretos mas **desalinhados do
 
 ## 2. 4 ARQUIVOS NO REGISTRY NÍVEL 1.5 (compartilhado worktrees)
 
-Sempre ABAIXO de `$HARNESS_PROJECT_DIR/` (NUNCA dentro worktree user):
+Sempre ABAIXO de `$HARNESS_PROJECT_DIR/` (= paths construídos no PREFLIGHT; NUNCA dentro worktree user):
 
 ```
-$HARNESS_SESSIONS_ROOT/.registry/projects/<PROJECT_SLUG>/
+${HARNESS_PROJECT_DIR:-$HARNESS_SESSIONS_ROOT/.registry/projects/<slug>}/
 ├── project_profile.md   ← AUTO (harness-xray)   · 12 seções técnicas
 ├── product_context.md   ← HUMANO (ESTE SKILL)    · 8 seções OBRIGATÓRIAS
 ├── architecture.md      ← HYBRID                  · auto do xray + manual aqui
 ├── roadmap.md           ← HUMANO (ESTE SKILL)    · épicos planejados
-└── registry.jsonl       ← append-only audit
+└── registry.jsonl       ← append-only audit via harness_append_decision_jsonl
+```
+
+### 2.1 Como escrever no registry (3 regras HARD)
+
+1. **Todo write é write atômico tmp→mv** via `harness_write_file_atomic <path>` (NÃO `cat > file`, NÃO edite in-place em Modo B interactive).
+2. **Todo audit append** em registry.jsonl **usa `harness_append_decision_jsonl`**; NÃO faça `echo "{}" >> registry.jsonl` manualmente.
+3. **NUNCA crie docs dentro worktree como primário.** Exceção só se usuário pedir VERBATIM "salve esse product_context.md no worktree para comitar"; nesse caso, a fonte canônica continua `$PRODUCT_CONTEXT_PATH` e (OPCIONALMENTE) `cp` um snapshot para a worktree.
+
+Exemplo Modo B item 8 audit trail (ANTERIORMENTE echo manual → AGORA helper):
+```bash
+harness_append_decision_jsonl "PROJECT_KNOWLEDGE_UPDATE" "{\"project_slug\":\"${HARNESS_PROJECT_SLUG:-unknown}\",\"updated_sections\":[\"product_context.1\",\"roadmap.E1\"]}"
+# Output cai AUTOMATICAMENTE no decisions.log.jsonl CANÔNICO (fora worktree)
+# + opcionalmente append no $PROJECT_REGISTRY_JSONL se quiser registry-local audit:
+harness_append_decision_jsonl "PROJECT_KNOWLEDGE_UPDATE" "{...}" 2>/dev/null || true
 ```
 
 ---

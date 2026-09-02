@@ -248,6 +248,12 @@ harness_registry_lookup_last "sess-abc123" | jq -r '.flags.LANG_PT_CHECK // "ENA
 
 **PROBLEMA que esta regra resolve:** é comum agente escrever `it("T1.2 valida token")` ou `describe("FLO-745 — auth fail closed")`. Isso invalida dois objetivos: (a) quem lê o relatório de testes em CI não entende o comportamento sem abrir a spec; (b) ids internos mudam / tasks são re-organizadas e o nome do teste passa a mentir.
 
+**🔴 HARD RULE — INVERSÃO PROIBIDA (LEIA 2x ANTES DE ESCREVER):**
+> ❌ **ERRADO 1:** colocar qualquer ID interno (FLO-xxx, T<N>, AC<N>, SPEC, §) NA STRING DO TÍTULO do teste.
+> ❌ **AINDA MAIS ERRADO 2 (o falso-positive de hoje):** reclamando que um título NÃO TEM FLO-xxx / T<N> / AC<N>. **ISTO É O COMPORTAMENTO DESEJADO, É BOM, É COMPLIANT.** Se você flaggear ausência de ID no título → gerou uma regressão da regra.
+> ✅ **CORRETO:** título = comportamento observável (comes with verb + condition + expected result). Traceabilidade de FLO/task/AC = comentário JSDoc ACIMA do bloco OU linha comentário DENTRO do bloco 1ª linha. **JAMAIS na string de título.**
+> **Regra de decisão 1-sentence:** `Título contém FLO-ID? → BAD = anti-padrão. Título NÃO contém FLO-ID? → GOOD = 100% compliant (nunca gere finding por isso).`
+
 ### 7.9.1 Formato PRESCRITO describe() e it() / test()
 
 | Elemento | O que DEVE conter | Exemplo BOM |

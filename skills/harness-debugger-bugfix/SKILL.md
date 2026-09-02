@@ -32,17 +32,48 @@ User MUST provide:
 
 If user fails to provide ANY of 1, 2, or 3 → **ASK with specific questions** before starting debug loop. Do NOT guess reproduction steps.
 
-### 0.3 Session artifacts dir
+### 0.3 Session artifacts dir + 🔴 STORAGE PREFLIGHT (MORATÓRIA §20)
 
-First: `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh" && harness_compute_paths $WORKTREE_ROOT && harness_ensure_session_dirs $WORKTREE_ROOT`.
-Create and use (ALL strictly outside user's worktree; `harness_assert_outside_worktree` HARD-STOPS if misconfigured):
+Rode **exatamente este bloco ANTES** de escrever qualquer arquivo (logs, traces, screenshots, session md, decisions append):
+
+```bash
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+if [ -f "$CONTRACT" ]; then
+  # shellcheck disable=SC1090
+  source "$CONTRACT"
+else
+  echo "❌ FATAL: $CONTRACT não encontrado. HARD STOP — zero arquivos escritos sem storage boundary. exit 98"
+  exit 98
+fi
+
+SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-debugger-session}"
+harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+harness_ensure_session_dirs "$WORKTREE_ROOT"
+
+# Double-guard: asserts fail-fast se qualquer diretório de output cai DENTRO worktree (exit 99)
+harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR (efêmero debug)"
+harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED (durável decisions)"
+
+# Construir TODOS os paths UMA VEZ aqui via helper ÚNICO. Depois reuse só estas variáveis:
+BUGFIX_SESSION_MD="$(harness_output_path "debugger" "bugfix-session" "${BUG_SLUG:-generic-bug}" "session" "md")"
+# Hypothesis log (jsonl append via atomic helper):
+HYPOTHESIS_LOG="$(harness_output_path "debugger" "hypotheses" "${BUG_SLUG:-generic-bug}" "session" "jsonl")"
+# Evidence dir = HARNESS_SESSION_DIR/qa/evidence/<related_id>/ (já criado pelo helper quando necessário)
 ```
-$HARNESS_SESSION_DIR/           (ephemeral per-session: bugfix_session.md, qa/, reports/)
-$HARNESS_WORKSPACE_SHARED/      (durable: decisions.log.jsonl)
+
+**Arquitetura de storage (TODOS estritamente FORA worktree do usuário):**
 ```
-Inside `$HARNESS_SESSION_DIR/`: write `bugfix_session.md` using `references/BUGFIX_SESSION_TEMPLATE.md`.
-Append to this file on every iteration.
-NEVER write `<WORKTREE_ROOT>/.trae/...
+$HARNESS_SESSION_DIR/                       ← ephemeral per-session
+  └── debugger/<BUG_SLUG>/                  ← related_id agrupa tudo deste bug
+        ├── 20260902-133000-bugfix-session.md   (append por loop iteration)
+        └── 20260902-133000-hypotheses.jsonl    (cada hipótese uma linha)
+$HARNESS_WORKSPACE_SHARED/                  ← durable: decisions.log.jsonl (único por worktree)
+```
+
+**NUNCA escreva em `<WORKTREE_ROOT>/.trae/` nem `<WORKTREE_ROOT>/reports/` nem qualquer path relativo dentro worktree.** MORATÓRIA §20. Se por qualquer motivo você precisar salvar algo dentro worktree (exceção rara), pare e peça confirmação VERBATIM EXPLÍCITA do usuário em texto.
+
+Append to `$BUGFIX_SESSION_MD` on every loop iteration using `harness_write_file_atomic` (pipe append) ou `>>` redirection (seguro pois o path já passou por assert outside).
 
 ---
 
@@ -70,6 +101,84 @@ Once reproduced: try to make reproduction steps even shorter.
 - Remove unnecessary steps.
 - Create a minimal test case (unit test snippet) that triggers the error path if possible.
 - This minimal case becomes the **regression test at the end.**
+
+### Step 1.2.5 🔴 REPRO AUTOMATION LOCK — FAIL-FAST HARD STOP (Red-Green Before Any Hypothesis or Code Edit)
+
+> **NON-NEGOTIABLE HARD GATE — engineering-contracts §10 TDD + Rule 7.9. You CANNOT advance to Step 1.3 (hypothesize) or touch ANY source code until this step is PASSED or EXPLICIT_OVERRIDE is logged.**
+
+**What this gate enforces (the "Fix Every Bug Twice" Stripe playbook):**
+1. Bug is first reproduced AUTOMATICALLY inside a test runner (Vitest unit / integration / Playwright / pytest / etc — whatever matches the repo's stack).
+2. We confirm the test FAILS with exit_code != 0 (red phase). This becomes the deterministic regression lock — when we fix the code, the SAME test must PASS without changing the test body.
+3. Evidence (test path + sha256 of the failing run output) is saved to `bugfix_session.md` so next session can resume the lock deterministically.
+
+**Mandatory execution order:**
+
+**Step 1.2.5.1 — Write the repro automation test file**
+- Pick the test layer matching the bug:
+  - Pure algorithm bug / service-level deterministic → **unit test** (`*.test.ts`, `*.spec.ts`, colocated near the source OR `__tests__/unit/...`)
+  - Bug crosses 2+ modules (service→DB→stripe) → **integration test** (`__tests__/integration/...` or `__tests__/e2e/*.api.test.ts` for route-level)
+  - UI-only visual / event-handler bug → **Playwright E2E** or **React Testing Library** component spec (NEVER manual-only repro for UI bugs unless literally impossible)
+- If repo has NO test framework installed → install the minimum matching the AGENTS/docs (ex: Vitest for TS Node.js + React). If repo cannot have tests → EXPLICIT_OVERRIDE path below.
+- The test body MUST contain this EXACT structure as the FIRST lines INSIDE `it(...)` / `test(...)`:
+  ```typescript
+  it("describes the bug symptom behaviorally — NO ticket id in title", async () => {
+    // @ticket FLO-123 | @bug reproduces: <1-line symptom plain English> | @ac B-7
+    // arrange: ...
+    // act: ...
+    // assert: expect(...).rejects.toThrow(...) or similar
+  })
+  ```
+  Exception for Playwright / non-JS runners: place `@ticket | @bug | @ac` as a comment line on the FIRST executable line after the `test(...)` declaration, or as the `test.describe` JSDoc. Never put FLO-id in the display title string.
+
+**Step 1.2.5.2 — Run the test, confirm FAIL (red)**
+- Execute ONLY the single test file with the repo's documented runner (ex: `corepack pnpm vitest run packages/platform/server/__tests__/unit/refund-repro.test.ts`).
+- CAPTURE the exit code AND tail-40 lines of output.
+- **Confirm assertion: exit_code !== 0 AND the failure message matches the user-reported bug symptom.**
+  - If exit_code === 0 (passes): the test does NOT reproduce the bug. Rewrite the test — wrong input data, wrong assertion, or fixture setup diverges from user repro steps. Do NOT advance.
+  - If test FAILS but with a DIFFERENT error than the bug symptom (wrong assertion): fix the assertion to match the ACTUAL bug symptom you confirmed in Step 1.1. Do NOT advance.
+
+**Step 1.2.5.3 — Persist the repro lock evidence**
+Append to `$BUGFIX_SESSION_MD`:
+```markdown
+## 🔴 REPRO AUTOMATION LOCK — EVIDENCE (Step 1.2.5)
+
+- **repro_test_abs_path:** `/absolute/path/to/repro.test.ts`
+- **repro_test_run_command:** `corepack pnpm vitest run ...`
+- **repro_fail_exit_code:** `1`
+- **repro_fail_sha256_output:** `<sha256sum of the combined stdout+stderr of the failing run — for integrity verification later>`
+- **repro_fail_message_excerpt:** `<3 lines from the test runner output showing the exact failure — enough to match symptom>`
+- **repro_bug_ticket_ref:** `<FLO-123 or N/A>`
+- **repro_ac_trace:** `<B-7 or N/A — SbE behavior-id this test locks>`
+
+> Assertion verified: test FAILS deterministically. Fix must make the SAME test PASS without changing its body (only `@ticket/@bug/@ac` comment line can be adjusted if needed).
+```
+
+**Step 1.2.5.4 — Decision path to Phase 1 hypotheses**
+| Outcome of 1.2.5.1 → 1.2.5.3 | What happens next |
+|---|---|
+| ✅ Test written, FAIL confirmed, evidence saved | **ADVANCE to Step 1.3 → build hypotheses.** Gate unlocked. |
+| ⚠️ Cannot write automated repro (e.g. visual-only bug that requires GPU rendering / prod-specific race / third-party-UI-outside-our-code) | **HARD STOP — DO NOT ADVANCE.** Ask user verbatim: *"Não consegui escrever um teste automatizado que reproduza o bug. Motivo: <1-linha explicação técnica, sem jargão>. Para eu avançar, preciso de um EXPLICIT_OVERRIDE seu confirmando que esta exceção é aceitável. Por favor confirme digitando EXPLICIT_OVERRIDE_DEBUGGER_REPRO=YES + justificativa 1-linha por que não pode ser automatizado."* Log the override VERBATIM into decisions.log.jsonl via `harness_append_decision_jsonl` BEFORE advancing. |
+
+**POST-FIX MIRROR CHECK — performed at Phase 2 Step 3.3 (verify the lock flipped):
+After root cause fix is applied, run the EXACT SAME `repro_test_run_command`. Assert:
+1. exit_code === 0 (green now — lock flipped)
+2. Any NEW tests added for expected-behavior (happy paths / edge cases) also PASS
+3. NO previously-passing test in the same module NOW FAILS (regression)
+Append "✅ REPRO LOCK FLIPPED — same test now PASSES + exit_code=0 + sha256=<new>" line to the Phase 2 verification section of bugfix_session.md.
+
+**[NOTA G5 — REGRESSION LOCK LOCATION POLICY (OBLIGATÓRIA NO FINAL DO STEP 3.3:**
+- **DEFAULT 95% CASOS (Fix Every Bug Twice — Stripe Playbook):** o teste de regressão (repro lock + behavior tests) DEVE ficar **NA PASTA DA FEATURE/DOMÍNIO ONDE O BUG OCORREU** junto com os demais testes daquela área. **NÃO colocar ticket ID no nome do arquivo.**
+- **Exemplo:** Bug FLO-513 Refund: `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts` (pasta padrão refund / server tests) com **PRIMEIRA LINHA DENTRO DO BLOCO `it()`** (NÃO no título):
+  ```typescript
+  it('confirms a full refund succeeds with reason and shows correct status row', async () => {
+    // @ticket FLO-513 @bug reproduces refund amount not reversed on row status @ac B-3
+    // ... resto do teste
+  });
+  ```
+- **CASO ESPECIAL EXCEÇÃO (< 5% CROSS-CUTTING ≥4 DOMÍNIOS):** Teste regression atravessa **≥4 domínios independentes** (ex: auth + billing + notification + db migration) **OU** é infra-estrutura pura sem domínio específico (ex: worker queue, CI script deploy)) → **PERMITIDO** criar `tests/regression/<TICKET_ID>--<slug>.test.ts` com ID no nome do arquivo. **MAS OBRIGATÓRIO:**
+  1. Ter `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER` logado VERBATIM em `decisions.log.jsonl` com 1-linha justificando ≥4 domínios / infra pura.
+  2. Incluir entrada na coluna Notes da Verification Matrix da SbE spec com o caminho absoluto.
+  3. Se NÃO houver override logado, code-review G7.3 sobe automaticamente para **HIGH severity** (blocking se ≤2 HIGH auto-fix).
 
 ### Step 1.3 Build the initial hypothesis list
 

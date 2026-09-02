@@ -26,6 +26,40 @@ If any is missing → **ABORT immediately** and go back to Scrum Master.
 
 ---
 
+## 0.4 STORAGE BOUNDARY PREFLIGHT (CANONICAL, NON-NEGOTIABLE — run BEFORE §0.5 binding and ANY write)
+
+NENHUM asset de trabalho do harness (decisions, reports, QA evidence, summaries, locks, etc) é escrito NA WORKTREE DO USUÁRIO por padrão. Única exceção: usuário pede VERBATIM EXPLICITAMENTE salvar um arquivo específico lá. **HARD STOP se qualquer output path cair dentro WORKTREE_ROOT.**
+
+Execute EXATAMENTE estes 4 passos (não inventar, não pular):
+
+```bash
+# 1. Source canônico do contrato de sessões
+source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
+
+# 2. Se SESSION_ID não vier do SM: derivar do harness_current_session_id / registry
+SESSION_ID="${SESSION_ID:-$(harness_current_session_id 2>/dev/null || echo "dev-$(date -u +%Y%m%d-%H%M%S)")}"
+
+# 3. Calcular paths canônicos UMA VEZ + criar diretórios base
+harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$(pwd)"
+harness_ensure_session_dirs "$WORKTREE_ROOT"
+
+# 4. DOUBLE-GUARD: reafirmar que HARNESS_SESSION_DIR + HARNESS_WORKSPACE_SHARED estão FORA da worktree
+#    (apesar do harness_output_path já rodar este assert internamente em todo write)
+harness_assert_outside_worktree "$HARNESS_SESSION_DIR"    "$WORKTREE_ROOT" "HARNESS_SESSION_DIR"
+harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED"
+
+# ==== PATHS DESTA SKILL CONSTRUÍDOS UMA VEZ (reutilizar abaixo, não reconstruir) ====
+# — decisions: $HARNESS_DECISIONS_PATH (já calculado em harness_compute_paths = helper harness_decisions_path)
+#              TODO write de decision SEMPRE usa: harness_append_decision_jsonl "<TITLE>" "{json_payload}"
+#              NUNCA escreva decisions.log.jsonl manualmente cat/echo >> (risco corrompimento, não-atomic).
+# — Task envelope: passado pelo SM como caminho absoluto (WORKSPACE_SHARED/tasks/<id>/...) já em harness-sessions.
+#                  Se não vir → construir via helper:
+#                    TASK_ENVELOPE_PATH="${TASK_ENVELOPE_PATH:-$(harness_output_path "task" "task-envelope" "T${TASK_ID}" "workspace" "md")}"
+# — Blast-radius exceptions e OUTSIDE BLAST RADIUS (abaixo §4): mesmos helpers.
+```
+
+---
+
 ## 0.5 WORKTREE SESSION BINDING PREFLIGHT (engineering-contracts §19, NON-NEGOTIABLE)
 
 Run BEFORE touching ANY Glob/Grep/file-write/git command.
@@ -33,10 +67,11 @@ Run BEFORE touching ANY Glob/Grep/file-write/git command.
 1. **Level 1 Global Index (AUTHORITY):** Read `harness_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `harness_current_session_id`. Extract `WORKTREE_ROOT` from that entry. If NO entry: binding hasn't been made yet → ABORT. Ask: "No Level1 binding for this session. Create it? (A = Select worktree now; B = Cancel task). NEVER write without binding created."
    - If found BOUND entry: confirm `WORKTREE_ROOT` from registry **MUST MATCH** the `WORKTREE_ROOT` passed by Scrum Master.
    - If MISMATCH → **ABORT.** Ask: "SM says worktree = X but Level 1 registry (GLOBAL) says BOUND_ROOT=Y. Switch binding first? (A = Switch per §19.3; B = Cancel task)." Never silent proceed.
-2. **Level 2 Detail File (informational only for Dev):** If Level 2 `$HARNESS_SESSION_DIR/binding.md` (resolved via contract `harness_compute_paths` + `harness_level2_binding_path`) does NOT exist → SM preflight didn't create it properly. Warn & create now (append Level 1 if needed, but don't duplicate BOUND entries). Report discrepancy to SM / decision.log. Decision log entries append to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (SINGLE shared file per worktree-slug, not one per task-id.)
+2. **Level 2 Detail File (informational only for Dev):** If Level 2 binding detail (resolved via contract `harness_level2_binding_path`) does NOT exist → SM preflight didn't create it properly. Warn & create now (append Level 1 if needed, but don't duplicate BOUND entries). Report discrepancy to SM via `harness_append_decision_jsonl "BINDING_LEVEL2_MISSING" '{"task_id":"'"${TASK_ID:-?}"'"}'`. Decision log entries APPEND-SEGURO via helper `harness_append_decision_jsonl` (SINGLE shared file per worktree-slug via `$HARNESS_DECISIONS_PATH`, not one per task-id — NÃO escreva manualmente).
 3. **Per-operation scissor check (before every file write, Glob/Grep, git cmd):**
    - Target path prefix within `WORKTREE_ROOT`? If not → BLOCK.
-   - Cross-worktree ops only allowed two outcomes: (A) user confirms one-off out-of-scope write, log decision.log; OR (B) ask user to switch worktree first per §19.3.
+   - Cross-worktree ops only allowed two outcomes: (A) user confirms one-off out-of-scope write, log decision via `harness_append_decision_jsonl`; OR (B) ask user to switch worktree first per §19.3.
+   - **Todo write de arquivo NÃO-código (reports, decisions, QA, summaries) passa obrigatoriamente por `harness_output_path` + `harness_write_file_atomic`. Nenhum path relativo, nenhum `./`.**
 4. **Never silent cross-worktree reads = violation (even "just a quick grep"). Hook 1 pretooluse also enforces this independently via Level1 registry (double guard).**
 5. **If at any point agent thinks "maybe this code is also in worktree B" → DO NOT TOUCH B. Ask user explicitly: "Tarefa vinculada à worktree X. Trocar para Y antes? (A = Trocar, B = Continuar em X)". Never silent swap.
 
@@ -154,17 +189,25 @@ Before production code:
 - If the repo has NO test infrastructure → note and ask SM/user how to proceed
 
 **MANDATORY (harness REGRA 7.9): NOMES DE TESTES = COMPORTAMENTO OBSERVÁVEL. NÃO IDs INTERNOS.**
+
+**🔴 HARD RULE — INVERSÃO PROIBIDA:**
+> ❌ **ERRADO:** `it("FLO-714 valida deploy workflow")` → ID NO TÍTULO = anti-padrão BAD. Além disso, NUNCA reclame que um título NÃO tem FLO/T/AC.
+> ✅ **CORRETO:** `it("returns 409 Conflict when refunding an already-refunded payment", () => {` → comportamento observável. Traceabilidade vai no COMENTÁRIO.
+
 ```
 ✗ describe("FLO-513 T2 refund", () => {})
 ✓ describe("POST /api/payments/refund", () => {})
 
 ✗ it("Task T2.3 valida AC 4.2 já estornado", () => {})
 ✓ it("returns 409 Conflict when refunding an already-refunded payment", () => {
-    // @ac 4.2 | @task T2.3 | @ticket FLO-513   ← traceability goes HERE
+    // @ac 4.2 | @task T2.3 | @ticket FLO-513   ← traceability goes HERE (1ª linha dentro do bloco)
   })
 ```
-Anti padrões PROIBIDOS no título de `describe()` / `it()` / `test()`:
+
+Anti padrões PROIBIDOS exclusivamente na **STRING do título** de `describe()` / `it()` / `test()`:
 `FLO-XXX`, `Task? T\d(\.\d+)?`, `AC? \d+`, `SPEC_XXX`, `§\d(\.\d+)?`, `REGRA \d`, `Item \d`, `Fase \d`, `Story \d+`.
+
+**❌ NUNCA** gere warning / peça rename porque um título NÃO contém FLO/T/AC. Ele NÃO DEVE conter. Título sem ID interno = COMPLIANT / BOM.
 
 ### 3.3 Run tests → confirm they FAIL
 
@@ -198,17 +241,26 @@ Count all files you:
 
 **If count > 10 files:**
 1. **STOP. DO NOT PROCEED.**
-2. Open `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (single file shared across all tasks on this worktree, not per task-id) and write an entry titled
-   `[TASK-ID] BLAST RADIUS > 10 FILES — self-review`
-3. For EACH file: justify why it absolutely must be part of this task.
+2. Append uma entry SEGURA via helper (NUNCA escreva decisions.log.jsonl manualmente — risco corrompimento JSONL + não-atomic):
+   ```bash
+   harness_append_decision_jsonl "BLAST_RADIUS_OVER_10_FILES_SELF_REVIEW" \
+     '{"task_id":"'"${TASK_ID}"'","files_count":'"${COUNT}"',"justification_per_file":[...]}'
+   ```
+   — Entry title format canônico = `[${TASK_ID}] BLAST RADIUS > 10 FILES — self-review` (campo `title` no JSONL, via helper).
+   — File único compartilhado todas as tarefas desta worktree = `$HARNESS_DECISIONS_PATH` (já em harness-sessions, FORA worktree por contrato.)
+3. For EACH file: justify why it absolutely must be part of this task (incluir no JSON payload acima `justification_per_file` array).
 4. Go back to Scrum Master with the list. Do NOT submit to QA before SM approves the exception.
 
 **If count ≤ 10 files:** proceed.
 
 Also validate:
 - Every file touched is listed in the TASK ENVELOPE's `Blast radius` list.
-  If you touched a file NOT in the list → write an entry to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl`
-  justifying why, with title `[TASK-ID] OUTSIDE BLAST RADIUS: <filepath>`.
+  If you touched a file NOT in the list → append via helper (mesma regra, NÃO write manual):
+  ```bash
+  harness_append_decision_jsonl "OUTSIDE_BLAST_RADIUS_FILE_TOUCHED" \
+    '{"task_id":"'"${TASK_ID}"'","filepath":"'"${FILEPATH}"'","justification":"<porque foi necessário tocar fora da lista>"}'
+  ```
+  — Title canônico = `[${TASK_ID}] OUTSIDE BLAST RADIUS: <filepath>` (campo `title` no JSONL).
 
 ---
 

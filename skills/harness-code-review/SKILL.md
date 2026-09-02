@@ -427,16 +427,25 @@ How:
    - Fix: OU (1) wire o handler corretamente: chamar o tRPC mutation com o idempotencyKey gerado, gate visibility com getEligibility/service call, ou (2) prominentemente label o componente como DEMO e separar de shipping code path (ex: mover para `components/demo/*` + comentário `// TODO REMOVE BEFORE SHIP` no topo).
 5. **4.7 Test-suite naming behavioral check (REGRA 7.9 do harness, MEDIUM / WARN).**
 
-   Scan test files added/modified in the diff (`*.test.*`, `*.spec.*`, files inside `__tests__/`). Detect anti-patterns **in the TITLE STRING** of `describe("...")` / `it("...")` / `test("...")`:
-   - Ticket IDs: `FLO-\d+`, ticket-codes like `ABC-123`
+   **🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça isso):**
+   > ❌ **ERRADO:** Reclamar que um teste NÃO tem `FLO-xxx` / `T<N>` / `AC<N>` no título.
+   > ✅ **CORRETO:** Ter essas referências NO TÍTULO é ANTI-PADRÃO (ruim). Não tê-los e descrever APENAS comportamento observável é BOM / COMPLIANT.
+   >
+   > **Regra de decisão 1-sentence:** `Título contém FLO-ID? → BAD = FINDING. Título NÃO contém FLO-ID? → GOOD = NUNCA reporte finding por isso.`
+   > **Traceabilty correta (NÃO viola REGRA 7.9):** comentário JSDoc `/** @ticket FLO-714 */` ACIMA do bloco, OU linha `// @ticket FLO-714 | @ac 3.2 | @task T1.4` COMO 1ª LINHA DENTRO do bloco. JAMAIS na string de título.
+
+   Scan test files added/modified in the diff (`*.test.*`, `*.spec.*`, files inside `__tests__/`). Detect anti-patterns **EXCLUSIVAMENTE in the TITLE STRING** of `describe("...")` / `it("...")` / `test("...")`:
+   - Ticket IDs: `FLO-\d+`, ticket-codes like `ABC-123` (qualquer prefixo 2+ letras + hífen + número no TÍTULO = BAD)
    - Task/item IDs: `Task? T\d+(\.\d+)?`, `Item \d+`
    - AC/section IDs: `AC\d+`, `§\d+(\.\d+)?`, `REGRA \d+`, `SPEC_XXX`, `PRD §`
    - Phase/story IDs: `Fase \d+`, `Story #?\d+`
 
-   Severity:
+   Severity (FINDING = BAD title = contém os patterns ACIMA):
    - 1–4 bad titles → **LOW WARN** (non-blocking, show in "Nice-to-have" list)
    - 5–9 bad titles → **MEDIUM** (appear in main findings; require rename before merge or explicit override comment)
    - ≥10 bad titles → **HIGH** (blocking: relatório de CI vai ser inútil, alguém quebra essa regra em escala)
+
+   **❌ NUNCA gere finding por "ausência de FLO-xxx no título"** → Isso é o comportamento DESEJADO, compliant. Qualquer relatório que flagge ausência de task-id no título é uma REGRESSÃO na review skill, invalida essa seção do report.
 
    Never flag the JSDoc traceability comment ABOVE a block or a `// @ac X | @task Y | @ticket Z` line INSIDE the block as bad. Those are the RECOMMENDED way to keep traceability without polluting the display title.
 6. **4.8 Route-level / failure-path test gap check (MEDIUM if missing)**. If Category 0 found a new webhook route event type → require 1 route-level signed-payload POST test (not just svc.handleEvent direct). If Category 0.3 flagged a tx pattern → require 1 failure path test: Stripe 5xx → tx rolls back + retry with same idempotency key → no double-effect. MEDIUM severity (waivable only with PR body sign-off override).
@@ -509,6 +518,124 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md` "Appendi
 
 ---
 
+### Category 7: 🟢 Testing Gaps & Regression Lock (NEW QA-Centric ONDA1) — HIGH for missing tests on behavior change, MEDIUM for traceability comments, LOW for skip without ticket
+
+> **Canonical enforcement companion rule:** harness-debugger-bugfix Step 1.2.5 REPRO AUTOMATION LOCK enforces the SAME rules for the bug-fix mode. This Category 7 applies for feature-mode diffs and code that touches runtime behavior / routes / UI components.
+
+**How to detect each finding (diff-based, never guess — always cross-check the changed file list against `*test*`, `*spec*`, `__tests__/` additions):**
+
+1. **G7.1 🟠 HIGH — ≥20 added lines of runtime behavior code WITHOUT any test file added/modified in the same diff.**
+   - Compute: from `changedFiles[]`, count ONLY lines ADDED (`+` prefix in unified diff) in files under `src/` / `server/` / `app/` / `packages/*/src` / `components/` (exclude pure type-only `.d.ts`, pure interface files, enums-only files, index re-exports, config files, migrations-only `.ts`/`.sql`).
+   - Also count ONLY files matching patterns `*.test.*`, `*.spec.*` inside `__tests__/`, `test/`, `spec/` directories in changedFiles.
+   - If behavior additions ≥20 lines AND test file count added/modified = 0 → **HIGH G7.1 = MISSING TESTS FOR NEW BEHAVIOR.**
+   - **EXEMPTIONS (waive G7.1 only if body match):**
+     - Conventional commit TYPE is `refactor:` AND commit body includes the phrase `"renames only"` or `"no behavior change"` — AND you can visually confirm the diff is only variable/class/file renames.
+     - Conventional commit TYPE is `style:` (Biome formatting, whitespace, CSS-only cosmetic with no semantic change).
+     - Conventional commit TYPE is `docs:` / `chore(ci):` / `chore(deps):` bump-only — AND zero runtime src/ files changed.
+     - Conventional commit body contains an EXPLICIT override declaration `QA_OVERRIDE: "no test possible here: <1-line justification>"` signed-off by a codeowner in the PR body.
+   - **Fix suggestion (when flagged):** Add a behavioral spec (unit preferred, integration if ≥2 modules cross; route-level for REST/tRPC; Playwright for UI) matching the behavior. At minimum, write 1 happy-path + 1 sad-path per new exported function / route mutation.
+
+2. **G7.2 🟠 HIGH — Public API change OR interactive UI component added without integration/Playwright test.**
+   - **Branch A (Public API):** Diff touches ANY file that is a tRPC router (ex: `server/api/routers/xRouter.ts` mutates) or REST handler (`route.ts`, `app/api/*/route.ts`, `server/webhooks/*`) OR exposes a new exported function from a package's public `exports` field in `package.json`. AND same diff does NOT contain an addition/modification of a route-level test file (ex: `*.api.test.ts`, `__tests__/e2e/*`, `test/integration/router-*.spec.ts`). → **HIGH G7.2a.**
+   - **Branch B (Interactive UI component NEW):** Diff adds a NEW `.tsx` file that exports a user-visible interactive component (Button/Dialog/Form/Modal/Combobox/DatePicker/Tabs/Table/AutoComplete — keywords in filename or JSX elements containing handlers `onClick`, `onSubmit`, `onChange`, `useState`, `useReducer`, `useForm`, `useMutation`). AND no corresponding RTL/Playwright spec file for that component exists in the diff. → **HIGH G7.2b.**
+   - **Exemptions (waive only with explicit confirmation):** Component is explicitly marked DEMO/SCAFFOLD in filename (ex: `*Demo*.tsx`, `*Scaffold*.tsx`) + PR body has the warning. OR route is strictly internal / health-check (`/healthz` route).
+   - **Fix:** Add 1 route-level test (for API branch A) calling `trpcClient.xxx(...)` or `POST /api/xxx` with signed payload + valid auth; for UI add 1 RTL spec calling `fireEvent.click` + assertions.
+
+3. **G7.3 🟡 MEDIUM → 🟠 HIGH UPGRADE SEVERIDADE CROSS-CUTTING REGRESSION FOLDER (G5 policy):**
+   - **Nome atual MEDIUM default:** New/modified test WITHOUT traceability comment linking to SbE behavior or ticket.
+   - Scope: scan EVERY test file (`*.test.*`, `*.spec.*`) NEW or MODIFIED in the diff. For each `it(...)` / `test(...)` block body, check the FIRST 3 non-empty lines inside the curly braces (or the JSDoc comment `/** ... */` IMMEDIATELY above the nearest enclosing `describe()`).
+   - Look for a comment line MATCHING the regex: `^\s*//\s*@(ac|ticket|task|bug)\s+(B-\d+|FLO-\d+|AC\d+(\.\d+)?|T\d+(\.\d+)?|AB-\d+)` or equivalent JSDoc tag `@ticket`, `@ac`, `@task`.
+   - If the test block has ZERO such comment inside (or JSDoc above nearest describe missing it) → **MEDIUM G7.3 default = NO TRACEABILITY from behavior table to test body.**
+   - **Exception (waive G7.3):** It's a pure test infrastructure refactor (rename, package.json updates, moving files across folders, jest/vitest config only). OR it's a well-known canonical test (ex: `it("sums 2+2")` = unrelated to SbE scope).
+   - **Fix:** Add 1 line as FIRST executable line inside the `it()/test()` block: `// @ac B-3 | @ticket FLO-123` (or JSDoc block for describe). This is the canonical SbE traceability anchor used by scope-checker CHECK2 bilateral verification.
+   - **🔴 UPGRADE AUTOMÁTICO SEVERIDADE PARA HIGH (G5 cross-cutting exceção):** SE (o teste está localizado em **`tests/regression/<TICKET_ID>--<slug>.test.ts` (com ticket ID no nome do arquivo) E NÃO EXISTIR `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER logada em decisions.log.jsonl justificando ≥4 domínios independentes OU infra-estrutura pura**) → **G7.3 automaticamente vira 🟠 HIGH severity** (contabiliza no contador ≤2 HIGH do ship gate §0.9.2 auto-fix rule). Se o teste está na pasta da feature com comment anchor correto → sem upgrade.
+
+4. **G7.4 🔵 LOW — `.skip()` / `xit()` / `it.todo()` used WITHOUT a follow-up ticket reference.**
+   - Scan test blocks for `.skip(` or `xit(` or `it.todo(` or `test.skip(` or `test.todo(`.
+   - Check 10 lines around the declaration for a comment MATCHING regex: `TODO\((FLO-\d+|PROJ-\d+|#\d+|issue #[^\s)]+)\)` or `Blocked on PR #\d+` or `Requires: <dependency>`.
+   - If `.skip` exists AND no follow-up ticket reference → **LOW G7.4 = SKIPPED TEST WITH NO FOLLOWUP.**
+   - **Exception:** `it.skip` inside a Scratch `.test.ts` file clearly named `scratch.*` or `_WIP_*` (developers use these locally — only flag if the file is staged to be committed).
+   - **Fix:** Add 1 line comment above the skip: `// TODO(FLO-123): reason = blocked on PR #456`. OR remove the skip entirely and make the test pass.
+
+**Severity defaults enforced on the ship-gate threshold (§0.9.2 auto-fix rule ≤2 HIGH count):**
+- G7.1 + G7.2 = HIGH severity (BLOCKING if total HIGH ≥3 in the same review alongside other Category 0-8 HIGHs; if ≤2, auto-fix rule triggers on code-review ship gate).
+- G7.3 = MEDIUM.
+- G7.4 = LOW.
+
+**Coverage of Review /report MUST include Category 7 in the table (see Coverage section §N-1 below).**
+
+---
+
+### Category 8: 🟣 UI Selector Contract Hygiene & data-testid 3-part Convention (NEW QA-Centric ONDA1) — HIGH for fragile selectors or NEW interactive components w/o ids, MEDIUM for naming convention, LOW for duplicate ids on list rows
+
+> **Canonical source for the UI selector contract rule:** harness-spec SbE §4.2 Behavior Example Tables — new column "UI Selector Contract" binds Playwright/RTL tests to stable ids. Testing Library Priority Order (canonical Kent C. Dodds, 2023): **ByRole > ByLabelText > ByPlaceholderText > ByText > ByDisplayValue > ByAltText > ByTitle > ByTestId (last escape hatch for dynamic content)**. When ByRole (with accessible name) is STABLE and UNIQUE for the element across renders → data-testid is NOT required. The purpose of data-testid is to cover UI that has unstable/translated/no accessible text: toast messages, icon-only buttons, spinners, loading states, table row action buttons.
+
+**Convention MANDATORY for ANY `data-testid` the diff introduces / modifies (3-part kebab-case with double-underscore separator):**
+```
+<domain>__<component-or-screen>__<action-or-element>
+```
+Examples (correct):
+- `creator-bookings__refund-dialog__confirm-button`
+- `public-events__event-card__buy-now-button`
+- `scanner__scan-screen__qr-input`
+- `auth__login-form__submit-btn`
+- (for repeated list rows: append `--<unique-id>` suffix) `creator-bookings__row__refund-button--order-abc123`
+
+Anti-patterns (flag G8.3 if used):
+- ❌ `refundButton` (no separator; camelCase not kebab)
+- ❌ `creator_bookings_refund` (single underscore instead of double `__`)
+- ❌ `bookings--refund--button` (triple hyphen not part separator)
+- ❌ `cancel` (too generic, 0 parts, no domain context — becomes ambiguous when you have 12 cancel buttons in app)
+
+**How to detect each finding (8.1 → 8.4):**
+
+1. **G8.1 🟠 HIGH — NEW interactive/visible user-facing component (or NEW screen) created WITHOUT data-testid on elements that NEED it (per priority-order rule).**
+   - Compute: from changedFiles, list `.tsx` / `.jsx` / `.vue` files with status `A` (added) OR `.tsx/.jsx` that export new components (filename includes `Button`, `Dialog`, `Modal`, `Form`, `Tabs`, `Select`, `Combobox`, `DatePicker`, `AutoComplete`, `Dropdown`, `Drawer`, `Snackbar`, `Toast`, `Card`, `Input`, `Table`, `Alert`).
+   - For EACH NEW interactive element in JSX:
+     - Is `ByRole + accessible name (label/text)` provably stable AND unique? → EXEMPT (Button with static text `<button>Confirm Refund</button>` → no id needed, `getByRole('button', {name: 'Confirm Refund'})` is stable).
+     - Is element icon-only button? `<Button><TrashIcon/></Button>`? Loading spinner? Toast message? Progress bar? Empty-state illustration? Table row action icon (duplicate across N rows)? → DATA-TESTID REQUIRED.
+     - Does text change based on translations (i18n) / feature flags / dynamic org/user state? → `ByText` fragile → DATA-TESTID REQUIRED.
+   - If ≥1 such element in the NEW component lacks a `data-testid=""` attribute → **HIGH G8.1 = NO SELECTOR CONTRACT FOR FRAGILE ELEMENTS.**
+   - **Exemption:** Component is explicitly a PURE presentational `<div>` wrapper with ZERO handlers, ZERO user interaction (cannot click/type/hover/focus it). Or PR body has explicit QA_OVERRIDE: `G8.1 WAIVED: all content has stable ByRole + accessible names`.
+   - **Fix:** Add `data-testid="<domain>__<component>__<element>"` for every element that fails stability check. For icon buttons, prefer aria-label FIRST (so screen readers work too), THEN add data-testid as a secondary selector contract.
+
+2. **G8.2 🟠 HIGH — NEW/MODIFIED TEST FILE uses a PRIMARY selector that is FRAGILE: CSS class, XPath, nth-child(N), regex text, or getAllByRole indexed.**
+   - Scope: scan EVERY test file (`*.spec.ts`, `*.test.tsx`, inside `playwright/`, `e2e/`, `__tests__/`) that is NEW or MODIFIED in the diff.
+   - Flag HIGH if the PRIMARY selector (first element-fetch call in the 1st/2nd line of a test block, or the selector used for an action like `click()`/`fill()`) uses ANY of these anti-patterns:
+     - CSS class selector: `.css-class-name` → ❌ `page.locator('.btn-primary')` or `container.querySelector('.save-btn')`
+     - XPath: `//div[2]/button[3]` or any `//` prefix → ❌ (structure changes = test breaks)
+     - `nth-child(N)` pseudo / `.getAllByRole('button')[3]` / `.first()` / `.nth(N)` when N≥1 on a list — ❌ (order changes = breaks)
+     - `getByText(/partial.*regex/)` with vague regex that can match another 2+ DOM elements (false-positive risk).
+   - **ALLOWED EXEMPTIONS for G8.2 (waive if verified):**
+     - Playwright `getByRole('button', { name: 'Save changes' })` — stable accessible role + name → ALWAYS ALLOWED (preferred over data-testid).
+     - RTL Testing Library `screen.getByLabelText('Email address')` on labeled inputs → stable → ALLOWED.
+     - `getByTestId('creator-bookings__refund-dialog__confirm-button')` using the valid 3-part convention → ALLOWED.
+   - **Fix:** Rewrite the primary selector to `getByRole(...)` (preferred, if stable unique accessible name exists) ELSE `getByTestId('<valid 3-part id>')`. For list rows, use `--<unique-id>` suffix + `getByTestId('x-row__action--' + rowId)`.
+
+3. **G8.3 🟡 MEDIUM — data-testid attribute exists but DOES NOT follow the 3-part convention.**
+   - In NEW files: any `data-testid="..."` string that FAILS the regex match:
+     ```
+     ^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*(--[a-z0-9][a-z0-9-]*)?$
+     ```
+   - For MODIFIED files: only flag `data-testid` values that were WRITTEN/CHANGED in this diff (don't flag existing dirty ids from legacy commits — blast radius only).
+   - If a non-conforming id exists AND file is not LEGACY (modified from pre-existing commit) → **MEDIUM G8.3 = NON STANDARD TEST ID FORMAT.**
+   - **Exception:** Explicit override `G8.3 CONVERTED LATER: <ticket>` in PR body with a ticket reference for a follow-up refactor batch (low-risk incremental cleanup).
+   - **Fix:** Rename the data-testid to canonical `domain__component__element[--unique-row]` form. Search for all references in spec files and rename there too.
+
+4. **G8.4 🔵 LOW — Duplicate identical data-testid in list/tabular renders without per-row unique suffix.**
+   - Pattern: Inside a `.map()` / loop over an array (JSX lists, tables, grid rows, tab panels), the SAME data-testid string is emitted for EACH row of the iteration with no suffix that distinguishes row `<unique-id>`.
+   - Example flagged: `<Button data-testid="orders__table__cancel-button">` inside `orders.map(order => ...)` (rendered N times, 10 rows = 10 identical ids → Playwright/RTL `getByTestId` throws `Found multiple elements` error and forces fragile `.first()`).
+   - Example correct (waive): `<Button data-testid={'orders__table__cancel-button--' + order.id}>`
+   - If duplicate pattern exists → **LOW G8.4 = AMBIGUOUS DUPLICATE TESTID IN LIST.**
+   - **Fix:** Append `--` + the unique entity primary key (order.id, booking.uuid, event.slug) to the 3-part canonical id.
+
+**Ship threshold enforcement for G8 findings:**
+- G8.1 + G8.2 = HIGH (both count toward the §0.9.2 ≤ 2 HIGH total ship rule).
+- G8.3 = MEDIUM.
+- G8.4 = LOW.
+
+---
+
 ## 3. NON-goals (we explicitly skip these — do NOT waste tokens / time)
 
 - ❌ Biome / formatting / indentation issues. (That's lint CI.)
@@ -568,24 +695,90 @@ Then at the end (both modes, except verdict notes):
 
 ---
 
+## 4.9 🔴 STORAGE PREFLIGHT OBRIGATÓRIO (NUNCA SKIP — engineering-contracts §20 + HARNESS_RULES.md STORAGE BOUNDARY)
+
+> **HARD STOP RULE VERBATIM DO USUÁRIO:** Nenhum asset do trabalho do harness deve ser criado na worktree. Apenas quando solicitado explicitamente. Tudo deve ser organizado no harness-sessions.
+
+**Antes do PRIMEIRO write em disco (qualquer arquivo: report, screenshots, decisions, QA evidence, etc), RODAR EXATAMENTE ESTE BLOCO:**
+
+```bash
+# (1) Source o contrato canônico de sessões (fornece harness_output_path, harness_assert_outside_worktree, etc)
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+if [ -f "$CONTRACT" ]; then
+  # shellcheck disable=SC1090
+  source "$CONTRACT"
+else
+  echo "❌ FATAL: harness_sessions_contract.sh não encontrado em $CONTRACT. Não posso escrever outputs sem o storage boundary. Abortando write."
+  exit 98
+fi
+
+# (2) Definir variáveis mínimas para binding (se já houver binding, reuse; senão usar defaults seguros)
+# WORKTREE_ROOT: obrigatório se Mode B; se Mode A sem worktree local, set para string vazia mas NÃO CAI NA WORKTREE POR ACIDENTE
+# SESSION_ID: harness_current_session_id do registry ou fallback slug-safe
+SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-review-session}"
+# WORKTREE_ROOT: se Mode B, já temos; se Mode A e user passou --worktree, use aquele valor; senão vazia (sem assert contra worktree nesse caso)
+# WORKTREE_ROOT é conhecido no fluxo desde §0.1 e §Mode B; aqui apenas reafirmar
+
+# (3) Computar paths canônicos + criar diretórios base (SESSION_DIR, WORKSPACE_SHARED, etc)
+# Se WORKTREE_ROOT existe e é válido:
+if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
+  harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+  harness_ensure_session_dirs "$WORKTREE_ROOT"
+  # Double-guard: o helper harness_output_path já roda assert automaticamente; mas reafirmar aqui para clareza
+  harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR (root de efêmeros)"
+  harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED (root duráveis)"
+fi
+
+# ⚠️ APÓS este bloco, NÃO construa paths manualmente.
+# Use SEMPRE: OUTPUT_PATH="$(harness_output_path "<type>" "<slug>" "<related_id>" "<scope=session|workspace>" "<ext>" "<suffix>")"
+# Garantias automáticas do helper: timestamp prefix UTC ordenável, subpasta por type/related_id, mkdir -p, assert outside worktree, fallback seguro.
+```
+
+---
+
 ## 5. Post-report actions
 
-### Mode A (GitHub PR) — unchanged:
-- Write review report TO DISK at:
-  `$HARNESS_SESSION_DIR/reports/review_PR-<ID>_<YYYYMMDD>.md` (EFÊMERO per-session, via contract)
-  (If no worktree / binding exists yet, fallback: write report to chat + offer to save at user home `~/.trae/reports/`.)
+> **IMPORTANTE: STORAGE BOUNDARY — NUNCA escreva dentro da worktree. Todo output via `harness_output_path` only (ver §4.9).**
+
+### Mode A (GitHub PR):
+- **Construir o path do report USANDO O HELPER (nunca manual):**
+  ```bash
+  # Report principal (full) — related_id = pr-<ID>; ficará agrupado em reviews/pr-<ID>/
+  REPORT_FULL_PATH="$(harness_output_path "review" "harness-code-review" "pr-${PR_ID}" "session" "md" "full")"
+
+  # Se houver um segundo report da MESMA PR (ex: postfix, post-review, auto-fix summary) — usar outro suffix:
+  # REPORT_POSTFIX_PATH="$(harness_output_path "review" "harness-code-review" "pr-${PR_ID}" "session" "md" "postfix")"
+  ```
+  - **Resultado esperado no filesystem:**
+    ```
+    $HARNESS_SESSION_DIR/reviews/pr-<ID>/
+      ├── 20260902-092400-harness-code-review_full.md   (1ª rodada, prefix timestamp ordena primeiro)
+      └── 20260902-093000-harness-code-review_postfix.md (2ª rodada, prefix timestamp ordena depois)
+    ```
+    Busca futura trivial: `ls -1 reviews/pr-382/*.md` → todos reports da PR juntos, ordem alfabética = ordem cronológica.
+  - **Fallback seguro SEM binding (raro):** o helper `harness_output_path` já cai em `$HARNESS_HOME/outputs/fallback-session/reviews/pr-<ID>/...` automaticamente; NUNCA cai na worktree nem em `./reports/`.
+  - **NUNCA use path relativo `./reports/` ou `$WORKTREE_ROOT/.trae/`. MORATÓRIA engineering-contracts §20.**
+
 - **DO NOT approve or request changes DIRECTLY on GitHub via `gh pr review`** unless user explicitly asks after seeing the report and saying "suba isso como review oficial". Our first deliverable = the report for the user to review in chat.
 - If there are ZERO findings → still write a report saying "No CRITICAL/HIGH issues found; scope matches; dependencies justified." + list what you checked so user trusts the review was actually done.
+- **Escrever usando atomic write:** pipe o conteúdo markdown no stdin de `harness_write_file_atomic "$REPORT_FULL_PATH"` (tmp → mv atômico, evita meio-escrito em crash).
 
-### Mode B (Local Worktree) — NEW:
-- Write review report TO DISK at:
-  `$HARNESS_SESSION_DIR/reports/review_LOCAL-WORKTREE_<YYYYMMDD>_<HHMMSS>.md` (EFÊMERO per-session, via contract)
-  (Timestamped because there may be multiple local review passes before code is committed.)
-- **DO NOT interact with GitHub at all** in Mode B (no gh commands, no PR creation). Pure local output only.
-- Zero findings → still write report with: "No CRITICAL/HIGH issues found in modified files. Scope matches stated goals; dependencies justified." Include the full changed files list + what you checked per category (Runtime/Security/Deps/Scope) so user trusts audit was actually done.
+### Mode B (Local Worktree):
+- **Construir o path do report USANDO O HELPER:**
+  ```bash
+  # Worktree slug: extrair basename de WORKTREE_ROOT (ex: feat-FLO-714--Design-a-non-blocking-and-scalable-deployment-in-prod-governance)
+  WT_SLUG="$(basename "${WORKTREE_ROOT%/}")"
+  REPORT_LOCAL_PATH="$(harness_output_path "review" "harness-code-review" "worktree-${WT_SLUG}" "session" "md" "full")"
+  # Segunda passagem da mesma worktree: trocar suffix para "pass2" ou "postfix" etc
+  ```
+  - **Resultado esperado:** `$HARNESS_SESSION_DIR/reviews/worktree-<WT_SLUG>/20260902-101500-harness-code-review_full.md`
+  - Timestamp UTC no prefix garante ORDENAÇÃO de múltiplas passes locais sem depender de mtime do SO.
+- **DO NOT interact with GitHub at all** in Mode B (no gh commands, no PR creation). Pure local output only inside harness-sessions.
+- Zero findings → still write report with: "No CRITICAL/HIGH issues found in modified files. Scope matches stated goals; dependencies justified." Include the full changed files list + what you checked per category.
 - Optional user convenience at end of chat message:
   - If Mode B, after presenting findings, offer ONE follow-up action:
-    - `[Apply fixes locally]` — if user says yes, proceed using harness-developer mindset to fix the CRITICAL/HIGH blockers inside the same worktree (still under scope; don't add features).
+    - `[Apply fixes locally]` — if user says yes, proceed using harness-developer mindset to fix the CRITICAL/HIGH blockers inside the same worktree (still under scope; don't add features). **Nota: QA evidence / screenshots dessa etapa também via harness_output_path type=qa scope=session.**
     - `[Show just the blocked items condensed]` — for brevity.
     - `[Nothing, thanks]` — stop.
   Don't be pushy. If user just says "ok thanks" → stop.

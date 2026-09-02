@@ -17,6 +17,45 @@ orchestrator — SM retains authority over scope + overall gates. This skill onl
 
 ---
 
+## -0.1 STORAGE BOUNDARY PREFLIGHT (CANONICAL, NON-NEGOTIABLE — run BEFORE §0 e ANTES DO PRIMEIRO WRITE)
+
+NENHUM asset de trabalho (execution_batches, dev_reports, merge_audits, batch_execution_report, _locks, dispatcher.config, etc) é escrito NA WORKTREE DO USUÁRIO por padrão. Única exceção: usuário pede VERBATIM EXPLICITAMENTE salvar um arquivo específico lá. **HARD STOP exit 99 se qualquer path cair dentro WORKTREE_ROOT.**
+
+Execute EXATAMENTE:
+
+```bash
+# 1. Source contrato canônico
+source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
+
+# 2. SESSION_ID (via SM ou derivado)
+SESSION_ID="${SESSION_ID:-$(harness_current_session_id 2>/dev/null || echo "dispatcher-$(date -u +%Y%m%d-%H%M%S)")}"
+RELATED_ID="dispatcher-${WORKTREE_SLUG_CANONICAL:-$(basename "$WORKTREE_ROOT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//')}"
+
+# 3. Paths canônicos + dirs
+harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$(pwd)"
+harness_ensure_session_dirs "$WORKTREE_ROOT"
+
+# 4. DOUBLE-GUARD outside worktree
+harness_assert_outside_worktree "$HARNESS_SESSION_DIR"       "$WORKTREE_ROOT" "HARNESS_SESSION_DIR"
+harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED"  "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED"
+
+# ==== PATHS DESTA SKILL CONSTRUÍDOS UMA VEZ (abaixo usar variáveis, não reconstruir) ====
+# INPUTS (duráveis workspace-shared, produzidos pelo SM antes do dispatcher):
+TASK_GRAPH_PATH="${TASK_GRAPH_PATH:-$(harness_output_path "task" "task-graph" "${RELATED_ID}" "workspace" "md")}"  # input SM Phase 0
+# OUTPUTS DURÁVEIS (workspace-shared, consultáveis próximas sessões mesma worktree):
+EXECUTION_BATCHES_PATH="$(harness_output_path "config" "execution-batches" "${RELATED_ID}" "workspace" "md")"
+DISPATCHER_LOCK_DIR="${HARNESS_WORKSPACE_SHARED}/_locks"                              # subpasta canônica já criada em ensure_session_dirs LOCK subdir mapping
+DISPATCHER_CONFIG_TEMPLATE_PATH='${HARNESS_WORKSPACE_SHARED}/tasks/<task-id>/dispatcher.config.json'  # per-task override (WORKSPACE_SHARED durável)
+# OUTPUTS EFÊMEROS (por-sessão, não precisam sobreviver restart harness):
+DEV_REPORT_PATTERN_SUFFIX='<TASK_ID>'                                                 # construir por task via: harness_output_path "report" "dev-report" "T${TASK_ID}-${TASK_SLUG}" "session" "md"
+# MERGE_AUDIT por batch/mini-batch (abaixo §4.1 loop = construir cada um com related_id="B${BATCH}-MB${MINI}"):
+#   MERGE_AUDIT_Bx_MBy_PATH="$(harness_output_path "merge_audit" "merge-audit" "${RELATED_ID}-B${BATCH}-MB${MINI}" "session" "md")"
+# BATCH_EXECUTION_REPORT final (abaixo §5 step 4 = construir UMA VEZ):
+BATCH_EXECUTION_REPORT_PATH="$(harness_output_path "report" "batch-execution-final" "${RELATED_ID}" "session" "md")"
+```
+
+---
+
 ## 0. Preconditions (MANDATORY — fail immediately)
 
 The SM MUST pass, either as function arguments or in a well-known dispatch config file:
@@ -24,8 +63,8 @@ The SM MUST pass, either as function arguments or in a well-known dispatch confi
 | Input | Source | Purpose |
 |---|---|---|
 | `WORKTREE_ROOT` | Confirmed by SM preflight | Absolute path |
-| `$HARNESS_WORKSPACE_SHARED/task_graph.md` (DURÁVEL workspace-shared) | SM Phase 0 output | Full task list, deps, status |
-| One `task_envelope_<TASK_ID>.md` file per task in `TODO`/`READY` state → at `$HARNESS_WORKSPACE_SHARED/tasks/<TASK_ID>/` (DURÁVEL) | SM Section 2.1 output | Each one has **Blast Radius → ALLOWED files** |
+| Task graph (DURÁVEL workspace-shared) → `$TASK_GRAPH_PATH` (via PREFLIGHT acima — path helper canônico `task/task-graph/dispatcher-<wt-slug>/*.md`) | SM Phase 0 output | Full task list, deps, status |
+| Task envelope per task TODO/READY → (mesma estrutura WORKSPACE_SHARED/tasks/<id>/task_envelope_*.md via harness_output_path type=`task` scope=`workspace`, construído pelo SM Section 2.1 antes chamar dispatcher) | SM Section 2.1 output | Cada um com **Blast Radius → ALLOWED files** |
 | `max_parallel` (optional, int) | SM or user | Cap for concurrent Devs. Default = `min(cpu_cores, 3)`. Max cap = 4 hard. |
 
 If ANY task marked READY-for-parallel does NOT have a fully enumerated `Blast Radius → ALLOWED files` list (with globs resolved to concrete files, not just "src/*") → **REFUSE parallel for that task and fall back to serial.** Blast-radius glob wildcards are not allowed in parallel mode because the lock system cannot validate intent.
@@ -67,9 +106,12 @@ Given a candidate set `S = {T1, T2, ...}` from the same Kahn wave:
 
 ### 1.4 Output of Step 1
 
-Save to `$HARNESS_WORKSPACE_SHARED/execution_batches.md` (DURÁVEL workspace-shared, via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`):
+Save para `$EXECUTION_BATCHES_PATH` (já construído PREFLIGHT — DURÁVEL workspace-shared, timestamp UTC prefix no filename, subpasta `config/dispatcher-<wt-slug>/`.
+NÃO reconstrua manualmente `$HARNESS_WORKSPACE_SHARED/execution_batches.md`; use a variável.
+Write atômico via helper (evita half-written SIGTERM):
 
-```markdown
+```bash
+cat <<'EOF' | harness_write_file_atomic "$EXECUTION_BATCHES_PATH"
 # EXECUTION BATCHES — <task-id>
 
 ## Strategy
@@ -100,11 +142,11 @@ For every mini-batch about to run:
 
 1. Before fanning out Devs:
    - For each task T in the mini-batch, for each file f in Files(T):
-     - **ASSERT**: no `$HARNESS_WORKSPACE_SHARED/_locks/<normalized-f>.lock.json` exists with state `HELD`.
+     - **ASSERT**: no `${DISPATCHER_LOCK_DIR}/<normalized-f>.lock.json` exists with state `HELD` (DIR construído PREFLIGHT = `$HARNESS_WORKSPACE_SHARED/_locks/`, subpasta canônica do contrato, FORA worktree por contrato + assert double-guard).
      - If any exists held → re-queue T into next mini-batch.
 2. On task T start (just before invoking harness-developer):
    - Atomically for ALL files in Files(T):
-     - Write `$HARNESS_WORKSPACE_SHARED/_locks/<hash>-<basename>.lock.json` (DURÁVEL workspace-shared, runtime, never staged):
+     - Write atômico via helper `harness_write_file_atomic "${DISPATCHER_LOCK_DIR}/<hash>-<basename>.lock.json"` (DURÁVEL workspace-shared, runtime, NUNCA staged/committed — blacklist do harness-ship §0.8 cobre padrão `**/_locks/**`):
        ```json
        {"task_id": "T1", "batch": "B1", "held_at": "<ISO>", "state": "HELD"}
        ```
@@ -112,7 +154,7 @@ For every mini-batch about to run:
 3. On task T end (regardless of success/failure):
    - Atomically for ALL files in Files(T): change state `RELEASED` with `ended_at` + `outcome` (PASS/FAIL_SCOPE/FAIL_QA/FAIL_COMPLIANCE).
 
-Lock directory is `$HARNESS_WORKSPACE_SHARED/_locks/` → lives OUTSIDE user worktree code by design (MORATÓRIA §19.1); never staged/committed.
+Lock directory é `${DISPATCHER_LOCK_DIR}` = `${HARNESS_WORKSPACE_SHARED}/_locks/` → lives OUTSIDE user worktree code by design (MORATÓRIA §20 engineering-contracts EXPANDIDA para TODA worktree); blacklist sincronizada no harness-ship §0.8 Stage 3, never staged/committed.
 
 ---
 
@@ -120,11 +162,15 @@ Lock directory is `$HARNESS_WORKSPACE_SHARED/_locks/` → lives OUTSIDE user wor
 
 For each task T in current mini-batch:
 
-1. Mark `task_graph.md` row for T: `Status = IN_PROGRESS (parallel, batch=<B>, mini-batch=<MB>)`.
-2. Invoke a **dedicated parallel-execution sub-agent call** for `harness-developer` with:
-   - Full env variable context: `WORKTREE_ROOT`, TASK_ID=T, envelope path.
-   - `general_purpose_task` sub-agent invoked with **isolation semantics** — each agent writes its own report file as `$HARNESS_SESSION_DIR/reports/dev_report_<TASK_ID>_<timestamp>.md` (EFÊMERO per-session, via contract) and **never writes to task_graph.md** (that is dispatcher's single-writer role).
-   - Output: when all sub-agents return, collect all per-task dev reports.
+1. Mark `task_graph.md` row for T: `Status = IN_PROGRESS (parallel, batch=<B>, mini-batch=<MB>)` (único writer = dispatcher/SM; NÃO deixe dev agents escreverem task_graph).
+2. Construa UMA VEZ o path do report por task (fora do loop de invocação) via helper (garante timestamp UTC prefix, subpasta `reports/T<id>-...`:
+   ```bash
+   DEV_REPORT_T_PATH="$(harness_output_path "report" "dev-report" "T${TASK_ID}-${TASK_SLUG:-unnamed}" "session" "md")"
+   ```
+3. Invoke a **dedicated parallel-execution sub-agent call** for `harness-developer` with:
+   - Full env variable context: `WORKTREE_ROOT`, `SESSION_ID`, `TASK_ID=T`, envelope path, `DEV_REPORT_OUTPUT_PATH="${DEV_REPORT_T_PATH}"`.
+   - `general_purpose_task` sub-agent invoked with **isolation semantics** — cada agent escreve seu próprio report file em `${DEV_REPORT_T_PATH}` (EFÊMERO per-session, via PREFLIGHT acima + path helper, NÃO cai dentro worktree) and **never writes to task_graph.md** (that is dispatcher's single-writer role).
+   - Output: when all sub-agents return, collect all per-task dev reports (ler cada `${DEV_REPORT_T_PATH}` e concatenar).
 
 ### 3.1 Developer Report Per-Task Parallel Contract
 
@@ -161,9 +207,17 @@ Algorithm:
 3. **Any file with frequency > 1 written by different tasks in THIS mini-batch → FLAG CONFLICT.**
 4. Conflict severity:
    - `LOW`: different files in same directory (no overlap, just coincidence) → ok.
-   - `MEDIUM`: exact same file path but diff is disjoint (hunks don't overlap) → SM reviews, applies with explicit decision.log entry.
-   - `HIGH`: exact same file path AND overlapping hunks (or the file is > 100 lines modified by both) → **HARD FAIL.** Roll back one of the two task's changes (git stash or git checkout HEAD -- <file> for whichever has more LOC committed), re-run task serial, re-apply gates.
-5. Save merge-audit report to `$HARNESS_SESSION_DIR/reports/merge_audit_<BATCH>_<MINI>.md` (EFÊMERO per-session).
+   - `MEDIUM`: exact same file path but diff is disjoint (hunks don't overlap) → SM reviews, applies with explicit decision entry via `harness_append_decision_jsonl "MERGE_AUDIT_MEDIUM_CONFLICT_SM_APPROVED" '{"batch":"'${BATCH}'","mini":"'${MINI}'","files_overlap": [...]}'`.
+   - `HIGH`: exact same file path AND overlapping hunks (or the file is > 100 lines modified by both) → **HARD FAIL.** Roll back one of the two task's changes (git stash or git checkout HEAD -- <file> for whichever has more LOC committed), re-run task serial, re-apply gates. Append decision log via `harness_append_decision_jsonl "MERGE_AUDIT_HIGH_CONFLICT_ROLLBACK" '{"batch":"'"${BATCH}"'","mini":"'"${MINI}"'","rolled_back_task":"<task_id>"}'`.
+5. Construa path para este merge-audit (um por BATCH + MINI) via helper + write atômico:
+   ```bash
+   MERGE_AUDIT_BATCH_MINI_PATH="$(harness_output_path "merge_audit" "merge-audit" "${RELATED_ID}-B${BATCH}-MB${MINI}" "session" "md")"
+   cat <<'MAEOF' | harness_write_file_atomic "$MERGE_AUDIT_BATCH_MINI_PATH"
+   # Merge Audit — B${BATCH} / MB${MINI}
+   ...
+   MAEOF
+   ```
+   (EFÊMERO per-session, subpasta `merge_audits/dispatcher-<wt-slug>-B<N>-MB<K>/` ordenado timestamp UTC prefix alfabético = cronológico.)
 
 If ANY task fails gates OR merge audit reports HIGH conflict → mark mini-batch PARTIAL and continue. The dispatcher returns a structured status to SM.
 
@@ -171,16 +225,22 @@ If ANY task fails gates OR merge audit reports HIGH conflict → mark mini-batch
 
 ## 5. Step 5 — Loop, Batch Complete, Return
 
-1. Once mini-batch passes gates + merge audit → release HELD locks → `rm` lock files.
+1. Once mini-batch passes gates + merge audit → release HELD locks → `rm` lock files (diretório `${DISPATCHER_LOCK_DIR}`).
 2. Advance Kahn in-degree counter by 1 for each task that is DONE.
 3. Build the next mini-batch or next Kahn wave.
 4. When **no more tasks remain** (all in task_graph marked DONE or FAILED_*):
-   - Write `$HARNESS_SESSION_DIR/reports/BATCH_EXECUTION_REPORT.md` (EFÊMERO per-session, via contract)
+   - Write atômico para `$BATCH_EXECUTION_REPORT_PATH` (já construído PREFLIGHT. EFÊMERO per-session, subpasta `reports/dispatcher-<wt-slug>/YYYYMMDD-HHMMSS-batch-execution-final.md`. Timestamp prefix UTC garante ordenação alfabética = cronológica entre runs futuras de dispatcher na mesma worktree.)
+     ```bash
+     cat <<'REOF' | harness_write_file_atomic "$BATCH_EXECUTION_REPORT_PATH"
+     # BATCH EXECUTION REPORT — dispatcher run <UTC iso>
      - Batches run, minibatches, tasks per batch, conflicts caught
      - Per-task status (DONE / FAIL_SCOPE / FAIL_QA / FAIL_COMPLIANCE / CONFLICT_ROLLBACK)
      - Per-batch merge audit tally
      - Wall-clock approx
      - Lock contention count
+     REOF
+     ```
+     NÃO reconstrua o path manualmente (`$HARNESS_SESSION_DIR/reports/BATCH_EXECUTION_REPORT.md`) — use variável PREFLIGHT (assert outside automático + timestamp prefix + grouping).
    - Return structured summary to `harness-scrum-master`.
    - SM then proceeds to **Compliance HEAVY → manual_test_plan → final_summary** as usual (no parallelism in final stage; it's a single cross-cut pass).
 
@@ -216,9 +276,10 @@ Safety first. The dispatcher MUST fall back to SM's serial per-task loop if ANY:
 ```yaml
 max_parallel_default: 3
 max_parallel_hard_cap: 4
-lock_dir: $HARNESS_WORKSPACE_SHARED/_locks  (DURÁVEL workspace-shared, outside user worktree)
+lock_dir: ${DISPATCHER_LOCK_DIR}  (DURÁVEL workspace-shared via PREFLIGHT; FORA user worktree por contrato)
 stale_lock_timeout_seconds: 3600
 merge_audit_high_conflict_min_lines_overlap: 5
 ```
 
-User can override via file: `$HARNESS_WORKSPACE_SHARED/tasks/<task-id>/dispatcher.config.json` (DURÁVEL, per-task, shared across sessions) on a per-task basis.
+User can override via file: `$DISPATCHER_CONFIG_TEMPLATE_PATH` (expand `<task-id>` → real TASK_ID. DURÁVEL WORKSPACE_SHARED. Fora worktree por contrato.) on a per-task basis.
+**NÃO crie arquivos de configuração do dispatcher DENTRO da worktree. Todas as sessões do harness compartilham o mesmo DISPATCHER_LOCK_DIR. Blacklist do harness-ship cobre padrões _locks e tasks/.*\.json.**

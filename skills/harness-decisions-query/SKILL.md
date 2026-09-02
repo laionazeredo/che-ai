@@ -16,12 +16,36 @@ description: "Queries, filters, summarizes, exports, and audits Harness decision
 ## 0. Preconditions (MANDATORY before any query)
 
 1. **Worktree absolute path known.** If not → ASK user for worktree; NEVER guess.
-2. **`decisions.log.jsonl` exists?** If file doesn't exist → say "Nenhuma decisão registrada nesta worktree ainda." Stop.
-3. **Source contracts first** before calling the helper CLI wrapper below:
+2. **Source contracts first (STORAGE BOUNDARY PREFLIGHT, MANDATORY mesmo sendo skill só de leitura):
    ```bash
+   # 1. Source contrato canônico
    source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
-   PATH_FILE=$(harness_decisions_path "<WORKTREE_ROOT>")
+
+   # 2. SESSION_ID (se não definido por orquestrador)
+   SESSION_ID="${SESSION_ID:-$(harness_current_session_id 2>/dev/null || echo "decisions-$(date -u +%Y%m%d-%H%M%S)")}"
+
+   # 3. Paths canônicos (para esta sessão (ainda que decisions já resolve harness_decisions_path
+   if [[ -z "${HARNESS_SESSION_DIR}" ]]; then
+     harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$(pwd)"
+     harness_ensure_session_dirs "$WORKTREE_ROOT"
+   fi
+
+   # 4. Double-guard: reafirma OUTSIDE worktree, MESMO para read-only skill (export READ de worktree user NÃO pode escrever output.)
+   harness_assert_outside_worktree "${HARNESS_SESSION_DIR}"      "$WORKTREE_ROOT" "HARNESS_SESSION_DIR"
+   harness_assert_outside_worktree "${HARNESS_WORKSPACE_SHARED}" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED"
+
+   # 5. Resolve path único canônico do arquivo de decisões (único compartilhado nesta worktree: FORA worktree por contrato)
+   PATH_FILE=$(harness_decisions_path "${WORKTREE_ROOT}")
    ```
+3. **`decisions.log.jsonl` existe?** If file doesn't exist → say "Nenhuma decisão registrada nesta worktree ainda." Stop.
+4. **Optional EXPORT para planilha (escritura output opcional — usa harness_output_path para garantir ordem timestamp + grouping por PR relacionado):
+   - Se user pedir "exporta pra CSV/TSV/JSON → construir output_file path via:
+     ```bash
+     EXPORT_PATH="$(harness_output_path "summary" "decisions-export-${MODE}" "${EXPORT_RELATED_ID:-decisions-general" "workspace" "${EXT:-csv}")"
+     ```
+     Nunca escreva exports em `./decisions-export.csv` nem em worktree.
+
+**NOTA:** Skill é read-only por padrão; mas se tiver que escrever export/audit output temporário → helper centralizado acima. Queda cair harness-sessions por construção `harness_output_path`, NUNCA cai worktree.
 
 ---
 

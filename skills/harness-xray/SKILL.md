@@ -28,12 +28,32 @@ description: "Onboarding raio-X de repositório NOVO. Detecta stack, linguagem, 
 
 ```bash
 # 1. Carrega contracts helpers
-source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+source "$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+WORKTREE_ROOT="${WORKTREE_ROOT:?WORKTREE_ROOT obrigatório para xray}"
 XRAY_SESSION_ID="$(harness_current_session_id)"
-harness_compute_paths "$WORKTREE_ROOT" "${XRAY_SESSION_ID:-xray-standalone}" "$PWD"
+XRAY_SESSION_ID="${XRAY_SESSION_ID:-xray-standalone-$(date -u +%Y%m%d-%H%M%S)}"
+harness_compute_paths "$WORKTREE_ROOT" "$XRAY_SESSION_ID" "$PWD"
 harness_ensure_session_dirs "$WORKTREE_ROOT"
 
-# 2. Verifica graphify CLI disponível
+# 2. Double-guard: registry NÃO pode cair dentro worktree
+harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR"
+harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED"
+[ -n "${HARNESS_PROJECT_DIR:-}" ] || { echo "[harness-xray] ❌ HARNESS_PROJECT_DIR não resolvido (compute_paths falhou?)" >&2; exit 99; }
+harness_assert_outside_worktree "$HARNESS_PROJECT_DIR" "$WORKTREE_ROOT" "HARNESS_PROJECT_DIR (registry Nível 1.5)"
+mkdir -p "$HARNESS_PROJECT_DIR"
+
+# 3. Constrói UMA VEZ os 3 paths de output do registry Nível 1.5 via helper type=project_registry
+XRay_RELATED_ID="xray-${HARNESS_PROJECT_SLUG:-unknown}"
+XRAY_PROJECT_PROFILE_PATH="$(harness_output_path "project_registry" "project-profile" "${HARNESS_PROJECT_SLUG:-unknown}" "workspace" "md")"
+XRAY_ARCHITECTURE_PATH="$(harness_output_path "project_registry" "architecture" "${HARNESS_PROJECT_SLUG:-unknown}" "workspace" "md")"
+
+# Se helper criou abaixo workspace_shared mas registry canônico = HARNESS_PROJECT_DIR → use o canônico
+XRAY_PROJECT_PROFILE_PATH="${HARNESS_PROJECT_DIR}/project_profile.md"
+XRAY_ARCHITECTURE_PATH="${HARNESS_PROJECT_DIR}/architecture.md"
+
+# 4. Verifica graphify CLI disponível. Como harness-graph agora joga cache FORA worktree,
+#    o output de /harness-graph refresh cai em $HARNESS_WORKSPACE_SHARED/graphify/<id>/
 if ! command -v graphify >/dev/null 2>&1; then
   echo "[harness-xray] ⚠️  graphify CLI NÃO instalado. Instalar: pipx install graphifyy (double 'y')"
   echo "[harness-xray] Prosseguindo com scan fallback leve (sem graph knowledge graph)"
@@ -41,6 +61,25 @@ if ! command -v graphify >/dev/null 2>&1; then
 else
   GRAPHIFY_OK=1
 fi
+```
+
+### 1.1 Escrevendo artefatos do registry (3 outputs)
+
+**NÃO FAÇA write manual `cat > arquivo` dentro worktree.** Em §2 Passo 7, os 3 artefatos devem:
+
+```bash
+# 7a. project_profile.md → write atômico FORA worktree
+{
+  # ... conteúdo 12-seções template §2.7a ...
+} | harness_write_file_atomic "$XRAY_PROJECT_PROFILE_PATH"
+
+# 7b. architecture.md (hybrid auto+manual) → write atômico FORA worktree
+{
+  # ... conteúdo template §2.7b ...
+} | harness_write_file_atomic "$XRAY_ARCHITECTURE_PATH"
+
+# 7c. Audit trail append → helper oficial (NÃO echo >> registry.jsonl manual)
+harness_append_decision_jsonl "XRAY_SCAN" "{\"project_slug\":\"${HARNESS_PROJECT_SLUG:-unknown}\",\"graphify_used\":${GRAPHIFY_OK},\"files_scanned\":${FILES_SCANNED:-0},\"stack_version\":\"2026-09-01\"}"
 ```
 
 ---

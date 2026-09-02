@@ -98,8 +98,49 @@ For HUMAN comments → classify content:
 
 ## 3. Triage Report Structure
 
-Write file: `$HARNESS_WORKSPACE_SHARED/pr_comments/pr-<ID>_<YYYYMMDD>.md`
-(Resolve via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh" && harness_compute_paths "$WORKTREE_ROOT" "$(harness_current_session_id)" && harness_ensure_session_dirs $WORKTREE_ROOT` first; NEVER create `<worktree>/.trae/` dirs.)
+### 2.9 🔴 STORAGE PREFLIGHT + PATH OBRIGATÓRIOS (ANTES DO PRIMEIRO WRITE)
+
+Rode EXATAMENTE este bloco; depois use SOMENTE o helper `harness_output_path`. NUNCA construa paths manualmente.
+NUNCA crie `<worktree>/.trae/` nem `<worktree>/reports/` nem `<worktree>/pr_comments/`. MORATÓRIA §20.
+
+```bash
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+if [ -f "$CONTRACT" ]; then
+  # shellcheck disable=SC1090
+  source "$CONTRACT"
+else
+  echo "❌ FATAL: harness_sessions_contract.sh não encontrado em $CONTRACT. Abortando write."
+  exit 98
+fi
+
+SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-pr-comments-session}"
+if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
+  harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+  harness_ensure_session_dirs "$WORKTREE_ROOT"
+  harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "WORKSPACE_SHARED"
+fi
+
+# Construir path ÚNICO via helper:
+# - type = pr_comments (mapeia para subpasta pr_comments/)
+# - slug = triage-report
+# - related_id = pr-<ID> (agrupa tudo relacionado a esta PR)
+# - scope = workspace (durável: compartilhado entre sessões nesta worktree, pode ser reaberto amanhã)
+# - ext = md
+PR_COMMENTS_REPORT_PATH="$(harness_output_path "pr_comments" "triage-report" "pr-${PR_ID}" "workspace" "md")"
+```
+
+Resultado exemplo: `$HARNESS_WORKSPACE_SHARED/pr_comments/pr-382/20260902-111500-triage-report.md`
+→ Timestamp no prefix ordena automaticamente se houver múltiplas rodadas de triage na mesma PR.
+→ related_id = `pr-382` agrupa tudo junto. Busca futura trivial: `ls -1 pr_comments/pr-382/*.md`.
+
+**Arquivo final escrito usando atomic write:**
+```bash
+# pipe o conteúdo markdown completo para o helper atômico (tmp → mv):
+cat <<'MARKDOWN_EOF' | harness_write_file_atomic "$PR_COMMENTS_REPORT_PATH"
+# ... corpo do triage report aqui ...
+MARKDOWN_EOF
+```
 
 ### Summary table
 

@@ -45,6 +45,24 @@ NENHUM scope source = ASK user. Não procede sem escopo.
 
 Extração produz array plana `AC[]` = `{id: string, text: string, area?: string, oos?: boolean}`. OOS items = marcados explicitamente como out-of-scope NÃO contam como missing no relatório.
 
+### 0.4 SbE Spec AUTO-DETECTION (ONDA2 bilateral mode — se detectar, roda CHECK 2 EXTENSION §3.5 OBRIGATÓRIO)
+
+Run DEPOIS de §0.3 Scope Sources, ANTES de §1 Gather context.
+
+**Modos de entrada para SbE bilateral (qualquer um 1 = ativa extensão):**
+1. User fornece flag explícito: `--spec=/absolute/path/to/approved_spec.md`
+2. Scope Source (PRD file / PR body / task graph) CONTÉM o heading literal `## §4 SPECIFICATION BY EXAMPLE` ou `## §4.2 POSITIVE BEHAVIOR EXAMPLES`
+3. Auto-scan workspace_shared specs: list `$HARNESS_WORKSPACE_SHARED/specs/<slug-matching-ticket-id>/*spec.md` files com `status: Approved` no frontmatter → se ENCONTRAR 1 match, pergunta user: "Detectei Approved spec SbE em <path>. Usar como escopo bilateral B-ID ↔ test ↔ diagrams? (Y/n)". Default = Sim.
+
+**Se SbE spec detectado:**
+- Set `SBE_SPEC_PATH = <absolute path>`
+- Parse frontmatter YAML: extrair `risk_level`, `b_count`, `ab_count`, `erd_required`, `mermaid_required`.
+- Parse §4.2 Behavior Table: produz `SBE_BEHAVIORS[] = { b_id: "B-1", given: "...", when: "...", then_obs: "...", playwright_layer_checked: true|false, ui_selectors: ["id1","id2"]}`
+- Parse §4.3 Anti-Behavior Table: produz `SBE_ANTI[] = { ab_id: "AB-1", ... }`
+- Parse §4.4 Mermaid (se existir): produz `SBE_MERMAID_BIDS = set()` contendo todos `B-\d+` e `AB-\d+` extraídos de nodes/edges dos 3 diagrams.
+- **Variável de controle:** `SBE_EXTENSION_ENABLED = true`. Se nenhum método acima → `false` e pula §3.5 (modo legacy).
+
+
 ---
 
 ## 1. Gather context — modo dependente
@@ -133,9 +151,16 @@ Do patch cumulativo, filtrar:
 
 REGRA7.9: Nomes de suites/testes DEVEM ser comportamento observável. Nomes ruins (FLO-123, test(), it1, shouldWork) não contam como evidence coverage.
 
+**🔴 HARD RULE — INVERSÃO PROIBIDA: NÃO PENALIZE títulos SEM task-id:**
+> ❌ **ERRADO:** "Título não tem FLO-714 como prefixo → evidence inválida / desconta pontos". **ISTO É UMA REGRESSÃO.**
+> ✅ **CORRETO:** Título descreve comportamento observável + NÃO tem FLO/T/AC na STRING → BOM, compliant, conta como evidence.
+>
+> **O que INVALIDA evidence (ruim):** a STRING do título contém anti-padrões `FLO-\d+` / `Task? T\d+` / `AC\d+` / `§\d+` / `SPEC_XXX`.
+> **O que VALIDA evidence (bom):** título contém keywords da AC (verbs + nouns do comportamento) + não tem IDs. Traceabilidade via comentário `// @ac 2.1 | @ticket FLO-732` DENTRO do bloco = também BOM e não penaliza.
+
 Raciocínio por AC:
 - Para cada AC comportamental tipo "usuário consegue aplicar refund stripe connect" → procurar nos testes strings como: `refund`, `stripe connect`, `connected account`, `refund succeeded`, `refund failed`
-- Se descreve comportamento = 🟢 TESTED
+- Se descreve comportamento = 🟢 TESTED (mesmo que não mencione FLO/T/AC — é o comportamento DESEJADO)
 - Se tem arquivo de teste pro módulo MAS nenhum caso acerta keyword da AC → 🟡 PARCIAL (quais testes existem vs falta qual comportamento específico)
 - Se SUT foi alterado e ZERO arquivo de teste alterado pra área → 🔴 NOT TESTED (qual behavior, qual file test criar)
 
@@ -146,6 +171,60 @@ Raciocínio por AC:
 | AC-1 refund | `cobertura_de_teste_unitario_ou_e2e_para_refund_connect_account` | 🟢 TESTED | [refund.test.ts#L102-L145](file:///...) it(`refunds_connected_account_destination_correctly`) |
 | AC-2 qrcode offline | `cobertura_de_teste_unitario_ou_e2e_para_qrcode_offline_scan` | 🟡 PARCIAL | [scanner/scanner.test.ts#L5-L18](file:///…) suite existe, só happy path online. **Faltou** caso offline + cache fallback. |
 | AC-3 login google | `cobertura_de_teste_unitario_ou_e2e_para_login_google_oauth_redirect` | 🔴 NOT TESTED | `packages/auth/src/google.ts` alterado, NENHUM `*.test.*` em `packages/auth/**` tocado. Criar `google-login.spec.ts` com casos: redirect_uri, state param, token exchange. |
+
+### Passo 3.5 — ⚡ CHECK 2 EXTENSION SbE BILATERAL ENFORCEMENT (3 sub-checks) — SÓ RODA SE `SBE_EXTENSION_ENABLED = true` (§0.4)
+
+> **Pilar ONDA2 bilateral verification loop:** Spec §4 Behavior → Test anchor → Evidence SHA → Spec §5 atualizada. Scope-checker valida o loop reverso também (qual B-coverage vs realidade).
+
+**3.5.1 Bilateral 1/3 — Anchor @ac B-X → it() body coverage (traça cada B-ID → arquivo de teste real)**
+
+Regra de varredura:
+1. **Regex de detecção anchor (exato G7.3 Category7 harness-code-review):** `^\/\/\s*@(ac|ticket|task|bug)\s+(B-\d+|FLO-\d+|[A-Z]+-\d+)` — **DEVE ser a PRIMEIRA LINHA DENTRO do bloco `it(...) { ... }` ou `test(...) { ... }`**. Fora do bloco = NÃO conta como evidence bilateral (pode ser comentário casual).
+2. **Universo scan:** TODOS arquivos de teste detectados em §3.2 (test/spec/__tests__/e2e/playwright files do diff) + SUT correspondentes se tiverem embed tests. NÃO scan o repo inteiro — só diff atual (blast radius).
+3. **Cálculo coverage anchor:**
+   ```
+   B_COUNT_SPEC = len(SBE_BEHAVIORS[])           // §4.2 tabela real
+   B_COVERED_BY_ANCHOR = count(SBE_BEHAVIORS.b_id ∋ aparece em pelo menos 1 match regex)
+   BILATERAL_ANCHOR_COVERAGE_PCT = B_COVERED_BY_ANCHOR ÷ max(1, B_COUNT_SPEC) × 100
+   ```
+4. **Severidade / Verdict:**
+   - **🔴 BLOCK (hard stop):** BILATERAL_ANCHOR_COVERAGE_PCT = 0% → NENHUM comportamento SbE tem anchor bilateral. **Exigir EXPLICIT_OVERRIDE_BILATERAL_SKIP com justificativa + decision.log entry.**
+   - **🟡 WARN (action item):** BILATERAL_ANCHOR_COVERAGE_PCT < 70% OU ≥2 B-IDs faltando individualmente mesmo que global ≥70 → listar B-IDs faltantes + arquivo(s) teste esperado(s) por keyword mapping.
+   - **🟢 FULLY LINKED:** ≥70% E B-IDs individuais missing <2 → green. Bônus score §7.1 se ≥90%.
+
+**3.5.2 Bilateral 2/3 — SPEC §4.4 Mermaid B-ID refs set vs §4.2 real Behavior Table set (diagramas não mentem)**
+
+> Erro comum em specs longas: diagrama ganhou B-11 mas tabela só tem até B-10 (orphan) OU tabela tem B-3/B-4 mas nenhum diagrama referencia mesmo com mermaid_required=true.
+
+Procedimento:
+1. Construir sets:
+   - `MERMAID_REF_SET = SBE_MERMAID_BIDS ∩ B` (só B-, ignora AB- para este check)
+   - `TABLE_B_SET = { SBE_BEHAVIORS[].b_id }`
+2. **Diff bidirecional:**
+   - **Orphan refs (diagrama tem, tabela NÃO tem):** `MERMAID_REF_SET \ TABLE_B_SET` → WARN se non-empty. Ex: "B-11, B-12 aparecem no sequenceDiagram mas NÃO existem na §4.2 Behavior Table — remover do diagrama ou adicionar rows na tabela."
+   - **Missing diagram refs (tabela tem ≥2, NENHUM diagrama referencia):** (TABLE_B_SET \ MERMAID_REF_SET) ≥ 2 ENTRIES E `mermaid_required === true` (frontmatter) → WARN. Ex: "mermaid_required=true mas B-2, B-5, B-7 da tabela NÃO aparecem em nenhum dos 3 diagrams §4.4 — rotular nós/edges com B-X para garantir bilateralidade."
+3. AB-IDs anti-behavior no diagrama é OPTIONAL por padrão; se frontmatter `ab_count ≥ 3` E `erd_required=true` → WARN soft se 0 AB- no ERD (sem bloqueio).
+
+**3.5.3 Bilateral 3/3 — SPEC §4.4.3 ERDiagram ↔ Migration SQL + TypeORM @Entity real**
+
+> **Hard gate só aplica SE:** `erd_required === true` (frontmatter §0.4) E diff tem arquivos migration (`**/migrations/*.sql`, `**/migrations/*.ts`) OU entity (`*.entity.ts`, `@Entity()`) NOVOS/MODIFICADOS. Caso contrário → ⚪ N/A marcado no resumo.
+
+Procedimento de cruzamento:
+1. **Entidade declarada ERD existe no código?** cada entity name no erDiagram → grep `@Entity.*<name>` no diff. Missing → WARN "Entidade `<X>` declarada no ERD mas @Entity TypeORM NÃO encontrada no diff."
+2. **Cardinalidade FK + ON DELETE rule match?** cada FK no ERD (cardinalidade Mermaid `}|`/`o|` etc) → cruzamos com migration SQL `REFERENCES <target>(id) ON DELETE <CASCADE|SET NULL|RESTRICT|NO ACTION>` e com TypeORM `@ManyToOne({ onDelete: "CASCADE" })`. Mismatch cardinalidade ou onDelete → WARN "Cardinalidade ERD `Order }|--|{ OrderItem` difere de migration `ON DELETE RESTRICT` (esperado CASCADE pela cardinalidade 1:N forte)."
+3. **Campos constraints ≥3 declarados ERD realmente existem?** se ERD lista campos com `UK`/`CHECK`/`UNIQUE` explicitamente → grep `ADD CONSTRAINT <nome> UNIQUE` ou `UNIQUE(col, col2)` ou `@Index({ unique: true })` no diff. ≥1 constraint declarada no ERD mas ausente schema → WARN "UK `uk_order_stripe_pi_unique` existe no ERD mas migration não tem ADD CONSTRAINT nem @Index unique."
+4. **Severidade:** Todos findings ERD = **🟡 WARN NÃO bloqueante** por default (muitas vezes ERD é "target state" e migration incremental). Se ≥3 mismatches + risco alto (FK ON DELETE errado em tabela de payments/tickets) → marcar como upgrade: **🔴 BLOCK se 1 dos mismatches é FK cardinalidade de integridade referencial forte (ex: Order 1:N Ticket mas ON DELETE CASCADE em Ticket deletaria tickets ao apagar Order — violação GDPR).**
+
+---
+
+#### §3.5 Report format — SbE Bilateral Extension (novo, REGRA7.9)
+
+| Anchor ID | Regra comportamental | Verdict | Evidence + Action item se 🟡/🔴 |
+|---|---|---|---|
+| SBE-B1 | `bilateral_anchor_coverage_para_spec_Behaviors_test_files` | 🟢 FULLY LINKED | 9/10 B-IDs tem `// @ac B-X` 1ª linha dentro it() block. Coverage=90%. Files: [refundFlow.api.test.ts](file:///...) + [RefundService.unit.test.ts](file:///...). **Bônus +0.5 SCOPE_score §7.1 aplicado.** |
+| SBE-B2 | `bilateral_mermaid_bid_refs_comportamento_tabela_real` | 🟡 WARN ORPHAN | Orphan refs: `B-11` existe no sequenceDiagram §4.4.1 mas NÃO tem correspondente na Behavior Table. Adicionar B-11 na tabela OU remover do diagrama. Missing refs count = 0 (ok, mermaid_required=true). |
+| SBE-B3 | `bilateral_erd_cardinalities_constraints_migration_e_typeorm` | 🟡 WARN MISMATCH | ERD `OrderItem → Order }|--|{` (ON DELETE CASCADE esperado). Migration `20260415_refund.sql#L80` usa `ON DELETE RESTRICT`. Ajustar migration para CASCADE (order sem items = deletado sem risco orphans). UK declarado ERD `uk_refund_payment_id` → encontrado no @Index unique ✅. |
+| SBE-B2-alt | `(exemplo 0% — hard block)` | 🔴 BLOCK ZERO ANCHORS | 0/7 B-IDs tem anchor bilateral. NENHUM arquivo teste modificado neste diff contém `// @ac B-X` pattern. Resolver: adicionar anchors OU EXPLICIT_OVERRIDE_BILATERAL_SKIP justificado + decision.log entry. |
 
 ---
 
@@ -282,7 +361,20 @@ DELIVERED_weighted = count(🟢 DELIVERED)
 PARCIAL_weighted   = count(🟡 PARCIAL) × 0.5
 SCOPE_score = 10 × (DELIVERED_weighted + PARCIAL_weighted) / max(1, TOTAL_ACs)
 ```
-Exemplo: 8🟢 + 1🟡 + 1🔴 → SCOPE = 10 × (8 + 0.5)/10 = **8.5**
+
+**⚡ SbE Bilateral Anchor Coverage adjustment (ONDA2 — só aplica se SBE_EXTENSION_ENABLED=true):**
+```
+# §3.5.1 coverage (já calculado)
+BILATERAL_ANCHOR_COVERAGE_PCT = (B_COVERED_BY_ANCHOR ÷ max(1, B_COUNT_SPEC)) × 100
+if (BILATERAL_ANCHOR_COVERAGE_PCT >= 90):
+    SCOPE_score = clamp(SCOPE_score + 0.5, 0, 10)   # BÔNUS bilateral forte
+elif (BILATERAL_ANCHOR_COVERAGE_PCT < 70 AND BILATERAL_ANCHOR_COVERAGE_PCT > 0):
+    SCOPE_score = clamp(SCOPE_score - 1.0, 0, 10)   # PENALIDADE coverage fraco
+# 0% anchors = BLOCK independente do score (veredito §8.1 tem check 🔴 item)
+```
+
+Exemplo: 8🟢 + 1🟡 + 1🔴 → SCOPE base = 10 × (8 + 0.5)/10 = **8.5**
+Com bilateral anchor coverage 92% (SbE ON) → SCOPE ajustado = clamp(8.5 + 0.5, 0, 10) = **9.0**
 
 ### 7.2 Cálculo LEAN sub-score (0-10)
 
@@ -327,11 +419,32 @@ Verdict =
   🟢 APPROVED se (FINAL_score ≥ 7.0) AND (ALL items são 🟢/⚪/INFO) E (ZERO itens 🔴)
 ```
 
+### 8.1 🔴 STORAGE PREFLIGHT OBRIGATÓRIO (ANTES DE ESCREVER O RELATÓRIO)
+
+> MORATÓRIA engineering-contracts §20: Nenhum asset na worktree. Tudo em harness-sessions via helper único.
+
+Rode EXATAMENTE este bloco ANTES de construir qualquer path:
+```bash
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+[ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ Contract $CONTRACT missing — exit 98"; exit 98; }
+SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-scope-session}"
+if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
+  harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+  harness_ensure_session_dirs "$WORKTREE_ROOT"
+fi
+```
+
 ### 8.2 Output header + relatório salvo em
 
+**Construir path com o helper — NUNCA manual:**
+```bash
+# SCOPE = workspace-shared (durável, reusável em futuras sessões desta worktree)
+# related_id = slug da review (ex: pr-382 ou feat-FLO-714 ou task-T1)
+SCOPE_CHECK_PATH="$(harness_output_path "scope_check" "scope-check" "<related_id>" "workspace" "md")"
 ```
-$HARNESS_WORKSPACE_SHARED/scope-check_<slug>_<YYYYMMDD>.md
-```
+Resultado exemplo: `$HARNESS_WORKSPACE_SHARED/scope_check/pr-382/20260902-140000-scope-check.md`
+→ Timestamp UTC no prefix = ordenação automática; related_id agrupa todas scope-checks da mesma entidade.
 
 Primeira página do relatório (sempre no TOPO):
 
@@ -344,12 +457,13 @@ Primeira página do relatório (sempre no TOPO):
 - **Diff:** N files changed / +X additions / -Y deletions
 - **Final Score 0-10:** `<FINAL>` (SCOPE: `<SCOPE>` · LEAN: `<LEAN>`)
 
-## 1. Verdict RESUMO 6 checks
+## 1. Verdict RESUMO 6+1 checks (SbE extension adicionada ONDA2)
 
 | # | Check | 🟢 | 🟡 | 🔴 | ⚪ |
 |---|---|---|---|---|---|
 | 1 | 🔍 Entrega escopo completo | 8 | 1 | 1 | 2 OOS |
 | 2 | 🧪 Cobertura testes unit/e2e | 6 | 2 | 1 | 0 |
+| 2-ext | ⚡ SbE Bilateral (anchors + diagrams + ERD) | 2 rows ok | 1 ERD mismatch | 0 | 1 N/A erd_required=false |
 | 3 | 📘 Docs atualizadas | 3 | 1 | 0 | 5 N/A |
 | 4 | 🔐 Novas env vars declaradas | 1 | 1 | 1 | 0 |
 | 5 | 🧩 Lean/YAGNI Overengineering | — | 5 L (MED) | 1 H (L6) | 7 allowlisted |

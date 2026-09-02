@@ -31,11 +31,68 @@ description: "Executes the manual_test_plan.md step-by-step using Playwright MCP
    - Option A (from harness session): `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` (via contract) exists (DURÁVEL workspace-shared).
    - Option B (standalone): user passes explicit file path to a Markdown file containing the AC sections below.
 3. If neither exists → STOP. Ask user to provide task-id or the manual_test_plan.md path.
-4. **Worktree Session Binding preflight (engineering-contracts §19):**
-   - Resolve paths via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"` + `harness_compute_paths`.
+4. **Worktree Session Binding preflight + 🔴 STORAGE BOUNDARY (engineering-contracts §19 + §20 MORATÓRIA — NON-NEGOTIABLE):**
+   ```bash
+   # (a) Source contrato + resolver paths CANÔNICOS
+   HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+   CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+   [ -f "$CONTRACT" ] || { echo "❌ FATAL: $CONTRACT não existe. Zero writes permitidos sem storage boundary. exit 98"; exit 98; }
+   # shellcheck disable=SC1090
+   source "$CONTRACT"
+   SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-manual-test-session}"
+   harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+   harness_ensure_session_dirs "$WORKTREE_ROOT"
+
+   # (b) Double-guard: assert NENHUM dos diretórios de output cai DENTRO da worktree
+   harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR (efêmero QA evidence)"
+   harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED (durável plans)"
+
+   # (c) PATHS CANÔNICOS PARA TODOS OS OUTPUTS DESTA SKILL — construa UMA VEZ aqui, reuse everywhere
+   # Report final (session-scope — efêmero, esta execução apenas):
+   MANUAL_TEST_REPORT_PATH="$(harness_output_path "qa" "manual-test-execution-report" "${TASK_ID:-standalone}" "session" "md")"
+   # Evidence directory helper: todo screenshot/log deve usar harness_output_path type=qa scope=session related_id=TASK_ID suffix="AC-<id>"
+   # Exemplo screenshot AC-2:  "SCREENSHOT_AC2_PATH=$(harness_output_path "qa" "screenshot" "${TASK_ID:-standalone}" "session" "png" "AC-002")"
+   # Exemplo log env setup:    "ENV_SETUP_LOG_PATH=$(harness_output_path "qa" "env-setup" "${TASK_ID:-standalone}" "session" "log")"
+   ```
    - Check `$HARNESS_SESSION_DIR/binding.md` Level2 entry if present (EFÊMERO per-session).
    - Mismatch with provided WORKTREE_ROOT → BLOCK. Ask override/switch/cancel.
    - Missing binding → follow §19 canonical binding flow (global registry Level1 + Level2), ask user confirm once.
+   - **HARD RULE A PARTIR DAQUI:** NUNCA construa path manualmente. Todo screenshot, todo log, todo report = obrigatoriamente via `harness_output_path "qa" ...`. Nenhum arquivo PNG/LOG/MD cai dentro worktree. MORATÓRIA.
+
+### 0.1 EVIDENCE RETENTION POLICY (ONDA4 — DOIS LOCAIS, NUNCA NA WORKTREE USUÁRIO)
+
+```bash
+# =============================================================
+# POLÍTICA DUPLO LOCAL — MORATÓRIA §20 engineering-contracts:
+# NENHUM evidence/manifest é escrito dentro de WORKTREE_ROOT/*
+# por padrão. Override = usuário pedir VERBATIM.
+# =============================================================
+
+# --- LOCAL 1 — EFÊMERO / SESSION-SCOPE (pesados, TTL 30 dias) ---
+# Screenshots FULL-size CADA step, logs brutos browser console,
+# HTTP response bodies, get_visible_text capture. Fica na sessão.
+# Handoff limpeza: sessões mais antigas que 30 dias = TTL.
+MANUAL_SESSION_EVIDENCE_DIR="$HARNESS_SESSION_DIR/qa"
+mkdir -p "$MANUAL_SESSION_EVIDENCE_DIR/screenshots" "$MANUAL_SESSION_EVIDENCE_DIR/logs" "$MANUAL_SESSION_EVIDENCE_DIR/api"
+
+# --- LOCAL 2 — DURÁVEL / WORKSPACE-SHARED (audit trail LEVE) ---
+# Path canonico via contract helper type=qa scope=workspace related_id=commit_7char.
+# SÓ CONTÉM:
+#   (i)   evidence_manifest_<SHA16_MANIFEST>.json
+#   (ii)  1 thumbnail JPEG/PNG FINAL por AC PASS ≤200KB
+CURRENT_COMMIT_7CHAR="${CURRENT_COMMIT_7CHAR:-$(cd "$WORKTREE_ROOT" && git rev-parse --short=7 HEAD 2>/dev/null || echo "HEAD-detached")}"
+MANUAL_WORKSPACE_AUDIT_DIR="$(harness_output_path "qa" "audit" "commit-${CURRENT_COMMIT_7CHAR}" "workspace" "tmp")"
+MANUAL_WORKSPACE_AUDIT_DIR="$(dirname -- "$MANUAL_WORKSPACE_AUDIT_DIR")"
+mkdir -p "$MANUAL_WORKSPACE_AUDIT_DIR"
+harness_assert_outside_worktree "$MANUAL_WORKSPACE_AUDIT_DIR" "$WORKTREE_ROOT" "MANUAL_WORKSPACE_AUDIT_DIR (durable hash manifest)"
+```
+
+**Manifest JSON Schema OBRIGATÓRIO (mesmo schema harness-qa):** mesmas keys `generated_at_utc / commit_7char / session_id / qa_run_passed / per_test_file_sha256 / per_evidence_sha256 / per_behavior_result / thumbnail_path` (ver harness-qa §-0.1.1 para formato canônico). Para esta skill, `per_behavior_result` mapeia AC-IDs manual (ex: `AC-001 → PASS`).
+
+**Per-AC Screenshot Rules (HARD):**
+1. **Cada screenshot FULL via playwright_screenshot** → sempre salvo em `LOCAL1 Session` (Session TTL30). Calcula SHA256 do arquivo → insere em `per_evidence_sha256`.
+2. **Após THEN verificado (último step da AC):** gerar thumbnail width=800px JPEG quality=75%. **SALVA SÓ O THUMBNAIL em LOCAL2 Workspace.** Se PNG → reduzir dimensões até ≤200KB. Se não couber → thumbnail=null.
+3. **NÃO salva screenshot FULL em LOCAL2 (moratória tamanho).** Apenas SHA256 dele no manifest.
 
 ---
 
@@ -177,7 +234,11 @@ Save each evidence file: `SMOKE_<Sx>_<name>.log` or `.png`.
 
 Canonical sections (match references/MANUAL_TEST_EXECUTION_REPORT.md). Use language **English for file content, Portuguese when delivering chat summary §18**.
 
-Report saved to: `$HARNESS_SESSION_DIR/reports/MANUAL_TEST_EXECUTION_REPORT.md` (EFÊMERO per-session, via contract) or user custom dir if standalone.
+Report saved to: a variável **`$MANUAL_TEST_REPORT_PATH`** (já construída durante o STORAGE PREFLIGHT no §0 item 4c usando `harness_output_path`). Resultado exemplo:
+```
+$HARNESS_SESSION_DIR/qa/evidence/T123-refund/20260902-130000-manual-test-execution-report.md
+```
+⚠️ NÃO use path hardcoded `reports/MANUAL_TEST_EXECUTION_REPORT.md`. Reutilize sempre a variável do preflight. Se por algum motivo a variável estiver vazia → RE-RUN o preflight §0 item 4 ANTES de salvar qualquer coisa.
 
 Report sections:
 1. Header (task-id, worktree, timestamps start/end duration, target base URLs)
@@ -197,6 +258,20 @@ Report sections:
    - Overall: ✅ All BLOCKER/HIGH ACs PASS → go / ship-ready
    - Overall: ❌ ≥1 BLOCKER or ≥2 HIGH FAIL → not ship-ready
    - Overall: ⚠️ Some PARTIAL + low-severity FAIL → conditional (human review pending items)
+9. **Evidence retention (ONDA4 — MANIFEST + THUMBNAIL RULES):**
+   - Workspace audit manifest SHA256  = <MANUAL_EVIDENCE_MANIFEST_SHA>
+   - Manifest JSON path              = <MANUAL_EVIDENCE_MANIFEST_PATH>
+   - Session full evidence (TTL 30d) = $HARNESS_SESSION_DIR/qa/
+
+### 6.1 STEP FINAL OBRIGATÓRIO — Gerar Evidence Manifest SHA256 (Local2 Workspace Audit)
+
+Após salvar o report final (§6), **antes de retornar**, gere o manifest usando o MESMO algoritmo de harness-qa §0.2:
+- SHA256 de CADA evidence salvo em Local1 (Session) → entry em `per_evidence_sha256`.
+- SHA256 de CADA screenshot FINAL_ASSERT por AC PASS → thumbnail ≤200KB em Local2 (Workspace) usando convert width=800 quality=75.
+- `per_behavior_result` mapeia cada AC-ID → PASS/FAIL/PARTIAL/SKIP.
+- `per_test_file_sha256` = vazio `{}` para esta skill (não executa spec files).
+- Calcula SHA256 do manifest → nome arquivo `evidence_manifest_<SHA16>.json`; salva via `harness_write_file_atomic`.
+- Decision log entry: `MANUAL_TEST_EVIDENCE_MANIFEST` com commit_7char, manifest_sha256, manifest_path, workspace_audit_dir, session_evidence_dir.
 
 ### Chat delivery rule (§18 contracts)
 The chat message user sees uses condensed §18 shape. It DOES NOT dump the full report. Chat summary contains:

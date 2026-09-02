@@ -77,8 +77,9 @@ gh pr reply <review-comment-db-id> --body "<polite non-argumentative English rep
 ```bash
 gh pr review <pr-url-or-number> \
   --request-changes \
-  --body-file .trae/review_PR-<N>_<date>.md
+  --body-file "$(harness_output_path "review" "gh-review-body" "pr-<N>" "session" "md")"
   # flags: --approve / --comment / --request-changes
+  # NÃO USE .trae/ dentro da worktree! Sempre via harness_output_path → HARNESS_SESSION_DIR/reviews/pr-<N>/...
 ```
 
 ### 1.5 CI fixer — pull failing run details (harness-ci-fixer)
