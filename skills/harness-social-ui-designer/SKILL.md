@@ -3,7 +3,7 @@ name: "harness-social-ui-designer"
 description: "V4 — Backend-neutral design pipeline with Social Media, UI/UX Feature, Design System and Brand modes. Mandatory SPEC approval, staged execution and visual review. Supports capability-selected OpenPencil, Figma or spec-only execution. Trigger: /harness-design, /harness-figma."
 ---
 
-# Harness — Social UI Designer (Orchestrator) v3.0
+# Harness — Social UI Designer (Orchestrator) v4.0
 
 > **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo):**
 > - **Formatting + verbosity ≤500w**: engineering-contracts §18 (subtítulos ## / ###, bullets ≤2 linhas, bold keywords)
@@ -24,7 +24,8 @@ Before creating any durable design artifact:
 
     source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
     harness_compute_paths "$WORKTREE_ROOT" "$(harness_current_session_id)" "$PWD"
-    HARNESS_DESIGN_ROOT="${HARNESS_DESIGN_ROOT:-$HARNESS_WORKSPACE_SHARED/designs}"
+    harness_ensure_session_dirs "$WORKTREE_ROOT"
+    HARNESS_DESIGN_ROOT="${HARNESS_DESIGN_ROOT:-$HARNESS_WORKSPACE_SHARED/design}"
     HARNESS_DESIGN_DIR="$HARNESS_DESIGN_ROOT/<modo>-<slug>-YYYYMMDD"
 
 Create `$HARNESS_DESIGN_DIR` only after the bound-worktree/session preflight passes.
@@ -298,8 +299,6 @@ Quer aprofundar em **<UMA COISA ÚNICA>**? (Sim / Não)
 $HARNESS_DESIGN_DIR/
   ├── spec.md                  # Spec draft (iteração)
   ├── spec.APPROVED.md         # Spec SHA256 travada após aprovação (GATE-1)
-  ├── source.pen               # OpenPencil source (via save_document; .openpencil cópia idêntica)
-  ├── source.openpencil
   ├── assets/
   │   ├── C1-hero.png          # Imagens 1024×1024 (>25k unique colors)
   │   └── C2-flatlay.png
@@ -325,6 +324,10 @@ $HARNESS_DESIGN_DIR/
   │   ├── tokens.tailwind.txt / tokens.css / tokens.json
   └── dev-spec.md (MODE B only, ≤15 linhas)
 ```
+
+Backend source artifacts are conditional: backend=`openpencil` stores `source.pen`
+plus the identical `source.openpencil` copy; backend=`figma` stores only
+`figma-source.md` metadata. backend=`spec-only` creates neither source artifact.
 
 ---
 

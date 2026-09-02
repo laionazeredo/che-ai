@@ -33,12 +33,16 @@ spec-only may create the SPEC/dev-spec, but MUST STOP before pixel/design execut
 Before durable writes:
 
     source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
+    harness_compute_paths "$WORKTREE_ROOT" "$(harness_current_session_id)" "$PWD"
+    harness_ensure_session_dirs "$WORKTREE_ROOT"
 
 Design artifacts live under:
 
-    HARNESS_DESIGN_ROOT="${HARNESS_DESIGN_ROOT:-$HARNESS_WORKSPACE_SHARED/designs}"
+    HARNESS_DESIGN_ROOT="${HARNESS_DESIGN_ROOT:-$HARNESS_WORKSPACE_SHARED/design}"
+    HARNESS_DESIGN_DIR="$HARNESS_DESIGN_ROOT/<mode>-<slug>-YYYYMMDD"
 
-Never hardcode a user's home directory.
+Never hardcode a user's home directory or create Harness artifacts inside the
+project worktree.
 
 ## Driver isolation
 
