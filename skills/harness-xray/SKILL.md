@@ -7,7 +7,7 @@ description: "Onboarding raio-X de repositório NOVO. Detecta stack, linguagem, 
 
 > **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
 > - Full engineering contracts (precedence 1-18, DbC, KISS, No Accidental Complexity, Ousterhout): `engineering-contracts` skill
-> - Path resolution + project registry Nível 1.5 helpers: `source ~/.trae/contracts/harness_sessions_contract.sh`
+> - Path resolution + project registry Nível 1.5 helpers: `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`
 > - Knowledge graph AST: `/harness-graph refresh` (wrapper graphify CLI pipx: `graphifyy`)
 > - Complemento humano contexto produto: `/harness-project-knowledge`
 
@@ -28,8 +28,9 @@ description: "Onboarding raio-X de repositório NOVO. Detecta stack, linguagem, 
 
 ```bash
 # 1. Carrega contracts helpers
-source ~/.trae/contracts/harness_sessions_contract.sh
-harness_compute_paths "$WORKTREE_ROOT" "${SESSION_ID:-xray-standalone}" "$PWD"
+source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
+XRAY_SESSION_ID="$(harness_current_session_id)"
+harness_compute_paths "$WORKTREE_ROOT" "${XRAY_SESSION_ID:-xray-standalone}" "$PWD"
 harness_ensure_session_dirs "$WORKTREE_ROOT"
 
 # 2. Verifica graphify CLI disponível

@@ -61,7 +61,7 @@ Run BEFORE any `git status / git add / git commit / git push`. PREVENTS wrong-wo
 
 **Purpose:** NEVER allow harness internal planning/decision files to end up in user-code PRs. These files MUST live under `$HARNESS_SESSIONS_ROOT/<workspace>/<worktree-slug>/workspace` (contracts/harness_sessions_contract.sh L9-L21). If any bug/legacy skill accidentally creates them inside the user worktree, detect, unstage, and DELETE them before any `git add` runs.
 
-Source of truth of patterns = `~/.trae/contracts/harness-planning-artifacts-blacklist.gitignore` (single list — keep in sync across install-harness.sh §5.5 injection, .gitignore do harness, e este preflight).
+Source of truth of patterns = `$HARNESS_HOME/contracts/harness-planning-artifacts-blacklist.gitignore` (single list — keep in sync across install-harness.sh §5.5 injection, .gitignore do harness, e este preflight).
 
 **BLACKLIST (any depth inside WORKTREE_ROOT):**
 ```
@@ -123,7 +123,7 @@ harness-review-report.md harness-compliance-report.md flockr-review-report.md
 **Purpose:** Garantir que o que vai ser commitado (1) entrega TUDO que foi prometido no escopo e (2) não tem overengineering / gordura / YAGNI violations. Executa o skill `harness-scope-checker` em Modo B.
 
 **Pré-condição interna deste gate:**
-- `$HARNESS_WORKSPACE_SHARED` resolvido via `source ~/.trae/contracts/harness_sessions_contract.sh`.
+- `$HARNESS_WORKSPACE_SHARED` resolvido via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`.
 
 **Scope source auto-discover ordem (primeiro match ganha — NÃO cascateia múltiplos sources):**
 1. **Envelope explícito** → existe `$HARNESS_WORKSPACE_SHARED/tasks/*/envelope.md`? (último task DONE no task_graph, pega seu envelope) → SCOPE_SOURCE=ENVELOPE.

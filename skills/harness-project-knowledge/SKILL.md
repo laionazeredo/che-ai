@@ -7,7 +7,7 @@ description: "Registro humano compartilhado (Nível 1.5 registry) de contexto do
 
 > **SHARED REFERENCES (CANONICAL):**
 > - Auto-onboarding complementar: `/harness-xray` (este skill não substitui xray)
-> - Paths: `source ~/.trae/contracts/harness_sessions_contract.sh`
+> - Paths: `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"`
 > - Regras de complexidade acidental + deep modules: `engineering-contracts` §1 + Appendix D (Ousterhout)
 
 ## 0. POR QUE EXISTE (Lean Motivation)
