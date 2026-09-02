@@ -1,3 +1,8 @@
+---
+name: "ui-testing-contracts"
+description: "Defines canonical UI testing contracts for Testing Library selectors, Playwright helpers, data-testid naming, and accessibility-focused test hygiene."
+---
+
 # UI Testing Contracts Skill
 
 > Helper helper para UI tests (RTL + Playwright + data-testid 3-part convention).
