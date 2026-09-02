@@ -20,7 +20,8 @@
 
 set -euo pipefail
 
-CONTRACTS_SH="${HOME}/.trae/contracts/harness_sessions_contract.sh"
+HARNESS_ROOT="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACTS_SH="$HARNESS_ROOT/contracts/harness_sessions_contract.sh"
 if [ -f "$CONTRACTS_SH" ]; then
   # shellcheck disable=SC1090
   source "$CONTRACTS_SH"
@@ -28,7 +29,7 @@ fi
 
 INPUT_JSON="$(cat)"
 
-SESSION_ID=$(jq -r '.sessionId // empty' <<<"$INPUT_JSON" 2>/dev/null || echo "")
+TRAE_SESSION_ID=$(jq -r '.sessionId // empty' <<<"$INPUT_JSON" 2>/dev/null || echo "")
 TOOL_NAME=$(jq -r '.toolName // ""' <<<"$INPUT_JSON" 2>/dev/null || echo "")
 
 TOOLS_TO_GUARD="Read|Glob|Grep|Edit|Write|RunCommand|DeleteFile|LS|SearchCodebase"
@@ -63,9 +64,12 @@ for p in "${CANDIDATE_PATHS[@]}"; do
 done
 
 # --- LEVEL 1 LOOKUP JSONL (chicken-and-egg solved: lookup by SESSION_ID) ---
-REGISTRY_FILE="$HOME/.trae/bindings/registry.jsonl"
+REGISTRY_FILE=""
+if declare -F harness_registry_path >/dev/null 2>&1; then
+  REGISTRY_FILE="$(harness_registry_path)"
+fi
 BOUND_ROOT=""
-if [ -n "$SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
+if [ -n "$TRAE_SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
   PY_SCRIPT='import json,sys
 p, sid = sys.argv[1:3]
 last = None
@@ -80,7 +84,7 @@ with open(p) as f:
 if last is None:
     sys.exit(1)
 print(last.get("worktree_root") or "")'
-  BOUND_ROOT=$(python3 -c "$PY_SCRIPT" "$REGISTRY_FILE" "$SESSION_ID" 2>/dev/null) || true
+  BOUND_ROOT=$(python3 -c "$PY_SCRIPT" "$REGISTRY_FILE" "$TRAE_SESSION_ID" 2>/dev/null) || true
 fi
 
 if [ -z "$BOUND_ROOT" ]; then
@@ -112,7 +116,7 @@ done
 
 if [ ${#VIOLATIONS[@]} -gt 0 ]; then
   UNIQ=$(printf "%s\n" "${VIOLATIONS[@]}" | sort -u | paste -sd "," -)
-  REASON_BLOCK="§19 WORKTREE SESSION BINDING VIOLATION (Level 1 Registry). sessionId=$SESSION_ID is BOUND in Level 1 registry ($REGISTRY_FILE) to WORKTREE_ROOT=$BOUND_NORMALIZED. Tool=$TOOL_NAME tentou acessar paths FORA worktree vinculada: $UNIQ. Action: (1) cancelar; (2) AskUserQuestion re-bind explícito (old entry STATUS=RELEASED + new BOUND append registry); (3) confirmação one-off opção A."
+  REASON_BLOCK="§19 WORKTREE SESSION BINDING VIOLATION (Level 1 Registry). sessionId=$TRAE_SESSION_ID is BOUND in Level 1 registry ($REGISTRY_FILE) to WORKTREE_ROOT=$BOUND_NORMALIZED. Tool=$TOOL_NAME tentou acessar paths FORA worktree vinculada: $UNIQ. Action: (1) cancelar; (2) AskUserQuestion re-bind explícito (old entry STATUS=RELEASED + new BOUND append registry); (3) confirmação one-off opção A."
   jq -nc --arg r "$REASON_BLOCK" '{decision:"block", reason: $r}'
   exit 2
 fi

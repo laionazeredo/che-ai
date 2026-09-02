@@ -68,3 +68,6 @@ jobs:
           T=$(mktemp -d)
           bash scripts/install-harness.sh --source "$PWD" --target "$T"
           rm -rf "$T"
+
+      - name: portable Trae hooks protocol
+        run: bash tests/hooks-portability-smoke.sh

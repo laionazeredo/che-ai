@@ -18,7 +18,8 @@
 
 set -euo pipefail
 
-CONTRACTS_SH="${HOME}/.trae/contracts/harness_sessions_contract.sh"
+HARNESS_ROOT="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACTS_SH="$HARNESS_ROOT/contracts/harness_sessions_contract.sh"
 if [ -f "$CONTRACTS_SH" ]; then
   # shellcheck disable=SC1090
   source "$CONTRACTS_SH"
@@ -26,7 +27,7 @@ fi
 
 INPUT_JSON="$(cat)"
 
-SESSION_ID=$(jq -r '.sessionId // empty' <<<"$INPUT_JSON" 2>/dev/null || echo "")
+TRAE_SESSION_ID=$(jq -r '.sessionId // empty' <<<"$INPUT_JSON" 2>/dev/null || echo "")
 TOOL_NAME=$(jq -r '.toolName // ""' <<<"$INPUT_JSON" 2>/dev/null || echo "")
 
 # Skip for non-write tools
@@ -49,9 +50,12 @@ fi
 #   - LANG_DOCS = pt-BR   → SKIP: NÃO avisar se encontrar PT (é configuração desejada)
 #   - LANG_DOCS = outros  → SKIP por segurança (ainda não temos dicionários de outras línguas)
 # Backward compat: legacy LANG_PT_CHECK=DISABLED é tratado como LANG_DOCS=pt-BR
-REGISTRY_FILE="$HOME/.trae/bindings/registry.jsonl"
+REGISTRY_FILE=""
+if declare -F harness_registry_path >/dev/null 2>&1; then
+  REGISTRY_FILE="$(harness_registry_path)"
+fi
 LANG_DOCS="en"
-if [ -n "$SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
+if [ -n "$TRAE_SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
   PY_SCRIPT='import json,sys
 p, sid = sys.argv[1:3]
 last = None
@@ -76,11 +80,11 @@ if ld is None or ld == "":
     else:
         ld = "en"
 print(ld)'
-  LANG_DOCS=$(python3 -c "$PY_SCRIPT" "$REGISTRY_FILE" "$SESSION_ID" 2>/dev/null || echo "en")
+  LANG_DOCS=$(python3 -c "$PY_SCRIPT" "$REGISTRY_FILE" "$TRAE_SESSION_ID" 2>/dev/null || echo "en")
 fi
 
 if [ "$LANG_DOCS" != "en" ]; then
-  jq -nc --arg sess "$SESSION_ID" --arg ld "$LANG_DOCS" \
+  jq -nc --arg sess "$TRAE_SESSION_ID" --arg ld "$LANG_DOCS" \
         '{decision:"allow", reason: ("Hook3 lang-pt: SKIP per session LANG_DOCS=" + $ld + " (≠en). sessionId=" + $sess + ". PT-BR text ALLOWED porque este projeto tem LANG_DOCS configurado p/ outro idioma.")}'
   exit 0
 fi
