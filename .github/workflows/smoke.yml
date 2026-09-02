@@ -74,3 +74,6 @@ jobs:
 
       - name: generic worktree binding guard
         run: bash tests/worktree-binding-smoke.sh
+
+      - name: design source backend routing
+        run: bash tests/design-source-routing-smoke.sh

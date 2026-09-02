@@ -13,11 +13,18 @@ arguments:
   - name: brand-refs
     description: "(Modo D only) URLs de marcas/logos referência separadas por vírgula. Ex: https://nike.com,https://stripe.com"
     required: false
+  - name: source-ref
+    description: "Figma design/file URL or existing local .pen/.openpencil file. Recognizable unsupported references fail closed."
+    required: false
+  - name: backend
+    description: "Explicit backend request: figma or openpencil. Must match source-ref when both are provided."
+    required: false
 ---
 
 IMMEDIATELY invoke the **`harness-social-ui-designer`** Skill and pass through
 the user-provided neutral design inputs.
 
-The Skill owns missing-input collection, backend capability detection and backend
-selection. OpenPencil remains supported when selected from the capabilities
-available in the Trae session.
+The Skill owns design-source classification, missing-input collection, backend
+capability detection and backend selection. Pass `source-ref` verbatim and treat
+`backend` as `requested_backend`. OpenPencil remains supported when selected from
+the capabilities available in the session.

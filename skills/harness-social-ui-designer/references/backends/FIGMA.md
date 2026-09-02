@@ -13,6 +13,21 @@ Classify capability as:
 - read + export
 - read + write
 
+The requested operation determines the required capability. Reading a supplied
+source requires at least read-only access; export and write operations require
+their corresponding detected capability. An unavailable required capability is
+`figma_capability_unavailable` and MUST NOT fall back to OpenPencil.
+
+## Supported references
+
+The driver accepts cloud-backed Figma URLs whose path identifies a `design` or
+legacy `file` resource on `figma.com`, with an optional `node=`, page selection,
+or `node-id`/node or node frame reference when exposed by Figma.
+
+Generic Figma URLs without a design/file resource are not consumable design
+sources. Keep the source classification when recognizable, but fail closed rather
+than guessing a file or node.
+
 ## Read-only or export capability
 
 Allowed:
@@ -43,3 +58,5 @@ Record source information under:
 
 Include file/project reference, page, frames or node identifiers,
 source reference and detected capability mode when available.
+
+Never create a local `.fig` file and never copy the source into OpenPencil.

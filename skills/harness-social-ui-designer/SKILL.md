@@ -18,6 +18,17 @@ OpenPencil-specific instructions apply ONLY when backend=`openpencil`.
 Figma execution follows `references/backends/FIGMA.md` when backend=`figma`.
 Never select a backend only because the runtime is Trae or Codex.
 
+### Design source bootstrap
+
+Before the design SPEC gate, capture optional `source_ref` and
+`requested_backend`, then resolve the complete `design_source` object through
+`references/DESIGN_BACKEND_CONTRACT.md`. Classification precedes capability
+validation. Do not call either backend while `effective_backend=none`.
+
+If routing fails closed, report `source_kind`, `capability_status`, and `reason`
+plus the supported input forms. Stop before design execution. Never convert a
+Figma source to OpenPencil or an OpenPencil source to Figma.
+
 ### Runtime bootstrap
 
 Before creating any durable design artifact:
@@ -46,6 +57,11 @@ Create `$HARNESS_DESIGN_DIR` only after the bound-worktree/session preflight pas
 
 #### 0.1 Escrever spec completa (use §9 TEMPLATE abaixo como base)
 Spec deve ter **TODOS** esses campos preenchidos, por peça/screen:
+
+When a design source was supplied, include a `Design Source` section with
+`source_ref`, `source_kind`, `requested_backend`, `effective_backend`,
+`capability_status`, and the fail-closed `reason` when present. Add Figma file
+key/page/node or OpenPencil identifiers only when the active driver exposes them.
 
 | Campo (por peça) | Descrição exemplo (MODE A Post 1:1) |
 |---|---|
