@@ -41,8 +41,8 @@ TARGET_A="$TEST_ROOT/harness-trae-a"
 TARGET_B="$TEST_ROOT/harness-trae-b"
 install_target "$TARGET_A"
 install_target "$TARGET_B"
-! rg -q "$TARGET_A" "$TARGET_B/hooks.json"
-! rg -q "$TARGET_B" "$TARGET_A/hooks.json"
+! grep -q -- "$TARGET_A" "$TARGET_B/hooks.json"
+! grep -q -- "$TARGET_B" "$TARGET_A/hooks.json"
 
 MAIN_REPO="$TEST_ROOT/project-alpha"
 BOUND_WORKTREE="$TEST_ROOT/project-alpha-wt-feature"
@@ -95,14 +95,14 @@ LANG_HOOK="$TARGET_A/hooks/posttooluse-lang-pt-check.sh"
 LANG_PAYLOAD=$(printf '{"event":"PostToolUse","sessionId":"trae-event","toolName":"Write","toolArgs":{"file_path":"%s/HARNESS_RULES.md"}}' "$TARGET_A")
 LANG_OUTPUT=$(HARNESS_HOME="$TARGET_A" HARNESS_SESSION_ID="inherited-codex" "$LANG_HOOK" <<<"$LANG_PAYLOAD")
 test "$(jq -r .decision <<<"$LANG_OUTPUT")" = "allow"
-rg -q 'LANG_DOCS=pt-BR' <<<"$(jq -r .reason <<<"$LANG_OUTPUT")"
+grep -q 'LANG_DOCS=pt-BR' <<<"$(jq -r .reason <<<"$LANG_OUTPUT")"
 
 LEGACY_PAYLOAD=$(printf '{"event":"PostToolUse","sessionId":"legacy-trae","toolName":"Write","toolArgs":{"file_path":"%s/HARNESS_RULES.md"}}' "$TARGET_A")
 LEGACY_OUTPUT=$(HARNESS_HOME="$TARGET_A" "$LANG_HOOK" <<<"$LEGACY_PAYLOAD")
 test "$(jq -r .decision <<<"$LEGACY_OUTPUT")" = "allow"
-rg -q 'LANG_DOCS=pt-BR' <<<"$(jq -r .reason <<<"$LEGACY_OUTPUT")"
+grep -q 'LANG_DOCS=pt-BR' <<<"$(jq -r .reason <<<"$LEGACY_OUTPUT")"
 
-! rg -n 'hooks|hooks.json' "$REPO_ROOT/adapters/codex/install.sh"
-! find "$HOME/.agents/skills" -maxdepth 1 -type l -lname '*hooks*' -print -quit 2>/dev/null | rg -q .
+! grep -En 'hooks|hooks.json' "$REPO_ROOT/adapters/codex/install.sh"
+! find "$HOME/.agents/skills" -maxdepth 1 -type l -lname '*hooks*' -print -quit 2>/dev/null | grep -q .
 
 printf '%s\n' "hooks portability smoke: PASS"

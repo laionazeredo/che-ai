@@ -81,5 +81,5 @@ expect_decision allow 0
 run_hook "$(printf '{"sessionId":"trae-event","toolName":"Read","toolArgs":{"ignore":["%s/generated"],"file_path":"%s/src/file.ts"}}' "$BOUND_WORKTREE" "$BOUND_WORKTREE")"
 expect_decision allow 0
 
-! rg -n 'Lumos|Lumos\.worktrees' "$REPO_ROOT/hooks/pretooluse-worktree-binding.sh"
+! grep -En 'Lumos|Lumos\.worktrees' "$REPO_ROOT/hooks/pretooluse-worktree-binding.sh"
 printf '%s\n' "generic worktree binding smoke: PASS"
