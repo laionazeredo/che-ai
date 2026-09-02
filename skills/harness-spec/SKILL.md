@@ -50,7 +50,7 @@ Present choices when input arg is missing or ambiguous. First match wins, never 
 | A | **Existing SPEC file** | File path OR pick from glob `$HARNESS_WORKSPACE_SHARED/spec_*.md` | Read it; if `status=Approved` → jump straight to §5 (approval). If Draft → proceed to §3 editing with the existing content pre-filled. |
 | B | **Ticket URL** (Linear FLO-XXX, ClickUp, GitHub issue) | Full URL | 1. Try to extract title + description + status via MCP tools (`mcp_flockr-linear`, `mcp_laion-clickup`, `mcp_github`). If MCP fails → fall back to user-provided inline description. 2. Populate frontmatter `ticket_ref:` + `spec_id:` from slug. 3. Seed §1 WHY bullets from ticket description. 4. Seed §4 MUST ACs = 3 bullets if ticket has Acceptance Criteria field. |
 | C | **Legacy PRD** (.md legado do projeto) | Absolute path to `.md` file | Parse with headings, map: `Problem / Background` → §1 WHY; `Goals` → §4 MUST; `Non-Goals` → §1 Non-goals; `Data Model / Migration` → §6 Hints; `Acceptance Criteria` → §4 MUST AC, each prefixed `GWT` verbatim; `Risk` → §5 Rollback trigger. If section missing → leave empty and prompt user to fill during §4 review. |
-| D | **Inline brief** (short text 2–5 sentences) | User typed description or typed nothing at all → walk through interactive prompts 1-by-1 | Prompt for: change_class (feature|bug|refactor|perf|ops); 3 bullets §1 WHY; 3 sections §2 (Can Touch ≤ 10 files, Can Create, Cannot Touch ≤ 5 lines); 3 PRE + 3 POST + 2 INVARIANTS in §3; 3 MUST + 1 SHOULD + 1 MAY §4 ACs (each AC must include GWT + TEST_METHOD literal). Defaults: `estimated_files_max=15`, `estimated_max_lines_add=400`, `new_dependencies=[]`, `pii_touch=none`, `supabase_rls_touch=false`, `currency_gbp_pence=false`, `flags=LANG_PT_CHECK=ENABLED`. |
+| D | **Inline brief** (short text 2–5 sentences) | User typed description or typed nothing at all → walk through interactive prompts 1-by-1 | Prompt for: change_class (feature|bug|refactor|perf|ops); 3 bullets §1 WHY; 3 sections §2 (Can Touch ≤ 10 files, Can Create, Cannot Touch ≤ 5 lines); 3 PRE + 3 POST + 2 INVARIANTS in §3; 3 MUST + 1 SHOULD + 1 MAY §4 ACs (each AC must include GWT + TEST_METHOD literal). Defaults: `estimated_files_max=15`, `estimated_max_lines_add=400`, `new_dependencies=[]`, `pii_touch=none`, `supabase_rls_touch=false`, `currency_gbp_pence=false`, `domain=engineering`, `flags=LANG_PT_CHECK=ENABLED`. |
 
 ---
 
@@ -65,6 +65,10 @@ spec_id: <slug-sanitized-alphanum-dash-underscore>
 ticket_ref: <"FLO-745" or "NONE">
 worktree_root: <absolute-path>
 change_class: feature|bug|refactor|perf|ops
+domain: engineering                  # valores aceitos: engineering | product | ux | devops | copywriting | social | seo-analytics
+                                      # default = engineering (retrocompat total com specs/sessões/skills antigas sem esse campo)
+                                      # se != engineering → SM §0.3 auto-carrega domains/<domain>/profile.md + playbook.md
+                                      # se != engineering → ship §0.9.5 executa gates obrigatórios playbook
 status: Draft
 estimated_files_max: <integer; default 15; hard stop per §15>
 estimated_max_lines_add: <integer; default 400; trigger for gh-stack>
@@ -137,6 +141,7 @@ Reject draft and loop back to §2 source if ANY fails:
 5. §3 ≥3 POSTconditions, ≥1 INVARIANT.
 6. §4 ACs: ≥3 MUST. Every bullet contains literal `GIVEN` and `WHEN` and `THEN` and `| TEST=`.
 7. §5 rollback trigger: exactly 1 trigger sentence, non-empty.
+8. (OPTIONAL, só validar SE `domain:` fornecido DIFERENTE de default `engineering`) → value MUST be in enum EXATA os 7 slugs canônicos: `engineering | product | ux | devops | copywriting | social | seo-analytics`. Se digitado errado (typo, slug não reconhecido), valor vazio mas diferente de engineering, ou cross-domínio 2+ valores → **REJECT draft com mensagem clara**: "Campo `domain: <valor_invalido>` inválido. Valores aceitos: engineering | product | ux | devops | copywriting | social | seo-analytics. Default omissão = engineering (retrocompat). Corrija o frontmatter ou remova o campo para usar default." Loop back usuário corrigir antes de Approved gate.
 
 ---
 

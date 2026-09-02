@@ -296,6 +296,52 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 
 ---
 
+## 🟣 TAXONOMIA DE DOMÍNIOS DO HARNESS (7 CATEGORIES)
+
+> **HARD RULE NÃO NEGOCIÁVEL**: Toda nova **NOVA skill, comando slash `/`, ou **SPEC DE NOVO tipo criado a partir de hoje DEVE declarar explicitamente a que **exatamente um domínio** dos 7 abaixo. Skills antigas sem declaram → domínio DEFAULT IMPLÍCITO = `engineering`. NUNCA "cross-domínio" em 1 skill (se tocar 2 domínios = 2 skills separadas, ou use scrum master com sub-skills).
+
+### 7 Domínios canônicos
+
+| Slug (valor frontmatter `domain:`) | Nome humano | O que cobre | Pasta física |
+|---|---|---|---|
+| **`engineering`** | Engenharia de software (DEFAULT para skills legadas hoje sem declaram dominio.) | Código backend/frontend, arquitetura técnica, CI/CD engenharia, testes unitários/e2e, database migrations, Supabase RLS, code review, ship gates. | `skills/harness-*` (tudo hoje, legacy.) |
+| **`product`** | Product Management | PRD, RICE scoring, JTBD, roadmap, tasks, priorização, integração Linear/ClickUp/Jira, gestão backlog. | `domains/product/` |
+| **`ux`** | UI / UX DesignOps | Descoberta UX, wireframe, hi-fi protótipo Figma/PenPot, accessibility (a11y), design tokens, dev-handoff, pixel check. | `domains/ux/` |
+| **`devops`** | DevOps & Observabilidade | Deploy, canary rollout, error budget SLO, Grafana, Sentry, Datadog, pipelines CI/CD gestão, Runbooks, gestão incidentes. | `domains/devops/` |
+| **`copywriting`** | Copywriting criativa | Copy de impacto landing hero/CTA, PAS/AIDA, página de vendas, headlines, A/B spec copy, páginas legais vs copy marketing. | `domains/copywriting/` |
+| **`social`** | Social Media & campanhas pagas/orgânicas | Instagram/TikTok posts, carrosséis 8 slides, stories, roteiros vídeo, campanhas ads Meta/TikTok Ads, UTMs, audiences, gestão campanha. | `domains/social/` |
+| **`seo-analytics`** | SEO, Analytics & Otimização | Keyword research, on-page SEO, technical SEO (sitemap/robots/canonical), schema.org, Lighthouse, GA4/GSC/GTM, Meta Pixel, otimização de conversão CRO. | `domains/seo-analytics/` |
+
+### Cada domínio = 5 artefatos OBRIGATÓRIOS mínimos
+
+Todo pasta por domínio (boilerplate criado automaticamente para você. Não quebrar a estrutura abaixo:
+
+1. **`profile.md`** — Persona do domínio + regras de estilo hard, convenções da casa, padrões proibidos. CarregadoAUTOMATICAMENTE no início scrum master ANTES scope capture se a SPEC tem `domain:` não engineering. NUNCA duplique instruções longas de persona no prompt de execução cada skill; profile é fonte única da verdade.
+2. **`playbook.md`** — Ordem obrigatória etapas OBRIGATÓRIO, não pular etapas, mesma função 0.1 ship gates hoje engenharia.
+3. **`connectors/`** — Configuração por integrações externas do domínio (clis oficiais ou MCP servers. NÃO colar HTTP raw aqui. Seguir engineering-contracts §20 (EXTERNAL CONNECTORS — OFFICIAL CLI/MCP ONLY (generalização do §18 GitHub).
+4. **`gates/`** — Quality gates do domínio (cada = PASS/FAIL comTHRESHOLD numérico e política retry (igual §0.9.1 scope gate. Executados OBRIGATORIAMENTE por `/harness-ship` §0.9.5 depois QA se domínio não default.
+5. **`templates/`** — Templates reutilizáveis entregáveis domínio.
+
+### Frontmatter `domain:` onde declarar
+
+| Local | Obrigatoriedade | Quem preenche |
+|---|---|---|
+| Skills novas (arquivo `skills/<nova>/SKILL.md header YAML frente `domain:` frontmatter) | **SIM NOVAS (HOJE 2026-09-01 em diante) | Skill author antes merge |
+| SPEC (`spec_<slug>.md YAML frontmatter campo `domain:` | OPCIONAL padrão engineering | Se não declarada engenharia normal; se UX/product etc) | harness-spec skill (ver spec default engineering se SPEC field. |
+| Project registry Level1.5 product_context.md frontmatter campo `domains: [ux, copywriting` |OPCIONAL array. | Quando projeto usa múltiplos domínios frequentemente. | Scrum-master carrega profiles de todos domínios listados no início sessão. |
+
+### Exemplo correto (recomendado) skill frontmatter nova skill:
+
+```yaml
+---
+name: "seo-keyword-cluster"
+domain: seo-analytics
+description: "Build KW cluster head-body-long-tail + cannibalism check audit."
+---
+```
+
+---
+
 ## 🟠 LANGUAGE CONFIGURATION PER PROJECT (4 EIXOS INDEPENDENTES — NUNCA MISTURAR)
 
 > **HARD RULE VERBATIM USER:** "nunca misturar linguagens". Cada eixo tem EXATAMENTE um idioma por projeto/sessão. Exceção 0: strings UI traduzidas são artefato de i18n e ficam em arquivos JSON de tradução (não conta como LANG_CODE).

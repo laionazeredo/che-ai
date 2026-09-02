@@ -79,8 +79,9 @@ flowchart TD
     ProdInit -->|"1 vez por projeto"| PK["0️⃣  harness-project-knowledge<br/>registry global: produto + arquitetura + roadmap + personas + integrações"]
     XRay & PK --> Read{"Qualquer sessão a partir de AGORA<br/>lê registry FIRST antes de qualquer coisa"}
     Read --> B["👤 Pede feature/bug/refactor"]
-    B --> Spec["1️⃣  harness-spec SPEC 7 seções canônicas + YAML frontmatter<br/>Approved gate = libera escopo"]
-    Spec --> ADRGate{"change_class é<br/>arch/platform/large-migration?"}
+    B --> Spec["1️⃣  harness-spec SPEC 7 seções canônicas + YAML frontmatter<br/>Approved gate = libera escopo · OPCIONAL: `domain:` field seta domínio não-eng"]
+    Spec --> DomainLoad["🗂 CARGA DOMÍNIO (Step 0.3 SM)<br/>IF spec frontmatter `domain:` is set AND ≠ 'engineering':<br/>(1) Load `domains/<domain>/profile.md`<br/>(2) Load `domains/<domain>/playbook.md`<br/>(3) Registrar gates obrigatórios para ship §0.9.5<br/>IF domain == engineering ou NULL → SKIP (compat total)"]
+    DomainLoad --> ADRGate{"change_class é<br/>arch/platform/large-migration?"}
     ADRGate -->|"Sim"| ADR["adr-architecture skill<br/>cria ADR-XXX design doc<br/>(salva em harness workspace_shared/design/<br/>cópia manual p/ workspace só se usuário quiser)"]
     ADRGate -->|"Não"| SM["2️⃣  harness-start Scrum Master<br/>gates 0-1.5: binding + spec aprovado + ADR se aplicável + tasks graph + envelopes"]
     ADR --> SM
@@ -97,7 +98,8 @@ flowchart TD
     G1 --> G2["Gate 0.9.2 🔎 CODE-REVIEW<br/>0C + ≤2H → auto-remediate SEM perguntar<br/>any CRITICAL ou ≥3H → BLOQUEIA ship"]
     G2 --> G3["Gate 0.9.3 🛡 COMPLIANCE HEAVY<br/>full diff scan 0C + 0H SEM override direto"]
     G3 --> G4["Gate 0.9.4 🧪 QA FINAL<br/>opcional --run-qa flag; detect stack"]
-    G4 --> PR["📤 Draft PR aberto · 1 conventional commit"]
+    G4 --> G5["Gate 0.9.5 🗂 DOMAIN GATES<br/>Roda todos arquivos em `domains/<domain>/gates/*`<br/>Thresholds numéricos + retry 1 automático + human 2nd fail<br/>IF domain = engineering / NULL → SKIP compat total"]
+    G5 --> PR["📤 Draft PR aberto · 1 conventional commit"]
     PR -->|"human reviewer"| Cmt["harness-pr-comments triage: actionable/nit; reply drafts + implementation plan"]
     PR -->|"CI vermelho"| Ci["harness-ci-fix diagnostica + corrige até 3 planos de fix"]
     PR -->|"nit, quality, blockers"| Rv["harness-review blocking: runtime/security/deps/scope"]
@@ -114,7 +116,7 @@ flowchart TD
 | ⚡0 | **`bash ~/.trae/scripts/self-update-harness.sh`** + `--apply` | 1-comando update da última versão oficial. Default dry-run. | **Todas as manhãs.** |
 | 0R | **`/harness-xray --worktree <abs_path>`** | 🔴 **1 vez por nova codebase.** Raio-X estruturado. Graphify-first. Salva project_profile + architecture auto-detectada no registry global. | Hoje mesmo em todos os seus projetos ativos. |
 | 0P | **`/harness-project-knowledge --project <slug> (edit\|view\|refresh)`** | Memória persistente do PRODUTO: nome, ramo, arquitetura geral alto-nível, roadmap futuro, personas, integrações externas, áreas de risco. Todo skill lê isso ANTES de começar. | 1 vez quando começa um projeto; atualiza sempre que algo muda no produto. |
-| 1 | **`/harness-spec input=<desc or ticket URL>`** | SPEC canônico 7 seções + 15 campos YAML frontmatter + Approved gate. | **Antes de escrever 1 linha de código.** |
+| 1 | **`/harness-spec input=<desc or ticket URL>`** | SPEC canônico 7 seções + 15 campos YAML frontmatter + Approved gate. FLAG OPCIONAL: `--domain=ux` seta domínio não-engineering (ver Taxonomia 7 categorias em HARNESS_RULES). Default=engineering (compat total sessões antigas). | **Antes de escrever 1 linha de código.** |
 | 2 | **`/harness-start --worktree <path>`** | **SM gates 0→1.5 obrigatórios**: binding 2-level → spec aprovado (ADR se necessário) → task graph + file locks → envelopes por task → dev serial ou paralelo Kahn → QA per-task → compliance light → loop até done. | SPEC Approved. |
 | 3 | **`/harness-ship`** | **§0.9 4-GATES EXECUTÁVEIS** antes de qualquer git op: 0.9.1 scope 6-checks → 0.9.2 review auto-fix threshold → 0.9.3 compliance heavy → 0.9.4 QA opcional. Depois: conventional commit atômico → push → Draft PR → assign user. | Todas tasks + QA per-task + compliance light fechados. |
 
@@ -149,9 +151,21 @@ flowchart TD
 
 > **Reversibility commitment:** Se um dia você migrar para LangGraph/LangChain, o trabalho de tradução é 1:1 — nenhuma regra de negócio ou contrato muda; só muda a **forma de declarar o grafo** (de Markdown rules → código Python/TS). `engineering-contracts` precendência 1-18 continua a mesma fonte canônica.
 
+### 3.2 Three-Layer Domains Architecture (evolutivo, não-destrutivo)
+
+> Harness v2 estende para 7 categorias de domínio mantendo **100% retrocompatibilidade** com sessões, skills e specs antigas. Design em 3 camadas de blast-radius mínimo. Reuso 70-90% de todo core existente (gates fail-fast ship §0.9, scrum-master task-graph envelopes, scope-checker LEAN 12 categorias, registry 1.5, decisions audit-trail). Nenhuma outra camada toca o Core a não ser pelos 3 pontos de integração mínima abaixo.
+
+| Camada | O que contém | Modificou nesta fase? | Blast radius default |
+|---|---|---|---|
+| **L1 · Core (intocado hoje)** | `engineering-contracts` §1-19 · `HARNESS_RULES` · hooks · `commands/` (22) · `skills/` legacy (40, todas default implícito `domain: engineering`) | ❌ NÃO — nem um arquivo de regra core antigo foi alterado. Só adições. | ZERO. Skills antigas SEM `domain:` frontmatter → comportamento idêntico fase7. |
+| **L2 · Domain Layer (NOVA)** | Pasta física `domains/<slug>/` com 5 artefatos OBRIGATÓRIOS por domínio: `profile.md` persona/rules · `playbook.md` flow etapas não-pula · `connectors/` integrações oficiais só CLI/MCP · `gates/` thresholds numéricos executáveis · `templates/` deliveráveis reusáveis. 7 slugs canônicos (ver `HARNESS_RULES.md` §Taxonomia): `engineering` (padrão implícito) + `product` + `ux` + `devops` + `copywriting` + `social` + `seo-analytics`. | ✅ SIM — Criada estrutura 6 pastas + 29 boilerplates + **Piloto UX 10 arquivos conteúdo completo** (profile + playbook + 2 connectors + 2 gates + 2 templates). | Isolado por domínio. Nada executa sem ser explicitamente carregado por L3. |
+| **L3 · Minimal Auto-Load Integration (3 updates mínimos 1-arquivo-cada)** | (A) **harness-scrum-master §0.3** = auto-carrega `domains/X/profile.md` + `playbook.md` ANTES scope-capture se `spec.domain` setado ≠ engineering. (B) **harness-spec YAML frontmatter** = adiciona campo OPCIONAL `domain: engineering` com validação enum 7 valores. (C) **harness-ship §0.9.5 DOMAIN GATES** = executa cada arquivo em `domains/X/gates/*` com threshold numérico + retry 1 automático + HARD STOP human 2nd falha (mesmo pattern scope-checker / review G1-G4). | ✅ SIM — 3 edições curtas, 1 arquivo cada. Nenhum outro arquivo core mexe. | NULL → Skip. `engineering` → Skip. Qualquer outro valor → Carrega contexto + roda gates. Se não tiver `domains/X/gates/*` → Skip compat. |
+
+> **Piloto UX primeiro provar o modelo:** Fase 1 implementou completo apenas `domains/ux/` (DesignOps Figma/PenPot/WCAG 2.2 AA / pixel-perfect). Quando piloto provar em 1 feature real Flockr → fase 2 rollout 1 domínio/mês. Os outros 5 domínios hoje tem só boilerplate placeholder em `domains/<slug>/` (não quebra nada, só indica estrutura esperada).
+
 ---
 
-### 3.2 Camadas de precedência (3 camadas + user_rules ganha de TUDO)
+### 3.3 Camadas de precedência (3 camadas + user_rules ganha de TUDO)
 
 ```mermaid
 %%{init: {'theme':'base'}}%%

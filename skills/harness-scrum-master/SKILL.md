@@ -117,6 +117,38 @@ Where:
 
 ---
 
+### 0.3 Domain Context Auto-Load (NOVO · Three-Layer Domains v2)
+
+Runs **AFTER** binding 0.1 + contract path resolution, **BEFORE** §0.5 Approved SPEC gate and §1 scope capture.
+
+Purpose: If the current feature/spec belongs to a non-engineering domain (ux/product/devops/copywriting/social/seo-analytics), automatically load the domain persona/rules and playbook into session context BEFORE asking any scope capture questions. This guarantees domain-specific hard rules (WCAG, design tokens, SEO thresholds, copy length) are enforced from minute 0, not retroactively at ship gate.
+
+Execution logic (in order — STOP at first match):
+1. **Parse SPEC candidate domain:** Read the SPEC YAML frontmatter (from §0.5 gate or user-provided existing SPEC path). Extract field `domain:`.
+2. **Fallback project registry domains array:** If `domain:` field is empty/null/absent in SPEC, read the Level 1.5 registry `domains: [ ]` array at `$HARNESS_HOME/bindings/project_registry.json` (if it exists) for the bound worktree project. Take the FIRST non-null, non-engineering entry if present.
+3. **Default fallback:** If both 1 and 2 returned `null` OR `engineering` → **SKIP THIS STEP COMPLETELY AND SILENTLY (ZERO log lines, ZERO output)**. Session proceeds EXACTLY with the legacy pre-v2 behavior. 100% backward compatibility for all existing sessions/branches/skills (default implicit engineering = skip).
+4. **If domain != engineering (one of: ux | product | devops | copywriting | social | seo-analytics):**
+   a. Check if folders exist: `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/` → MUST exist. If not → WARN "Domain <slug> referenced but folder domains/<slug>/ doesn't exist yet (fase 2 rollout). Skipping domain load." → skip rest.
+   b. **Read and inject profile.md:** Read `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/profile.md`. Append full content verbatim to session context preamble (same level as engineering-contracts §1-21). Agent MUST follow all Forbidden Patterns + Hard Rules in profile with same precedence as §14 Conventional Commits.
+   c. **Read and inject playbook.md:** Read `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/playbook.md`. Append to session context. Steps listed in playbook (e.g. UX 5 phases Brief→Wire→Hi-fi→Gates→Handoff) are treated as REQUIRED PRECONDITIONS before §1 scope capture for domain-specific tasks. If playbook says "Need Brief Approved Gate literal 'Approved' before wireframes", agent enforces it.
+   d. **Register mandatory gates list for downstream §0.9.5 ship:** Parse playbook frontmatter YAML key `gate_files_required: [ ... ]`. Store in session state `SESSION_DOMAIN_GATES = array`. This list is consumed AUTOMATICALLY by harness-ship §0.9.5 DOMAIN GATES later.
+   e. **Mandatory decision.log entry (1 single line):** Append to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl`:
+      ```
+      [DOMAIN-LOAD] session=<sid> worktree=<wt_slug> domain=<slug> profile=LOADED playbook=LOADED mandatory_gates=<n> gates_list=[<comma-sep>]
+      ```
+5. **Nunca carrega 2 domínios simultâneos:** Se SPEC `domain:` e registry `domains[0]` forem diferentes → usa SPEC `domain:` SEMPRE (SPEC tem maior precedência que registry global). NUNCA carrega profile + playbook de 2 domínios na mesma sessão. Se realmente precisa cross-domain → SM cria 2 tasks SEPARADAS no task graph cada uma com seu domínio.
+
+### 0.4 Project Knowledge Level 1.5 Reuse (auto-load, mesmo padrão §0.3)
+
+Runs **immediately after §0.3, before §0.5**. Reuses pre-existing hard rule from CLAUDE.md: "If `graphify-out/GRAPH_REPORT.md` exists, read first. Then read relevant area doc docs/platform.md, docs/scanner.md, docs/packages.md, docs/decisions.md, docs/overview.md."
+
+Execution logic (no breaking change — adds 2 more reads only):
+1. Se `$HARNESS_HOME/bindings/project_registry.json` existir e tiver entry para o projeto da worktree atual → ler e injetar no contexto: `product_context` + `architecture` + `roadmap` + `personas` + `integrations_external`.
+2. Sempre lê `docs/packages.md` + `docs/decisions.md` se existirem no bound worktree root (caminhos absolutos). Precedência menor que SPEC aprovada, maior que "intuition" do agente.
+3. If no file exists → **SKIP silently**. Zero output. Zero log. Compat 100% projetos antigos sem docs/.
+
+---
+
 ## 1. Phase 0 — SCOPE CAPTURE (once per feature)
 
 ### 0.5 Preflight: Approved SPEC validation (GATE before scope capture)

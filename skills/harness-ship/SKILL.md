@@ -327,19 +327,54 @@ Detecta stack do monorepo automaticamente (ordem de tentativa):
 
 ---
 
-### 0.9.5 ALL GATES PASSED — Transition guard
+### 0.9.5 GATE 5 (NOVO Three-Layer Domains v2) — DOMAIN GATES Obrigatórios por Domínio Não-Engineering
 
-**Aparece somente se 0.9.1 ✅ + 0.9.2 ✅ (qualquer ramo que passou) + 0.9.3 ✅ + 0.9.4 ✅ OU SKIPPED.**
+> **Ordem de precedência resolve effective_domain (STOP at first non-null match):** (1) SPEC frontmatter `domain:` field → (2) Project Level 1.5 registry `domains[0]` array first entry → (3) DEFAULT FALLBACK `engineering`.
+
+Purpose: Mesmo fail-fast engine G1-G4 generalizado para QUALQUER domínio (ux/product/devops/copywriting/social/seo-analytics) usando thresholds numéricos, retry 1 grátis automático, e HUMAN REQUIRED após 2nd falha. Igual padrão engineering-contracts §6 DbC + §15 BDD incremental. Nenhum "gosto" ou avaliação subjetiva permitida — tudo threshold NUMÉRICO.
+
+Execution steps (ordem fixa):
+
+1. **Resolve `effective_domain`:** Ler SPEC (mesmo path do gate 0.9.1 scope) YAML `domain:` + fallback project registry `domains[]`. Se ambos null/ausentes → `effective_domain = engineering`.
+2. **IF `effective_domain === 'engineering'` → **SKIP GATE 5 COMPLETAMENTE E SILENCIOSAMENTE (0 linhas log, 0 output extra).** Sessões/specs antigas SEM o campo `domain:` têm comportamento IDÊNTICO ao v2 original. Backward compat 100% garantida.
+3. **IF `effective_domain !== 'engineering':`**
+   a. **Check pasta existe:** `${HARNESS_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/` → MUST existir. Não existe → **WARN "Domínio <slug> não tem gates implementados ainda (fase 2 rollout). Skip §0.9.5."** Log decision entry single line → prossegue §0.9.6 ALL GATES PASSED normalmente.
+   b. **Glob + sort alphabetical gate files:** `${HARNESS_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/*.md`. Ordem de execução = ordem alfabética nome arquivo (igual convenção G1→G2→G3→G4). Exemplo UX: `accessibility-gate.md` executa ANTES `pixel-check-gate.md`.
+   c. **Para CADA arquivo gate (0.9.5.1, 0.9.5.2, ...):**
+      - Parse YAML frontmatter do arquivo: `threshold_pass`, `retry_policy`, `log_format_decisions`, `tool_official`.
+      - Se frontmatter ausente → FAIL gate imediatamente: "Gate <filename> não tem frontmatter YAML threshold declarado. Domínio inválido."
+      - **Run gate evaluation (automático):** Siga EXATAMENTE os passos listados no arquivo `domains/<slug>/gates/<name>.md` seção "Execução". Se o gate usar uma ferramenta oficial via §21 External Connectors (P1 MCP ou P2 CLI): SEMPRE use os canais P1→P2 ordem; NUNCA raw curl/fetch.
+      - `PASS condition`: frontmatter `threshold_pass` satisfeito NUMERICAMENTE (ex: `score >= 8.0`, `critical_count === 0`). Se string → FAIL.
+      - Verdict:
+        | Resultado gate 1ª rodada | Ação |
+        |---|---|
+        | 🟢 PASS threshold | ✅ Passa este gate. Log entry `[DOMAIN-GATE-EXECUTED] domain=ux gate=<n> status=PASS score=<x> duration_ms=<ms>`. Próximo gate. |
+        | 🔴 FAIL threshold (1ª vez) | **Retry GRÁTIS AUTOMÁTICO = 1 única rodada:** Aplicar os passos recomendados no arquivo gate seção "Retry Policy" (ex: "corrigir top-3 desvios >4px", "corrigir alt ausentes"). Re-rodar gate 1 NOVA vez. |
+        | 🔴 FAIL threshold APÓS retry automático = 2ª falha | **HARD STOP §0.9.5 DOMAIN GATES.** Não abre PR. Não commita. Não prossegue para §0.9.6. Mensagem usuário (padronizada): <br/>`🔴 SHIP GATE 0.9.5 DOMAIN GATE FAIL APÓS RETRY AUTOMÁTICO.<br/>effective_domain=<slug><br/>gate=<nome_arquivo><br/>threshold=<original, ex score≥8.0><br/>score_atual=<6.7><br/>Últimos 5 desvios top: [...]<br/>Opções: (A) Quero corrigir manualmente agora e re-rodar /harness-ship depois. (B) EXPLICIT_OVERRIDE abaixar threshold temporariamente (requer user VERBATIM resposta literal explicando motivo, logado em decisions.log). (C) Cancelar ship agora.` |
+   d. **Após todos gates PASS ou explicit override logged:** Todos gates passaram OU user deu EXPLICIT_OVERRIDE VERBATIM logado em decisions → Log FINAL gate 5 entry: `[DOMAIN-GATES-ALL-PASSED] domain=<slug> n_gates=<n> overrides=<qtd> duration_total_ms=<ms>`. Prossegue §0.9.6.
+4. **EXPLICIT_OVERRIDE rules (igual G2 code-review today):** Threshold NUNCA é abaixado automaticamente pelo agente. SÓ é permitido se user digitou EXPLICITAMENTE "EXPLICIT_OVERRIDE domain=<slug> gate=<X> old=<threshold> new=<n> reason=<TEXT>" LITERALMENTE no chat. Nesta condição: logar entry EXATA em decisions.log `[EXPLICIT_OVERRIDE] timestamp domain=ux gate=pixel-check-gate old=8.0 new=7.0 reason="..." traceId=...` e marcar gate como "PASS (COM OVERRIDE)". Nenhuma outra forma de bypass existe. Não confie em "parece OK".
+
+**Output artifacts gate 0.9.5:**
+- 1 decision.log entry PER gate executado (PASS/FAIL/RETRY/OVERRIDE). Mesmo formato §0.9.3 compliance log.
+- Report por gate em `$HARNESS_WORKSPACE_SHARED/reports/domain_<slug>_gate_<nome>_<ISO_TS>.json`.
+
+**Blacklist check:** Reports ficam 100% em $HARNESS_WORKSPACE_SHARED/reports/, NUNCA na worktree do usuário. §0.8 + §2.2 continuam garantindo que nenhum relatório/diff artifact/decisions log entra no diff do commit do usuário.
+
+---
+
+### 0.9.6 ALL GATES PASSED — Transition guard
+
+**Aparece somente se 0.9.1 ✅ + 0.9.2 ✅ (qualquer ramo que passou) + 0.9.3 ✅ + 0.9.4 ✅ OU SKIPPED + 0.9.5 DOMAIN ✅ OU SKIPPED (engineering default).**
 
 Print one-liner ANTES de iniciar §1 Git Housekeeping:
 ```
-🟢 ALL 4 EXECUTABLE SHIP GATES PASSED (scope-checker 6-checks · code-review · compliance-heavy · qa[flag])
+🟢 ALL 5 EXECUTABLE SHIP GATES PASSED (scope-checker 6-checks · code-review · compliance-heavy · qa[flag] · domain-gates[<slug or skipped>])
 Proceeding to Git Housekeeping §1 → atomic conventional commit → push → open DRAFT PR.
 ```
 
-Append entry FINAL `ALL_SHIP_GATES_PASSED {gates: [0.9.1,0.9.2,0.9.3,0.9.4], scores: {scope}}` ao decision.log.
+Append entry FINAL `ALL_SHIP_GATES_PASSED {gates: [0.9.1,0.9.2,0.9.3,0.9.4,0.9.5], scores: {scope, domain}, effective_domain: <slug>}` ao decision.log.
 
-**Pós-gates reminder de blacklist:** Todos os 4 reports acima foram escritos EXCLUSIVAMENTE em `$HARNESS_WORKSPACE_SHARED/reports/**`. O §0.8 blacklist stage 1-2 já rodou e continuará rodando em §2.2 antes de cada commit para garantir que NENHUM desses reports ou decision artifacts entram acidentalmente no diff do usuário.
+**Pós-gates reminder de blacklist:** Todos os 5 reports acima foram escritos EXCLUSIVAMENTE em `$HARNESS_WORKSPACE_SHARED/reports/**`. O §0.8 blacklist stage 1-2 já rodou e continuará rodando em §2.2 antes de cada commit para garantir que NENHUM desses reports ou decision artifacts entram acidentalmente no diff do usuário.
 
 ---
 
