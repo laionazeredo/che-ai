@@ -39,7 +39,19 @@ description: "Context builder for diff conversations. TWO MODES: (A) GitHub PR U
 
 1. **`gh` CLI authenticated:** Run `gh auth status` silently. If not → guide user to `gh auth login` then stop.
 2. **PR URL reachable:** Validate URL format + run a tiny `gh pr view <url> --json number,title` to confirm it exists. If 404 / 403 → stop and report.
-3. **Worktree binding optional:** If user also gave `--worktree <path>`, write/read session binding per §19 (ask if mismatch). If no worktree → proceed with GitHub only; report will be saved to `$HARNESS_SESSION_DIR/reports/` (EFÊMERO per-session, via contract) if binding exists, else to `~/.trae/reports/`.
+3. **Worktree binding optional + 🔴 STORAGE PREFLIGHT (ANTES do primeiro write):** If user also gave `--worktree <path>`, write/read session binding per §19 (ask if mismatch). **Em QUALQUER modo (A ou B), ANTES de salvar o primeiro arquivo em disco, rode:**
+   ```bash
+   HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+   CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+   [ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ $CONTRACT missing; exit 98"; exit 98; }
+   SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-diffctx-session}"
+   if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
+     harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+     harness_ensure_session_dirs "$WORKTREE_ROOT"
+   fi
+   # APÓS isto: usar SOMENTE harness_output_path "diff_context" ... para construir paths.
+   ```
+   NUNCA use `./reports/` nem paths dentro da worktree. MORATÓRIA §20.
 
 #### A.1 Context collection (3 sources)
 
@@ -121,9 +133,14 @@ MÁXIMO 3 itens. 1 frase cada. Estes são seus tópicos pra pautar na call/comen
 ```
 
 #### A.3 Save + delivery
-Save report to:
-- Worktree/binding known → `$HARNESS_SESSION_DIR/reports/diff-context_PR-<N>_<YYYYMMDD-HHMM>.md` (EFÊMERO per-session)
-- Worktree unknown → `~/.trae/reports/diff-context_PR-<N>_<YYYYMMDD-HHMM>.md`
+**Construir path SOMENTE via helper (preflight já rodou em A.0 item 3):**
+```bash
+# Mode A = PR URL → related_id = pr-<N>; type = diff_context; scope = session (efêmero)
+DIFFCTX_PATH="$(harness_output_path "diff_context" "diff-context" "pr-${PR_ID}" "session" "md")"
+```
+Resultado exemplo: `$HARNESS_SESSION_DIR/diff_contexts/pr-382/20260902-103000-diff-context.md`
+→ Fallback se sem binding já é tratado pelo helper (cai em `$HARNESS_HOME/outputs/fallback-session/...` nunca worktree).
+→ Timestamp UTC prefix garante ordenação se rodar múltiplas vezes na mesma PR.
 
 Delivery to chat follows §18 shape: **📍 Status / 🧩 Resumo / 🔗 Refs / ❓ Deep-dive**.
 Never dump the full 5-section report into chat verbatim unless user says "mostra tudo". Chat summary = condensed 3 bullets from each of sections 1/2/3 + warning if section 4 > 0 items. Offer: "Quer o relatório completo salvo no disco ou o full text aqui?"
@@ -271,7 +288,25 @@ MÁXIMO 3, 1 frase cada:
 ```
 
 #### B.4 Save + delivery
-Save report to: `$HARNESS_SESSION_DIR/reports/diff-context_LOCAL_<YYYYMMDD-HHMM>.md` (EFÊMERO per-session, via contract).
+**Construir path SOMENTE via helper (preflight já rodou no A.0 item 3, reutilizar aqui também no Mode B — se não rodou ainda por algum motivo, rodar AGORA antes do write):**
+```bash
+# Caso o preflight A.0 item 3 NÃO tenha rodado (usuário pulou direto para Mode B sem Mode A), GARANTIR aqui:
+if [ -z "${HARNESS_SESSION_DIR:-}" ]; then
+  HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+  CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+  [ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ $CONTRACT missing; exit 98"; exit 98; }
+  SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-diffctx-local-session}"
+  if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
+    harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+    harness_ensure_session_dirs "$WORKTREE_ROOT"
+  fi
+fi
+# Mode B = Local Worktree → related_id = worktree-<slug>
+WT_SLUG="$(basename "${WORKTREE_ROOT%/}")"
+DIFFCTX_LOCAL_PATH="$(harness_output_path "diff_context" "diff-context-local" "worktree-${WT_SLUG}" "session" "md")"
+```
+Resultado exemplo: `$HARNESS_SESSION_DIR/diff_contexts/worktree-feat-FLO-714--X/20260902-110000-diff-context-local.md`
+→ Múltiplas passes locais ordenam por timestamp UTC automaticamente.
 
 Chat delivery follows §18 shape (condensed, not full dump unless asked).
 

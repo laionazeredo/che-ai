@@ -57,6 +57,44 @@ Run BEFORE any `git status / git add / git commit / git push`. PREVENTS wrong-wo
 
 ---
 
+### 0.7.1 STORAGE PREFLIGHT OBRIGATÓRIO (run IMEDIATAMENTE após §0.7, ANTES de §0.8 ou QUALQUER write de report/decision)
+
+ANTES de gerar QUALQUER arquivo de report (gates 0.9.1→0.9.5), decision log, backup artifact: execute EXATAMENTE este bloco UMA VEZ por execução de /harness-ship. **Garante que todos paths resolvam FORA da worktree, com prefixo timestamp UTC ordenável + agrupamento `<type>/<related_id>/`:**
+
+```bash
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"; CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+[ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ $CONTRACT missing; exit 98"; exit 98; }
+SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-ship-session}"
+if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
+  harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+  harness_ensure_session_dirs "$WORKTREE_ROOT"
+  harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR (root efêmeros ship)"
+  harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "WORKSPACE_SHARED (root duráveis ship)"
+fi
+
+WORKTREE_SLUG_CANONICAL="${WORKTREE_SLUG:-$(basename "$WORKTREE_ROOT")}"
+RELATED_ID="ship-${WORKTREE_SLUG_CANONICAL}"
+
+# === Variáveis de paths dos reports GATES (construídas UMA VEZ, reutilizadas abaixo) ===
+SHIP_SCOPE_CHECK_REPORT="$(harness_output_path "report" "ship-scope-check" "${RELATED_ID}" "workspace" "md")"
+SHIP_CODE_REVIEW_REPORT="$(harness_output_path "report" "ship-code-review" "${RELATED_ID}" "workspace" "md")"
+SHIP_COMPLIANCE_HEAVY_REPORT="$(harness_output_path "report" "ship-compliance-heavy" "${RELATED_ID}" "workspace" "md")"
+SHIP_QA_GATE_LOG="$(harness_output_path "report" "ship-qa-gate" "${RELATED_ID}" "workspace" "log")"
+# Gate 0.9.5: Um report POR domain-gate; construa dinamicamente no loop §0.9.5.3.c:
+#   DOMAIN_GATE_REPORT="$(harness_output_path "report" "domain-gate-${EFFECTIVE_DOMAIN}-${GATE_NAME}" "${RELATED_ID}" "workspace" "json")"
+SHIP_DOMAIN_GATE_REPORT_TEMPLATE_TYPE="report"
+SHIP_DOMAIN_GATE_REPORT_TEMPLATE_SCOPE="workspace"
+
+# Artifact cleanup backup path §0.8 Stage 2:
+ARTIFACT_CLEANUP_BACKUP_DIR="$(harness_output_path "legacy_binding_cleanup" "artifact-cleanup-backup" "${RELATED_ID}" "workspace" "folder" | sed 's|/[^/]*$||')"
+# (a linha acima pega folder pai pois harness_output_path retorna arquivo; queremos um diretório)
+mkdir -p "$ARTIFACT_CLEANUP_BACKUP_DIR"
+
+# === NOTA: decision log appends SEMPRE usam helper harness_append_decision_jsonl (nunca escreva manual). ===
+```
+
+---
+
 ### 0.8 PLANNING ARTIFACTS BLACKLIST PREFLIGHT (NON-NEGOTIABLE)
 
 **Purpose:** NEVER allow harness internal planning/decision files to end up in user-code PRs. These files MUST live under `$HARNESS_SESSIONS_ROOT/<workspace>/<worktree-slug>/workspace` (contracts/harness_sessions_contract.sh L9-L21). If any bug/legacy skill accidentally creates them inside the user worktree, detect, unstage, and DELETE them before any `git add` runs.
@@ -72,10 +110,23 @@ task_graph.md manual_test_plan.md final_summary.md
 execution_batches.md batch_execution_report.md
 merge_audit.md merge_audit.jsonl
 scope-report.md scope-report.json scope_check_report.md scope_check_report.json
-spec_*.md gh_stack_plan.md session.md envelope.md task_envelope.md
+scope-check_*.md scope-check_*.json
+spec_*.md SPEC-*.md gh_stack_plan.md session.md envelope.md task_envelope.md
 graphify-out/**
-**/qa_evidence/** **/manual-test-screenshots/**
+**/qa_evidence/** **/qa-evidence/** **/manual-test-screenshots/** **/screenshots/**
 harness-review-report.md harness-compliance-report.md flockr-review-report.md
+# ---------------------------------------------------------------------------
+# BUGFIX (storage boundary): patterns de artifacts que por bug antigo caem em worktree
+# Cleanup sincronizado com contracts/harness_sessions_contract.sh cleanup_legacy patterns
+# ---------------------------------------------------------------------------
+reports/**                               # pasta reports/ indevida (ex: HCR PR #382 bug)
+HCR-*.md  HCR-*.json                      # harness-code-review reports mode A naming
+REVIEW-*.md  REVIEW-*.json review-*.md review-*.json   # reviews genéricos / pré-novo-helper
+summary.md summary.json                   # summaries escritos direto na raiz
+seo_report.md seo_report.json             # reports SEO auditoria
+diff-context_*.md diff-context_*.json     # harness-diff-context salvos em .trae/ worktree
+pr_comments/**  pr-comments-*.md  pr-comments-*.json  # triage PR comments drafts
+*.adr.md  ADR-*.md                         # ADRs por ventura escritos em worktree
 ```
 
 **Runs INSIDE $WORKTREE_ROOT, in this exact order:**
@@ -87,7 +138,7 @@ harness-review-report.md harness-compliance-report.md flockr-review-report.md
    ```
 3. **STAGE 2 — Delete UNTRACKED blacklist files (they never belong here):**
    - For each `f` in `<FOUND_BLACKLIST>` where `git ls-files --error-unmatch "$f"` exits non-zero → UNTRACKED.
-   - **DELETE them.** Backup copy preserved FIRST to `$HARNESS_WORKSPACE_SHARED/artifact_cleanup_backup/<ISO-date>/` just in case, then `rm -f <file>`.
+   - **DELETE them.** Backup copy preserved FIRST to `$ARTIFACT_CLEANUP_BACKUP_DIR/` (variável §0.7.1, já criada via helper — FORA worktree, assert outside feito) just in case, then `rm -f "$f"`.
 4. **STAGE 3 — TRACKED blacklist files = BLOCK SHIP, ask user.** They were committed by an older harness bug and are now in git history. Present EXACT options:
    ```
    🔴 PLANNING ARTIFACTS BLACKLIST — TRACKED FILES FOUND (committed before):
@@ -98,13 +149,16 @@ harness-review-report.md harness-compliance-report.md flockr-review-report.md
 
    Options:
      A = Untrack them (git rm --cached each), KEEP local copies MOVED to
-         $HARNESS_WORKSPACE_SHARED/legacy_artifact_backup/<basename>  (RECOMMENDED)
+         $ARTIFACT_CLEANUP_BACKUP_DIR/legacy_artifact_backup_<basename>  (RECOMMENDED)
      B = I will handle manually. Cancel ship.
    ```
    If A → move file to backup dir → `git rm --cached <path>` → proceed.
    If B → abort ship cleanly, 0 exit.
 5. **POST-CHECK:** Re-run find. Re-run `git status --porcelain --untracked-files=no`. ZERO blacklisted files must remain STAGED. If any remain → BLOCK SHIP.
-6. **DECISION LOG:** Append 1 single `ARTIFACT_CLEANUP` entry to `$HARNESS_DECISIONS_LOG` with list of files auto-unstaged / auto-deleted / untracked.
+6. **DECISION LOG (helper oficial):** NÃO append manual. Use:
+   ```bash
+   harness_append_decision_jsonl "ARTIFACT_CLEANUP" "auto-unstaged=<list> | auto-deleted=<list> | untracked-moved=<list> | backup_dir=$ARTIFACT_CLEANUP_BACKUP_DIR"
+   ```
 
 ---
 
@@ -138,20 +192,20 @@ harness-review-report.md harness-compliance-report.md flockr-review-report.md
    - `--mode B`
    - `--scope-source <SCOPE_SOURCE>`
    - `--scope-path <path_do_arquivo>`
-   - `--report-out "$HARNESS_WORKSPACE_SHARED/reports/ship_scope_check_<ISO_TIMESTAMP>.md"`
+   - `--report-out "$SHIP_SCOPE_CHECK_REPORT"`  (variável §0.7.1; prefixo timestamp UTC + report/ship-wt-<slug>/ estrutura fora worktree)
 2. Aguarda retorno com `verdict` field + `final_score` field + `findings[]` (CHECK 1-6).
 
 **Verdict handling (regra EXATA do harness-scope-checker §8):**
 | Verdict scope-checker | Ação gate 0.9.1 | Próximo passo |
 |---|---|---|
 | 🟢 APPROVED (score ≥7.0 AND 0 🔴 em CHECKS 1–6) | ✅ PASS GATE 1 | Segue imediatamente para §0.9.2 |
-| 🟡 CONDICOES (score ≥7.0 mas tem algum action item não-bloqueante OU score 5.0–6.9) | ⏸️ PAUSE + PERGUNTA user | Print findings e action items ao user. Opções EXATAS: **(A) = Aplicar fixes sugeridos e re-run gate 1; (B) = Aprovar condicionalmente (justificativa obrigatória → gravada decision.log); (C) = Cancelar ship.** |
+| 🟡 CONDICOES (score ≥7.0 mas tem algum action item não-bloqueante OU score 5.0–6.9) | ⏸️ PAUSE + PERGUNTA user | Print findings e action items ao user. Opções EXATAS: **(A) = Aplicar fixes sugeridos e re-run gate 1; (B) = Aprovar condicionalmente (justificativa obrigatória → gravada via helper decision.log); (C) = Cancelar ship.** |
 | 🔴 REPROVADO (score <5.0 OU qualquer 🔴 em CHECK 1 Entrega / CHECK 4 Env / CHECK 3 Docs obrigatórios) | 🔴 BLOCK SHIP | Apresenta findings ao usuário. NÃO oferece opção de override direto (requer nova rodada). Sugere: corrigir → rodar /harness-scope-checker standalone → depois re-rodar /harness-ship. |
 
 **Output artifacts:**
-- `$HARNESS_WORKSPACE_SHARED/reports/ship_scope_check_<ISO_TIMESTAMP>.md` — report completo 6-checks com SCOPE × LEAN final score.
-- Append entry `SHIP_GATE_0_9_1 {verdict, score, source}` ao `$HARNESS_DECISIONS_LOG`.
-- NENHUM artifact é criado dentro de `<WORKTREE_ROOT>` (blacklist §0.8 garante limpeza).
+- `$SHIP_SCOPE_CHECK_REPORT` — report completo 6-checks com SCOPE × LEAN final score. Estrutura final: `$HARNESS_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-scope-check.md` (ordenado por prefixo timestamp, agrupado por worktree relacionado).
+- Decision log entry via helper oficial: `harness_append_decision_jsonl "SHIP_GATE_0_9_1" "verdict=${verdict} score=${final_score} source=${SCOPE_SOURCE} report=${SHIP_SCOPE_CHECK_REPORT}"`.
+- NENHUM artifact é criado dentro de `<WORKTREE_ROOT>` (helper assert outside já trava exit 99 se path cair lá; blacklist §0.8 garante limpeza redundante).
 
 ---
 
@@ -174,7 +228,7 @@ harness-review-report.md harness-compliance-report.md flockr-review-report.md
    - `--worktree <WORKTREE_ROOT>`
    - `--mode B`
    - `--base origin/<DEFAULT_BRANCH>`
-   - `--report-out "$HARNESS_WORKSPACE_SHARED/reports/ship_code_review_<ISO_TIMESTAMP>.md"`
+   - `--report-out "$SHIP_CODE_REVIEW_REPORT"`  (variável §0.7.1; helper garantiu outside worktree)
    - `--include-unstaged true`
 2. Espera resultado estruturado: `{ critical_count: N, high_count: N, medium_count: N, low_count: N, findings: [...] }`
    - Cada finding tem: `{ severity: CRITICAL|HIGH|MEDIUM|LOW, file, line, title, suggested_fix_code_block (opcional), auto_fixable: boolean }`.
@@ -226,7 +280,10 @@ git commit -m "fix(review): auto-remediate code review HIGH findings ($N_FIXED/$
 ```
 
 **2.A.4 — Pós-commit:**
-- Append entry `SHIP_GATE_0_9_2 {verdict: AUTO_REMEDIATED_PASSED, critical: 0, high: N, auto_applied: X, auto_failed: Y}` ao `$HARNESS_DECISIONS_LOG`.
+- Decision log entry via helper oficial:
+  ```bash
+  harness_append_decision_jsonl "SHIP_GATE_0_9_2" "verdict=AUTO_REMEDIATED_PASSED critical=0 high=${N_TOTAL_HIGH} auto_applied=${N_FIXED} auto_failed=${Y} report=${SHIP_CODE_REVIEW_REPORT}"
+  ```
 - **SEGUIR IMEDIATAMENTE PARA GATE §0.9.3.** NÃO VOLTA para §1 Git Housekeeping normal. O commit especial já foi feito. O §1 normal irá rodar e contabilizar apenas os changes que sobraram (se houver).
 
 ---
@@ -260,8 +317,9 @@ Se user escolher B (override):
 ---
 
 **Output artifacts gate 0.9.2:**
-- `$HARNESS_WORKSPACE_SHARED/reports/ship_code_review_<ISO_TIMESTAMP>.md` — report completo findings.
-- Decision log entries conforme ramo A ou B.
+- `$SHIP_CODE_REVIEW_REPORT` — report completo findings. Estrutura final: `$HARNESS_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-code-review.md` (ordenado, agrupado).
+- Decision log entries via `harness_append_decision_jsonl` helper conforme ramo A ou B.
+- Ramo B: Se OVERRIDE, cada finding overrideado usa: `harness_append_decision_jsonl "REVIEW_OVERRIDE" "finding_id=${id} justification=${text}"`.
 - NO ramo A tem 1 commit novo no worktree prefixado `fix(review): auto-remediate...`.
 
 ---
@@ -274,7 +332,7 @@ Se user escolher B (override):
 1. Invoca `harness-compliance` skill com params:
    - `--worktree <WORKTREE_ROOT>`
    - `--mode HEAVY_STEP_2_FULL_SCAN`
-   - `--report-out "$HARNESS_WORKSPACE_SHARED/reports/ship_compliance_heavy_<ISO_TIMESTAMP>.md"`
+   - `--report-out "$SHIP_COMPLIANCE_HEAVY_REPORT"`  (variável §0.7.1; helper garantiu outside worktree)
    - `--required 0_CRITICAL_AND_0_HIGH`
 2. Espera resultado: `{ critical_count: N, high_count: N, scan_categories_ran: [1..15] }`
 
@@ -293,8 +351,8 @@ Se user escolher B (override):
 - Categorias 6-15: restantes do harness-compliance skill.
 
 **Output artifacts:**
-- `$HARNESS_WORKSPACE_SHARED/reports/ship_compliance_heavy_<ISO_TIMESTAMP>.md` — full scan report.
-- Entry `SHIP_GATE_0_9_3 {verdict, critical, high}` no decision.log.
+- `$SHIP_COMPLIANCE_HEAVY_REPORT` — full scan report. Estrutura final: `$HARNESS_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-compliance-heavy.md` (ordenado, agrupado).
+- Decision log entry via helper oficial: `harness_append_decision_jsonl "SHIP_GATE_0_9_3" "verdict=${verdict} critical=${critical_count} high=${high_count} categories=${#scan_categories_ran} report=${SHIP_COMPLIANCE_HEAVY_REPORT}"`.
 
 ---
 
@@ -303,27 +361,32 @@ Se user escolher B (override):
 **Purpose:** Última linha de defesa antes do commit real. **DESLIGADO POR DEFAULT por custo de tempo (build/typecheck/lint/tests).** SÓ é executado SE usuário passou explicitamente a flag `--run-qa` no comando `/harness-ship --run-qa`.
 
 **Quando skipado:**
-- Se flag ausente → append entry `SHIP_GATE_0_9_4 {verdict: SKIPPED_FLAG_NOT_SET}` no decision.log. Segue direto para §1 Git Housekeeping. NÃO PERGUNTA NADA.
+- Se flag ausente → decision log entry helper: `harness_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=SKIPPED_FLAG_NOT_SET"`. Segue direto para §1 Git Housekeeping. NÃO PERGUNTA NADA.
 
 **Quando executado (flag `--run-qa` presente):**
 Detecta stack do monorepo automaticamente (ordem de tentativa):
 1. **Nx workspace (pnpm + nx)** → existe `nx.json` + `pnpm-workspace.yaml`? → run:
    ```bash
-   cd "$WORKTREE_ROOT" && corepack pnpm nx affected:typecheck --tui false
-   corepack pnpm nx affected:lint --tui false
-   corepack pnpm nx affected:test --tui false
+   cd "$WORKTREE_ROOT" && {
+     echo "===== QA GATE: typecheck $(date -Iseconds) ====="
+     corepack pnpm nx affected:typecheck --tui false 2>&1
+     echo "===== QA GATE: lint $(date -Iseconds) ====="
+     corepack pnpm nx affected:lint --tui false 2>&1
+     echo "===== QA GATE: test $(date -Iseconds) ====="
+     corepack pnpm nx affected:test --tui false 2>&1
+   } | harness_write_file_atomic "$SHIP_QA_GATE_LOG"
    ```
-2. **Generic pnpm** → existe `package.json` com `scripts.typecheck` etc? → `corepack pnpm typecheck && corepack pnpm lint && corepack pnpm test`.
+2. **Generic pnpm** → existe `package.json` com `scripts.typecheck` etc? → `{ echo typecheck; corepack pnpm typecheck 2>&1; echo lint; corepack pnpm lint 2>&1; echo test; corepack pnpm test 2>&1; } | harness_write_file_atomic "$SHIP_QA_GATE_LOG"`.
 3. **Generic npm/yarn** → adapta o package manager.
-4. **Nenhuma detecção** → WARN "Não foi possível detectar stack QA. Skip gate 4". Decision log.
+4. **Nenhuma detecção** → WARN "Não foi possível detectar stack QA. Skip gate 4". Decision log helper: `harness_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=SKIPPED_STACK_NOT_DETECTED"`.
 
 **Verdict handling QA:**
 - Todos os 3 comandos (typecheck, lint, test) exit code 0 → ✅ PASS GATE 4. Segue §1.
-- Qualquer comando falha (exit code != 0) → 🔴 **BLOCK SHIP**. Print tail -50 da saída com erro ao user. Opções: (A) Quero corrigir manualmente agora; (B) Override (requer justificativa forte explícita por que teste/typecheck falhado deve shipar — gravado decision.log).
+- Qualquer comando falha (exit code != 0) → 🔴 **BLOCK SHIP**. Print tail -50 da saída com erro ao user. Opções: (A) Quero corrigir manualmente agora; (B) Override (requer justificativa forte explícita por que teste/typecheck falhado deve shipar — gravada via helper decision.log).
 
 **Output artifacts:**
-- `$HARNESS_WORKSPACE_SHARED/reports/ship_qa_gate_<ISO_TIMESTAMP>.log` — stdout concatenado dos 3 comandos.
-- Entry `SHIP_GATE_0_9_4 {verdict, flag: boolean, typecheck: PASS/FAIL, lint: PASS/FAIL, test: PASS/FAIL}`.
+- `$SHIP_QA_GATE_LOG` — stdout concatenado dos 3 comandos. Estrutura final: `$HARNESS_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-qa-gate.log` (ordenado, agrupado). Write atômico via `harness_write_file_atomic` stdin pipe.
+- Decision log entry helper: `harness_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=${verdict} flag=TRUE typecheck=${tc_status} lint=${lint_status} test=${test_status} log=${SHIP_QA_GATE_LOG}"`.
 
 ---
 
@@ -338,27 +401,36 @@ Execution steps (ordem fixa):
 1. **Resolve `effective_domain`:** Ler SPEC (mesmo path do gate 0.9.1 scope) YAML `domain:` + fallback project registry `domains[]`. Se ambos null/ausentes → `effective_domain = engineering`.
 2. **IF `effective_domain === 'engineering'` → **SKIP GATE 5 COMPLETAMENTE E SILENCIOSAMENTE (0 linhas log, 0 output extra).** Sessões/specs antigas SEM o campo `domain:` têm comportamento IDÊNTICO ao v2 original. Backward compat 100% garantida.
 3. **IF `effective_domain !== 'engineering':`**
-   a. **Check pasta existe:** `${HARNESS_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/` → MUST existir. Não existe → **WARN "Domínio <slug> não tem gates implementados ainda (fase 2 rollout). Skip §0.9.5."** Log decision entry single line → prossegue §0.9.6 ALL GATES PASSED normalmente.
+   a. **Check pasta existe:** `${HARNESS_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/` → MUST existir. Não existe → **WARN "Domínio <slug> não tem gates implementados ainda (fase 2 rollout). Skip §0.9.5."** Log decision entry helper:
+      ```bash
+      harness_append_decision_jsonl "DOMAIN-GATES-WARN" "domain=${effective_domain} reason=no-gates-folder phase-2-rollout skip=TRUE"
+      ```
+      Prossegue §0.9.6 ALL GATES PASSED normalmente.
    b. **Glob + sort alphabetical gate files:** `${HARNESS_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/*.md`. Ordem de execução = ordem alfabética nome arquivo (igual convenção G1→G2→G3→G4). Exemplo UX: `accessibility-gate.md` executa ANTES `pixel-check-gate.md`.
    c. **Para CADA arquivo gate (0.9.5.1, 0.9.5.2, ...):**
       - Parse YAML frontmatter do arquivo: `threshold_pass`, `retry_policy`, `log_format_decisions`, `tool_official`.
       - Se frontmatter ausente → FAIL gate imediatamente: "Gate <filename> não tem frontmatter YAML threshold declarado. Domínio inválido."
-      - **Run gate evaluation (automático):** Siga EXATAMENTE os passos listados no arquivo `domains/<slug>/gates/<name>.md` seção "Execução". Se o gate usar uma ferramenta oficial via §21 External Connectors (P1 MCP ou P2 CLI): SEMPRE use os canais P1→P2 ordem; NUNCA raw curl/fetch.
+      - **Construir path report POR gate usando helper (um arquivo JSON por gate, ordenado, agrupado):**
+        ```bash
+        GATE_BASENAME="$(basename "$gate_file" .md)"
+        DOMAIN_GATE_REPORT="$(harness_output_path "${SHIP_DOMAIN_GATE_REPORT_TEMPLATE_TYPE}" "domain-gate-${effective_domain}-${GATE_BASENAME}" "${RELATED_ID}" "${SHIP_DOMAIN_GATE_REPORT_TEMPLATE_SCOPE}" "json")"
+        ```
+      - **Run gate evaluation (automático):** Siga EXATAMENTE os passos listados no arquivo `domains/<slug>/gates/<name>.md` seção "Execução". Grave todo output do gate no report JSON via `harness_write_file_atomic "$DOMAIN_GATE_REPORT"` (write atômico, outside worktree garantido). Se o gate usar uma ferramenta oficial via §21 External Connectors (P1 MCP ou P2 CLI): SEMPRE use os canais P1→P2 ordem; NUNCA raw curl/fetch.
       - `PASS condition`: frontmatter `threshold_pass` satisfeito NUMERICAMENTE (ex: `score >= 8.0`, `critical_count === 0`). Se string → FAIL.
       - Verdict:
         | Resultado gate 1ª rodada | Ação |
         |---|---|
-        | 🟢 PASS threshold | ✅ Passa este gate. Log entry `[DOMAIN-GATE-EXECUTED] domain=ux gate=<n> status=PASS score=<x> duration_ms=<ms>`. Próximo gate. |
-        | 🔴 FAIL threshold (1ª vez) | **Retry GRÁTIS AUTOMÁTICO = 1 única rodada:** Aplicar os passos recomendados no arquivo gate seção "Retry Policy" (ex: "corrigir top-3 desvios >4px", "corrigir alt ausentes"). Re-rodar gate 1 NOVA vez. |
-        | 🔴 FAIL threshold APÓS retry automático = 2ª falha | **HARD STOP §0.9.5 DOMAIN GATES.** Não abre PR. Não commita. Não prossegue para §0.9.6. Mensagem usuário (padronizada): <br/>`🔴 SHIP GATE 0.9.5 DOMAIN GATE FAIL APÓS RETRY AUTOMÁTICO.<br/>effective_domain=<slug><br/>gate=<nome_arquivo><br/>threshold=<original, ex score≥8.0><br/>score_atual=<6.7><br/>Últimos 5 desvios top: [...]<br/>Opções: (A) Quero corrigir manualmente agora e re-rodar /harness-ship depois. (B) EXPLICIT_OVERRIDE abaixar threshold temporariamente (requer user VERBATIM resposta literal explicando motivo, logado em decisions.log). (C) Cancelar ship agora.` |
-   d. **Após todos gates PASS ou explicit override logged:** Todos gates passaram OU user deu EXPLICIT_OVERRIDE VERBATIM logado em decisions → Log FINAL gate 5 entry: `[DOMAIN-GATES-ALL-PASSED] domain=<slug> n_gates=<n> overrides=<qtd> duration_total_ms=<ms>`. Prossegue §0.9.6.
-4. **EXPLICIT_OVERRIDE rules (igual G2 code-review today):** Threshold NUNCA é abaixado automaticamente pelo agente. SÓ é permitido se user digitou EXPLICITAMENTE "EXPLICIT_OVERRIDE domain=<slug> gate=<X> old=<threshold> new=<n> reason=<TEXT>" LITERALMENTE no chat. Nesta condição: logar entry EXATA em decisions.log `[EXPLICIT_OVERRIDE] timestamp domain=ux gate=pixel-check-gate old=8.0 new=7.0 reason="..." traceId=...` e marcar gate como "PASS (COM OVERRIDE)". Nenhuma outra forma de bypass existe. Não confie em "parece OK".
+        | 🟢 PASS threshold | ✅ Passa este gate. Decision log helper: `harness_append_decision_jsonl "DOMAIN-GATE-EXECUTED" "domain=${effective_domain} gate=${GATE_BASENAME} status=PASS score=${score} duration_ms=${ms} report=${DOMAIN_GATE_REPORT}"`. Próximo gate. |
+        | 🔴 FAIL threshold (1ª vez) | **Retry GRÁTIS AUTOMÁTICO = 1 única rodada:** Aplicar os passos recomendados no arquivo gate seção "Retry Policy" (ex: "corrigir top-3 desvios >4px", "corrigir alt ausentes"). Re-rodar gate 1 NOVA vez. Decision log helper para retry: `harness_append_decision_jsonl "DOMAIN-GATE-RETRY" "domain=${effective_domain} gate=${GATE_BASENAME} score_before=${sb} retry=1"`. |
+        | 🔴 FAIL threshold APÓS retry automático = 2ª falha | **HARD STOP §0.9.5 DOMAIN GATES.** Não abre PR. Não commita. Não prossegue para §0.9.6. Decision log HELPER com details: `harness_append_decision_jsonl "DOMAIN-GATE-HARD-FAIL" "domain=${effective_domain} gate=${GATE_BASENAME} threshold=${orig} score_now=${sn} report=${DOMAIN_GATE_REPORT}"`. Mostre mensagem padronizada ao usuário. |
+   d. **Após todos gates PASS ou explicit override logged:** Todos gates passaram OU user deu EXPLICIT_OVERRIDE VERBATIM logado em decisions → Log FINAL gate 5 entry HELPER: `harness_append_decision_jsonl "DOMAIN-GATES-ALL-PASSED" "domain=${effective_domain} n_gates=${N} overrides=${QTD} duration_total_ms=${ms}"`. Prossegue §0.9.6.
+4. **EXPLICIT_OVERRIDE rules (igual G2 code-review today):** Threshold NUNCA é abaixado automaticamente pelo agente. SÓ é permitido se user digitou EXPLICITAMENTE "EXPLICIT_OVERRIDE domain=<slug> gate=<X> old=<threshold> new=<n> reason=<TEXT>" LITERALMENTE no chat. Nesta condição: logar entry HELPER `harness_append_decision_jsonl "EXPLICIT_OVERRIDE" "domain=${effective_domain} gate=${GATE_BASENAME} old=${OLD} new=${NEW} reason=${TEXT} trace_id=${TRACE_ID}"` e marcar gate como "PASS (COM OVERRIDE)". Nenhuma outra forma de bypass existe. Não confie em "parece OK".
 
 **Output artifacts gate 0.9.5:**
-- 1 decision.log entry PER gate executado (PASS/FAIL/RETRY/OVERRIDE). Mesmo formato §0.9.3 compliance log.
-- Report por gate em `$HARNESS_WORKSPACE_SHARED/reports/domain_<slug>_gate_<nome>_<ISO_TS>.json`.
+- 1 decision.log entry PER gate executado (PASS/FAIL/RETRY/OVERRIDE), **todos via `harness_append_decision_jsonl` helper oficial.**
+- Report por gate: `$DOMAIN_GATE_REPORT` (1 arquivo JSON por gate, construído dinamicamente via `harness_output_path` dentro loop). Estrutura final: `$HARNESS_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-domain-gate-<dom>-<nome>.json` (prefixo timestamp = ordenado; todos arquivos do mesmo ship ficam na MESMA subpasta `report/ship-<wt-slug>/` → fácil buscar glob `**/ship-<slug>/*`).
 
-**Blacklist check:** Reports ficam 100% em $HARNESS_WORKSPACE_SHARED/reports/, NUNCA na worktree do usuário. §0.8 + §2.2 continuam garantindo que nenhum relatório/diff artifact/decisions log entra no diff do commit do usuário.
+**Blacklist check:** Reports ficam 100% em `$HARNESS_WORKSPACE_SHARED/report/<related_id>/` (helper garantiu outside assert). §0.8 + §2.2 continuam garantindo que nenhum relatório/diff artifact/decisions log entra no diff do commit do usuário.
 
 ---
 
@@ -372,9 +444,12 @@ Print one-liner ANTES de iniciar §1 Git Housekeeping:
 Proceeding to Git Housekeeping §1 → atomic conventional commit → push → open DRAFT PR.
 ```
 
-Append entry FINAL `ALL_SHIP_GATES_PASSED {gates: [0.9.1,0.9.2,0.9.3,0.9.4,0.9.5], scores: {scope, domain}, effective_domain: <slug>}` ao decision.log.
+Append entry FINAL via decision log helper oficial:
+```bash
+harness_append_decision_jsonl "ALL_SHIP_GATES_PASSED" "gates=[0.9.1,0.9.2,0.9.3,0.9.4,0.9.5] scores_scope=${score} effective_domain=${effective_domain} related_id=${RELATED_ID}"
+```
 
-**Pós-gates reminder de blacklist:** Todos os 5 reports acima foram escritos EXCLUSIVAMENTE em `$HARNESS_WORKSPACE_SHARED/reports/**`. O §0.8 blacklist stage 1-2 já rodou e continuará rodando em §2.2 antes de cada commit para garantir que NENHUM desses reports ou decision artifacts entram acidentalmente no diff do usuário.
+**Pós-gates reminder de blacklist:** Todos reports acima foram escritos EXCLUSIVAMENTE em `$HARNESS_WORKSPACE_SHARED/report/${RELATED_ID}/YYYYMMDD-HHMMSS-*.{md,log,json}` (helper centralizado construiu todos paths). O §0.8 blacklist stage 1-2 já rodou e continuará rodando em §2.2 antes de cada commit para garantir que NENHUM desses reports ou decision artifacts entram acidentalmente no diff do usuário.
 
 ---
 
@@ -659,8 +734,18 @@ Resumo:
     - ...
   • PR criada (DRAFT): <PR_URL>  [atribuída a você]
   • Assumptions, review points, breaking changes: veja corpo da PR
+
+Ship gates reports (todos em harness-sessions, ordenados por timestamp UTC):
+  • Scope check (§0.9.1): $SHIP_SCOPE_CHECK_REPORT
+  • Code review (§0.9.2): $SHIP_CODE_REVIEW_REPORT
+  • Compliance heavy (§0.9.3): $SHIP_COMPLIANCE_HEAVY_REPORT
+  • QA gate log (§0.9.4): $SHIP_QA_GATE_LOG
+
+Artefatos relacionados (mesmo workspace):
   • Manual test plan: referenciado no corpo e disponível em:
-    $HARNESS_WORKSPACE_SHARED/manual_test_plan.md
+    $MANUAL_TEST_PLAN_PATH
+  • Decision log (todas decisions append-safe JSONL, via harness_append_decision_jsonl):
+    $HARNESS_DECISIONS_PATH
 
 Próximos passos:
   1. Rode um smoke test manual usando o plano acima.
@@ -679,7 +764,18 @@ Resumo Geral:
   • Worktree: <worktree path>
   • Número de PRs na stack (bottom-up): <N layers>
   • gh-stack chain criada. Todas as PRs DRAFT + atribuídas a você.
-  • Plano original: consultar $HARNESS_WORKSPACE_SHARED/gh_stack_plan.md
+
+Ship gates reports (todos em harness-sessions, ordenados por timestamp UTC):
+  • Scope check (§0.9.1): $SHIP_SCOPE_CHECK_REPORT
+  • Code review (§0.9.2): $SHIP_CODE_REVIEW_REPORT
+  • Compliance heavy (§0.9.3): $SHIP_COMPLIANCE_HEAVY_REPORT
+  • QA gate log (§0.9.4): $SHIP_QA_GATE_LOG
+
+Artefatos relacionados (mesmo workspace):
+  • Plano gh-stack original: $GH_STACK_PLAN_PATH
+  • Manual test plan global: $MANUAL_TEST_PLAN_PATH
+  • Decision log (todas decisions append-safe JSONL, via harness_append_decision_jsonl):
+    $HARNESS_DECISIONS_PATH
 
 Stack de PRs (ordem de merge = base primeiro para o topo):
 ───────────────────────────────────────────────
@@ -704,7 +800,6 @@ LN (topo, merged last) → depends on #<L[N-1].PR_NUMBER>
    PR DRAFT: <LN.PR_URL>   [base: L[N-1].BranchName]
 ───────────────────────────────────────────────
 
-Manual test plan global: $HARNESS_WORKSPACE_SHARED/manual_test_plan.md
 (Valide o comportamento de cada layer individualmente antes de marcar a stack como pronta.)
 
 Próximos passos (ordem de review = mesma ordem de merge bottom-up):

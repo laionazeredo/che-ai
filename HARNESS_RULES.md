@@ -37,31 +37,60 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 
 ## 🔴 DIRETÓRIO DE SAÍDA DO HARNESS
 
-> Separação estrita CÓDIGO vs DADOS. Nada gerado é escrito em `<WORKTREE_ROOT>/.trae/*` (MORATÓRIA HARD STOP, ver engineering-contracts §19.1).
+> **🔴 STORAGE BOUNDARY HARD STOP — REGRA VERBATIM USUÁRIO:**
+> **"Nenhum asset do trabalho do harness deve ser criado na worktree. Apenas quando solicitado. tudo deve ser organizado no harness-sessions."**
+>
+> Separação estrita CÓDIGO vs DADOS. **NADA** gerado pelo harness é escrito em **QUALQUER LUGAR** dentro de `<WORKTREE_ROOT>/*` por padrão (NÃO só `.trae/*` — relatórios `reports/`, arquivos na raiz tipo `summary.md`, `seo_report.md`, `REVIEW-*.md`, `HCR-*.md`, `diff-context_*.md`, pastas `qa_evidence/`, `screenshots/`, `pr_comments/`, e QUALQUER outro asset mutável gerado pelo harness são PROIBIDOS dentro do código do usuário). MORATÓRIA HARD STOP, ver engineering-contracts §20.
+>
+> ÚNICA EXCEÇÃO POSSÍVEL: usuário pede VERBATIM, explicitamente e de forma clara, que um arquivo ESPECÍFICO seja salvo dentro da worktree. Sem esse pedido verbal, default = **FORA WORKTREE**.
 >
 > - **CÓDIGO IMUTÁVEL harness (skills/commands/hooks/user_rules/contracts):** permanece `$HOME/.trae/`.
-> - **DADOS/GERADOS/MUTÁVEIS (specs, plans, decisions, reports, evidências QA, bindings):** vão obrigatoriamente para `$HARNESS_SESSIONS_ROOT` (default `$HOME/code/harness-sessions`), **FORA DAS WORKTREES DO USUÁRIO**, sob `<WORKSPACE_NAME>/<WORKTREE_SLUG>/`.
+> - **DADOS/GERADOS/MUTÁVEIS (specs, plans, decisions, reports, evidências QA, bindings, diff contexts, PR comments):** vão obrigatoriamente para `$HARNESS_SESSIONS_ROOT` (default `$HOME/code/harness-sessions`), **FORA DAS WORKTREES DO USUÁRIO**, sob `<WORKSPACE_NAME>/<WORKTREE_SLUG>/`.
 >
 > Contrato canônico de paths SINGLE SOURCE OF TRUTH: `source ~/.trae/contracts/harness_sessions_contract.sh` + `harness_compute_paths WORKTREE_ROOT SESSION_ID CWD`. **Proibido construir paths hardcoded.**
+>
+> **🔧 HELPER OBRIGATÓRIO PARA TODO WRITE DE OUTPUT:**
+> NÃO invente paths manualmente. Sempre chame:
+>
+> ```bash
+> harness_output_path <type> <slug> <related_id> <scope> <ext> [suffix]
+> # Exemplos:
+> harness_output_path "review" "harness-code-review" "pr-382" "session" "md" "full"
+>   # → $HARNESS_SESSION_DIR/reviews/pr-382/20260902-092405-harness-code-review_full.md
+> harness_output_path "report" "harness-scope-check" "pr-382" "workspace" "md"
+>   # → $HARNESS_WORKSPACE_SHARED/reports/pr-382/20260902-093010-harness-scope-check.md
+> harness_output_path "diff_context" "diff-summary" "pr-382" "session" "md"
+>   # → $HARNESS_SESSION_DIR/diff_contexts/pr-382/20260902-093500-diff-summary.md
+> ```
+>
+> O helper GARANTE automaticamente: (1) Prefixo timestamp UTC **NO INÍCIO** do filename → ordem alfabética = ordem cronológica de criação (não depende de mtime do SO); (2) Subpastas `<type>/<related_id>/` → todos arquivos da mesma PR/task ficam colocalizados, fácil de buscar com um glob; (3) `harness_assert_outside_worktree` em baixo nível → HARD STOP se por algum motivo o path resolveria para dentro da worktree; (4) cria diretórios pai automaticamente.
+>
+> Para escrita: prefira `harness_write_file_atomic <path>` (stdin → tmp → mv atômico, evita arquivos meio-escritos).
 
 1. Determinado o `WORKTREE_ROOT` e o `SESSION_ID`:
    - Execute `harness_compute_paths` → resolve `HARNESS_WORKSPACE_NAME` (via `.code-workspace` match cwd, fallback `default`) e `HARNESS_WORKTREE_SLUG` (padrão `RepoName__branch-slug`, separador canônico `__`).
    - Execute `harness_ensure_session_dirs` → cria estrutura 2 diretórios por worktree **fora do código do usuário**:
      - `$HARNESS_WORKSPACE_SHARED/` — **DURÁVEL** (várias sessões compartilham):
-       - `spec_<slug>.md` — (1+ por worktree) **Harness Execution Specification (SPEC).** 7 seções canônicas + YAML frontmatter campos obrigatórios. Gate Approved no SM §0.5. Substitui PRD legado.
-       - `task_graph.md` — grafo completo de tarefas, dependências, status, gh-stack PR plan
+       - `reports/<related_id>/` — scope-check final, ship-gate reports (duráveis, procuráveis por PR/task)
+       - `specs/` — (1+ por worktree) **Harness Execution Specification (SPEC).** 7 seções canônicas + YAML frontmatter campos obrigatórios. Gate Approved no SM §0.5. Substitui PRD legado.
+       - `architecture/` — ADRs / design docs harness locais (SALVAR AQUI POR DEFAULT, NÃO no workspace do usuário). Cópia manual para `docs/adr/` ou `architecture/decisions/` no repo de produto é OPCIONAL e só acontece se usuário pedir explicitamente — por padrão ADR neste momento é REFERÊNCIA do pipeline para validar trade-offs e escopo.
+       - `tasks/<TASK_ID>/` — envelope/scope/ac, UM subdiretório por tarefa
        - `decisions.log.jsonl` — append a cada decisão não óbvia / trade-off (1 por worktree, não 1 por task)
        - `manual_test_plan.md` — no final, quando todas tasks forem DONE
        - `gh_stack_plan.md` — (OPCIONAL, se múltiplos PRs) plano hierárquico gh-stack
-       - `design/` — ADRs / design docs harness locais (SALVAR AQUI POR DEFAULT, NÃO no workspace do usuário). Cópia manual para `docs/adr/` ou `architecture/decisions/` no repo de produto é OPCIONAL e só acontece se usuário pedir explicitamente — por padrão ADR neste momento é REFERÊNCIA do pipeline para validar trade-offs e escopo.
-       - `tasks/<TASK_ID>/` — envelope/scope/ac, UM subdiretório por tarefa
+       - `legacy_binding_cleanup/<ISO-ts>/` — backup automático de artifacts bugados antigos movidos da worktree durante binding
      - `$HARNESS_SESSION_DIR/` — **EFÊMERO** (esta sessão só):
        - `binding.md` — Level2 detail (fora da worktree user, nunca commitado)
        - `session.md` — metadata da sessão
-       - `reports/` — code-review, diff-context, merge-audit, batch-execution
-       - `qa/screenshots/`, `qa/logs/` — evidências Playwright/manual test
+       - `reviews/<related_id>/` — code-review reports, postfix reviews, PR comments triage (sessão atual)
+       - `reports/<related_id>/` — relatórios efêmeros, diff-contexts, merge-audit intermed, batch execution
+       - `diff_contexts/<related_id>/` — contexto 5-seção pré-conversação de diffs
+       - `pr_comments/<related_id>/` — triagem e drafts de respostas a comments de PR
+       - `qa/screenshots/`, `qa/evidence/<related_id>/` — evidências Playwright/manual test
+       - `execution/` — batch logs, execution trace, envelopes runtime
+       - `debugger/` — screenshots, logs e traces do harness-debugger-bugfix
        - `final_summary.md` — resumo final e estatísticas desta execução
-2. **NUNCA** crie esses arquivos em outros locais (docs/, raiz do repo, pastas de packages, `<WORKTREE_ROOT>/.trae/*`) a menos que usuário pede explicitamente.
+2. **NUNCA** crie esses arquivos em outros locais (docs/, raiz do repo, pastas de packages, `<WORKTREE_ROOT>/.trae/*`, `<WORKTREE_ROOT>/reports/`) a menos que usuário pede explicitamente.
 3. **NUNCA** toque `AGENTS.md` ou `CLAUDE.md` de worktree do usuário (harness altera só ~/.trae + harness-sessions).
 
 ---

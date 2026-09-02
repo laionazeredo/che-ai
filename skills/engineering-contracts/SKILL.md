@@ -543,7 +543,21 @@ Runtime portability:
   - ensure dirs: harness_ensure_session_dirs
 ```
 
-MORATÓRIA (hard stop): NENHUM arquivo `.md` ou `.json` ou `.png` gerado pelo harness é escrito em `<WORKTREE_ROOT>/.trae/*` a partir de agora. Isso evita git status sujo / commit acidental de evidências de QA / decisions / etc.
+MORATÓRIA (HARD STOP — EXPANDIDA PARA TODA WORKTREE DO USUÁRIO):
+> **REGRA VERBATIM USUÁRIO:** "Nenhum asset do trabalho do harness deve ser criado na worktree. Apenas quando solicitado. tudo deve ser organizado no harness-sessions."
+>
+> NENHUM arquivo `.md` / `.json` / `.jsonl` / `.csv` / `.png` / `.pdf` / `.html` / `.log` / **qualquer extensão** gerado pelo harness é escrito em **QUALQUER LUGAR** dentro de `<WORKTREE_ROOT>/*` por padrão. Isso INCLUI e ULTRAPASSA: `.trae/*`, `reports/`, `docs/`, raiz do repo, `packages/*/`, `apps/*/`, qualquer subpasta do código do usuário.
+>
+> ÚNICA EXCEÇÃO (não tem grey area): usuário pedir VERBATIM, EXPLICITAMENTE, que um arquivo específico seja salvo dentro da worktree. Sem pedido verbal explícito e claro, default = **FORA WORKTREE, em `$HARNESS_SESSIONS_ROOT` via helper `harness_output_path`.**
+>
+> Isso evita: (1) `git status` permanentemente sujo; (2) commit acidental de evidências QA, decisions, reports; (3) colisão de nomenclatura entre sessões paralelas; (4) poluição do diff do usuário com lixo do pipeline.
+>
+> Enforcer canônico = `harness_assert_outside_worktree` do contract. Chamado automaticamente pelo helper único `harness_output_path` (DUVIDA? CHAMA ELE. NUNCA construa paths manualmente).
+>
+> Output path helper canônico OBRIGATÓRIO para TODO write:
+>   `harness_output_path <type=report|review|qa|...> <slug=harness-code-review> <related_id=pr-382|""> <scope=session|workspace> <ext=md|json> [suffix]`
+>
+>   Garante: (a) timestamp UTC prefix no filename ↔ sort alfabético = cronológico; (b) subpastas `<type>/<related_id>/` ↔ arquivos relacionados mesma PR/task ficam juntos; (c) assert outside automático em baixo nível; (d) atomic writes via `harness_write_file_atomic`.
 
 Binding contract:
 

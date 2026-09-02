@@ -318,15 +318,31 @@ harness_ensure_session_dirs() {
   # Nível 1.5: registry global do projeto (compartilhado worktrees × sessões)
   mkdir -p "$HARNESS_SESSIONS_ROOT/.registry/projects/$HARNESS_PROJECT_SLUG"
   [ -f "$HARNESS_PROJECT_REGISTRY" ] || : > "$HARNESS_PROJECT_REGISTRY"
-  # Nível 2: workspace + worktree + session
+  # Nível 2: workspace + worktree + subpastas CANÔNICAS por tipo (WORKSPACE_SHARED = durável entre sessões)
   mkdir -p "$HARNESS_WORKSPACE_DIR" \
            "$HARNESS_WORKTREE_DIR" \
            "$HARNESS_WORKSPACE_SHARED" \
            "$HARNESS_WORKSPACE_SHARED/design" \
            "$HARNESS_WORKSPACE_SHARED/tasks" \
+           "$HARNESS_WORKSPACE_SHARED/specs" \
+           "$HARNESS_WORKSPACE_SHARED/reports" \
+           "$HARNESS_WORKSPACE_SHARED/architecture" \
+           "$HARNESS_WORKSPACE_SHARED/legacy_binding_cleanup" \
            "$HARNESS_SESSION_DIR" \
+           "$HARNESS_SESSION_DIR/reports" \
+           "$HARNESS_SESSION_DIR/reviews" \
            "$HARNESS_SESSION_DIR/qa" \
-           "$HARNESS_SESSION_DIR/qa/screenshots"
+           "$HARNESS_SESSION_DIR/qa/screenshots" \
+           "$HARNESS_SESSION_DIR/qa/evidence" \
+           "$HARNESS_SESSION_DIR/specs" \
+           "$HARNESS_SESSION_DIR/design" \
+           "$HARNESS_SESSION_DIR/tasks" \
+           "$HARNESS_SESSION_DIR/diff_contexts" \
+           "$HARNESS_SESSION_DIR/pr_comments" \
+           "$HARNESS_SESSION_DIR/merge_audits" \
+           "$HARNESS_SESSION_DIR/execution" \
+           "$HARNESS_SESSION_DIR/graph" \
+           "$HARNESS_SESSION_DIR/debugger"
 }
 
 harness_level2_binding_path() {
@@ -428,6 +444,150 @@ PYEOF
 }
 
 # ---------------------------------------------------------------------------
+# OUTPUT PATH HELPER (SINGLE SOURCE OF TRUTH PARA TODO WRITE DO HARNESS)
+# ---------------------------------------------------------------------------
+# NENHUMA skill/hook/script DEVE construir paths de output MANUALMENTE.
+# Tudo passa por aqui. Garante:
+#   1. Prefixo timestamp UTC NO INÍCIO do arquivo → ordenação alfabética = cronológica
+#   2. Subpastas por TIPO + RELATED_ID → agrupamento por PR/task/facilidade de busca
+#   3. SCOPE = session (efêmero, SESSION_DIR) ou workspace (durável, WORKSPACE_SHARED)
+#   4. harness_assert_outside_worktree AUTOMÁTICO antes de retornar o path
+#   5. Cria os diretórios pai automaticamente
+#
+# ASSINATURA (todos posicionais OBRIGATÓRIOS, passe "" se não aplicar):
+#   $1 = type        (report | review | qa | spec | design | task | diff_context | pr_comments | merge_audit | execution | graph | debugger | architecture | adr | other)
+#   $2 = slug        (ex: "harness-code-review", "harness-scope-check-full", "playwright-evidence-step3") — curto, lowercase, hyphen
+#   $3 = related_id  (ex: "pr-382", "task-FLO-714", "batch-02", "" se não aplicar)
+#   $4 = scope       ("session" = SESSION_DIR efêmero | "workspace" = WORKSPACE_SHARED durável)
+#   $5 = ext         ("md" | "json" | "jsonl" | "csv" | "png" | "pdf" | "html" — SEM o ponto)
+#   $6 = suffix      (OPCIONAL: extra no final do filename, ex: "postfix", "full", "verdict-green" — hyphenated lowercase)
+#
+# SAÍDA stdout: path absoluto canônico
+#
+# EXEMPLOS:
+#   harness_output_path "review"  "harness-code-review"    "pr-382"      "session"   "md" "full"
+#     → $HARNESS_SESSION_DIR/reviews/pr-382/20260902-092405-harness-code-review_full.md
+#
+#   harness_output_path "report"  "harness-scope-check"    "pr-382"      "workspace" "md" ""
+#     → $HARNESS_WORKSPACE_SHARED/reports/pr-382/20260902-093010-harness-scope-check.md
+#
+#   harness_output_path "qa"      "playwright-screenshot"  "task-login"  "session"   "png" "step1"
+#     → $HARNESS_SESSION_DIR/qa/evidence/task-login/20260902-100000-playwright-screenshot_step1.png
+#
+# FALLBACK se SESSION_DIR / WORKSPACE_SHARED indefinidos (sem binding):
+#   Usa $HARNESS_HOME/outputs/<type>/<related_id>/... (ainda FORA worktree)
+
+harness_output_path() {
+  local type="$1"
+  local slug="$2"
+  local related_id="$3"
+  local scope="$4"
+  local ext="$5"
+  local suffix="${6:-}"
+
+  [ -n "$type" ] || { echo "harness_output_path: type is required" >&2; return 2; }
+  [ -n "$slug" ] || { echo "harness_output_path: slug is required" >&2; return 2; }
+  [ -n "$ext"  ] || { echo "harness_output_path: ext is required" >&2; return 2; }
+  [ "$scope" = "session" ] || [ "$scope" = "workspace" ] || { echo "harness_output_path: scope must be 'session' or 'workspace'" >&2; return 2; }
+
+  # Timestamp UTC no início → alfabetical sort = cronológico
+  local ts_prefix
+  ts_prefix="$(date -u +"%Y%m%d-%H%M%S")"
+
+  # Mapa type → subpasta canônica
+  local subfolder=""
+  case "$type" in
+    report)        subfolder="reports" ;;
+    review)        subfolder="reviews" ;;
+    qa)            subfolder="qa/evidence" ;;
+    spec)          subfolder="specs" ;;
+    design)        subfolder="design" ;;
+    task)          subfolder="tasks" ;;
+    diff_context)  subfolder="diff_contexts" ;;
+    pr_comments)   subfolder="pr_comments" ;;
+    merge_audit)   subfolder="merge_audits" ;;
+    execution)     subfolder="execution" ;;
+    graph)         subfolder="graph" ;;
+    debugger)      subfolder="debugger" ;;
+    architecture)  subfolder="architecture" ;;
+    adr)           subfolder="architecture" ;;
+    other)         subfolder="other" ;;
+    *)             subfolder="$type" ;;
+  esac
+
+  # Escolhe root dir por scope (fallback se variáveis indefinidas)
+  local root_dir=""
+  if [ "$scope" = "session" ]; then
+    root_dir="${HARNESS_SESSION_DIR:-${HARNESS_HOME:-$HOME/.trae}/outputs/fallback-session}"
+  else
+    root_dir="${HARNESS_WORKSPACE_SHARED:-${HARNESS_HOME:-$HOME/.trae}/outputs/fallback-workspace}"
+  fi
+
+  # Monta path final: <root>/<subfolder>/<related_id>/<ts>-<slug>[-<suffix>].<ext>
+  local parent_dir="$root_dir/$subfolder"
+  if [ -n "$related_id" ]; then
+    parent_dir="$parent_dir/$related_id"
+  fi
+
+  local filename="${ts_prefix}-${slug}"
+  if [ -n "$suffix" ]; then
+    filename="${filename}_${suffix}"
+  fi
+  filename="${filename}.${ext}"
+
+  local final_path="$parent_dir/$filename"
+
+  # Double guard: cria diretórios + assert outside worktree
+  mkdir -p "$parent_dir"
+
+  # Assert outside: usa WORKTREE_ROOT do ambiente se definido
+  local wt_for_assert="${WORKTREE_ROOT:-}"
+  if [ -n "$wt_for_assert" ]; then
+    harness_assert_outside_worktree "$final_path" "$wt_for_assert" "harness_output_path: type=$type related=$related_id scope=$scope"
+  fi
+
+  printf '%s\n' "$final_path"
+}
+
+# ---------------------------------------------------------------------------
+# ATOMIC FILE WRITE (NUNCA deixa arquivo meio-escrito se o agente morrer)
+# ---------------------------------------------------------------------------
+# $1 = target_path (obtido via harness_output_path de preferência)
+# stdin = conteúdo a escrever
+#
+# Uso:
+#   echo "conteudo" | harness_write_file_atomic "$(harness_output_path ...)"
+#   harness_write_file_atomic "/tmp/x.md" < meu_arquivo.md
+#
+# Garante: write first em .tmp, depois `mv` atômico do SO.
+
+harness_write_file_atomic() {
+  local target="$1"
+  [ -n "$target" ] || { echo "harness_write_file_atomic: target path required" >&2; return 2; }
+
+  local tmp_path="${target}.tmp.$$"
+  local dir
+  dir="$(dirname "$target")"
+  mkdir -p "$dir"
+
+  # Assert outside (redundância dupla se harness_output_path já rodou, mas barato)
+  if [ -n "${WORKTREE_ROOT:-}" ]; then
+    harness_assert_outside_worktree "$target" "$WORKTREE_ROOT" "atomic_write: $target"
+  fi
+
+  # Escreve em tmp via stdin
+  cat > "$tmp_path"
+
+  # Atomic rename
+  mv -f "$tmp_path" "$target"
+
+  # Limpeza fallback: tmp orphan se houver
+  rm -f "$tmp_path" 2>/dev/null || true
+
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # LIMPEZA DE LEGACY ARTIFACTS DENTRO DA WORKTREE (BIND TIME)
 # ---------------------------------------------------------------------------
 # Por bugs harness antigos, pode existir .trae/ ou decisions.log.jsonl /
@@ -483,6 +643,33 @@ harness_cleanup_legacy_artifacts_in_worktree() {
     "harness-review-report.md"
     "harness-compliance-report.md"
     "flockr-review-report.md"
+    "reports"                              # ← BUG FIX: pasta reports/ criada indevidamente na worktree
+    "HCR-*.md"                             # ← BUG FIX: harness-code-review reports PR mode A naming
+    "HCR-*.json"
+    "REVIEW-*.md"                          # ← BUG FIX: legacy reviews genéricas
+    "REVIEW-*.json"
+    "review-*.md"
+    "review-*.json"
+    "summary.md"                           # ← BUG FIX: summaries gerados na raiz
+    "summary.json"
+    "seo_report.md"                        # ← BUG FIX: reports SEO
+    "seo_report.json"
+    "spec_*.md"                            # ← BUG FIX: specs harness-prd
+    "spec_*.yaml"
+    "SPEC-*.md"
+    "diff-context_*.md"                    # ← BUG FIX: diff contexts salvos em .trae/ worktree
+    "diff-context_*.json"
+    "pr_comments"                          # ← BUG FIX: pasta triage comments PR
+    "pr-comments-*.md"
+    "pr-comments-*.json"
+    "qa_evidence"                          # ← BUG FIX: pasta screenshots/evidence QA
+    "qa-evidence"
+    "screenshots"                          # ← BUG FIX: pasta screenshots gerais
+    "*.qa-report.md"
+    "scope-check_*.md"                     # ← scope checker outputs
+    "scope-check_*.json"
+    "*.adr.md"                             # ← ADRs que por ventura caiam na worktree
+    "ADR-*.md"
   )
 
   # Construindo find args.

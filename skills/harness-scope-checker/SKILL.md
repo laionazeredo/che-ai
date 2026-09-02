@@ -334,11 +334,32 @@ Verdict =
   🟢 APPROVED se (FINAL_score ≥ 7.0) AND (ALL items são 🟢/⚪/INFO) E (ZERO itens 🔴)
 ```
 
+### 8.1 🔴 STORAGE PREFLIGHT OBRIGATÓRIO (ANTES DE ESCREVER O RELATÓRIO)
+
+> MORATÓRIA engineering-contracts §20: Nenhum asset na worktree. Tudo em harness-sessions via helper único.
+
+Rode EXATAMENTE este bloco ANTES de construir qualquer path:
+```bash
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+[ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ Contract $CONTRACT missing — exit 98"; exit 98; }
+SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-scope-session}"
+if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
+  harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+  harness_ensure_session_dirs "$WORKTREE_ROOT"
+fi
+```
+
 ### 8.2 Output header + relatório salvo em
 
+**Construir path com o helper — NUNCA manual:**
+```bash
+# SCOPE = workspace-shared (durável, reusável em futuras sessões desta worktree)
+# related_id = slug da review (ex: pr-382 ou feat-FLO-714 ou task-T1)
+SCOPE_CHECK_PATH="$(harness_output_path "scope_check" "scope-check" "<related_id>" "workspace" "md")"
 ```
-$HARNESS_WORKSPACE_SHARED/scope-check_<slug>_<YYYYMMDD>.md
-```
+Resultado exemplo: `$HARNESS_WORKSPACE_SHARED/scope_check/pr-382/20260902-140000-scope-check.md`
+→ Timestamp UTC no prefix = ordenação automática; related_id agrupa todas scope-checks da mesma entidade.
 
 Primeira página do relatório (sempre no TOPO):
 

@@ -1,6 +1,6 @@
 ---
 name: "harness-qa"
-description: "Auto-detects project tech stack, runs build → lint → typecheck → tests in the correct order. Invoke ONLY by harness-scrum-master after Developer completes a task and scope validation passes."
+description: "Auto-detects project tech stack, runs build → lint → typecheck → tests in the correct order. Invoke ONLY by harness-scrum-master after Developer completes a task and scope validation passes. QA reports ficam FORA worktree em $HARNESS_SESSION_DIR/qa/<related_id>/ com prefixo timestamp ordenável."
 ---
 
 # Harness — QA
@@ -14,6 +14,37 @@ Always returns a **structured, numbered report** so Developer can fix without gu
 
 ---
 
+## -0.1 STORAGE BOUNDARY PREFLIGHT (OBRIGATÓRIO ANTES DO PRIMEIRO WRITE)
+
+```bash
+# 1. Carrega contrato de sessões
+source ~/.trae/contracts/harness_sessions_contract.sh
+
+# 2. Resolve inputs mínimos (SM deve passar; fallback seguro só se não veio)
+WORKTREE_ROOT="${WORKTREE_ROOT:?SM deve passar WORKTREE_ROOT}"
+TASK_ID="${TASK_ID:-full-session}"
+TASK_SLUG="${TASK_SLUG:-qa}"
+SESSION_ID="${SESSION_ID:-qa-standalone-$(date -u +%Y%m%d-%H%M%S)}"
+
+# 3. Paths canônicos + assegura dirs
+harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+harness_ensure_session_dirs "$WORKTREE_ROOT"
+
+# 4. Double-guard: outputs NUNCA na worktree
+harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR"
+harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED"
+
+# 5. Constrói UMA VEZ paths de output QA
+QA_RELATED_ID="T${TASK_ID}-${TASK_SLUG}"
+QA_REPORT_PATH="$(harness_output_path "report" "qa-run" "${QA_RELATED_ID}" "session" "md")"
+QA_EVIDENCE_DIR="$(dirname -- "$(harness_output_path "qa" ".keep" "${QA_RELATED_ID}" "session" "tmp")")"
+mkdir -p "$QA_EVIDENCE_DIR"
+```
+
+**NÃO INVENTE paths:** Todo report, evidence screenshot, console capture, build log fica ABAIXO de `$QA_EVIDENCE_DIR` ou usa `$QA_REPORT_PATH`. Não crie `./qa-report.md`, `/tmp/qa-run.md` ou caminhos relativos à worktree. `stage E test names lint` usa `$QA_EVIDENCE_DIR/test-names.txt` ao invés de `/tmp/qa-test-names.txt`.
+
+---
+
 ## 0. Preconditions
 
 Must receive from Scrum Master:
@@ -23,6 +54,28 @@ Must receive from Scrum Master:
 - Change type hints: e.g. `domain-function`, `ui-component`, `api-route`, `db-migration`, `config`
 
 If any missing → ABORT, go back to SM.
+
+### 0.1 Como escrever o report QA final para DISCO (FAIL ou PASS)
+
+Depois de produzir o report estruturado (template FAIL Stage A-D-E ou template PASS §3), **escreva para arquivo fora worktree usando write atômico:**
+
+```bash
+# NÃO faça "cat > ./qa-report.md" (cai dentro worktree!)
+# NÃO faça "cat > /tmp/qa-task-T1.md" (perde ordenabilidade por related_id/timestamp)
+{
+  echo "# QA Run Report — T${TASK_ID}-${TASK_SLUG}"
+  echo "> Generated at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "> Related ID: ${QA_RELATED_ID}"
+  echo "> Engine: stack detectada no §1"
+  echo
+  # ... cole aqui o conteúdo completo FAIL template OU PASS template §3 ...
+} | harness_write_file_atomic "$QA_REPORT_PATH"
+```
+
+Depois append 1 linha audit trail:
+```bash
+harness_append_decision_jsonl "QA_RUN" "{\"related_id\":\"${QA_RELATED_ID}\",\"task_id\":\"${TASK_ID}\",\"passed\":${QA_PASSED:-false},\"report_path\":\"${QA_REPORT_PATH}\",\"evidence_dir\":\"${QA_EVIDENCE_DIR}\"}"
+```
 
 ---
 

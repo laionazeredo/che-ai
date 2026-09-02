@@ -137,7 +137,30 @@ Para CADA hunk resolvido, append 1 entry `MERGE_RESOLVE` no `decisions.log.jsonl
    ```
    Qualquer restante → exibir lista + perguntar p/ user (normalmente era ambiguidade manual).
 2. `git status --short`: nenhum status `UU AA DD AU UA DU UD` pode sobrar.
-3. Relatório final salvo em: `$HARNESS_WORKSPACE_SHARED/merge-resolve_<slug>_<YYYYMMDD>.md`
+3. **🔴 STORAGE PREFLIGHT (MORATÓRIA §20) + construir paths ANTES de escrever relatório:**
+   ```bash
+   HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+   CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+   [ -f "$CONTRACT" ] || { echo "❌ FATAL: $CONTRACT missing. HARD STOP sem storage boundary. exit 98"; exit 98; }
+   # shellcheck disable=SC1090
+   source "$CONTRACT"
+   SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-merge-session}"
+   if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
+     harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+     harness_ensure_session_dirs "$WORKTREE_ROOT"
+     harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "WORKSPACE_SHARED"
+   fi
+   # Construir path ÚNICO via helper (DURÁVEL workspace-shared — merge logs são reusáveis entre sessões)
+   # related_id = slug do merge (ex: merge-main-into-feat-FLO-714)
+   MERGE_SLUG="${MERGE_SLUG:-wt-$(basename "${WORKTREE_ROOT%/}")}"
+   MERGE_REPORT_PATH="$(harness_output_path "merge_audit" "merge-resolve-final" "${MERGE_SLUG}" "workspace" "md")"
+   ```
+   Relatório final salvo em **`$MERGE_REPORT_PATH`**. Exemplo no filesystem:
+   ```
+   $HARNESS_WORKSPACE_SHARED/merge_audits/wt-feat-FLO-714--X/20260902-140000-merge-resolve-final.md
+   ```
+   → Timestamp no prefix garante ordem se houver re-merge attempts (ex: cherry-pick depois).
+   → NUNCA construa manual `$HARNESS_WORKSPACE_SHARED/merge-resolve_<slug>_<YYYYMMDD>.md`.
    Estrutura:
    - Header: worktree · branch atual · branch incoming (quando detectável `MERGE_HEAD`) · strategy default ours · path subfilter se usado.
    - Summary table counts:

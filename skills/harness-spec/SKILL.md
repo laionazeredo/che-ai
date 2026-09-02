@@ -162,13 +162,35 @@ Reject draft and loop back to §2 source if ANY fails:
 
 ---
 
-## §6 SAVE (atomic write)
+## §6 SAVE (atomic write via contrato helpers)
 
 1. **Final sanitize slug:** `slug = frontmatter.spec_id` sanitized `[^a-zA-Z0-9_-] → -`.
-2. **Target path:** `$HARNESS_WORKSPACE_SHARED/spec_<slug>.md`
+2. **Construir path ÚNICO via `harness_output_path` (NUNCA manual):**
+   ```bash
+   # type=spec → subpasta specs/ (WORKSPACE_SHARED, durável multi-session)
+   # related_id = slug spec → agrupa versões futuras v2/v3 se houver
+   # scope = workspace → DURÁVEL
+   SPEC_FINAL_PATH="$(harness_output_path "spec" "spec" "${slug}" "workspace" "md")"
+   ```
+   Resultado exemplo: `$HARNESS_WORKSPACE_SHARED/specs/feat-refund-pipeline/20260902-120000-spec.md`
+   → Timestamp no prefix: se gerar v2 depois, `20260902-150000-spec.md` ordena DEPOIS automaticamente.
 3. **Check existing overwrite:** If file already exists AND status in existing is Approved → ask "Overwrite Approved spec? Yes/No" before writing. Yes = overwrite. No = append suffix `-v2`, `-v3` to slug until unused.
-4. Write file atomically: write to `$HARNESS_WORKSPACE_SHARED/.spec_<slug>.md.tmp` first, then `mv` on top of final path (never half-written file visible).
-5. Append entry to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (DURÁVEL): `[SPEC] <slug> <status> saved at <ISO ts>. Approver=<approver>`.
+4. **Escrever EXCLUSIVAMENTE via atomic write helper:**
+   ```bash
+   # NÃO escreva .tmp manual. Use o helper canônico tmp → mv atômico:
+   cat <<'SPEC_EOF' | harness_write_file_atomic "$SPEC_FINAL_PATH"
+   ---
+   # YAML frontmatter completo aqui
+   ---
+   # 7 seções do SPEC aqui
+   SPEC_EOF
+   ```
+   (O helper já roda `harness_assert_outside_worktree` automaticamente antes do write.)
+5. **Append decision entry via `harness_append_decision_jsonl` (NÃO construa path nem formate JSON manualmente):**
+   ```bash
+   # o helper decisions já garante path fora worktree + atomic append
+   harness_append_decision_jsonl "SPEC" "${slug} ${status} saved. Approver=${approver}"
+   ```
 
 ---
 

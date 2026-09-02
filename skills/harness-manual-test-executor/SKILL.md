@@ -31,11 +31,33 @@ description: "Executes the manual_test_plan.md step-by-step using Playwright MCP
    - Option A (from harness session): `$HARNESS_WORKSPACE_SHARED/manual_test_plan.md` (via contract) exists (DURÁVEL workspace-shared).
    - Option B (standalone): user passes explicit file path to a Markdown file containing the AC sections below.
 3. If neither exists → STOP. Ask user to provide task-id or the manual_test_plan.md path.
-4. **Worktree Session Binding preflight (engineering-contracts §19):**
-   - Resolve paths via `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"` + `harness_compute_paths`.
+4. **Worktree Session Binding preflight + 🔴 STORAGE BOUNDARY (engineering-contracts §19 + §20 MORATÓRIA — NON-NEGOTIABLE):**
+   ```bash
+   # (a) Source contrato + resolver paths CANÔNICOS
+   HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+   CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+   [ -f "$CONTRACT" ] || { echo "❌ FATAL: $CONTRACT não existe. Zero writes permitidos sem storage boundary. exit 98"; exit 98; }
+   # shellcheck disable=SC1090
+   source "$CONTRACT"
+   SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-manual-test-session}"
+   harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+   harness_ensure_session_dirs "$WORKTREE_ROOT"
+
+   # (b) Double-guard: assert NENHUM dos diretórios de output cai DENTRO da worktree
+   harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR (efêmero QA evidence)"
+   harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED (durável plans)"
+
+   # (c) PATHS CANÔNICOS PARA TODOS OS OUTPUTS DESTA SKILL — construa UMA VEZ aqui, reuse everywhere
+   # Report final (session-scope — efêmero, esta execução apenas):
+   MANUAL_TEST_REPORT_PATH="$(harness_output_path "qa" "manual-test-execution-report" "${TASK_ID:-standalone}" "session" "md")"
+   # Evidence directory helper: todo screenshot/log deve usar harness_output_path type=qa scope=session related_id=TASK_ID suffix="AC-<id>"
+   # Exemplo screenshot AC-2:  "SCREENSHOT_AC2_PATH=$(harness_output_path "qa" "screenshot" "${TASK_ID:-standalone}" "session" "png" "AC-002")"
+   # Exemplo log env setup:    "ENV_SETUP_LOG_PATH=$(harness_output_path "qa" "env-setup" "${TASK_ID:-standalone}" "session" "log")"
+   ```
    - Check `$HARNESS_SESSION_DIR/binding.md` Level2 entry if present (EFÊMERO per-session).
    - Mismatch with provided WORKTREE_ROOT → BLOCK. Ask override/switch/cancel.
    - Missing binding → follow §19 canonical binding flow (global registry Level1 + Level2), ask user confirm once.
+   - **HARD RULE A PARTIR DAQUI:** NUNCA construa path manualmente. Todo screenshot, todo log, todo report = obrigatoriamente via `harness_output_path "qa" ...`. Nenhum arquivo PNG/LOG/MD cai dentro worktree. MORATÓRIA.
 
 ---
 
@@ -177,7 +199,11 @@ Save each evidence file: `SMOKE_<Sx>_<name>.log` or `.png`.
 
 Canonical sections (match references/MANUAL_TEST_EXECUTION_REPORT.md). Use language **English for file content, Portuguese when delivering chat summary §18**.
 
-Report saved to: `$HARNESS_SESSION_DIR/reports/MANUAL_TEST_EXECUTION_REPORT.md` (EFÊMERO per-session, via contract) or user custom dir if standalone.
+Report saved to: a variável **`$MANUAL_TEST_REPORT_PATH`** (já construída durante o STORAGE PREFLIGHT no §0 item 4c usando `harness_output_path`). Resultado exemplo:
+```
+$HARNESS_SESSION_DIR/qa/evidence/T123-refund/20260902-130000-manual-test-execution-report.md
+```
+⚠️ NÃO use path hardcoded `reports/MANUAL_TEST_EXECUTION_REPORT.md`. Reutilize sempre a variável do preflight. Se por algum motivo a variável estiver vazia → RE-RUN o preflight §0 item 4 ANTES de salvar qualquer coisa.
 
 Report sections:
 1. Header (task-id, worktree, timestamps start/end duration, target base URLs)

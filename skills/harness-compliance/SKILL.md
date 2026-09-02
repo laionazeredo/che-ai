@@ -18,6 +18,45 @@ Security/PII/security pattern scanner. Two stages:
 
 ---
 
+## -0.1 STORAGE BOUNDARY PREFLIGHT (CANONICAL, NON-NEGOTIABLE — run BEFORE §0 e ANTES DO PRIMEIRO WRITE)
+
+NENHUM compliance report é escrito NA WORKTREE DO USUÁRIO por padrão. Todo report cai em harness-sessions via helper centralizado. Única exceção: usuário pede VERBATIM EXPLICITAMENTE salvar um report específico lá.
+
+```bash
+# 1. Source contrato (se não herdado de SM/ship)
+source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh"
+
+# 2. SESSION_ID + RELATED_ID (per-task = T<id>; final = worktree slug)
+SESSION_ID="${SESSION_ID:-$(harness_current_session_id 2>/dev/null || echo "compliance-$(date -u +%Y%m%d-%H%M%S)")}"
+if [[ "${stage}" == "final" ]]; then
+  COMPLIANCE_RELATED_ID="compliance-final-${WORKTREE_SLUG_CANONICAL:-$(basename "$WORKTREE_ROOT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//')}"
+else
+  COMPLIANCE_RELATED_ID="T${TASK_ID:-0000}-${TASK_SLUG:-per-task}"
+fi
+
+# 3. Paths canônicos + dirs (se não herdado)
+if [[ -z "${HARNESS_SESSION_DIR}" ]]; then
+  harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$(pwd)"
+  harness_ensure_session_dirs "$WORKTREE_ROOT"
+fi
+
+# 4. Double-guard outside worktree
+harness_assert_outside_worktree "${HARNESS_SESSION_DIR}"      "$WORKTREE_ROOT" "HARNESS_SESSION_DIR"
+harness_assert_outside_worktree "${HARNESS_WORKSPACE_SHARED}" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED"
+
+# ==== OUTPUT PATH DESTA SKILL (construído UMA VEZ) ====
+# stage = final     → scope=workspace (durable: comparação entre sessões)
+# stage = per-task  → scope=session   (ephemeral: só esta sessão)
+COMPLIANCE_SCOPE="session"
+[[ "${stage}" == "final" ]] && COMPLIANCE_SCOPE="workspace"
+COMPLIANCE_REPORT_PATH="$(harness_output_path "report" "compliance-${stage}" "${COMPLIANCE_RELATED_ID}" "${COMPLIANCE_SCOPE}" "md")"
+# → Exemplo per-task:  $HARNESS_SESSION_DIR/reports/T2-refund/20260902-143000-compliance-per-task.md
+# → Exemplo final:     $HARNESS_WORKSPACE_SHARED/report/compliance-final-wt-feat-X/20260902-143000-compliance-final.md
+# → Ordenação intrínseca por prefixo timestamp UTC. Write atômico via: harness_write_file_atomic "$COMPLIANCE_REPORT_PATH" stdin
+```
+
+---
+
 ## 0. Preconditions
 
 Must receive:
@@ -25,7 +64,7 @@ Must receive:
 - `stage`: `"per-task"` OR `"final"`
 - If `per-task`: list of changed files for that task
 - If `final`: list of ALL files changed in the session so far
-- Harness session task-id (to know where to write report)
+- Harness session task-id (to know where to write report; usa `$COMPLIANCE_REPORT_PATH` do preflight acima)
 
 ---
 
@@ -248,6 +287,30 @@ Severity definitions:
 - **MEDIUM**: plausible but requires unlikely preconditions. Soft block: if task is tiny patch release or justification; or explicit user override.
 - **LOW**: best-practice violations, readability / smell. Non-blocking logged.
 - **WARN**: cosmetic / informational. Non-blocking.
+
+### Como escrever o report para disco (NÃO cai dentro da worktree)
+
+Use sempre o path e write atômico do PREFLIGHT. NUNCA construa `$HARNESS_*` manualmente, nunca use `./reports`, nunca escreva em `<WORKTREE_ROOT>/.trae/`.
+
+```bash
+# Gera o report markdown em memória e escreve atômico:
+cat <<'EOF' | harness_write_file_atomic "$COMPLIANCE_REPORT_PATH"
+# Compliance Report — <TASK-ID> — Stage: <per-task | final>
+... (estrutura §7 acima completa)
+EOF
+
+# Printa ao usuário (PT-BR):
+#   Compliance <stage> concluído. 0 CRITICAL. 0 HIGH.
+#   Report completo salvo em: $COMPLIANCE_REPORT_PATH (fora da sua worktree).
+#   Nenhum arquivo untracked/modified adicionado em git status.
+```
+
+Se stage=`final` (cross-session durable): decision-log via helper para audit trail:
+```bash
+harness_append_decision_jsonl "COMPLIANCE_HEAVY_RUN" \
+  '{"report_path":"'"${COMPLIANCE_REPORT_PATH}"'","total_findings":<N>,"critical":<N>,"high":<N>}'
+```
+NÃO escreva este decision append como `cat >> $HARNESS_DECISIONS_PATH` (risco não-atomic + corrompimento JSONL).
 
 ---
 

@@ -32,17 +32,48 @@ User MUST provide:
 
 If user fails to provide ANY of 1, 2, or 3 → **ASK with specific questions** before starting debug loop. Do NOT guess reproduction steps.
 
-### 0.3 Session artifacts dir
+### 0.3 Session artifacts dir + 🔴 STORAGE PREFLIGHT (MORATÓRIA §20)
 
-First: `source "${HARNESS_HOME:-$HOME/.trae}/contracts/harness_sessions_contract.sh" && harness_compute_paths $WORKTREE_ROOT && harness_ensure_session_dirs $WORKTREE_ROOT`.
-Create and use (ALL strictly outside user's worktree; `harness_assert_outside_worktree` HARD-STOPS if misconfigured):
+Rode **exatamente este bloco ANTES** de escrever qualquer arquivo (logs, traces, screenshots, session md, decisions append):
+
+```bash
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+if [ -f "$CONTRACT" ]; then
+  # shellcheck disable=SC1090
+  source "$CONTRACT"
+else
+  echo "❌ FATAL: $CONTRACT não encontrado. HARD STOP — zero arquivos escritos sem storage boundary. exit 98"
+  exit 98
+fi
+
+SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-debugger-session}"
+harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+harness_ensure_session_dirs "$WORKTREE_ROOT"
+
+# Double-guard: asserts fail-fast se qualquer diretório de output cai DENTRO worktree (exit 99)
+harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR (efêmero debug)"
+harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED (durável decisions)"
+
+# Construir TODOS os paths UMA VEZ aqui via helper ÚNICO. Depois reuse só estas variáveis:
+BUGFIX_SESSION_MD="$(harness_output_path "debugger" "bugfix-session" "${BUG_SLUG:-generic-bug}" "session" "md")"
+# Hypothesis log (jsonl append via atomic helper):
+HYPOTHESIS_LOG="$(harness_output_path "debugger" "hypotheses" "${BUG_SLUG:-generic-bug}" "session" "jsonl")"
+# Evidence dir = HARNESS_SESSION_DIR/qa/evidence/<related_id>/ (já criado pelo helper quando necessário)
 ```
-$HARNESS_SESSION_DIR/           (ephemeral per-session: bugfix_session.md, qa/, reports/)
-$HARNESS_WORKSPACE_SHARED/      (durable: decisions.log.jsonl)
+
+**Arquitetura de storage (TODOS estritamente FORA worktree do usuário):**
 ```
-Inside `$HARNESS_SESSION_DIR/`: write `bugfix_session.md` using `references/BUGFIX_SESSION_TEMPLATE.md`.
-Append to this file on every iteration.
-NEVER write `<WORKTREE_ROOT>/.trae/...
+$HARNESS_SESSION_DIR/                       ← ephemeral per-session
+  └── debugger/<BUG_SLUG>/                  ← related_id agrupa tudo deste bug
+        ├── 20260902-133000-bugfix-session.md   (append por loop iteration)
+        └── 20260902-133000-hypotheses.jsonl    (cada hipótese uma linha)
+$HARNESS_WORKSPACE_SHARED/                  ← durable: decisions.log.jsonl (único por worktree)
+```
+
+**NUNCA escreva em `<WORKTREE_ROOT>/.trae/` nem `<WORKTREE_ROOT>/reports/` nem qualquer path relativo dentro worktree.** MORATÓRIA §20. Se por qualquer motivo você precisar salvar algo dentro worktree (exceção rara), pare e peça confirmação VERBATIM EXPLÍCITA do usuário em texto.
+
+Append to `$BUGFIX_SESSION_MD` on every loop iteration using `harness_write_file_atomic` (pipe append) ou `>>` redirection (seguro pois o path já passou por assert outside).
 
 ---
 

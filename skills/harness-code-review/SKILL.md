@@ -577,24 +577,90 @@ Then at the end (both modes, except verdict notes):
 
 ---
 
+## 4.9 🔴 STORAGE PREFLIGHT OBRIGATÓRIO (NUNCA SKIP — engineering-contracts §20 + HARNESS_RULES.md STORAGE BOUNDARY)
+
+> **HARD STOP RULE VERBATIM DO USUÁRIO:** Nenhum asset do trabalho do harness deve ser criado na worktree. Apenas quando solicitado explicitamente. Tudo deve ser organizado no harness-sessions.
+
+**Antes do PRIMEIRO write em disco (qualquer arquivo: report, screenshots, decisions, QA evidence, etc), RODAR EXATAMENTE ESTE BLOCO:**
+
+```bash
+# (1) Source o contrato canônico de sessões (fornece harness_output_path, harness_assert_outside_worktree, etc)
+HARNESS_HOME="${HARNESS_HOME:-$HOME/.trae}"
+CONTRACT="$HARNESS_HOME/contracts/harness_sessions_contract.sh"
+if [ -f "$CONTRACT" ]; then
+  # shellcheck disable=SC1090
+  source "$CONTRACT"
+else
+  echo "❌ FATAL: harness_sessions_contract.sh não encontrado em $CONTRACT. Não posso escrever outputs sem o storage boundary. Abortando write."
+  exit 98
+fi
+
+# (2) Definir variáveis mínimas para binding (se já houver binding, reuse; senão usar defaults seguros)
+# WORKTREE_ROOT: obrigatório se Mode B; se Mode A sem worktree local, set para string vazia mas NÃO CAI NA WORKTREE POR ACIDENTE
+# SESSION_ID: harness_current_session_id do registry ou fallback slug-safe
+SESSION_ID="${HARNESS_CURRENT_SESSION_ID:-fallback-review-session}"
+# WORKTREE_ROOT: se Mode B, já temos; se Mode A e user passou --worktree, use aquele valor; senão vazia (sem assert contra worktree nesse caso)
+# WORKTREE_ROOT é conhecido no fluxo desde §0.1 e §Mode B; aqui apenas reafirmar
+
+# (3) Computar paths canônicos + criar diretórios base (SESSION_DIR, WORKSPACE_SHARED, etc)
+# Se WORKTREE_ROOT existe e é válido:
+if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
+  harness_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
+  harness_ensure_session_dirs "$WORKTREE_ROOT"
+  # Double-guard: o helper harness_output_path já roda assert automaticamente; mas reafirmar aqui para clareza
+  harness_assert_outside_worktree "$HARNESS_SESSION_DIR" "$WORKTREE_ROOT" "HARNESS_SESSION_DIR (root de efêmeros)"
+  harness_assert_outside_worktree "$HARNESS_WORKSPACE_SHARED" "$WORKTREE_ROOT" "HARNESS_WORKSPACE_SHARED (root duráveis)"
+fi
+
+# ⚠️ APÓS este bloco, NÃO construa paths manualmente.
+# Use SEMPRE: OUTPUT_PATH="$(harness_output_path "<type>" "<slug>" "<related_id>" "<scope=session|workspace>" "<ext>" "<suffix>")"
+# Garantias automáticas do helper: timestamp prefix UTC ordenável, subpasta por type/related_id, mkdir -p, assert outside worktree, fallback seguro.
+```
+
+---
+
 ## 5. Post-report actions
 
-### Mode A (GitHub PR) — unchanged:
-- Write review report TO DISK at:
-  `$HARNESS_SESSION_DIR/reports/review_PR-<ID>_<YYYYMMDD>.md` (EFÊMERO per-session, via contract)
-  (If no worktree / binding exists yet, fallback: write report to chat + offer to save at user home `~/.trae/reports/`.)
+> **IMPORTANTE: STORAGE BOUNDARY — NUNCA escreva dentro da worktree. Todo output via `harness_output_path` only (ver §4.9).**
+
+### Mode A (GitHub PR):
+- **Construir o path do report USANDO O HELPER (nunca manual):**
+  ```bash
+  # Report principal (full) — related_id = pr-<ID>; ficará agrupado em reviews/pr-<ID>/
+  REPORT_FULL_PATH="$(harness_output_path "review" "harness-code-review" "pr-${PR_ID}" "session" "md" "full")"
+
+  # Se houver um segundo report da MESMA PR (ex: postfix, post-review, auto-fix summary) — usar outro suffix:
+  # REPORT_POSTFIX_PATH="$(harness_output_path "review" "harness-code-review" "pr-${PR_ID}" "session" "md" "postfix")"
+  ```
+  - **Resultado esperado no filesystem:**
+    ```
+    $HARNESS_SESSION_DIR/reviews/pr-<ID>/
+      ├── 20260902-092400-harness-code-review_full.md   (1ª rodada, prefix timestamp ordena primeiro)
+      └── 20260902-093000-harness-code-review_postfix.md (2ª rodada, prefix timestamp ordena depois)
+    ```
+    Busca futura trivial: `ls -1 reviews/pr-382/*.md` → todos reports da PR juntos, ordem alfabética = ordem cronológica.
+  - **Fallback seguro SEM binding (raro):** o helper `harness_output_path` já cai em `$HARNESS_HOME/outputs/fallback-session/reviews/pr-<ID>/...` automaticamente; NUNCA cai na worktree nem em `./reports/`.
+  - **NUNCA use path relativo `./reports/` ou `$WORKTREE_ROOT/.trae/`. MORATÓRIA engineering-contracts §20.**
+
 - **DO NOT approve or request changes DIRECTLY on GitHub via `gh pr review`** unless user explicitly asks after seeing the report and saying "suba isso como review oficial". Our first deliverable = the report for the user to review in chat.
 - If there are ZERO findings → still write a report saying "No CRITICAL/HIGH issues found; scope matches; dependencies justified." + list what you checked so user trusts the review was actually done.
+- **Escrever usando atomic write:** pipe o conteúdo markdown no stdin de `harness_write_file_atomic "$REPORT_FULL_PATH"` (tmp → mv atômico, evita meio-escrito em crash).
 
-### Mode B (Local Worktree) — NEW:
-- Write review report TO DISK at:
-  `$HARNESS_SESSION_DIR/reports/review_LOCAL-WORKTREE_<YYYYMMDD>_<HHMMSS>.md` (EFÊMERO per-session, via contract)
-  (Timestamped because there may be multiple local review passes before code is committed.)
-- **DO NOT interact with GitHub at all** in Mode B (no gh commands, no PR creation). Pure local output only.
-- Zero findings → still write report with: "No CRITICAL/HIGH issues found in modified files. Scope matches stated goals; dependencies justified." Include the full changed files list + what you checked per category (Runtime/Security/Deps/Scope) so user trusts audit was actually done.
+### Mode B (Local Worktree):
+- **Construir o path do report USANDO O HELPER:**
+  ```bash
+  # Worktree slug: extrair basename de WORKTREE_ROOT (ex: feat-FLO-714--Design-a-non-blocking-and-scalable-deployment-in-prod-governance)
+  WT_SLUG="$(basename "${WORKTREE_ROOT%/}")"
+  REPORT_LOCAL_PATH="$(harness_output_path "review" "harness-code-review" "worktree-${WT_SLUG}" "session" "md" "full")"
+  # Segunda passagem da mesma worktree: trocar suffix para "pass2" ou "postfix" etc
+  ```
+  - **Resultado esperado:** `$HARNESS_SESSION_DIR/reviews/worktree-<WT_SLUG>/20260902-101500-harness-code-review_full.md`
+  - Timestamp UTC no prefix garante ORDENAÇÃO de múltiplas passes locais sem depender de mtime do SO.
+- **DO NOT interact with GitHub at all** in Mode B (no gh commands, no PR creation). Pure local output only inside harness-sessions.
+- Zero findings → still write report with: "No CRITICAL/HIGH issues found in modified files. Scope matches stated goals; dependencies justified." Include the full changed files list + what you checked per category.
 - Optional user convenience at end of chat message:
   - If Mode B, after presenting findings, offer ONE follow-up action:
-    - `[Apply fixes locally]` — if user says yes, proceed using harness-developer mindset to fix the CRITICAL/HIGH blockers inside the same worktree (still under scope; don't add features).
+    - `[Apply fixes locally]` — if user says yes, proceed using harness-developer mindset to fix the CRITICAL/HIGH blockers inside the same worktree (still under scope; don't add features). **Nota: QA evidence / screenshots dessa etapa também via harness_output_path type=qa scope=session.**
     - `[Show just the blocked items condensed]` — for brevity.
     - `[Nothing, thanks]` — stop.
   Don't be pushy. If user just says "ok thanks" → stop.
