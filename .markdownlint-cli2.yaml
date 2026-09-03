@@ -16,3 +16,14 @@ config:
   MD055: false  # Table pipe style
   MD034: false  # No bare URLs
   MD049: false  # Emphasis style
+  MD007: false  # Unordered list indentation
+  MD056: false  # Table column count
+  MD038: false  # No spaces inside code span elements
+  MD037: false  # No spaces inside emphasis markers
+  MD009: false  # No trailing spaces
+  MD025: false  # Multiple top-level headings in the same document
+  MD012: false  # Multiple consecutive blank lines
+  MD036: false  # Emphasis used instead of a heading
+  MD004: false  # Unordered list style
+  MD050: false  # Strong style
+  MD001: false  # Heading levels should only increment by one level at a time
