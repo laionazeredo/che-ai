@@ -74,3 +74,4 @@ graphify-out/
 harness-review-report.md
 harness-compliance-report.md
 flockr-review-report.md
+__pycache__/
