@@ -421,7 +421,7 @@ logger.info(`Refund completed, refundId=${refundId} customerEmail=${email}`)
 
 **Regra NÃO NEGOCIÁVEL scripts:**
 1. **Prefixo obrigatório por nível:** `[INFO]` / `[WARN]` / `[ERROR]` / `[STEP 1/5]` (pipeline numerado é ouro). Não dependa só de `set -x` (debug super floodado, útil só p/ debugging).
-2. **Todo step com IO externo (clone, download, backup, apply, migrate, deploy, curl HTTP)** = echo **START** + echo **END (OK/failed)**. Humanos lêem `[INFO] Fetching gh CLI repo (laionazeredo/trae-config)...` e sabem o que está acontecendo SEM olhar código.
+2. **Todo step com IO externo (clone, download, backup, apply, migrate, deploy, curl HTTP)** = echo **START** + echo **END (OK/failed)**. Humanos lêem `[INFO] Fetching gh CLI repo (laionazeredo/che-ai)...` e sabem o que está acontecendo SEM olhar código.
 3. **Branching / condicionais:** se caiu num fallback, se usou A ou B, avise `[WARN] gh not detected in PATH, fallback skipped (error expected) → exit 6`.
 4. **NÃO flood com `set -x` global ligado sempre.** Use `set -x` APENAS em blocos pequenos e específicos debugging. Desligue depois.
 5. **Erro = sempre exit code diferente:** `echo "[ERROR] ..." >&2; exit N`. Use fd 2 para stderr.
@@ -437,9 +437,9 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 echo "[INFO] gh detected OK, $(gh --version | head -1). [OK 1/4]"
 
-echo "[STEP 2/4] Fetch repo laionazeredo/trae-config via gh repo clone..."
-gh repo clone laionazeredo/trae-config /tmp/src -- --depth 1 --quiet || {
-  echo "[ERROR] gh clone failed. Diagnostico: gh auth status; gh repo view laionazeredo/trae-config" >&2
+echo "[STEP 2/4] Fetch repo laionazeredo/che-ai via gh repo clone..."
+gh repo clone laionazeredo/che-ai /tmp/src -- --depth 1 --quiet || {
+  echo "[ERROR] gh clone failed. Diagnostico: gh auth status; gh repo view laionazeredo/che-ai" >&2
   exit 8
 }
 echo "[INFO] Fetch OK (depth 1). [OK 2/4]"

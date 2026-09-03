@@ -19,7 +19,7 @@ The installer:
 
 Run:
 
-    export CHE_HOME=/absolute/path/to/trae-config
+    export CHE_HOME=/absolute/path/to/che-ai
     export CHE_SESSION_ID="codex-$(date +%s)"
     codex
 
