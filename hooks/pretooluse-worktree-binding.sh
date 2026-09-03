@@ -4,14 +4,14 @@
 #   Level 1 = GLOBAL INDEX (AUTHORITY): $HOME/.trae/bindings/registry.jsonl
 #     entry per SESSION_ID. Resolves chicken-and-egg: lookup WORKTREE_ROOT from SESSION_ID
 #     WITHOUT knowing worktree first. 1 session = 1 BOUND entry active (last STATUS=BOUND wins)
-#     NÃO use Edit/Write direto. Sempre source harness_sessions_contract.sh + harness_registry_append_jsonl.
+#     NÃO use Edit/Write direto. Sempre source che_sessions_contract.sh + che_registry_append_jsonl.
 #   Level 2 = PER-SESSION DETAIL (FORA WORKTREE USER — NUNCA commitado):
-#     $HARNESS_SESSION_DIR/binding.md (resolvido via harness_sessions_contract.sh).
+#     $CHE_SESSION_DIR/binding.md (resolvido via che_sessions_contract.sh).
 #     Not used by this hook for scissor checks; only SM/Ship/Dev read level 2 for audit chain.
 #
 # This hook exits 2 (BLOCK) only when:
 #   (a) SESSION_ID FOUND in Level1 registry AND target path outside BOUND WORKTREE_ROOT active STATUS=BOUND
-#       AND target path is NOT inside $HARNESS_SESSIONS_ROOT (exceção paths gerados).
+#       AND target path is NOT inside $CHE_SESSIONS_ROOT (exceção paths gerados).
 # Otherwise allow (allow unknown sessions proceed to binding-decision flow §19.2).
 #
 # Input  stdin JSON: {event, sessionId, toolName, toolArgs: {...}}
@@ -20,8 +20,8 @@
 
 set -euo pipefail
 
-HARNESS_ROOT="${HARNESS_HOME:-$HOME/.trae}"
-CONTRACTS_SH="$HARNESS_ROOT/contracts/harness_sessions_contract.sh"
+CHE_ROOT="${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}"
+CONTRACTS_SH="$CHE_ROOT/contracts/che_sessions_contract.sh"
 if [ -f "$CONTRACTS_SH" ]; then
   # shellcheck disable=SC1090
   source "$CONTRACTS_SH"
@@ -38,10 +38,10 @@ if [[ ! "$TOOL_NAME" =~ ^($TOOLS_TO_GUARD)$ ]]; then
   exit 0
 fi
 
-# --- HARNESS_SESSIONS_ROOT EXCEPTION (explicit, by design) ---
+# --- CHE_SESSIONS_ROOT EXCEPTION (explicit, by design) ---
 # Paths de dados gerados (plans, reports, qa, Level2 binding) são SEMPRE permitidos.
 # Eles estão fora do código do usuário → não há risco cross-worktree de código.
-HARNESS_SESSIONS_ROOT="${HARNESS_SESSIONS_ROOT:-$HOME/code/harness-sessions}"
+CHE_SESSIONS_ROOT="${CHE_SESSIONS_ROOT:-${HARNESS_SESSIONS_ROOT:-$HOME/.che-workspaces}}"
 
 extract_paths() {
   jq -r '[.toolArgs.file_path // empty,
@@ -55,10 +55,18 @@ extract_paths() {
 
 mapfile -t CANDIDATE_PATHS < <(extract_paths)
 
+# Early allow: qualquer path candidato começa com CHE_SESSIONS_ROOT → permitido
+for p in "${CANDIDATE_PATHS[@]}"; do
+  if [[ "$p" == "$CHE_SESSIONS_ROOT"/* ]]; then
+    echo '{"decision":"allow","reason":"§19 EXCEÇÃO CHE_SESSIONS_ROOT: path alvo é pasta de dados gerados/efêmeros che (fora código usuário). Scissor bypassed by design."}'
+    exit 0
+  fi
+done
+
 # --- LEVEL 1 LOOKUP JSONL (chicken-and-egg solved: lookup by SESSION_ID) ---
 REGISTRY_FILE=""
-if declare -F harness_registry_path >/dev/null 2>&1; then
-  REGISTRY_FILE="$(harness_registry_path)"
+if declare -F che_registry_path >/dev/null 2>&1; then
+  REGISTRY_FILE="$(che_registry_path)"
 fi
 BOUND_ROOT=""
 if [ -n "$TRAE_SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
@@ -109,7 +117,7 @@ VIOLATIONS=()
 PROJECT_PATHS=0
 SESSION_ARTIFACT_PATHS=0
 for p in "${CANDIDATE_PATHS[@]}"; do
-  if [ "$p" = "$HARNESS_SESSIONS_ROOT" ] || [[ "$p" == "$HARNESS_SESSIONS_ROOT"/* ]]; then
+  if [ "$p" = "$CHE_SESSIONS_ROOT" ] || [[ "$p" == "$CHE_SESSIONS_ROOT"/* ]]; then
     SESSION_ARTIFACT_PATHS=$((SESSION_ARTIFACT_PATHS + 1))
     continue
   fi

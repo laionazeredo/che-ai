@@ -24,8 +24,8 @@ gh auth status --show-token 2>&1 | grep -c "Logged in to github.com" >/dev/null
 | Listar PRs abertas | `gh pr list --state open --json number,title,url,headRefName,statusCheckRollup` | `--json` sempre que possível (parseável) |
 | Criar DRAFT PR | `gh pr create --draft --title "..." --body "..." --base main --head <branch>` | SEMPRE cria DRAFT primeiro (ship §0.9 post gates) |
 | Marcar PR ready | `gh pr ready <numero>` | Só depois G1-G5 all pass |
-| Check CI status | `gh pr checks <numero> --watch` | Se CI vermelho → harness-ci-fix skill |
-| Comentários PR triage | `gh pr view <numero> --json comments,reviews` | ver harness-pr-comments skill |
+| Check CI status | `gh pr checks <numero> --watch` | Se CI vermelho → che-ci-fix skill |
+| Comentários PR triage | `gh pr view <numero> --json comments,reviews` | ver che-pr-comments skill |
 | Merge PR | `gh pr merge <numero> --squash --delete-branch --admin` | SEMPRE --squash + delete branch |
 | Label | `gh pr edit <n> --add-label "🟢 scope-approved"` | Convenção de labels por projeto |
 | Check diff PR vs branch alvo | `gh pr diff <n>` | |

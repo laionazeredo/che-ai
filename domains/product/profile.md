@@ -5,7 +5,7 @@ owner: ""
 created: "2026-09-01"
 status: "Draft"
 version: "0.1.0"
-notes: "Bootstrap boilerplate. Customize before use. See HARNESS_RULES taxonomy for domain fields."
+notes: "Bootstrap boilerplate. Customize before use. See CHE_RULES taxonomy for domain fields."
 ---
 
 # Domain Profile — product

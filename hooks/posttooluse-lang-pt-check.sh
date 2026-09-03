@@ -4,7 +4,7 @@
 #   - Watches Edit/Write tool operations (file writes).
 #   - Reads Level 1 registry ($HOME/.trae/bindings/registry.jsonl):
 #       if SESSION_ID has flags.LANG_PT_CHECK == DISABLED -> SKIP entirely (allow, no warn).
-#       NÃO use Edit/Write direto. Sempre source harness_sessions_contract.sh + harness_registry_append_jsonl.
+#       NÃO use Edit/Write direto. Sempre source che_sessions_contract.sh + che_registry_append_jsonl.
 #   - Otherwise: scans the WRITTEN file (toolArgs.file_path or cwd-written) for:
 #       (a) 3+ PT-BR stopwords on same file (comment/string/MD content lines), OR
 #       (b) combination of 2+ PT diacritics (ç ã õ é ê á à ó ô ú â î û ñ) with PT stopwords pattern
@@ -18,8 +18,8 @@
 
 set -euo pipefail
 
-HARNESS_ROOT="${HARNESS_HOME:-$HOME/.trae}"
-CONTRACTS_SH="$HARNESS_ROOT/contracts/harness_sessions_contract.sh"
+CHE_ROOT="${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}"
+CONTRACTS_SH="$CHE_ROOT/contracts/che_sessions_contract.sh"
 if [ -f "$CONTRACTS_SH" ]; then
   # shellcheck disable=SC1090
   source "$CONTRACTS_SH"
@@ -51,8 +51,8 @@ fi
 #   - LANG_DOCS = outros  → SKIP por segurança (ainda não temos dicionários de outras línguas)
 # Backward compat: legacy LANG_PT_CHECK=DISABLED é tratado como LANG_DOCS=pt-BR
 REGISTRY_FILE=""
-if declare -F harness_registry_path >/dev/null 2>&1; then
-  REGISTRY_FILE="$(harness_registry_path)"
+if declare -F che_registry_path >/dev/null 2>&1; then
+  REGISTRY_FILE="$(che_registry_path)"
 fi
 LANG_DOCS="en"
 if [ -n "$TRAE_SESSION_ID" ] && [ -f "$REGISTRY_FILE" ] && command -v python3 >/dev/null 2>&1; then
@@ -130,7 +130,7 @@ ADDL="ACTION REQUIRED by AGENT: AskUserQuestion to user BEFORE PROCEEDING furthe
 Current project LANG_DOCS=en (padrão). O que deseja fazer?
 (A) Traduzir conteúdo detectado para inglês (recomendado p/ manter LANG_DOCS=en)
 (B) Manter em português — NESTE ARQUIVO ESPECÍFICO (justificar, e se for padrão novo aplicar em (C))
-(C) CONFIGURAR ESTE PROJETO/SESSÃO com LANG_DOCS=pt-BR (TODO comments/PR/commits/docs em PT-BR mas variáveis código = EN). This is the permanent recommended option if the whole project is in portuguese docs. Adiciona via helper `harness_registry_append_jsonl` com `"flags":{"LANG_DOCS":"pt-BR"}` Level 1 registry.jsonl. Backward compat flag LANG_PT_CHECK=DISABLED adicionado também.
+(C) CONFIGURAR ESTE PROJETO/SESSÃO com LANG_DOCS=pt-BR (TODO comments/PR/commits/docs em PT-BR mas variáveis código = EN). This is the permanent recommended option if the whole project is in portuguese docs. Adiciona via helper `che_registry_append_jsonl` com `"flags":{"LANG_DOCS":"pt-BR"}` Level 1 registry.jsonl. Backward compat flag LANG_PT_CHECK=DISABLED adicionado também.
 Sample lines: $SAMPLE_LINES
 File analyzed: $FILE_PATH"
 

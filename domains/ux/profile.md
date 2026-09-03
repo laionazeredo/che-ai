@@ -1,7 +1,7 @@
 ---
 domain: "ux"
 name: "UI/UX DesignOps (Figma · PenPot)"
-owner: "Harness Domain Layer — Piloto UX"
+owner: "Che Domain Layer — Piloto UX"
 created: "2026-09-01"
 status: "Active · Pilot"
 version: "0.1.0"
@@ -78,7 +78,7 @@ notes: "Piloto primeiro domínio não-engineering. Provado o modelo aqui, rollou
 
 ## 🔗 Cross-references a skills / ferramentas / gates oficiais
 
-- **Skill oficial de design Figma já existente no ecossistema Flockr:** `/harness-figma` — build Figma screen/component in code accurately on the first pass: gathers exact dev-mode values up front, checks for existing component reuse, implements, then self-verifies.
+- **Skill oficial de design Figma já existente no ecossistema Flockr:** `/che-figma` — build Figma screen/component in code accurately on the first pass: gathers exact dev-mode values up front, checks for existing component reuse, implements, then self-verifies.
 - **Skill oficial pixel verificação:** `/figma-pixel-check` — verify implemented component against Figma using exact dev-mode values (padding, radius, icon/font size) instead of eyeballing screenshots. Base do nosso Gate `pixel-check-gate` (abaixo).
 - **Gate A11y oficial:** `domains/ux/gates/accessibility-gate.md` (axe-core CLI `@axe-core/cli` oficial, WCAG 2.2 AA).
 - **Gate Pixel oficial:** `domains/ux/gates/pixel-check-gate.md` (inspirado `/figma-pixel-check`).

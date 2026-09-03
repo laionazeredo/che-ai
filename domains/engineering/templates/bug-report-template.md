@@ -1,6 +1,6 @@
 # Template · Engineering Bug Report (científico, reprodutível)
 
-O padrão do Scientific Debugging (harness-fix skill). **Sempre preencha ANTES de começar a corrigir.**
+O padrão do Scientific Debugging (che-fix skill). **Sempre preencha ANTES de começar a corrigir.**
 
 ---
 

@@ -2,21 +2,21 @@
 
 ⚠️ **ESTA PASTA LOCAL NÃO TEM DADOS NO REPO PÚBLICO.**
 
-O arquivo único de verdade aqui é `registry.jsonl` — ele é **ESCRITO APENAS pelo helper oficial do contracts** `harness_registry_append_jsonl` durante sessões de trabalho na SUA máquina.
+O arquivo único de verdade aqui é `registry.jsonl` — ele é **ESCRITO APENAS pelo helper oficial do contracts** `che_registry_append_jsonl` durante sessões de trabalho na SUA máquina.
 
 ## Por que NÃO está versionado (blacklist no `.gitignore`)?
 
 - Cada `registry.jsonl` guarda session_ids e worktree paths HARDCODED da máquina LOCAL.
 - Fazer pull de registry.jsonl de outra pessoa → binding quebrado + paths inexistentes.
-- Cada sessão do harness bootstrappa **em runtime** quando você roda `/harness-start` ou `/harness-spec`.
+- Cada sessão do che bootstrappa **em runtime** quando você roda `/che-start` ou `/che-spec`.
 
 ## Quando esta pasta ganha conteúdo?
 
 ```
-1. Você: /harness-start <worktree>
+1. Você: /che-start <worktree>
    → contracts helper cria entrada BOUND no registry.jsonl LOCAL
    → hook pretooluse-worktree-binding.sh lê ela e faz scissor dos paths
-2. Fim da sessão: /harness-ship ou /harness-abort
+2. Fim da sessão: /che-ship ou /che-abort
    → entrada CLOSED no mesmo registry.jsonl
 ```
 

@@ -1,6 +1,6 @@
 # SHARED CHECKLIST — Security & PII Compliance (CANONICAL)
 
-> REFERÊNCIA COMPARTILHADA por: harness-compliance, harness-code-review, harness-ship (light per-task check), harness-pr-comments, harness-ci-fixer (secrets rotation check), harness-developer (per-implementation self-check).
+> REFERÊNCIA COMPARTILHADA por: che-compliance, che-code-review, che-ship (light per-task check), che-pr-comments, che-ci-fixer (secrets rotation check), che-developer (per-implementation self-check).
 > NÃO duplique o conteúdo abaixo em skills individuais. Referencie apenas este arquivo.
 
 ---

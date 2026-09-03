@@ -1,17 +1,17 @@
 ---
 name: "engineering-contracts"
-description: "HIGHEST-PRECEDENCE engineering rulebook for ALL tasks (CANONICAL — DO NOT duplicate pure engineering rules anywhere else). Formal precedence 1-18 of KISS/YAGNI/blast-radius over everything else; forces strict typing, Design by Contract, TDD/ATDD, functional-core/imperative-shell, Rust-style Result/Option, observability, conventional commits, Supabase Postgres ENABLE RLS default, agile BDD incremental delivery with SOLID, code-review optimization (max 2 lines comment block + gh-stack multi-PR reference), agent response verbosity budget (concise by default with optional deep-dive prompts). Invoked FIRST by harness-developer before any code. Respected by all harness skills. Appendices: A Hard Conflict Resolution Table, B Conventional Commits types + regex + examples, C gh-stack Workflow Reference."
+description: "HIGHEST-PRECEDENCE engineering rulebook for ALL tasks (CANONICAL — DO NOT duplicate pure engineering rules anywhere else). Formal precedence 1-18 of KISS/YAGNI/blast-radius over everything else; forces strict typing, Design by Contract, TDD/ATDD, functional-core/imperative-shell, Rust-style Result/Option, observability, conventional commits, Supabase Postgres ENABLE RLS default, agile BDD incremental delivery with SOLID, code-review optimization (max 2 lines comment block + gh-stack multi-PR reference), agent response verbosity budget (concise by default with optional deep-dive prompts). Invoked FIRST by che-developer before any code. Respected by all che skills. Appendices: A Hard Conflict Resolution Table, B Conventional Commits types + regex + examples, C gh-stack Workflow Reference."
 ---
 
 # Engineering Contracts (Highest Precedence Rules — CANONICAL)
 
-This is the **authoritative rulebook** for every coding task in the harness.
-It is invoked by `harness-developer` FIRST, and its rules **trump local repo conventions when they conflict** — except for Rule 3 ("repo style wins unless undefined").
+This is the **authoritative rulebook** for every coding task in the che.
+It is invoked by `che-developer` FIRST, and its rules **trump local repo conventions when they conflict** — except for Rule 3 ("repo style wins unless undefined").
 
 > **DUPLICATION POLICY:**
 > Pure engineering rules (precedence order, DbC, TDD, strong typing, security, conventional commits, RLS, agile BDD, SOLID, code review optimization) LIVE EXCLUSIVELY HERE.
-> They MUST NOT be duplicated in `HARNESS_RULES.md`, `user_rules`, `AGENTS.md` or any other location. Those files may only REFERENCE (link) this skill, never reproduce full bodies.
-> `HARNESS_RULES.md` owns ONLY process/flow (worktree ask, gate order, parallelism algorithm, PRD G1-G10, gh-stack planning triggers, GitHub integration UX).
+> They MUST NOT be duplicated in `CHE_RULES.md`, `user_rules`, `AGENTS.md` or any other location. Those files may only REFERENCE (link) this skill, never reproduce full bodies.
+> `CHE_RULES.md` owns ONLY process/flow (worktree ask, gate order, parallelism algorithm, PRD G1-G10, gh-stack planning triggers, GitHub integration UX).
 
 > When two rules seem to conflict: the rule higher in this precedence list wins.
 > When this rulebook and a repo's local `AGENTS.md` conflict: **THIS rulebook wins** because it is global user policy. Local `AGENTS.md` can only ADD rules, not OVERRIDE these.
@@ -148,7 +148,7 @@ Granularity:
 > **HARD RULE VERBATIM USER (contractual):** "nunca misturar linguagens". Cada eixo abaixo tem EXATAMENTE 1 idioma configurado por arquivo/sessão/projeto. Strings UI traduzidas = artefato de i18n em JSON separado (não conta como LANG_CODE).
 
 **Precedência de configuração (HIGH → LOW):**
-1. **Override sessão Level 1 registry flags** (`harness_registry_append_jsonl … FLAGS … '{"flags":{"LANG_DOCS":"pt-BR"}}'`) — temporário, só esta sessão.
+1. **Override sessão Level 1 registry flags** (`che_registry_append_jsonl … FLAGS … '{"flags":{"LANG_DOCS":"pt-BR"}}'`) — temporário, só esta sessão.
 2. **Project registry Level 1.5** `.registry/projects/<slug>/product_context.md` frontmatter `lang_code:` + `lang_docs:` — durável por projeto, compartilhado worktrees × sessões.
 3. **Defaults ABAIXO** se nenhum dos dois acima definiu.
 
@@ -159,7 +159,7 @@ Granularity:
 | **CÓDIGO** | `LANG_CODE` | `en` (INGLÊS OBRIGATÓRIO default) | Identificadores: variables, classes, functions, methods, constants, file names, folder names, enum members, type names, exported symbols, i18n keys. **SÓ MUDE se usuário EXPLICITLY pedir por projeto.** Não confundir com strings UI traduzidas (arquivos JSON i18n separados). |
 | **DOCUMENTAÇÃO CÓDIGO + PR/COMMITS** | `LANG_DOCS` | `en` (default) | Comments inline non-docstring no source, JSDoc/TSDoc, PR titles + body, conventional commit scope + description, repo docs / ADRs / README / SPEC body + YAML. **CONFIGURAÇÃO MAIS COMUM override = `LANG_DOCS = pt-BR`** → comentários/PR/commits/docs em PT-BR mas variáveis de código SEMPRE em EN (LANG_CODE stays `en`). |
 | **CHAT COM USUÁRIO** | `LANG_CHAT` | `pt-BR` (default hoje) | Respostas textuais no chat direto com o usuário. |
-| **REPORTS ESTRUTURADOS** | `LANG_REPORT` | `en` (default) | Reports harness: code-review, scope-checker, QA report, merge-audit, spec YAML frontmatter. |
+| **REPORTS ESTRUTURADOS** | `LANG_REPORT` | `en` (default) | Reports che: code-review, scope-checker, QA report, merge-audit, spec YAML frontmatter. |
 
 **Backward compat legacy:** Flag binária antiga `LANG_PT_CHECK=ENABLED|DISABLED` é migrada automaticamente: `LANG_PT_CHECK=DISABLED → LANG_DOCS=pt-BR`. Usuário NÃO precisa fazer migration manual.
 
@@ -215,7 +215,7 @@ This rule turns "agilidade" from vague talk into enforceable checkpoints:
 5. **Behavior golden rule:**
    - NEVER break existing behavior without an EXPLICIT AC asking for the break.
    - If you need behavior breaking: NON-GOALS, Data Model + Migration with rollback plan, and explicit user approval.
-6. **Test-suite naming = behavior observable ONLY (REGRA 7.9 do harness).**
+6. **Test-suite naming = behavior observable ONLY (REGRA 7.9 do che).**
 
    **🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça ao contrário):**
    > ❌ **ERRADO:** Escrever `it("FLO-714 T1.2 valida AC 3.1 deploy")` → IDs NO TÍTULO = antinômio da regra.
@@ -255,7 +255,7 @@ Rules enforced on EVERY implementation:
    - What questions would a reviewer ask? Answer them in the function name, not in a comment.
    - Ship PR body explains WHAT and WHY, not HOW (how = code).
 4. **gh-stack hierarchy for PR chains (see Appendix C).**
-   - When multiple PRs: harness uses gh-stack and each PR body shows "Depends on: #PR" — reviewer knows the correct order.
+   - When multiple PRs: che uses gh-stack and each PR body shows "Depends on: #PR" — reviewer knows the correct order.
 
 ### 17. 🟠 SUPABASE POSTGRES — ENABLE RLS BY DEFAULT (GLOBAL SECURITY RULE)
 
@@ -264,7 +264,7 @@ Rules enforced on EVERY implementation:
 Rule:
 1. **For EVERY new table:** immediately add `ALTER TABLE <schema>.<table> ENABLE ROW LEVEL SECURITY;` in the migration.
 2. **Define explicit read/write policies per role** (e.g. `organizer_select_policy`, `admin_all_policy`). A table with RLS enabled but ZERO policies = no rows can be read/written (default deny) — good.
-3. **Add an Acceptance Criteria in the SPEC (if using harness-spec standalone or /harness-start SM §0.5 SPEC gate) specifically for RLS:** e.g. `- [MUST] AC-RLS GIVEN Organizer A authenticated WHEN querying tickets/events owned by Organizer B THEN HTTP 403 or 404 returned | TEST=qa_integration` literal format in §4. This is validated during QA.
+3. **Add an Acceptance Criteria in the SPEC (if using che-spec standalone or /che-start SM §0.5 SPEC gate) specifically for RLS:** e.g. `- [MUST] AC-RLS GIVEN Organizer A authenticated WHEN querying tickets/events owned by Organizer B THEN HTTP 403 or 404 returned | TEST=qa_integration` literal format in §4. This is validated during QA.
 4. **ONLY exception (allowed logged + user approved double confirmation):**
    - Pure lookup tables (enum reference tables, immutable public seed data for everyone) → RLS not needed, BUT:
      - Explicitly mark in Non-Goals / Data Model notes.
@@ -320,7 +320,7 @@ Canonical output:
 
 > **Motivation:** Uniform authentication, scopes, rate-limiting, 2FA token flow, Enterprise SSO, private-repo access, audit trail, `gh auth status` single-truth. Every alternative (HTTP curl/fetch to api.github.com, direct `git clone https://github.com/...`, octokit/SDK-js/python, raw PAT in Authorization header) causes leaks, wrong auth, 403s on private repos, PAT rotation fragility.
 
-This rule applies to **every operation the harness does that touches GitHub (clone, PRs, diffs, comments, reviews, checks, releases, issues, search, repo metadata, branch listing, tag listing, file content, Actions logs)**. It applies to ALL skills (code-review, scope-checker, diff-context, ship, pr-comments, ci-fix, harness-git-ops, direct chat ops) and direct user requests ("pega a PR #123 pra mim").
+This rule applies to **every operation the che does that touches GitHub (clone, PRs, diffs, comments, reviews, checks, releases, issues, search, repo metadata, branch listing, tag listing, file content, Actions logs)**. It applies to ALL skills (code-review, scope-checker, diff-context, ship, pr-comments, ci-fix, che-git-ops, direct chat ops) and direct user requests ("pega a PR #123 pra mim").
 
 **6 NON-NEGOTIABLES:**
 
@@ -328,7 +328,7 @@ This rule applies to **every operation the harness does that touches GitHub (clo
    - ✅ Allowed: `gh pr view <url> --json ...`, `gh pr diff <url>`, `gh pr view --json comments,reviews`, `gh pr checks`, `gh pr create`, `gh pr review`, `gh run view`, `gh release view`, `gh repo clone <owner>/<name>`, `gh issue list`, `gh api repos/<o>/<r> --jq ...` (REST wrapper com auth herdada do gh).
    - ❌ NEVER: `curl https://api.github.com/... -H "Authorization: Bearer $PAT"` ou qualquer variante HTTP manual.
    - ❌ NEVER: `git clone https://github.com/<o>/<r>.git` direto (sem passar por `gh repo clone`). Fallback por HTTPS público NÃO EXISTE mais; se gh não logar → erro + instruções `gh auth login`.
-   - ❌ NEVER: octokit.js / octokit.py / PyGithub / github3.py em código de script do harness ou em implementação de skills. Se você precisar de uma operação que `gh` não tem built-in → use `gh api <rest-endpoint>` (que herda auth/scopes corretos).
+   - ❌ NEVER: octokit.js / octokit.py / PyGithub / github3.py em código de script do che ou em implementação de skills. Se você precisar de uma operação que `gh` não tem built-in → use `gh api <rest-endpoint>` (que herda auth/scopes corretos).
 2. **PREFLIGHT EM TODA OPERAÇÃO.** Antes de 1ª chamada gh em uma skill/etapa:
    ```bash
    command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI (GitHub) não instalado. Instale: https://cli.github.com/  → depois: gh auth login --scopes repo,read:org,workflow" >&2; exit 6; }
@@ -363,7 +363,7 @@ This rule applies to **every operation the harness does that touches GitHub (clo
 ### 19. 🔴 LOGGING & OBSERVABILITY STANDARD (HARD RULE — win over generic defaults; repo convention wins over THIS rule se repo define)
 
 > **Pedido VERBATIM USER contractual:** "todo codigo produzido tenha uma boa pratica de log. Nao deve logar demais, nem de menos. … entender o que esta acontecendo em runtime, mas sem ser floodado."
-> Esta seção substitui o §12 (que é só pointer). Anti-patterns de logging em PR/code-review são auditados em **harness-code-review Category 6 (L6.x)** com severidades.
+> Esta seção substitui o §12 (que é só pointer). Anti-patterns de logging em PR/code-review são auditados em **che-code-review Category 6 (L6.x)** com severidades.
 
 #### 19.0 Princípio Hierárquico — REPO PRIMEIRO (sempre)
 
@@ -426,7 +426,7 @@ logger.info(`Refund completed, refundId=${refundId} customerEmail=${email}`)
 4. **NÃO flood com `set -x` global ligado sempre.** Use `set -x` APENAS em blocos pequenos e específicos debugging. Desligue depois.
 5. **Erro = sempre exit code diferente:** `echo "[ERROR] ..." >&2; exit N`. Use fd 2 para stderr.
 
-Exemplo script GOLDEN STANDARD (harness self-update header style):
+Exemplo script GOLDEN STANDARD (che self-update header style):
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
@@ -494,16 +494,16 @@ try { ... } catch(e) { throw new Error("failed") /* PERDEU stack e causa raiz */
 
 ### 20. 🔴 WORKTREE SESSION BINDING — One Session = One Worktree. Doubt = Ask.
 
-> **This rule controls worktree scoping during a chat session. It is a HARD SCISSORS rule — violating it causes wrong-code commits on wrong worktrees (data loss). Higher precedence than "be helpful / be efficient" defaults. Lower precedence only than safety rules (§2 Security / §6 DbC). It applies to ALL harness skills and direct chat file operations.**
+> **This rule controls worktree scoping during a chat session. It is a HARD SCISSORS rule — violating it causes wrong-code commits on wrong worktrees (data loss). Higher precedence than "be helpful / be efficient" defaults. Lower precedence only than safety rules (§2 Security / §6 DbC). It applies to ALL che skills and direct chat file operations.**
 
-#### 20.1 HARNESS SESSIONS ROOT (PATH CONTRACT — all mutable/generated data lives here)
+#### 20.1 CHE WORKSPACES ROOT (PATH CONTRACT — all mutable/generated data lives here)
 
-**Immutable harness code (skills, commands, hooks, rules, references) STAYS in `$HARNESS_HOME/`.** Never put generated output there.
-**Generated output (session bindings, task graphs, decisions, QA evidence, design docs, summaries) MUST LIVE under `$HARNESS_SESSIONS_ROOT` (default: `$HOME/code/harness-sessions`).** One flat parent folder per user.
+**Immutable che code (skills, commands, hooks, rules, references) STAYS in `$CHE_HOME/`.** Never put generated output there.
+**Generated output (session bindings, task graphs, decisions, QA evidence, design docs, summaries) MUST LIVE under `$CHE_SESSIONS_ROOT` (default: `$HOME/code/che-sessions`).** One flat parent folder per user.
 
-Path layout (CANONICAL — all skills/commands MUST build paths by calling the contract script `$HARNESS_HOME/contracts/harness_sessions_contract.sh`; NEVER hardcode):
+Path layout (CANONICAL — all skills/commands MUST build paths by calling the contract script `$CHE_HOME/contracts/che_sessions_contract.sh`; NEVER hardcode):
 ```
-$HARNESS_SESSIONS_ROOT/
+$CHE_SESSIONS_ROOT/
 └── <WORKSPACE_NAME>/                            # Ex: Flockr  (from Flockr.code-workspace)
     └── <WORKTREE_SLUG>/                         # CANONICAL <repo>__<branch-or-worktree-basename>  (2 underscores)
         │                                        #   Lumos worktree pattern: parent dir Lumos.worktrees/<slug> → slug = Lumos__<slug>
@@ -513,61 +513,61 @@ $HARNESS_SESSIONS_ROOT/
         │   ├── decisions.log.jsonl                 # trade-offs / exceções / non-obvious decisions
         │   ├── gh_stack_plan.md                 # se ≥3 tasks ou >15 arquivos
         │   ├── manual_test_plan.md              # plano manual de smoke/QA
-        │   ├── design/                          # (seu item 4:) documentos de design do harness, ADRs, figures
+        │   ├── design/                          # (seu item 4:) documentos de design do che, ADRs, figures
         │   └── tasks/<TASK_ID>/                 # arquivos PER-TASK duráveis (envelope, scope, acceptance criteria)
         │
         └── sessions/
             └── <SESSION_ID>/                    # EFÊMERO / per-sessão. Apagável após sessão fechar (exceto binding history audit).
                 ├── binding.md                   # Level 2 DETAIL (§19.3) — audit/rebind chain
-                ├── qa/                          # evidências de /harness-manual-test
+                ├── qa/                          # evidências de /che-manual-test
                 │   ├── screenshots/*.png
                 │   └── logs/*.jsonl
                 ├── reports/                     # PR review reports, diff reports, batch reports
                 └── summary.md                   # re-summaries / milestones da sessão
 
-RESOLVER (authoritative): `$HARNESS_HOME/contracts/harness_sessions_contract.sh`
+RESOLVER (authoritative): `$CHE_HOME/contracts/che_sessions_contract.sh`
 
 Runtime portability:
-- `HARNESS_HOME` is the canonical Harness installation root.
-- Default for Trae compatibility: `HARNESS_HOME=$HOME/.trae`.
+- `CHE_HOME` is the canonical Che installation root.
+- Default for Trae compatibility: `CHE_HOME=$HOME/.trae`.
 - Skills MUST NOT resolve runtime paths by directly reading `$HOME/.trae` after runtime bootstrap.
-- The only permitted legacy bootstrap is `${HARNESS_HOME:-$HOME/.trae}` to locate and source the canonical contract; after sourcing it, use `HARNESS_HOME` and canonical helper functions.
-- Effective session identity MUST be obtained through `harness_current_session_id`.
-- `HARNESS_SESSION_ID` has precedence when present (Codex/runtime-neutral).
+- The only permitted legacy bootstrap is `${CHE_HOME:-$HOME/.trae}` to locate and source the canonical contract; after sourcing it, use `CHE_HOME` and canonical helper functions.
+- Effective session identity MUST be obtained through `che_current_session_id`.
+- `CHE_SESSION_ID` has precedence when present (Codex/runtime-neutral).
 - `SESSION_ID` remains the backward-compatible Trae fallback.
-- Level 1 registry path MUST be obtained through `harness_registry_path`.
+- Level 1 registry path MUST be obtained through `che_registry_path`.
 
-  - source harness_sessions_contract.sh
-  - harness_compute_paths <WORKTREE_ROOT> [<EFFECTIVE_SESSION_ID>] <current-cwd>
-  - exports: HARNESS_WORKSPACE_NAME / HARNESS_WORKTREE_SLUG / HARNESS_WORKSPACE_SHARED / HARNESS_SESSION_DIR / HARNESS_LEVEL2_BINDING
-  - ensure dirs: harness_ensure_session_dirs
+  - source che_sessions_contract.sh
+  - che_compute_paths <WORKTREE_ROOT> [<EFFECTIVE_SESSION_ID>] <current-cwd>
+  - exports: CHE_WORKSPACE_NAME / CHE_WORKTREE_SLUG / CHE_WORKSPACE_SHARED / CHE_SESSION_DIR / CHE_LEVEL2_BINDING
+  - ensure dirs: che_ensure_session_dirs
 ```
 
 MORATÓRIA (HARD STOP — EXPANDIDA PARA TODA WORKTREE DO USUÁRIO):
-> **REGRA VERBATIM USUÁRIO:** "Nenhum asset do trabalho do harness deve ser criado na worktree. Apenas quando solicitado. tudo deve ser organizado no harness-sessions."
+> **REGRA VERBATIM USUÁRIO:** "Nenhum asset do trabalho do che deve ser criado na worktree. Apenas quando solicitado. tudo deve ser organizado no che-sessions."
 >
-> NENHUM arquivo `.md` / `.json` / `.jsonl` / `.csv` / `.png` / `.pdf` / `.html` / `.log` / **qualquer extensão** gerado pelo harness é escrito em **QUALQUER LUGAR** dentro de `<WORKTREE_ROOT>/*` por padrão. Isso INCLUI e ULTRAPASSA: `.trae/*`, `reports/`, `docs/`, raiz do repo, `packages/*/`, `apps/*/`, qualquer subpasta do código do usuário.
+> NENHUM arquivo `.md` / `.json` / `.jsonl` / `.csv` / `.png` / `.pdf` / `.html` / `.log` / **qualquer extensão** gerado pelo che é escrito em **QUALQUER LUGAR** dentro de `<WORKTREE_ROOT>/*` por padrão. Isso INCLUI e ULTRAPASSA: `.trae/*`, `reports/`, `docs/`, raiz do repo, `packages/*/`, `apps/*/`, qualquer subpasta do código do usuário.
 >
-> ÚNICA EXCEÇÃO (não tem grey area): usuário pedir VERBATIM, EXPLICITAMENTE, que um arquivo específico seja salvo dentro da worktree. Sem pedido verbal explícito e claro, default = **FORA WORKTREE, em `$HARNESS_SESSIONS_ROOT` via helper `harness_output_path`.**
+> ÚNICA EXCEÇÃO (não tem grey area): usuário pedir VERBATIM, EXPLICITAMENTE, que um arquivo específico seja salvo dentro da worktree. Sem pedido verbal explícito e claro, default = **FORA WORKTREE, em `$CHE_SESSIONS_ROOT` via helper `che_output_path`.**
 >
 > Isso evita: (1) `git status` permanentemente sujo; (2) commit acidental de evidências QA, decisions, reports; (3) colisão de nomenclatura entre sessões paralelas; (4) poluição do diff do usuário com lixo do pipeline.
 >
-> Enforcer canônico = `harness_assert_outside_worktree` do contract. Chamado automaticamente pelo helper único `harness_output_path` (DUVIDA? CHAMA ELE. NUNCA construa paths manualmente).
+> Enforcer canônico = `che_assert_outside_worktree` do contract. Chamado automaticamente pelo helper único `che_output_path` (DUVIDA? CHAMA ELE. NUNCA construa paths manualmente).
 >
 > Output path helper canônico OBRIGATÓRIO para TODO write:
->   `harness_output_path <type=report|review|qa|...> <slug=harness-code-review> <related_id=pr-382|""> <scope=session|workspace> <ext=md|json> [suffix]`
+>   `che_output_path <type=report|review|qa|...> <slug=che-code-review> <related_id=pr-382|""> <scope=session|workspace> <ext=md|json> [suffix]`
 >
->   Garante: (a) timestamp UTC prefix no filename ↔ sort alfabético = cronológico; (b) subpastas `<type>/<related_id>/` ↔ arquivos relacionados mesma PR/task ficam juntos; (c) assert outside automático em baixo nível; (d) atomic writes via `harness_write_file_atomic`.
+>   Garante: (a) timestamp UTC prefix no filename ↔ sort alfabético = cronológico; (b) subpastas `<type>/<related_id>/` ↔ arquivos relacionados mesma PR/task ficam juntos; (c) assert outside automático em baixo nível; (d) atomic writes via `che_write_file_atomic`.
 
 Binding contract:
 
 1. **1 session ↔ 1 WORKTREE_ROOT by default.**
-   - The very first operation of a harness flow (or first file access in a worktree scoped session) MUST produce a binding decision: which absolute worktree path is this session attached to?
+   - The very first operation of a che flow (or first file access in a worktree scoped session) MUST produce a binding decision: which absolute worktree path is this session attached to?
    - **MOVE FORWARD: O usuário deve ser perguntado qual o FRIENDLY_NAME da pasta desta sessão imediatamente após binding ser criado. Regra: Pergunta 1 única, no momento em que binding é criado: "Qual o nome amigável dessa pasta (slug short)?". Resposta user é salva em Level1 campo FRIENDLY_NAME e vira sub-papel de SESSION_DIR se definido. NÃO é obrigatório.**
    - **2-LEVEL LAYOUT (resolves chicken-and-egg + multi-session parallelism + zero race condition + per-session FLAGS + never pollutes worktree git status:**
-     - **Level 1 (GLOBAL INDEX / CHICKEN-AND-EGG SOLVER):** 1 unique per user, outside worktrees + sessions dir. Path: resolved by `harness_registry_path` (default `$HARNESS_HOME/bindings/registry.jsonl`). One entry per SESSION_ID, append-only (never overwrite, just add new lines).
+     - **Level 1 (GLOBAL INDEX / CHICKEN-AND-EGG SOLVER):** 1 unique per user, outside worktrees + sessions dir. Path: resolved by `che_registry_path` (default `$CHE_HOME/bindings/registry.jsonl`). One entry per SESSION_ID, append-only (never overwrite, just add new lines).
        ```
-       SESSION_ID: <effective-session-id-from-harness_current_session_id>
+       SESSION_ID: <effective-session-id-from-che_current_session_id>
        WORKTREE_ROOT: <absolute path>
        TASK_ID: <slug or manual>
        FRIENDLY_NAME: <optional slug-for-user, pergunta na hora do binding>
@@ -578,10 +578,10 @@ Binding contract:
        ```
        Optional fields (OMIT when defaults suffice — keep registry minimal):
        - `LANG_PT_CHECK=DISABLED`: Disables the PostToolUse Portuguese-text detector hook for THIS SESSION ONLY. When line omitted → default ENABLED (hook runs normally). Hook 3 reads this flag per SESSION_ID from Level 1.
-       - `FRIENDLY_NAME`: short slug. Se user forneceu no momento do binding, HARNESS_SESSION_DIR vira `<WORKTREE>/sessions/<SESSION_ID>--<FRIENDLY_NAME>/` (facilita navegação humana).
-     - **Level 2 (PER-SESSION DETAIL / SESSIONS DIR — NUNCA DENTRO DA WORKTREE DO USUÁRIO):** 1 file per session, **inside the sessions dir da worktree DENTRO DE $HARNESS_SESSIONS_ROOT.** Canonical path:
+       - `FRIENDLY_NAME`: short slug. Se user forneceu no momento do binding, CHE_SESSION_DIR vira `<WORKTREE>/sessions/<SESSION_ID>--<FRIENDLY_NAME>/` (facilita navegação humana).
+     - **Level 2 (PER-SESSION DETAIL / SESSIONS DIR — NUNCA DENTRO DA WORKTREE DO USUÁRIO):** 1 file per session, **inside the sessions dir da worktree DENTRO DE $CHE_SESSIONS_ROOT.** Canonical path:
        ```
-       $HARNESS_SESSIONS_ROOT/<WORKSPACE>/<WORKTREE_SLUG>/sessions/<SESSION_ID>[--<FRIENDLY_NAME>]/binding.md
+       $CHE_SESSIONS_ROOT/<WORKSPACE>/<WORKTREE_SLUG>/sessions/<SESSION_ID>[--<FRIENDLY_NAME>]/binding.md
        ```
        Stores re-binding chain history & audit (PREV/NEXT only if worktree switched)+ FLAGS mirror for human readability. Not used for hook scissor checks (only SM/Ship/Dev read it for re-binding audit).
        ```
@@ -594,13 +594,13 @@ Binding contract:
        FLAGS: LANG_PT_CHECK=DISABLED   (same value as Level 1 if set; omit line if default)
        WORKSPACE_NAME: <canonical from .code-workspace>
        WORKTREE_SLUG: <canonical repo__branch>
-       HARNESS_SESSION_DIR: <absolute>  (facilita debug)
-       HARNESS_WORKSPACE_SHARED: <absolute>
+       CHE_SESSION_DIR: <absolute>  (facilita debug)
+       CHE_WORKSPACE_SHARED: <absolute>
        # PREV_BINDING: <old detail md path> (after first switch)
        # NEXT_BINDING: <new detail md path> (after switch)
        ```
    - Write once into BOTH during initial binding decision:
-     1. Append Level 1 entry via HELPER OFICIAL: `source harness_sessions_contract.sh && harness_registry_append_jsonl <sid> BOUND <wt_root> <payload_json>`. Add Level 2 file inside `$HARNESS_SESSIONS_ROOT/...` (use resolver contract `harness_compute_paths`). Idempotência built-in: helper deduplica por conteúdo sha256, não duplica mesma entry SESSION_ID+STATUS=BOUND já existente. NÃO use Edit/Write manual no registry.jsonl.
+     1. Append Level 1 entry via HELPER OFICIAL: `source che_sessions_contract.sh && che_registry_append_jsonl <sid> BOUND <wt_root> <payload_json>`. Add Level 2 file inside `$CHE_SESSIONS_ROOT/...` (use resolver contract `che_compute_paths`). Idempotência built-in: helper deduplica por conteúdo sha256, não duplica mesma entry SESSION_ID+STATUS=BOUND já existente. NÃO use Edit/Write manual no registry.jsonl.
    - Scissor checks (hook 1) ONLY use Level 1 registry index; never enter sessions dir to lookup. If SESSION_ID not in Level 1 → binding doesn't exist yet (agent proceeds to binding decision flow §19.2).
 
 2. **Initial binding decision rules (order of precedence — STOP at first match):**
@@ -614,22 +614,22 @@ Binding contract:
    - Switching is ONLY allowed after EXPLICIT user confirmation: "Yes, switch to worktree X now."
    - When switching (update BOTH levels atomically + contract resolver re-run):
      1. **Level 1 registry update**: Find the SESSION_ID entry, set `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_WORKTREE_ROOT: <newpath>`, then append NEW BOUND entry for the same SESSION_ID pointing to new worktree.
-     2. **Level 2 detail file update**: OLD detail file inside OLD `HARNESS_SESSION_DIR/binding.md` → `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_BINDING: <new-detail-md-path>`. Create NEW detail file inside NEW worktree sessão dir → `STATUS: BOUND + PREV_BINDING: <old-detail-md-path>`
+     2. **Level 2 detail file update**: OLD detail file inside OLD `CHE_SESSION_DIR/binding.md` → `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_BINDING: <new-detail-md-path>`. Create NEW detail file inside NEW worktree sessão dir → `STATUS: BOUND + PREV_BINDING: <old-detail-md-path>`
      3. Announce the switch in the next Status section output.
    - Agent-initiated switches (without user saying so) = violation. Never "oh, this code is in worktree B so let me touch it" without asking first.
 
 4. **Per-operation scissor check (MANDATORY before any git/Glob/Grep/file-write):**
-   - Before any file-system write or git command: LOOKUP the effective session id from `harness_current_session_id` in **Level 1 registry resolved by `harness_registry_path`** (ONLY). Use WORKTREE_ROOT from that entry.
-   - If target path is a **USER CODE** file (ou seja, está dentro de WORKTREE_ROOT mas NÃO é um arquivo gerado em $HARNESS_SESSIONS_ROOT) E fica FORA WORKTREE_ROOT → BLOCK. Two outcomes:
+   - Before any file-system write or git command: LOOKUP the effective session id from `che_current_session_id` in **Level 1 registry resolved by `che_registry_path`** (ONLY). Use WORKTREE_ROOT from that entry.
+   - If target path is a **USER CODE** file (ou seja, está dentro de WORKTREE_ROOT mas NÃO é um arquivo gerado em $CHE_SESSIONS_ROOT) E fica FORA WORKTREE_ROOT → BLOCK. Two outcomes:
      a. User confirms "yes, write outside worktree scope this one user code file" → log decision.log.
      b. Otherwise abort and ask: "This target is outside worktree <X>. Switch first? (A = switch, B = cancel)"
-   - Exception to scissor check for HARNESS_GENERATED paths: Arquivos que ficam em **$HARNESS_SESSIONS_ROOT/** são explicitamente FORA do worktree e SEMPRE podem ser escritos após binding criado; não precisa de pergunta por operação.
+   - Exception to scissor check for CHE_GENERATED paths: Arquivos que ficam em **$CHE_SESSIONS_ROOT/** são explicitamente FORA do worktree e SEMPRE podem ser escritos após binding criado; não precisa de pergunta por operação.
    - No silent cross-worktree reads without user made aware.
 
 5. **Doubt / ambiguity → ask. Never guess.**
    - "User said refund feature; ≥2 worktrees have refund branches → list ≤2 concrete options AskUserQuestion.
    - Binding Level1 says X but context hints Y → ASK. Never silent switch.
-   - User não forneceu FRIENDLY_NAME ainda → perguntar 1 única vez antes de criar arquivos na HARNESS_SESSION_DIR.
+   - User não forneceu FRIENDLY_NAME ainda → perguntar 1 única vez antes de criar arquivos na CHE_SESSION_DIR.
 
 6. **Pre-send self-check for scoping:**
    - If draft response contains references to files in ≥2 different worktrees (without user explicitly asking cross-worktree comparison): STOP. Trim. Either focus on 1 worktree, or ask which one first.
@@ -769,7 +769,7 @@ chore(deps): bump stripe-sdk 18.4 → 18.5 (patch)
 2. Updates PR bodies with "Depends on: #123 · Stacks against main" links so reviewers understand order.
 3. Supports rebasing the whole stack when lower PRs get fixes.
 
-### C.2 Preconditions to use gh-stack (harness-scrum-master validates in planning)
+### C.2 Preconditions to use gh-stack (che-scrum-master validates in planning)
 1. Task Graph ≥ 3 tasks OR one task > 15 files blast radius.
 2. Tasks can be semantically grouped into "PR layers" (ex: PR1=types/contracts, PR2=service layer + unit tests, PR3=API + e2e tests).
 3. User did NOT explicitly say "single PR please".
@@ -791,7 +791,7 @@ Notes:
 - After PR1 merged to main: `gh-stack update` rebases PR2→main, PR3→new PR2.
 ```
 
-### C.4 Standard gh-stack commands (harness-ship reference)
+### C.4 Standard gh-stack commands (che-ship reference)
 ```bash
 # Install (1x per machine)
 gh extension install github/gh-stack
@@ -809,23 +809,23 @@ gh-stack status
 gh-stack update --base main
 ```
 
-### C.5 Harness rules enforced on gh-stack
+### C.5 Che rules enforced on gh-stack
 - Stack ALWAYS starts DRAFT. Single "ready for review" = user explicitly asks.
 - Each individual PR passes CI individually (QA + light compliance per PR).
 - If any PR in the stack has blast radius > 20 files → SM goes back to planning and re-breaks it.
-- Body of each non-base PR MUST open with `Depends on: #<previous-pr-number>` (gh-stack does this automatically, but harness validates).
+- Body of each non-base PR MUST open with `Depends on: #<previous-pr-number>` (gh-stack does this automatically, but che validates).
 
 ---
 
 ## Appendix D — A Philosophy of Software Design (John Ousterhout — CANONICAL Quick-Ref)
 
 > **Fonte original:** John Ousterhout, _A Philosophy of Software Design_, 2ª Ed. (2018, 2021).
-> **Mapa de integração no harness:**
+> **Mapa de integração no che:**
 > - **§1 No Accidental Complexity (hard rule acima)** = fundação 3 primeiros capítulos (complexity is greatest risk).
-> - **harness-scope-checker CHECK 5 (LEAN/YAGNI scanner)** = lê 13 RED FLAGS abaixo + atribui Lean findings (com justificador AC se necessário).
-> - **harness-code-review (gate 0.9.2 no ship)** = cada finding abaixo que aparece no diff ganha severidade: **HIGH** (4 itens em negrito abaixo, quebram deep modules), **MEDIUM** (restantes 9).
-> - **harness-spec antes de escrever código** = checklist "Before You Code" abaixo obrigatório se task ≥ 8 arquivos.
-> - **harness-ship gate 0.9.2 antes de commitar** = checklist "Before You Commit" abaixo obrigatório.
+> - **che-scope-checker CHECK 5 (LEAN/YAGNI scanner)** = lê 13 RED FLAGS abaixo + atribui Lean findings (com justificador AC se necessário).
+> - **che-code-review (gate 0.9.2 no ship)** = cada finding abaixo que aparece no diff ganha severidade: **HIGH** (4 itens em negrito abaixo, quebram deep modules), **MEDIUM** (restantes 9).
+> - **che-spec antes de escrever código** = checklist "Before You Code" abaixo obrigatório se task ≥ 8 arquivos.
+> - **che-ship gate 0.9.2 antes de commitar** = checklist "Before You Commit" abaixo obrigatório.
 
 ### D.1 13 RED FLAGS DE COMPLEXIDADE (qualquer 1 = aviso; 2+ no mesmo módulo = refatorar antes de PR)
 
@@ -877,7 +877,7 @@ gh-stack update --base main
 □ (9) Complexidade foi PUXADA PARA DENTRO do módulo (caller não sabe de casos especiais)?
 ```
 
-### D.4 CHECKLIST BEFORE YOU COMMIT (obrigatório antes de `/harness-ship`)
+### D.4 CHECKLIST BEFORE YOU COMMIT (obrigatório antes de `/che-ship`)
 
 ```
 □ (1) Nenhum dos 13 RED FLAGS (D.1) aparece NO DIF que vou commitar?
@@ -893,16 +893,16 @@ gh-stack update --base main
 
 ### D.5 MAPA: Quando usar qual princípio (8 situações canônicas)
 
-| Situação | Princípios chave | Harness integration |
+| Situação | Princípios chave | Che integration |
 |---|---|---|
-| Criando NOVA classe / módulo do zero | D.2 #2 (deep), #3 (abstraction), #6 (general-purpose), #13 (comments first) | harness-spec §6 hints + Before-You-Code (D.3) |
-| Refatorando módulo existente que está "ruim" | D.2 #1 (enemy complexity), #4 (not shallow), #9 (together), #10 (errors out) | harness-code-review HIGH findings → auto-fix |
+| Criando NOVA classe / módulo do zero | D.2 #2 (deep), #3 (abstraction), #6 (general-purpose), #13 (comments first) | che-spec §6 hints + Before-You-Code (D.3) |
+| Refatorando módulo existente que está "ruim" | D.2 #1 (enemy complexity), #4 (not shallow), #9 (together), #10 (errors out) | che-code-review HIGH findings → auto-fix |
 | Criando interface pública / API tRPC / REST | D.2 #5 (no leakage), #8 (pull down), #12 (restriction, not choice), #15 (consistency) | scope-checker CHECK4 env + design doc |
 | Tratamento de erros / edge cases | D.2 #10 (define erros fora existência) + §2 security | code-review MEDIUM findings |
 | Nomeando funções / parâmetros / variáveis | D.1 RF10 (não obscuro) + D.2 #15 (consistência) | code-review nit auto-fix |
 | Escrevendo comentários / docs | D.1 RF08,RF09 (não repete código / não doc interna) + D.2 #12, #13 (comments first) | code-review comments guideline §16 |
 | Decisão arquitetural grande (nova layer, nova lib) | D.2 #11 (design twice) + §1 No Accidental Complexity | ADR skill (adr-architecture) obrigatório |
-| Planejando feature grande / épico (antes SPEC) | D.2 #1 (complexity é enemy #1) + #7 (different abstraction por layer) | harness-project-knowledge + xray arquitetura |
+| Planejando feature grande / épico (antes SPEC) | D.2 #1 (complexity é enemy #1) + #7 (different abstraction por layer) | che-project-knowledge + xray arquitetura |
 
 ---
 
@@ -916,4 +916,4 @@ These rules are **intentionally strict.** They exist because:
 - LLMs write overly-commented/verbose code hard to review. §16 forces clean/concise code.
 - LLMs anticipate future and deliver giant PRs. §15 + gh-stack Appendix C forces small incrementals.
 
-If any rule feels wrong for a specific case → **log the exception + rationale to `$HARNESS_WORKSPACE_SHARED/decisions.log.jsonl` (NEVER under `<WORKTREE_ROOT>/.trae/`; use `harness_compute_paths` from `$HARNESS_HOME/contracts/harness_sessions_contract.sh` to resolve the correct path outside the user worktree)**, and proceed.
+If any rule feels wrong for a specific case → **log the exception + rationale to `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` (NEVER under `<WORKTREE_ROOT>/.trae/`; use `che_compute_paths` from `$CHE_HOME/contracts/che_sessions_contract.sh` to resolve the correct path outside the user worktree)**, and proceed.

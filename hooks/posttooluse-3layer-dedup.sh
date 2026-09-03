@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Hook 2 (GLOBAL OBRIGATÓRIO): PostToolUse — 3-Layer Non-Duplication Guard
-# Rodando APÓS Edit/Write em user_rules/*.md (Layer 1) ou HARNESS_RULES.md (Layer 2).
+# Rodando APÓS Edit/Write em user_rules/*.md (Layer 1) ou CHE_RULES.md (Layer 2).
 # Garante HARD STOP: "nenhum corpo de regra >=4 linhas aparece em >1 camada."
 # Layer 3 skills/*/SKILL.md é DONO do corpo. Layer 1/2 = só title + link + curto gate.
 #
@@ -33,14 +33,14 @@ fi
 FILENAME=$(basename "$FILE_PATH")
 DIRNAME=$(dirname "$FILE_PATH")
 
-# Só ativar se for Layer 1 (user_rules/*.md) ou Layer 2 (HARNESS_RULES.md / HARNESS_COMMANDS.md)
+# Só ativar se for Layer 1 (user_rules/*.md) ou Layer 2 (CHE_RULES.md / CHE_COMMANDS.md)
 IS_LAYER1=false
 IS_LAYER2=false
 case "$DIRNAME" in
   *"/user_rules") [[ "$FILENAME" == *.md ]] && IS_LAYER1=true ;;
 esac
 case "$FILENAME" in
-  HARNESS_RULES.md|HARNESS_COMMANDS.md) [[ "$DIRNAME" == "$TRAE_ROOT" ]] && IS_LAYER2=true ;;
+  CHE_RULES.md|CHE_COMMANDS.md) [[ "$DIRNAME" == "$TRAE_ROOT" ]] && IS_LAYER2=true ;;
 esac
 
 if [ "$IS_LAYER1" = "false" ] && [ "$IS_LAYER2" = "false" ]; then

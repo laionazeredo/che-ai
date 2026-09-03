@@ -2,13 +2,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HARNESS_REPO="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CHE_REPO="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
 SKILLS_TARGET="$AGENTS_HOME/skills"
 
-echo "Harness repo : $HARNESS_REPO"
+echo "Che repo : $CHE_REPO"
 echo "Codex home   : $CODEX_HOME"
 echo "Agents home  : $AGENTS_HOME"
 
@@ -57,7 +57,7 @@ ln -sfn "$AGENTS_SOURCE" "$AGENTS_TARGET"
 
 INSTALLED=0
 
-for skill_dir in "$HARNESS_REPO"/skills/*; do
+for skill_dir in "$CHE_REPO"/skills/*; do
   [ -d "$skill_dir" ] || continue
   [ -f "$skill_dir/SKILL.md" ] || continue
 
@@ -76,8 +76,8 @@ for skill_dir in "$HARNESS_REPO"/skills/*; do
 done
 
 echo
-echo "Codex Harness adapter installed."
+echo "Codex Che adapter installed."
 echo "Skills linked : $INSTALLED"
 echo
 echo "For this checkout use:"
-echo "  export HARNESS_HOME=\"$HARNESS_REPO\""
+echo "  export CHE_HOME=\"$CHE_REPO\""

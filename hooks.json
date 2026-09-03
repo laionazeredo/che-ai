@@ -13,7 +13,7 @@
     "PostToolUse": [
       {
         "name": "3layer-non-duplication-guard",
-        "description": "Enforces HARD STOP 3-Layer Architecture: Layer 1/2 (user_rules, HARNESS_RULES/COMMANDS) are title+link only. Layer 3 skills/*/SKILL.md owns the rule BODY. Warns with additionalContext when >=4 identical lines found in both Layer 1/2 AND any Layer 3 SKILL.md; never blocks post-hoc but flags to agent.",
+        "description": "Enforces HARD STOP 3-Layer Architecture: Layer 1/2 (user_rules, CHE_RULES/COMMANDS) are title+link only. Layer 3 skills/*/SKILL.md owns the rule BODY. Warns with additionalContext when >=4 identical lines found in both Layer 1/2 AND any Layer 3 SKILL.md; never blocks post-hoc but flags to agent.",
         "matcher": "Edit,Write",
         "type": "command",
         "command": "__HARNESS_TARGET__/hooks/posttooluse-3layer-dedup.sh",

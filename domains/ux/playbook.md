@@ -12,9 +12,9 @@ connectors_optional:
   - "domains/ux/connectors/figma.config.md"
   - "domains/ux/connectors/penpot.config.md"
 cross_skills:
-  - "/harness-figma (build + implement)"
+  - "/che-figma (build + implement)"
   - "/figma-pixel-check (validação pixel-perfect)"
-  - "/harness-ship §0.9.5 DOMAIN GATES (execução gates no ship)"
+  - "/che-ship §0.9.5 DOMAIN GATES (execução gates no ship)"
 ---
 
 # Playbook — UI/UX DesignOps (`ux`) · 5 Etapas Obrigatórias (NÃO PULA)
@@ -38,7 +38,7 @@ Entender o PROBLEMA antes de abrir o Figma/PenPot. "Design é solução de probl
    When <SITUACAO>, I want to <ACAO_USUARIO>, so I can <RESULTADO_ESPERADO>.
    ```
    Máximo 1 linha por JTBD. Mínimo 3 JTBDs únicos por feature. Sem "melhorar UX" (vazio).
-0.2 **User Persona canônica:** Linkar `domains/ux/profile.md` persona + acrescentar 1 parágrafo contexto específico dessa tela. Se não existir persona no registry level 1.5 → criar via `/harness-project-knowledge --edit` (não só inline).
+0.2 **User Persona canônica:** Linkar `domains/ux/profile.md` persona + acrescentar 1 parágrafo contexto específico dessa tela. Se não existir persona no registry level 1.5 → criar via `/che-project-knowledge --edit` (não só inline).
 0.3 **User flow canônico Mermaid:** Diagrama `flowchart TD` mínimo 3 nodes (Entry → Action A → Success State + Error State). NÃO stadium shapes. Quebras com `<br/>` HTML.
 0.4 **Approved Gate humano:** Brief + JTBD + flow Mermaid enviados para usuário. **Aprovação EXPLÍCITA (reply "Approved" literal) é obrigatória.** Sem aprovação → NÃO AVANÇA etapa 1.
 
@@ -100,7 +100,7 @@ Aplicar Design System tokens do `domains/ux/profile.md` (spacing/radius/color/ty
 
 ## Fase 3 — Gates Quality Obrigatórios (Thresholds NUMÉRICOS, não avaliação subjetiva)
 
-> **Executados por `/harness-ship §0.9.5 DOMAIN GATES` automaticamente quando ship de uma feature com `domain: ux`.** Mesmo engine fail-fast do core (threshold + retry 1 grátis + human required após 2nd falha).
+> **Executados por `/che-ship §0.9.5 DOMAIN GATES` automaticamente quando ship de uma feature com `domain: ux`.** Mesmo engine fail-fast do core (threshold + retry 1 grátis + human required após 2nd falha).
 
 ### Ordem de execução (alphabetical por arquivo nome, igual ship §0.9 G1-G4)
 
@@ -128,7 +128,7 @@ Abaixar threshold de um gate (ex: pixel de 8.0 → 7.0) SÓ é permitido via `EX
 ### Etapas 4.1 → 4.5 (não pula)
 4.1 **Preencher template `domains/ux/templates/dev-handoff-template.md` COMPLETO:** Campos obrigatórios = SPEC id + ticket id · medidas absolute px por breakpoint · browsers suportados lista · assets export SVG/PNG 2x path · animations duration/easing tokens · accessibility checklist final (15 itens do profile)
 4.2 **Export design tokens → JSON automático:** Rodar script de extração Figma Variables / PenPot Design Tokens → arquivo `tokens.json` estruturado por categoria. Nenhum valor hardcoded.
-4.3 **Rodar `/figma-pixel-check` (se usado skill implementação codegen `/harness-figma`):** Report anexar no handoff.
+4.3 **Rodar `/figma-pixel-check` (se usado skill implementação codegen `/che-figma`):** Report anexar no handoff.
 4.4 **Rodar `@axe-core/cli` axe-core accessibility final:** Report JSON + HTML anexar no handoff.
 4.5 **Approved humano final:** Dev (ou usuário) confirma "Handoff Completo e Entendido" literal.
 
@@ -142,4 +142,4 @@ Abaixar threshold de um gate (ex: pixel de 8.0 → 7.0) SÓ é permitido via `EX
 - [x] Etapa 4 `tokens.json` exportado ✅
 - [x] Entry final decisions.log: `[UX-PLAYBOOK-COMPLETE] slug=... gate_results={a11y:PASS,pixel:PASS} handoff_path=...` ✅
 
-> **Fim do playbook.** Agora o `/harness-ship` executa §0.9 G1-G4 normalmente (scope / review / compliance / QA), depois §0.9.5 G5 Domain Gates confirma novamente G-UX-1 e G-UX-2 nos artifacts gerados, e abre Draft PR.
+> **Fim do playbook.** Agora o `/che-ship` executa §0.9 G1-G4 normalmente (scope / review / compliance / QA), depois §0.9.5 G5 Domain Gates confirma novamente G-UX-1 e G-UX-2 nos artifacts gerados, e abre Draft PR.

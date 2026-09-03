@@ -1,46 +1,46 @@
-# Shared Engineering Harness — Codex Adapter
+# Shared Engineering Che — Codex Adapter
 
-This Codex environment uses the shared Trae/Codex Engineering Harness.
+This Codex environment uses the shared Trae/Codex Engineering Che.
 
 ## Canonical engineering rules
 
 The authoritative engineering rulebook is:
 
-$HARNESS_HOME/skills/engineering-contracts/SKILL.md
+$CHE_HOME/skills/engineering-contracts/SKILL.md
 
 Do not duplicate engineering rules in this file.
 
-## Canonical Harness workflow
+## Canonical Che workflow
 
 Feature/refactor workflow:
 
-1. harness-spec
-2. harness-scrum-master
-3. harness-developer
-4. harness-qa
-5. harness-compliance
-6. harness-scope-checker
-7. harness-ship
+1. che-spec
+2. che-scrum-master
+3. che-developer
+4. che-qa
+5. che-compliance
+6. che-scope-checker
+7. che-ship
 
-Bug workflow uses harness-debugger-bugfix.
+Bug workflow uses che-debugger-bugfix.
 
 ## Runtime
 
-The Harness runtime is resolved through:
+The Che runtime is resolved through:
 
-$HARNESS_HOME/contracts/harness_sessions_contract.sh
+$CHE_HOME/contracts/che_sessions_contract.sh
 
-Codex sessions use HARNESS_SESSION_ID.
+Codex sessions use CHE_SESSION_ID.
 Trae compatibility continues through SESSION_ID.
 
 ## Worktree safety
 
-One Harness session is bound to one worktree.
+One Che session is bound to one worktree.
 
-Generated Harness artifacts must use the canonical session contract and must never be written inside the user's source worktree.
+Generated Che artifacts must use the canonical session contract and must never be written inside the user's source worktree.
 
 ## Skills
 
-Prefer Harness skills from the shared skills directory.
+Prefer Che skills from the shared skills directory.
 
-When a Harness skill conflicts with generic agent behavior, follow the Harness skill.
+When a Che skill conflicts with generic agent behavior, follow the Che skill.

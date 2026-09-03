@@ -33,5 +33,5 @@ Gate failure process (same for every domain, non-negotiable):
 
 ## 4. Phase 4 — Delivery / Handoff / Ship integration
 After ALL gates PASS:
-- Call /harness-ship if code/artifacts go to git repo.
-- If pure docs-only or creative-only deliverable: write final report + save in `$HARNESS_SESSION_DIR/reports/` for audit.
+- Call /che-ship if code/artifacts go to git repo.
+- If pure docs-only or creative-only deliverable: write final report + save in `$CHE_SESSION_DIR/reports/` for audit.

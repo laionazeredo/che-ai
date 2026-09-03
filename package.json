@@ -1,9 +1,9 @@
 {
-  "name": "@flockr/harness",
+  "name": "@flockr/che",
   "private": true,
   "type": "module",
   "version": "1.0.0",
-  "description": "Flockr harness — simulated agile team in software. Runtime config for TS entry points only.",
+  "description": "Flockr che — simulated agile team in software. Runtime config for TS entry points only.",
   "scripts": {
     "decisions": "tsx contracts/decisions-query.cli.ts",
     "typecheck": "tsc --noEmit"

@@ -1,6 +1,6 @@
 # SHARED CHECKLIST — GitHub CLI (gh) Common Operations (CANONICAL)
 
-> REFERÊNCIA COMPARTILHADA por: harness-ship, harness-code-review, harness-pr-comments, harness-ci-fixer, harness-scrum-master (gh-stack create).
+> REFERÊNCIA COMPARTILHADA por: che-ship, che-code-review, che-pr-comments, che-ci-fixer, che-scrum-master (gh-stack create).
 > NÃO duplique. Invocar os passos abaixo + sempre checar auth antes.
 
 ---
@@ -23,9 +23,9 @@ If NOT logged in → STOP + tell user. Ask them to run `gh auth login` with scop
 
 ---
 
-## 1. Harness commonly-used gh commands
+## 1. Che commonly-used gh commands
 
-### 1.1 Ship — commit + push + create PR (harness-ship)
+### 1.1 Ship — commit + push + create PR (che-ship)
 
 ```bash
 # Listar mudanças para confirmar o que vai ser commitado
@@ -55,7 +55,7 @@ gh pr edit <pr-url-or-number> --label "area:payments,status:ready-for-review"
 gh pr ready <pr-url-or-number>
 ```
 
-### 1.2 Review — pull PR metadata + diff (harness-code-review)
+### 1.2 Review — pull PR metadata + diff (che-code-review)
 
 ```bash
 gh pr view <pr-url-or-number> --json \
@@ -64,7 +64,7 @@ gh pr diff <pr-url-or-number> --name-only
 gh pr diff <pr-url-or-number> > /tmp/pr-<N>.diff
 ```
 
-### 1.3 Comments — pull review threads (harness-pr-comments)
+### 1.3 Comments — pull review threads (che-pr-comments)
 
 ```bash
 gh pr view <pr-url-or-number> --json comments,reviews,reviewRequests
@@ -72,17 +72,17 @@ gh pr view <pr-url-or-number> --json comments,reviews,reviewRequests
 gh pr reply <review-comment-db-id> --body "<polite non-argumentative English reply>"
 ```
 
-### 1.4 Submit review official (harness-code-review; user asks "suba essa review")
+### 1.4 Submit review official (che-code-review; user asks "suba essa review")
 
 ```bash
 gh pr review <pr-url-or-number> \
   --request-changes \
-  --body-file "$(harness_output_path "review" "gh-review-body" "pr-<N>" "session" "md")"
+  --body-file "$(che_output_path "review" "gh-review-body" "pr-<N>" "session" "md")"
   # flags: --approve / --comment / --request-changes
-  # NÃO USE .trae/ dentro da worktree! Sempre via harness_output_path → HARNESS_SESSION_DIR/reviews/pr-<N>/...
+  # NÃO USE .trae/ dentro da worktree! Sempre via che_output_path → CHE_SESSION_DIR/reviews/pr-<N>/...
 ```
 
-### 1.5 CI fixer — pull failing run details (harness-ci-fixer)
+### 1.5 CI fixer — pull failing run details (che-ci-fixer)
 
 ```bash
 # Listar jobs falhos

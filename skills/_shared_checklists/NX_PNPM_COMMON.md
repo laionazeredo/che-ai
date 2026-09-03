@@ -1,6 +1,6 @@
 # SHARED CHECKLIST — pnpm (Corepack) + Nx Common Operations (CANONICAL)
 
-> REFERÊNCIA COMPARTILHADA por: harness-developer, harness-qa, harness-ci-fixer, harness-debugger-bugfix (build/run reproducing), harness-ship (build/lint smoke before push).
+> REFERÊNCIA COMPARTILHADA por: che-developer, che-qa, che-ci-fixer, che-debugger-bugfix (build/run reproducing), che-ship (build/lint smoke before push).
 > NÃO duplique comandos pnpm/nx; sempre invoque os formatos abaixo.
 
 ---
@@ -66,7 +66,7 @@ corepack pnpm nx affected --targets=lint,typecheck,test --tui false
 
 ---
 
-## 3. CI failure common fixes (harness-ci-fixer)
+## 3. CI failure common fixes (che-ci-fixer)
 
 | Sintoma (log error) | Causa provável | Fix |
 |---|---|---|
@@ -79,7 +79,7 @@ corepack pnpm nx affected --targets=lint,typecheck,test --tui false
 
 ---
 
-## 4. Harness QA Standard Run Order (harness-qa skill default)
+## 4. Che QA Standard Run Order (che-qa skill default)
 
 Para cada task envelope após implementation (seguir a ordem — barata → cara):
 ```bash

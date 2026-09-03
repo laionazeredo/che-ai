@@ -1,6 +1,6 @@
 # Codex Adapter
 
-Makes the shared Engineering Harness available to Codex without duplicating skills.
+Makes the shared Engineering Che available to Codex without duplicating skills.
 
 ## Install
 
@@ -11,7 +11,7 @@ Run:
 The installer:
 
 - links `adapters/codex/AGENTS.md` to `~/.codex/AGENTS.md`;
-- links valid Harness skills to `~/.agents/skills/`;
+- links valid Che skills to `~/.agents/skills/`;
 - preserves existing non-symlink user configuration;
 - validates `SKILL.md` frontmatter before installation.
 
@@ -19,17 +19,17 @@ The installer:
 
 Run:
 
-    export HARNESS_HOME=/absolute/path/to/trae-config
-    export HARNESS_SESSION_ID="codex-$(date +%s)"
+    export CHE_HOME=/absolute/path/to/trae-config
+    export CHE_SESSION_ID="codex-$(date +%s)"
     codex
 
 Example explicit skill invocation:
 
-    $harness-spec
-    $harness-scrum-master
-    $harness-qa
-    $harness-code-review
-    $harness-ship
+    $che-spec
+    $che-scrum-master
+    $che-qa
+    $che-code-review
+    $che-ship
 
 ## Uninstall
 
@@ -37,4 +37,4 @@ Run:
 
     ./adapters/codex/uninstall.sh
 
-The uninstaller removes only symlinks owned by this Harness installation.
+The uninstaller removes only symlinks owned by this Che installation.

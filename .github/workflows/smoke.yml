@@ -1,4 +1,4 @@
-name: harness-smoke
+name: che-smoke
 
 on:
   push:
@@ -32,13 +32,13 @@ jobs:
           test "$(ls -1 commands | wc -l)" = "23"
           test "$(ls -1 hooks    | wc -l)" = "3"
           test "$(ls -1 contracts | wc -l)" -ge 2
-          test -f contracts/harness_sessions_contract.sh
+          test -f contracts/che_sessions_contract.sh
           test -f contracts/decisions-query.cli.ts
-          test -f scripts/install-harness.sh
-          test -x scripts/install-harness.sh
+          test -f scripts/install-che.sh
+          test -x scripts/install-che.sh
           test -f README.md
-          test -f HARNESS_RULES.md
-          test -f HARNESS_COMMANDS.md
+          test -f CHE_RULES.md
+          test -f CHE_COMMANDS.md
           test -f REFERENCE_USER_RULES_MINIFIED.md
           test -f hooks.json
           test -f package.json
@@ -66,7 +66,7 @@ jobs:
         run: |
           set -euo pipefail
           T=$(mktemp -d)
-          bash scripts/install-harness.sh --source "$PWD" --target "$T"
+          bash scripts/install-che.sh --source "$PWD" --target "$T"
           rm -rf "$T"
 
       - name: portable Trae hooks protocol

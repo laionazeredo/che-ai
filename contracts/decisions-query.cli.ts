@@ -1,7 +1,7 @@
 #!/usr/bin/env -S corepack pnpm exec tsx
 /**
  * decisions-query.cli.ts — CLI helper for decisions.log.jsonl.
- * Part of harness-decisions-query global skill. Single writer = contracts helper;
+ * Part of che-decisions-query global skill. Single writer = contracts helper;
  * this file = multi-mode READ-only tool for summaries / filters / exports / tail.
  *
  * Usage (equivalent à antiga versão Python):

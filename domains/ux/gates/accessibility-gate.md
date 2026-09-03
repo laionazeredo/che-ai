@@ -64,7 +64,7 @@ corepack pnpm axe --chromedriver-path $(corepack pnpm exec which playwright-chro
   --rules wcag22aa \
   --tags wcag2a,wcag2aa,wcag22a,wcag22aa \
   --format json \
-  --output-dir $HARNESS_SESSION_DIR/reports/ \
+  --output-dir $CHE_SESSION_DIR/reports/ \
   --save accessibility-report.json \
   http://localhost:3000/<page-slug>
 
@@ -72,7 +72,7 @@ corepack pnpm axe --chromedriver-path $(corepack pnpm exec which playwright-chro
 corepack pnpm axe ...(mesmos flags)... --format html --save accessibility-report.html
 
 # [STEP 3/3] Parse JSON → log decisions.log entry e comparar threshold
-# (feito automaticamente pelo harness-ship §0.9.5 DOMAIN GATES)
+# (feito automaticamente pelo che-ship §0.9.5 DOMAIN GATES)
 #
 # pseudo-código parse:
 # critical_count = len([r for r in report.violations if r.impact === 'critical'])

@@ -6,8 +6,8 @@ description: "Defines canonical UI testing contracts for Testing Library selecto
 # UI Testing Contracts Skill
 
 > Helper helper para UI tests (RTL + Playwright + data-testid 3-part convention).
-> Invocado via `/harness-ui-testing` quando usuário pede ajuda com: selectors CSS, testes UI, data-testid attributes, Playwright boilerplate, RTL Testing Library order enforcement.
-> Integração: cross-reference com Category8 UI Hygiene (ONDA1 code-review) e SbE Behavior Table coluna "UI Selector Contract" (ONDA2 harness-spec).
+> Invocado via `/che-ui-testing` quando usuário pede ajuda com: selectors CSS, testes UI, data-testid attributes, Playwright boilerplate, RTL Testing Library order enforcement.
+> Integração: cross-reference com Category8 UI Hygiene (ONDA1 code-review) e SbE Behavior Table coluna "UI Selector Contract" (ONDA2 che-spec).
 
 ---
 
@@ -122,7 +122,7 @@ grep -rnE 'data-testid=' --include='*.tsx' --include='*.ts' packages/ \
 | G8.3 | 🟡 MEDIUM | Nome `data-testid` FORA da convenção 3-partes (camelCase, 2 níveis, separador errado, uppercase) | §3 regex lint + grep one-liner |
 | G8.4 | 🔵 LOW | IDs duplicados em listas/tabelas SEM unique suffix `--<id>` no final (ex: múltiplas linhas booking com mesmo `booking__row__delete-btn`) | §3 convenção parte opcional `--<unique-id>` |
 
-### SbE Spec Integration (ONDA2 harness-spec §4.2 Behavior Table nova coluna):
+### SbE Spec Integration (ONDA2 che-spec §4.2 Behavior Table nova coluna):
 
 Quando uma SbE spec tem **Playwright ou RTL marcado ✅ na coluna "Test Layers"**, OBRIGATÓRIO preencher a coluna **"UI Selector Contract"** com o data-testid 3-partes exato:
 

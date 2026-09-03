@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HARNESS_REPO="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CHE_REPO="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
@@ -26,7 +26,7 @@ if [ -d "$SKILLS_TARGET" ]; then
     resolved="$(readlink -f "$target" 2>/dev/null || true)"
 
     case "$resolved" in
-      "$HARNESS_REPO"/skills/*)
+      "$CHE_REPO"/skills/*)
         rm "$target"
         echo "Removed: $target"
         REMOVED=$((REMOVED + 1))
@@ -36,5 +36,5 @@ if [ -d "$SKILLS_TARGET" ]; then
 fi
 
 echo
-echo "Codex Harness adapter removed."
+echo "Codex Che adapter removed."
 echo "Skill links removed: $REMOVED"
