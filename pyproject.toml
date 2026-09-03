@@ -1,0 +1,19 @@
+[project]
+name = "che-ai"
+version = "1.0.0"
+description = "IDE-agnostic Agentic Engineering Harness"
+requires-python = ">=3.9"
+dependencies = []
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+include = ["che_core/**/*.py", "hooks/**/*.py", "tests/**/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+ignore = ["E501"] # Ignore line length violations (handled by formatter)
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
