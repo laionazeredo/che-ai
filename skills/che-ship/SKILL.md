@@ -59,106 +59,27 @@ Run BEFORE any `git status / git add / git commit / git push`. PREVENTS wrong-wo
 
 ### 0.7.1 STORAGE PREFLIGHT OBRIGATÓRIO (run IMEDIATAMENTE após §0.7, ANTES de §0.8 ou QUALQUER write de report/decision)
 
-ANTES de gerar QUALQUER arquivo de report (gates 0.9.1→0.9.5), decision log, backup artifact: execute EXATAMENTE este bloco UMA VEZ por execução de /che-ship. **Garante que todos paths resolvam FORA da worktree, com prefixo timestamp UTC ordenável + agrupamento `<type>/<related_id>/`:**
+ANTES de gerar QUALQUER arquivo de report (gates 0.9.1→0.9.5), decision log, backup artifact: execute EXATAMENTE este comando UMA VEZ por execução de /che-ship. **Garante que todos paths resolvam FORA da worktree:**
 
 ```bash
-CHE_HOME="${CHE_HOME:-$HOME/.trae}"; CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-[ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ $CONTRACT missing; exit 98"; exit 98; }
-SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-ship-session}"
-if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
-  che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-  che_ensure_session_dirs "$WORKTREE_ROOT"
-  che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR (root efêmeros ship)"
-  che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "WORKSPACE_SHARED (root duráveis ship)"
-fi
-
-WORKTREE_SLUG_CANONICAL="${WORKTREE_SLUG:-$(basename "$WORKTREE_ROOT")}"
-RELATED_ID="ship-${WORKTREE_SLUG_CANONICAL}"
-
-# === Variáveis de paths dos reports GATES (construídas UMA VEZ, reutilizadas abaixo) ===
-SHIP_SCOPE_CHECK_REPORT="$(che_output_path "report" "ship-scope-check" "${RELATED_ID}" "workspace" "md")"
-SHIP_CODE_REVIEW_REPORT="$(che_output_path "report" "ship-code-review" "${RELATED_ID}" "workspace" "md")"
-SHIP_COMPLIANCE_HEAVY_REPORT="$(che_output_path "report" "ship-compliance-heavy" "${RELATED_ID}" "workspace" "md")"
-SHIP_QA_GATE_LOG="$(che_output_path "report" "ship-qa-gate" "${RELATED_ID}" "workspace" "log")"
-# Gate 0.9.5: Um report POR domain-gate; construa dinamicamente no loop §0.9.5.3.c:
-#   DOMAIN_GATE_REPORT="$(che_output_path "report" "domain-gate-${EFFECTIVE_DOMAIN}-${GATE_NAME}" "${RELATED_ID}" "workspace" "json")"
-SHIP_DOMAIN_GATE_REPORT_TEMPLATE_TYPE="report"
-SHIP_DOMAIN_GATE_REPORT_TEMPLATE_SCOPE="workspace"
-
-# Artifact cleanup backup path §0.8 Stage 2:
-ARTIFACT_CLEANUP_BACKUP_DIR="$(che_output_path "legacy_binding_cleanup" "artifact-cleanup-backup" "${RELATED_ID}" "workspace" "folder" | sed 's|/[^/]*$||')"
-# (a linha acima pega folder pai pois che_output_path retorna arquivo; queremos um diretório)
-mkdir -p "$ARTIFACT_CLEANUP_BACKUP_DIR"
-
-# === NOTA: decision log appends SEMPRE usam helper che_append_decision_jsonl (nunca escreva manual). ===
+python3 -m che_core.ship preflight "$WORKTREE_ROOT" "$SESSION_ID"
 ```
+
+Exporte as variáveis impressas pelo script para usá-las nos próximos gates.
 
 ---
 
 ### 0.8 PLANNING ARTIFACTS BLACKLIST PREFLIGHT (NON-NEGOTIABLE)
 
-**Purpose:** NEVER allow che internal planning/decision files to end up in user-code PRs. These files MUST live under `$CHE_SESSIONS_ROOT/<workspace>/<worktree-slug>/workspace` (contracts/che_sessions_contract.sh L9-L21). If any bug/legacy skill accidentally creates them inside the user worktree, detect, unstage, and DELETE them before any `git add` runs.
+**Purpose:** NEVER allow che internal planning/decision files to end up in user-code PRs. If any bug/legacy skill accidentally creates them inside the user worktree, detect, unstage, and DELETE them before any `git add` runs.
 
-Source of truth of patterns = `"${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che-planning-artifacts-blacklist.gitignore"` (single list — keep in sync across install-che.sh §5.5 injection, .gitignore do che, e este preflight).
+Execute o script de verificação de blacklist:
 
-**BLACKLIST (any depth inside WORKTREE_ROOT):**
-```
-.trae/**                                 (legacy layout: never inside user code)
-decisions.log.jsonl  decisions.log.md  decisions.log
-decision.log.jsonl   decision.log.md   decision.log
-task_graph.md manual_test_plan.md final_summary.md
-execution_batches.md batch_execution_report.md
-merge_audit.md merge_audit.jsonl
-scope-report.md scope-report.json scope_check_report.md scope_check_report.json
-scope-check_*.md scope-check_*.json
-spec_*.md SPEC-*.md gh_stack_plan.md session.md envelope.md task_envelope.md
-graphify-out/**
-**/qa_evidence/** **/qa-evidence/** **/manual-test-screenshots/** **/screenshots/**
-che-review-report.md che-compliance-report.md flockr-review-report.md
-# ---------------------------------------------------------------------------
-# BUGFIX (storage boundary): patterns de artifacts que por bug antigo caem em worktree
-# Cleanup sincronizado com contracts/che_sessions_contract.sh cleanup_legacy patterns
-# ---------------------------------------------------------------------------
-reports/**                               # pasta reports/ indevida (ex: HCR PR #382 bug)
-HCR-*.md  HCR-*.json                      # che-code-review reports mode A naming
-REVIEW-*.md  REVIEW-*.json review-*.md review-*.json   # reviews genéricos / pré-novo-helper
-summary.md summary.json                   # summaries escritos direto na raiz
-seo_report.md seo_report.json             # reports SEO auditoria
-diff-context_*.md diff-context_*.json     # che-diff-context salvos em .trae/ worktree
-pr_comments/**  pr-comments-*.md  pr-comments-*.json  # triage PR comments drafts
-*.adr.md  ADR-*.md                         # ADRs por ventura escritos em worktree
+```bash
+python3 -m che_core.ship blacklist_check "$WORKTREE_ROOT" "$SESSION_ID"
 ```
 
-**Runs INSIDE $WORKTREE_ROOT, in this exact order:**
-
-1. **Find all matching files (tracked OR untracked):** use find + patterns acima | sort -u. Call list `<FOUND_BLACKLIST>`.
-2. **STAGE 1 — Unstage anything staged (ALWAYS):**
-   ```bash
-   cd "$WORKTREE_ROOT" && [ -n "<FOUND_BLACKLIST>" ] && git reset HEAD -- <FOUND_BLACKLIST> 2>/dev/null || true
-   ```
-3. **STAGE 2 — Delete UNTRACKED blacklist files (they never belong here):**
-   - For each `f` in `<FOUND_BLACKLIST>` where `git ls-files --error-unmatch "$f"` exits non-zero → UNTRACKED.
-   - **DELETE them.** Backup copy preserved FIRST to `$ARTIFACT_CLEANUP_BACKUP_DIR/` (variável §0.7.1, já criada via helper — FORA worktree, assert outside feito) just in case, then `rm -f "$f"`.
-4. **STAGE 3 — TRACKED blacklist files = BLOCK SHIP, ask user.** They were committed by an older che bug and are now in git history. Present EXACT options:
-   ```
-   🔴 PLANNING ARTIFACTS BLACKLIST — TRACKED FILES FOUND (committed before):
-     · <path1>
-     · <path2>
-   These are che internal files (decisions / task_graph / manual_test_plan / spec_*.md etc)
-   and MUST NOT live in user-code git history.
-
-   Options:
-     A = Untrack them (git rm --cached each), KEEP local copies MOVED to
-         $ARTIFACT_CLEANUP_BACKUP_DIR/legacy_artifact_backup_<basename>  (RECOMMENDED)
-     B = I will handle manually. Cancel ship.
-   ```
-   If A → move file to backup dir → `git rm --cached <path>` → proceed.
-   If B → abort ship cleanly, 0 exit.
-5. **POST-CHECK:** Re-run find. Re-run `git status --porcelain --untracked-files=no`. ZERO blacklisted files must remain STAGED. If any remain → BLOCK SHIP.
-6. **DECISION LOG (helper oficial):** NÃO append manual. Use:
-   ```bash
-   che_append_decision_jsonl "ARTIFACT_CLEANUP" "auto-unstaged=<list> | auto-deleted=<list> | untracked-moved=<list> | backup_dir=$ARTIFACT_CLEANUP_BACKUP_DIR"
-   ```
+Se o script reportar arquivos trackeados (código de saída 2), apresente as opções (A ou B) para o usuário conforme sugerido no output.
 
 ---
 

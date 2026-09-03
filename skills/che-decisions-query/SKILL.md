@@ -78,11 +78,8 @@ Common event types:
 
 ## 2. Query modes (use the smallest scope needed)
 
-Run queries via the TypeScript CLI runner (zero-build, tsx executor):
-`corepack pnpm --dir "$CHE_HOME" exec tsx "$CHE_HOME/contracts/decisions-query.cli.ts" <path> <mode> [args]`.
-
-Shortcut via package.json script:
-`corepack pnpm --dir "$CHE_HOME" decisions <path> <mode> [args]`.
+Run queries via the Python CLI runner (zero-build):
+`python3 -m che_core.decisions_query <path> <mode> [args]`.
 
 ### MODE: `summary` (DEFAULT when user says "mostra as decisões")
 

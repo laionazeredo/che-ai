@@ -35,11 +35,7 @@ Figma source to OpenPencil or an OpenPencil source to Figma.
 Before creating any durable design artifact:
 
 ```bash
-source "${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che_sessions_contract.sh"
-che_compute_paths "$WORKTREE_ROOT" "$(che_current_session_id)" "$PWD"
-che_ensure_session_dirs "$WORKTREE_ROOT"
-CHE_DESIGN_ROOT="${CHE_DESIGN_ROOT:-$CHE_WORKSPACE_SHARED/design}"
-CHE_DESIGN_DIR="$CHE_DESIGN_ROOT/<modo>-<slug>-YYYYMMDD"
+python3 -m che_core.designer bootstrap "$WORKTREE_ROOT" "$SESSION_ID" "<modo>" "<slug>"
 ```
 
 Create `$CHE_DESIGN_DIR` only after the bound-worktree/session preflight passes.

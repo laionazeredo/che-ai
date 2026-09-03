@@ -26,59 +26,22 @@ description: "Onboarding raio-X de repositório NOVO. Detecta stack, linguagem, 
 
 ## 1. PREFLIGHT (obrigatório antes de qualquer scan)
 
+Execute o script Python do X-Ray para resolver os caminhos seguros (fora da worktree):
+
 ```bash
-# 1. Carrega contracts helpers
-CHE_HOME="${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}"
-source "$CHE_HOME/contracts/che_sessions_contract.sh"
-WORKTREE_ROOT="${WORKTREE_ROOT:?WORKTREE_ROOT obrigatório para xray}"
-SESSION_ID="${CHE_CURRENT_SESSION_ID:-${SESSION_ID:-xray-standalone-$(date -u +%Y%m%d-%H%M%S)}}"
-che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-che_ensure_session_dirs "$WORKTREE_ROOT"
-
-# 2. Double-guard: registry NÃO pode cair dentro worktree
-che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR"
-che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
-[ -n "${CHE_PROJECT_DIR:-}" ] || { echo "[che-xray] ❌ CHE_PROJECT_DIR não resolvido (compute_paths falhou?)" >&2; exit 99; }
-che_assert_outside_worktree "$CHE_PROJECT_DIR" "$WORKTREE_ROOT" "CHE_PROJECT_DIR (registry Nível 1.5)"
-mkdir -p "$CHE_PROJECT_DIR"
-
-# 3. Constrói UMA VEZ os 3 paths de output do registry Nível 1.5 via helper type=project_registry
-XRay_RELATED_ID="xray-${CHE_PROJECT_SLUG:-unknown}"
-XRAY_PROJECT_PROFILE_PATH="$(che_output_path "project_registry" "project-profile" "${CHE_PROJECT_SLUG:-unknown}" "workspace" "md")"
-XRAY_ARCHITECTURE_PATH="$(che_output_path "project_registry" "architecture" "${CHE_PROJECT_SLUG:-unknown}" "workspace" "md")"
-
-# Se helper criou abaixo workspace_shared mas registry canônico = CHE_PROJECT_DIR → use o canônico
-XRAY_PROJECT_PROFILE_PATH="${CHE_PROJECT_DIR}/project_profile.md"
-XRAY_ARCHITECTURE_PATH="${CHE_PROJECT_DIR}/architecture.md"
-
-# 4. Verifica graphify CLI disponível. Como che-graph agora joga cache FORA worktree,
-#    o output de /che-graph refresh cai em $CHE_WORKSPACE_SHARED/graphify/<id>/
-if ! command -v graphify >/dev/null 2>&1; then
-  echo "[che-xray] ⚠️  graphify CLI NÃO instalado. Instalar: pipx install graphifyy (double 'y')"
-  echo "[che-xray] Prosseguindo com scan fallback leve (sem graph knowledge graph)"
-  GRAPHIFY_OK=0
-else
-  GRAPHIFY_OK=1
-fi
+python3 -m che_core.xray "$WORKTREE_ROOT" "$SESSION_ID"
 ```
+
+Capture as variáveis de ambiente que o script imprimir (ex: `XRAY_PROJECT_PROFILE_PATH`, `XRAY_ARCHITECTURE_PATH`, `GRAPHIFY_OK`).
 
 ### 1.1 Escrevendo artefatos do registry (3 outputs)
 
-**NÃO FAÇA write manual `cat > arquivo` dentro worktree.** Em §2 Passo 7, os 3 artefatos devem:
+**NÃO FAÇA write manual `cat > arquivo` dentro worktree.** Use a tool `Write` para salvar os arquivos nos caminhos exatos (absolutos) retornados pelo preflight.
+
+Após gerar e salvar os arquivos, finalize a auditoria rodando:
 
 ```bash
-# 7a. project_profile.md → write atômico FORA worktree
-{
-  # ... conteúdo 12-seções template §2.7a ...
-} | che_write_file_atomic "$XRAY_PROJECT_PROFILE_PATH"
-
-# 7b. architecture.md (hybrid auto+manual) → write atômico FORA worktree
-{
-  # ... conteúdo template §2.7b ...
-} | che_write_file_atomic "$XRAY_ARCHITECTURE_PATH"
-
-# 7c. Audit trail append → helper oficial (NÃO echo >> registry.jsonl manual)
-che_append_decision_jsonl "XRAY_SCAN" "{\"project_slug\":\"${CHE_PROJECT_SLUG:-unknown}\",\"graphify_used\":${GRAPHIFY_OK},\"files_scanned\":${FILES_SCANNED:-0},\"stack_version\":\"2026-09-01\"}"
+python3 -m che_core.xray "$WORKTREE_ROOT" "$SESSION_ID" --finalize --files-scanned <QTD>
 ```
 
 ---
