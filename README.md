@@ -39,6 +39,20 @@ Once installed, Che exposes its capabilities directly inside your AI assistant's
 
 If you are an AI agent or developer looking to extend Che, please read **[AGENTS.md](./AGENTS.md)** first. It outlines the strict 3-Layer Architecture, the Python core rule, and how to safely manipulate the file system.
 
+### Approval & Contribution Workflow
+To ensure the stability and security of the framework, Che enforces a strict contribution workflow:
+- **Branch Protection**: Direct pushes to `main` are blocked. All changes must be submitted via Pull Requests.
+- **Code Owners**: The `.github/CODEOWNERS` file mandates explicit review and approval from `@laionazeredo` before any PR can be merged.
+- **Zero-Build Policy**: No Node.js dependencies (`package.json`) or complex build steps. The core is pure Python. Bash is strictly reserved for the bootstrap/install scripts.
+- **Worktree Hygiene**: Temporary scripts, logs, and untracked files must not be left in the repository root. Ephemeral data belongs in the Session Level (L4) folders.
+
+## 🛡️ Quality & Security
+
+Che employs a robust Continuous Integration (CI) pipeline via GitHub Actions to maintain code quality and prevent security regressions:
+- **Linting & Formatting**: Python code is strictly linted and formatted using `ruff`. Markdown files are validated with `markdownlint-cli2`.
+- **Unit & Security Testing**: `pytest` runs unit tests for the core logic (e.g., path resolution) and executes static security analysis (`test_skill_security.py`) on `SKILL.md` files. This ensures no destructive Bash commands (like `rm -r`, `curl`, `eval`) are embedded in Markdown and limits Python blocks to a maximum of 15 lines, forcing complex logic into the `che_core` package.
+- **Secret Scanning**: `TruffleHog` runs on every push and PR to prevent accidental commits of secrets, API keys, or passwords by AI agents.
+
 ## 🔄 Updating
 
 To fetch the latest version of Che:

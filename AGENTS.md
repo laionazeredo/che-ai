@@ -48,3 +48,12 @@ When modifying this repository, apply the **KISS** (Keep It Simple, Stupid) and 
 - Minimize dependencies. Use Python's standard library whenever possible.
 - Focus on reducing the blast radius of changes.
 - Apply Design by Contract (DbC) on core functions (preconditions, postconditions).
+- **Worktree Hygiene**: Do not leave temporary scripts, untracked files, or logs in the root. Ephemeral data goes to the Session Level (L4).
+
+## 6. Quality, Security & Contribution Workflow
+
+Che enforces a strict CI and contribution workflow to prevent regressions and security vulnerabilities:
+- **CI Pipeline**: GitHub Actions runs `ruff` (Python linting/formatting), `pytest` (unit and security tests), and `markdownlint-cli2`.
+- **Skill Security**: Markdown files (`SKILL.md`) are statically analyzed by `tests/test_skill_security.py`. Destructive bash commands (`rm -r`, `curl`, `eval`, etc.) are prohibited. Python blocks inside Markdown must not exceed 15 lines. All complex logic must reside in `che_core`.
+- **Secret Scanning**: TruffleHog runs on all PRs and pushes to ensure no secrets or API keys are accidentally committed.
+- **Approval Workflow**: Direct pushes to `main` are blocked. All changes must be submitted via PRs and require explicit approval from `@laionazeredo` (enforced via `.github/CODEOWNERS`).
