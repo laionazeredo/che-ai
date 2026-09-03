@@ -327,13 +327,13 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 
 ## 🟣 TAXONOMIA DE DOMÍNIOS DO HARNESS (7 CATEGORIES)
 
-> **HARD RULE NÃO NEGOCIÁVEL**: Toda nova **NOVA skill, comando slash `/`, ou **SPEC DE NOVO tipo criado a partir de hoje DEVE declarar explicitamente a que **exatamente um domínio** dos 7 abaixo. Skills antigas sem declaram → domínio DEFAULT IMPLÍCITO = `engineering`. NUNCA "cross-domínio" em 1 skill (se tocar 2 domínios = 2 skills separadas, ou use scrum master com sub-skills).
+> **HARD RULE NÃO NEGOCIÁVEL**: Toda **NOVA skill, comando slash `/`, ou SPEC DE NOVO tipo criado a partir de hoje DEVE declarar explicitamente **exatamente um domínio** dos 7 abaixo. Skills novas sem declaram → valor **DEFAULT** (não mais implícito) = `engineering`, AGORA com pasta física oficial. NUNCA "cross-domínio" em 1 skill (se tocar 2 domínios = 2 skills separadas, ou use scrum master com sub-skills).
 
 ### 7 Domínios canônicos
 
 | Slug (valor frontmatter `domain:`) | Nome humano | O que cobre | Pasta física |
 |---|---|---|---|
-| **`engineering`** | Engenharia de software (DEFAULT para skills legadas hoje sem declaram dominio.) | Código backend/frontend, arquitetura técnica, CI/CD engenharia, testes unitários/e2e, database migrations, Supabase RLS, code review, ship gates. | `skills/harness-*` (tudo hoje, legacy.) |
+| **`engineering`** | Engenharia de software (valor DEFAULT para skills novas sem declaram dominio) | Código backend/frontend, arquitetura técnica, CI/CD engenharia, testes unitários/e2e, database migrations, Supabase RLS, code review, ship gates. | `domains/engineering/` |
 | **`product`** | Product Management | PRD, RICE scoring, JTBD, roadmap, tasks, priorização, integração Linear/ClickUp/Jira, gestão backlog. | `domains/product/` |
 | **`ux`** | UI / UX DesignOps | Descoberta UX, wireframe, hi-fi protótipo Figma/PenPot, accessibility (a11y), design tokens, dev-handoff, pixel check. | `domains/ux/` |
 | **`devops`** | DevOps & Observabilidade | Deploy, canary rollout, error budget SLO, Grafana, Sentry, Datadog, pipelines CI/CD gestão, Runbooks, gestão incidentes. | `domains/devops/` |
@@ -343,21 +343,21 @@ Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs
 
 ### Cada domínio = 5 artefatos OBRIGATÓRIOS mínimos
 
-Todo pasta por domínio (boilerplate criado automaticamente para você. Não quebrar a estrutura abaixo:
+Toda pasta por domínio tem a estrutura abaixo. NÃO quebrar (boilerplate criado automaticamente em rollout fase 2 domínios restantes):
 
-1. **`profile.md`** — Persona do domínio + regras de estilo hard, convenções da casa, padrões proibidos. CarregadoAUTOMATICAMENTE no início scrum master ANTES scope capture se a SPEC tem `domain:` não engineering. NUNCA duplique instruções longas de persona no prompt de execução cada skill; profile é fonte única da verdade.
-2. **`playbook.md`** — Ordem obrigatória etapas OBRIGATÓRIO, não pular etapas, mesma função 0.1 ship gates hoje engenharia.
-3. **`connectors/`** — Configuração por integrações externas do domínio (clis oficiais ou MCP servers. NÃO colar HTTP raw aqui. Seguir engineering-contracts §20 (EXTERNAL CONNECTORS — OFFICIAL CLI/MCP ONLY (generalização do §18 GitHub).
-4. **`gates/`** — Quality gates do domínio (cada = PASS/FAIL comTHRESHOLD numérico e política retry (igual §0.9.1 scope gate. Executados OBRIGATORIAMENTE por `/harness-ship` §0.9.5 depois QA se domínio não default.
+1. **`profile.md`** — Persona do domínio + regras de estilo hard, convenções da casa, padrões proibidos. Carregado **AUTOMATICAMENTE no início scrum master ANTES scope capture** para QUALQUER domínio declarado (incluindo engineering). NUNCA duplique instruções longas de persona no prompt de execução cada skill; profile é fonte única da verdade.
+2. **`playbook.md`** — Ordem obrigatória de etapas NÃO-PULA. Função equivalente a gates §0.9 ship para engenharia, agora generalizada para todos 7 domínios.
+3. **`connectors/`** — Configuração por integrações externas do domínio (CLIs oficiais ou MCP servers. NÃO colar HTTP raw aqui. Seguir engineering-contracts §20 EXTERNAL CONNECTORS — OFFICIAL CLI/MCP ONLY (generalização do §18 GitHub).
+4. **`gates/`** — Quality gates do domínio (cada = PASS/FAIL com THRESHOLD numérico e política retry igual §0.9.1 scope gate. Executados OBRIGATORIAMENTE por `/harness-ship` §0.9.5 depois QA, PARA TODOS OS 7 DOMÍNIOS (sem exceção).
 5. **`templates/`** — Templates reutilizáveis entregáveis domínio.
 
 ### Frontmatter `domain:` onde declarar
 
 | Local | Obrigatoriedade | Quem preenche |
 |---|---|---|
-| Skills novas (arquivo `skills/<nova>/SKILL.md header YAML frente `domain:` frontmatter) | **SIM NOVAS (HOJE 2026-09-01 em diante) | Skill author antes merge |
-| SPEC (`spec_<slug>.md YAML frontmatter campo `domain:` | OPCIONAL padrão engineering | Se não declarada engenharia normal; se UX/product etc) | harness-spec skill (ver spec default engineering se SPEC field. |
-| Project registry Level1.5 product_context.md frontmatter campo `domains: [ux, copywriting` |OPCIONAL array. | Quando projeto usa múltiplos domínios frequentemente. | Scrum-master carrega profiles de todos domínios listados no início sessão. |
+| Skills novas (arquivo `skills/<nova>/SKILL.md` header YAML frente `domain:` frontmatter) | **SIM NOVAS (HOJE 2026-09-01 em diante)** | Skill author antes merge |
+| SPEC (`spec_<slug>.md` YAML frontmatter campo `domain:`) | OPCIONAL — padrão `engineering` | Se não declarada = engenharia normal; se UX/product etc = domínio específico. harness-spec skill já seta default engineering se field vazio. |
+| Project registry Level 1.5 `product_context.md` frontmatter campo `domains: [ux, copywriting, ...]` | OPCIONAL array | Quando projeto usa múltiplos domínios frequentemente | Scrum-master carrega profiles de todos domínios listados no início sessão. |
 
 ### Exemplo correto (recomendado) skill frontmatter nova skill:
 

@@ -155,20 +155,20 @@ MERGE_AUDIT_PATH_Tn="$(harness_output_path "merge_audit" "merge-audit" "batch-${
 
 ---
 
-### 0.3 Domain Context Auto-Load (NOVO · Three-Layer Domains v2)
+### 0.3 Domain Context Auto-Load (Three-Layer Domains v2.1 · 7 domínios físicos SEM exceção)
 
 Runs **AFTER** binding 0.1 + contract path resolution, **BEFORE** §0.5 Approved SPEC gate and §1 scope capture.
 
-Purpose: If the current feature/spec belongs to a non-engineering domain (ux/product/devops/copywriting/social/seo-analytics), automatically load the domain persona/rules and playbook into session context BEFORE asking any scope capture questions. This guarantees domain-specific hard rules (WCAG, design tokens, SEO thresholds, copy length) are enforced from minute 0, not retroactively at ship gate.
+Purpose: Automatically load domain persona/rules and playbook into session context BEFORE asking any scope capture questions — for **ALL 7 domains including `engineering`**. Guarantees domain-specific hard rules (WCAG, design tokens, contracts §1-21 engineering quickref, SEO thresholds, copy length) are enforced from minute 0, not retroactively at ship gate.
 
 Execution logic (in order — STOP at first match):
 1. **Parse SPEC candidate domain:** Read the SPEC YAML frontmatter (from §0.5 gate or user-provided existing SPEC path). Extract field `domain:`.
-2. **Fallback project registry domains array:** If `domain:` field is empty/null/absent in SPEC, read the Level 1.5 registry `domains: [ ]` array at `$HARNESS_HOME/bindings/project_registry.json` (if it exists) for the bound worktree project. Take the FIRST non-null, non-engineering entry if present.
-3. **Default fallback:** If both 1 and 2 returned `null` OR `engineering` → **SKIP THIS STEP COMPLETELY AND SILENTLY (ZERO log lines, ZERO output)**. Session proceeds EXACTLY with the legacy pre-v2 behavior. 100% backward compatibility for all existing sessions/branches/skills (default implicit engineering = skip).
-4. **If domain != engineering (one of: ux | product | devops | copywriting | social | seo-analytics):**
-   a. Check if folders exist: `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/` → MUST exist. If not → WARN "Domain <slug> referenced but folder domains/<slug>/ doesn't exist yet (fase 2 rollout). Skipping domain load." → skip rest.
+2. **Fallback project registry domains array:** If `domain:` field is empty/null/absent in SPEC, read the Level 1.5 registry `domains: [ ]` array at `$HARNESS_HOME/bindings/project_registry.json` (if it exists) for the bound worktree project. Take the FIRST non-null entry if present.
+3. **Default fallback:** If both 1 and 2 returned `null` → **valor default canônico = `engineering`** (não há mais "skip silencioso").
+4. **TODOS os domínios SEMPRE carregam (sem SKIP, sem condicional):**
+   a. Check if folders exist: `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/` → SHOULD exist for all 7 canônicos. If not → WARN "Domain <slug> referenced but folder `domains/<slug>/` doesn't exist yet (fase 2 rollout). Procedendo com fallback engineering profile apenas para esta sessão." → ignora c/d mas continua (compatibilidade fase 2).
    b. **Read and inject profile.md:** Read `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/profile.md`. Append full content verbatim to session context preamble (same level as engineering-contracts §1-21). Agent MUST follow all Forbidden Patterns + Hard Rules in profile with same precedence as §14 Conventional Commits.
-   c. **Read and inject playbook.md:** Read `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/playbook.md`. Append to session context. Steps listed in playbook (e.g. UX 5 phases Brief→Wire→Hi-fi→Gates→Handoff) are treated as REQUIRED PRECONDITIONS before §1 scope capture for domain-specific tasks. If playbook says "Need Brief Approved Gate literal 'Approved' before wireframes", agent enforces it.
+   c. **Read and inject playbook.md:** Read `${HARNESS_HOME:-$HOME/.trae}/domains/<domain>/playbook.md`. Append to session context. Steps listed in playbook are treated as REQUIRED PRECONDITIONS before §1 scope capture for domain-specific tasks.
    d. **Register mandatory gates list for downstream §0.9.5 ship:** Parse playbook frontmatter YAML key `gate_files_required: [ ... ]`. Store in session state `SESSION_DOMAIN_GATES = array`. This list is consumed AUTOMATICALLY by harness-ship §0.9.5 DOMAIN GATES later.
    e. **Mandatory decision.log entry (1 single line):** NÃO append manual. Use HELPER OFICIAL ÚNICO:
       ```bash
