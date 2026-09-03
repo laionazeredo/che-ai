@@ -17,7 +17,7 @@
 #
 # O que este script FAZ AUTOMATICAMENTE, ZERO CONFIGURAÇÃO:
 #   1) Valida que ~/.trae (TARGET) já existe (não é fresh install).
-#   2) Faz fetch AUTÔNOMO da ÚLTIMA versão oficial de github.com/laionazeredo/trae-config:
+#   2) Faz fetch AUTÔNOMO da ÚLTIMA versão oficial de github.com/laionazeredo/che-ai:
 #        UNICA VIA PERMITIDA (HARD RULE do che): `gh` CLI logado (GitHub CLI oficial).
 #          → gh repo clone ... --depth 1 em /tmp/tmpXXXXXX.
 #        NÃO EXISTE MAIS fallback git clone HTTPS. Motivo: autenticacao/scopes/rate-limit
@@ -61,7 +61,7 @@ set -euo pipefail
 # ============================================================
 APPLY=0
 TARGET="${HOME}/.trae"
-GH_REPO="laionazeredo/trae-config"
+GH_REPO="laionazeredo/che-ai"
 TMP_SRC=""   # definido abaixo se fetch for bem sucedido.
 
 while [ $# -gt 0 ]; do

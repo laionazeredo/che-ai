@@ -1,1 +1,0 @@
-che_sessions_contract.sh

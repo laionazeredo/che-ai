@@ -20,7 +20,7 @@
 #            · source tem, target tem e IGUAIS → skip (zero ruído).
 #            · source NÃO tem, target tem → NUNCA TOCA (preserva skills custom do
 #              usuário, comandos novos que a pessoa adicionou, referências locais etc).
-#        - Ideal para: "peguei versão nova do repo laionazeredo/trae-config, quero
+#        - Ideal para: "peguei versão nova do repo laionazeredo/che-ai, quero
 #          atualizar skills/commands/rules sem perder minhas regras pessoais".
 #
 # USO (dentro da pasta fonte .trae ou --source=/custom/.trae):
@@ -376,7 +376,7 @@ fi
 # Passo 5.5: Injetar snippet CHE BLACKLIST no .gitignore do
 #            REPO CLIENTE (se rodando install/update de dentro
 #            de uma worktree de projeto que NÃO é o próprio
-#            trae-config). Decisão tomada: fail-closed — se um
+#            che-ai). Decisão tomada: fail-closed — se um
 #            projeto cliente tem decisions.log / task_graph.md
 #            aparecendo em PRs, o GIT tem que ignorar esses
 #            patterns MESMO que o che não consiga mover eles

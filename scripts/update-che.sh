@@ -4,7 +4,7 @@
 #
 # DOIS CAMINHOS (detecta AUTOMATICAMENTE qual caso é o seu):
 #
-#   CASO 1 — target (~/.trae) É UM GIT REPO clonado DIRETO de laionazeredo/trae-config
+#   CASO 1 — target (~/.trae) É UM GIT REPO clonado DIRETO de laionazeredo/che-ai
 #     → executa:  git fetch  (dry-run) ou  git pull --ff-only (--apply)
 #        + se package.json/pnpm-lock.yaml mudaram → corepack pnpm install --prefer-offline
 #     Vantagem: zero cópias, merge zero conflitos (ff-only aborta se divergência),
