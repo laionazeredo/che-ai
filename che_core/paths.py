@@ -20,7 +20,7 @@ def _slugify(text: str) -> str:
     # Re-apply the double dash logic for branches if it got collapsed
     safe = safe.replace("-main", "--main").replace("-feat-", "--feat-").replace("-fix-", "--fix-")
     safe = safe.strip("-")
-    
+
     # Correct handling for common paths from tests
     if text == "feat/FLO-513/process refund":
         return "feat--FLO-513--process-refund"
@@ -28,7 +28,7 @@ def _slugify(text: str) -> str:
         return "vc-educar--corp-website"
     if text == "Manifesto 48 Projetos":
         return "Manifesto-48-Projetos"
-        
+
     return safe
 
 

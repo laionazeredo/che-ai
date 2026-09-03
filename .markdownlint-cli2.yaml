@@ -1,0 +1,5 @@
+config:
+  MD013: false  # Line length
+  MD026: false  # Trailing punctuation in heading
+  MD032: false  # Blanks around lists
+  MD040: false  # Fenced code blocks should have a language specified
