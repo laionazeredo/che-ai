@@ -6,7 +6,7 @@
         "description": "Enforces contracts §19 — 1 session = 1 worktree. BLOCK any file/git op outside BOUND worktree; requires AskUserQuestion for re-bind.",
         "matcher": "Read,Glob,Grep,Edit,Write,RunCommand,DeleteFile,LS,SearchCodebase",
         "type": "command",
-        "command": "__HARNESS_TARGET__/hooks/pretooluse-worktree-binding.sh",
+        "command": "__HARNESS_TARGET__/hooks/pretooluse-worktree-binding.py",
         "timeout": 5
       }
     ],
@@ -24,7 +24,7 @@
         "description": "WARN-only (never blocks): detects Portuguese text in files written via Edit/Write (4+ PT stopword hits OR 2+ diacritics lines + 2 PT words). Never auto-fixes. Signals the agent to AskUserQuestion: (A) translate to EN, (B) keep PT, (C) disable for this session. Per-session disable via Level1 registry FLAGS: LANG_PT_CHECK=DISABLED on BOUND entry.",
         "matcher": "Edit,Write",
         "type": "command",
-        "command": "__HARNESS_TARGET__/hooks/posttooluse-lang-pt-check.sh",
+        "command": "__HARNESS_TARGET__/hooks/posttooluse-lang-pt-check.py",
         "timeout": 8
       }
     ]
