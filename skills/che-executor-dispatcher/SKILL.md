@@ -1,6 +1,6 @@
 ---
 name: "che-executor-dispatcher"
-description: "Parallel batch executor for the che. Given a TASK GRAPH, builds topological batches, enforces blast-radius file-lock partitions, fans-out independent che-developer instances in parallel, runs per-batch MERGE AUDIT + scope/QA/compliance gates, and produces a BATCH_REPORT. Invoked BY che-scrum-master only when task_graph.md has >=2 tasks with no dependencies sharing zero files. Or explicitly by /che-parallel."
+description: "Parallel batch executor for the che. Given a TASK GRAPH, builds topological batches, enforces blast-radius file-lock partitions, fans-out independent che-developer instances in parallel, runs per-batch MERGE AUDIT + scope/QA/compliance gates, and produces a BATCH_REPORT. Invoked BY che-act only when task_graph.md has >=2 tasks with no dependencies sharing zero files. Or explicitly by /che-parallel."
 ---
 
 # Che — Parallel Executor Dispatcher
@@ -12,7 +12,7 @@ fans out `che-developer` calls as parallel independent sub-agent calls in BATCHE
 then runs per-task gates (scope/QA/compliance-light) and a per-batch **MERGE AUDIT** to catch
 cross-task file conflicts BEFORE the next batch starts.
 
-**CRITICAL CONTRACT**: This skill is called BY `che-scrum-master`. It is **NOT** a top-level
+**CRITICAL CONTRACT**: This skill is called BY `che-act`. It is **NOT** a top-level
 orchestrator — SM retains authority over scope + overall gates. This skill only does dispatch.
 
 ---
@@ -188,7 +188,7 @@ If absent → dispatcher treats the task as FAILED_SCOPE (contract not upheld), 
 Once ALL tasks in mini-batch have returned a Dev report:
 
 1. **For EACH task T in mini-batch, SERIALLY** (SM is still single-writer for gates + task_graph, because QA/compliance scan worktree state which is shared):
-   - Scope Validation (che-scrum-master rules section 2.3).
+   - Scope Validation (che-act rules section 2.3).
    - If PASS → mark `SCOPE_OK`.
    - Run QA (che-qa) on task T.
    - If PASS → mark `QA_OK`.
@@ -241,7 +241,7 @@ If ANY task fails gates OR merge audit reports HIGH conflict → mark mini-batch
      REOF
      ```
      NÃO reconstrua o path manualmente (`$CHE_SESSION_DIR/reports/BATCH_EXECUTION_REPORT.md`) — use variável PREFLIGHT (assert outside automático + timestamp prefix + grouping).
-   - Return structured summary to `che-scrum-master`.
+   - Return structured summary to `che-act`.
    - SM then proceeds to **Compliance HEAVY → manual_test_plan → final_summary** as usual (no parallelism in final stage; it's a single cross-cut pass).
 
 ---

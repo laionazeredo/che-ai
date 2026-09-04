@@ -26,7 +26,7 @@ Run:
 Example explicit skill invocation:
 
     $che-spec
-    $che-scrum-master
+    $che-act
     $che-qa
     $che-code-review
     $che-ship

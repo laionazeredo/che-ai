@@ -26,7 +26,7 @@ EXCLUDED_FILES = [
     "skills/che-qa/SKILL.md",
     "skills/che-executor-dispatcher/SKILL.md",
     "skills/che-developer/SKILL.md",
-    "skills/che-project-knowledge/SKILL.md",
+    "skills/che-onboarding/SKILL.md",
     "skills/che-graph/SKILL.md",
     "skills/che-compliance/SKILL.md",
     "skills/che-social-ui-designer/SKILL.md",

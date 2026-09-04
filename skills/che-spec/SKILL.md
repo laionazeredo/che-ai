@@ -10,18 +10,18 @@ description: "Generate or validate a Che Execution Specification (SPEC). 4 input
 > - Path resolution (WORKSPACE_NAME, WORKTREE_SLUG, CHE_WORKSPACE_SHARED, CHE_SESSION_DIR): `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"`, call `che_compute_paths WT SID CWD`
 > - Worktree binding 2-LEVEL (Level1 registry, Level2 sessions dir): engineering-contracts §19
 
-Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~60–120 lines, 7 sections). Replaces project-specific legacy PRD artifacts. Gate before scope capture in `/che-start` and standalone runnable via `/che-spec`.
+Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~60–120 lines, 7 sections). Replaces project-specific legacy PRD artifacts. Gate before scope capture in `/che-act` and standalone runnable via `/che-spec`.
 
 ---
 
 ## §0 PURPOSE & INTEGRATION
 
 When called:
-1. **From `/che-start` (embedded)**: runs AFTER binding §19 + ensure_dirs, BEFORE scope capture §1. User says which SPEC to use or generates new.
+1. **From `/che-act` (embedded)**: runs AFTER binding §19 + ensure_dirs, BEFORE scope capture §1. User says which SPEC to use or generates new.
 2. **Standalone** via `/che-spec`: runs independently; performs binding if needed, then generates or edits spec.
 
 On completion this skill **returns to the caller** two values printed in the last 2 lines of the transcript:
-- `SPEC_PATH=<absolute-path-to-spec>` — used by che-scrum-master
+- `SPEC_PATH=<absolute-path-to-spec>` — used by che-act
 - `SPEC_STATUS=Approved|Draft` — only `Approved` unlocks subsequent execution in SM.
 
 ---
@@ -368,7 +368,7 @@ This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bila
    - Re-run §4 VALIDATION.
    - Re-show ONE TIME only.
    - User now either Approves → update frontmatter Approved → SAVE. OR says "more edits" → tell user to re-run `/che-spec` fresh (avoid infinite loops).
-4. **If user says "Cancel":** Write Draft (no Approved flag) → SAVE anyway for future work. Print warning: `SPEC_STATUS=Draft (not Approved — che-start will re-prompt when you run it)`. End.
+4. **If user says "Cancel":** Write Draft (no Approved flag) → SAVE anyway for future work. Print warning: `SPEC_STATUS=Draft (not Approved — che-act will re-prompt when you run it)`. End.
 
 ---
 

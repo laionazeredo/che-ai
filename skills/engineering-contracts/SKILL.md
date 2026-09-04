@@ -264,7 +264,7 @@ Rules enforced on EVERY implementation:
 Rule:
 1. **For EVERY new table:** immediately add `ALTER TABLE <schema>.<table> ENABLE ROW LEVEL SECURITY;` in the migration.
 2. **Define explicit read/write policies per role** (e.g. `organizer_select_policy`, `admin_all_policy`). A table with RLS enabled but ZERO policies = no rows can be read/written (default deny) — good.
-3. **Add an Acceptance Criteria in the SPEC (if using che-spec standalone or /che-start SM §0.5 SPEC gate) specifically for RLS:** e.g. `- [MUST] AC-RLS GIVEN Organizer A authenticated WHEN querying tickets/events owned by Organizer B THEN HTTP 403 or 404 returned | TEST=qa_integration` literal format in §4. This is validated during QA.
+3. **Add an Acceptance Criteria in the SPEC (if using che-spec standalone or /che-act SM §0.5 SPEC gate) specifically for RLS:** e.g. `- [MUST] AC-RLS GIVEN Organizer A authenticated WHEN querying tickets/events owned by Organizer B THEN HTTP 403 or 404 returned | TEST=qa_integration` literal format in §4. This is validated during QA.
 4. **ONLY exception (allowed logged + user approved double confirmation):**
    - Pure lookup tables (enum reference tables, immutable public seed data for everyone) → RLS not needed, BUT:
      - Explicitly mark in Non-Goals / Data Model notes.
@@ -769,7 +769,7 @@ chore(deps): bump stripe-sdk 18.4 → 18.5 (patch)
 2. Updates PR bodies with "Depends on: #123 · Stacks against main" links so reviewers understand order.
 3. Supports rebasing the whole stack when lower PRs get fixes.
 
-### C.2 Preconditions to use gh-stack (che-scrum-master validates in planning)
+### C.2 Preconditions to use gh-stack (che-act validates in planning)
 1. Task Graph ≥ 3 tasks OR one task > 15 files blast radius.
 2. Tasks can be semantically grouped into "PR layers" (ex: PR1=types/contracts, PR2=service layer + unit tests, PR3=API + e2e tests).
 3. User did NOT explicitly say "single PR please".
@@ -902,7 +902,7 @@ gh-stack update --base main
 | Nomeando funções / parâmetros / variáveis | D.1 RF10 (não obscuro) + D.2 #15 (consistência) | code-review nit auto-fix |
 | Escrevendo comentários / docs | D.1 RF08,RF09 (não repete código / não doc interna) + D.2 #12, #13 (comments first) | code-review comments guideline §16 |
 | Decisão arquitetural grande (nova layer, nova lib) | D.2 #11 (design twice) + §1 No Accidental Complexity | ADR skill (adr-architecture) obrigatório |
-| Planejando feature grande / épico (antes SPEC) | D.2 #1 (complexity é enemy #1) + #7 (different abstraction por layer) | che-project-knowledge + xray arquitetura |
+| Planejando feature grande / épico (antes SPEC) | D.2 #1 (complexity é enemy #1) + #7 (different abstraction por layer) | che-onboarding + xray arquitetura |
 
 ---
 

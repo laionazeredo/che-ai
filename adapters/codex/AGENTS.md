@@ -15,7 +15,7 @@ Do not duplicate engineering rules in this file.
 Feature/refactor workflow:
 
 1. che-spec
-2. che-scrum-master
+2. che-act
 3. che-developer
 4. che-qa
 5. che-compliance

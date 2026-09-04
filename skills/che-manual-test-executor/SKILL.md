@@ -1,12 +1,12 @@
 ---
 name: "che-manual-test-executor"
-description: "Executes the manual_test_plan.md step-by-step using Playwright MCP (browser interactions + screenshots) or HTTP/curl requests for API-only scenarios, generates evidence files (PNG screenshots, JSON logs), and delivers a structured pass/fail report per AC. Call this AFTER manual_test_plan.md is written by che-scrum-master and BEFORE che-ship, or standalone when user passes a worktree + task-id or a manual test plan path explicitly."
+description: "Executes the manual_test_plan.md step-by-step using Playwright MCP (browser interactions + screenshots) or HTTP/curl requests for API-only scenarios, generates evidence files (PNG screenshots, JSON logs), and delivers a structured pass/fail report per AC. Call this AFTER manual_test_plan.md is written by che-act and BEFORE che-ship, or standalone when user passes a worktree + task-id or a manual test plan path explicitly."
 ---
 
 # Che — Manual Test Executor (step-by-step Playwright + HTTP)
 
 > **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
-> - Manual Test Plan canonical format (AC structure with GWT / Manual Steps / Severity): che-scrum-master `references/MANUAL_TEST_PLAN_TEMPLATE.md`
+> - Manual Test Plan canonical format (AC structure with GWT / Manual Steps / Severity): che-act `references/MANUAL_TEST_PLAN_TEMPLATE.md`
 > - Nx/pnpm build/dev service startup commands: `_shared_checklists/NX_PNPM_COMMON.md`
 > - Worktree Session Binding (one session = one worktree, doubt = ask): engineering-contracts §19
 > - Output shape rules (concise 4 sections, diagonal readability, deep-dive gate): engineering-contracts §18

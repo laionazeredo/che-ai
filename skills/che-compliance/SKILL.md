@@ -1,6 +1,6 @@
 ---
 name: "che-compliance"
-description: "Two-stage security & compliance review: LIGHT per-task diff scan and HEAVY final full-session scan. Checks for secrets, PII leaks, SQL injection patterns, auth/RLS bypasses, dangerous URLs. Invoke ONLY by che-scrum-master. NEVER fixes code directly — only reports findings."
+description: "Two-stage security & compliance review: LIGHT per-task diff scan and HEAVY final full-session scan. Checks for secrets, PII leaks, SQL injection patterns, auth/RLS bypasses, dangerous URLs. Invoke ONLY by che-act. NEVER fixes code directly — only reports findings."
 ---
 
 # Che — Compliance & Security

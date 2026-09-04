@@ -38,7 +38,7 @@ Entender o PROBLEMA antes de abrir o Figma/PenPot. "Design é solução de probl
    When <SITUACAO>, I want to <ACAO_USUARIO>, so I can <RESULTADO_ESPERADO>.
    ```
    Máximo 1 linha por JTBD. Mínimo 3 JTBDs únicos por feature. Sem "melhorar UX" (vazio).
-0.2 **User Persona canônica:** Linkar `domains/ux/profile.md` persona + acrescentar 1 parágrafo contexto específico dessa tela. Se não existir persona no registry level 1.5 → criar via `/che-project-knowledge --edit` (não só inline).
+0.2 **User Persona canônica:** Linkar `domains/ux/profile.md` persona + acrescentar 1 parágrafo contexto específico dessa tela. Se não existir persona no registry level 1.5 → criar via `/che-onboarding --edit` (não só inline).
 0.3 **User flow canônico Mermaid:** Diagrama `flowchart TD` mínimo 3 nodes (Entry → Action A → Success State + Error State). NÃO stadium shapes. Quebras com `<br/>` HTML.
 0.4 **Approved Gate humano:** Brief + JTBD + flow Mermaid enviados para usuário. **Aprovação EXPLÍCITA (reply "Approved" literal) é obrigatória.** Sem aprovação → NÃO AVANÇA etapa 1.
 

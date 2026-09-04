@@ -9,7 +9,7 @@ description: "Onboarding raio-X de repositório NOVO. Detecta stack, linguagem, 
 > - Full engineering contracts (precedence 1-18, DbC, KISS, No Accidental Complexity, Ousterhout): `engineering-contracts` skill
 > - Path resolution + project registry Nível 1.5 helpers: `source "${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che_sessions_contract.sh"`
 > - Knowledge graph AST: `/che-graph refresh` (wrapper graphify CLI pipx: `graphifyy`)
-> - Complemento humano contexto produto: `/che-project-knowledge`
+> - Complemento humano contexto produto: `/che-onboarding`
 
 ## 0. WHEN TO CALL
 
@@ -19,7 +19,7 @@ description: "Onboarding raio-X de repositório NOVO. Detecta stack, linguagem, 
 
 **NON-GOALS (não usa X-Ray):**
 - Não é task spec → use `/che-spec`
-- Não é contexto humano do produto → use `/che-project-knowledge`
+- Não é contexto humano do produto → use `/che-onboarding`
 - Não é conhecimento em tempo real de diff → use `/che-diff`
 
 ---
@@ -217,7 +217,7 @@ root/
 - Entry points: ...
 - Data layer: ...
 
-## 🧭 Manual Part — PREENCHER via /che-project-knowledge
+## 🧭 Manual Part — PREENCHER via /che-onboarding
 ### Arquitetura Geral (desenho mental: 1 página)
 ### Diagrama de Contexto C4 (Level 1: sistemas externos + este)
 ### Diagrama de Container C4 (Level 2: apps + DB + cache + filas)
@@ -248,7 +248,7 @@ NÃO encha de linhas no chat. Devolve 10 linhas compactas no final:
   ├─ CI/CD: GitHub Actions → Vercel deploy 2 apps
   ├─ ⚠️  2 RED FLAGS: (1) @flockr/db god package 2.3k arquivos (2) sem tests unitários
   ├─ Knowledge graph: graphify v0.9.53 OK (4286 arquivos indexados)
-  └─ ── Next step: agora rode /che-project-knowledge para preencher produto, roadmap, arquitetura manual
+  └─ ── Next step: agora rode /che-onboarding para preencher produto, roadmap, arquitetura manual
 ```
 
 ---
