@@ -73,6 +73,23 @@ Once installed, Che exposes its capabilities directly inside your AI assistant's
 - `/che-export` — Packages durable project data (architecture, specs, decisions) for portability.
 - `/che-import` — Imports a project archive, resolving naming conflicts automatically.
 
+### 📦 Portabilidade
+
+Os comandos de portabilidade permitem que você mova o contexto e a memória de um projeto entre diferentes máquinas ou ambientes sem perder o histórico de decisões e a arquitetura definida.
+
+#### `/che-export`
+Este comando empacota os dados duráveis do projeto (Níveis L2 e L3).
+- **O que é exportado**: Arquitetura, perfis de projeto, log de decisões (`decisions.log.jsonl`), designs e relatórios de QA.
+- **O que NÃO é exportado**: Dados efêmeros de sessão (L4), logs de execução temporários e estado do debugger.
+- **Uso**: `/che-export <caminho_do_projeto> <arquivo_de_saida>`
+- **Exemplo**: `/che-export /home/user/my-repo backup.che.tar.gz`
+
+#### `/che-import`
+Este comando restaura um projeto a partir de um arquivo gerado pelo `/che-export`.
+- **Funcionamento**: O Che extrai os dados e os organiza na hierarquia de workspaces local. Se houver conflito de nomes (slugs), ele resolve automaticamente adicionando um sufixo de timestamp.
+- **Uso**: `/che-import <caminho_do_arquivo> [nome_do_workspace_destino]`
+- **Exemplo**: `/che-import backup.che.tar.gz main-workspace`
+
 ## 🏗 Contributing & Architecture
 
 If you are an AI agent or developer looking to extend Che, please read **[AGENTS.md](./AGENTS.md)** first. It outlines the strict 3-Layer Architecture, the Python core rule, and how to safely manipulate the file system.

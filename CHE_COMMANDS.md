@@ -405,6 +405,29 @@ Agent action: ask confirmation first.
 | `/che-decisions` | Reads `decisions.log.jsonl` |
 | `/che-summary` | Uses SM logic to generate interim final_summary |
 | `/che-abort` | SM writes ABORTED metadata |
+| `/che-export` | `portability.py` logic | Exports project durable data (L2+L3). |
+| `/che-import` | `portability.py` logic | Imports project durable data from archive. |
+
+---
+
+## `/che-export <worktree> [output_file]`
+**What it does:** Exports the perennial knowledge of the current project (L2 Project Metadata + L3 Worktree Shared Strategy) to a portable `.tar.gz` archive. Excludes ephemeral session data (L4).
+**When to invoke:** When you want to port a project's architecture, specs, and business context to another machine or backup.
+**Agent action:**
+1. Resolve `WORKTREE_ROOT`.
+2. Determine `output` path (default: `$HOME/che-export-<project-slug>.tar.gz`).
+3. Execute: `python3 -m che_core.cli export "$WORKTREE_ROOT" "$OUTPUT_PATH"`.
+4. Report success and file location to the user.
+
+---
+
+## `/che-import <archive_path> [--workspace name]`
+**What it does:** Imports a previously exported Che project archive. Recreates the L2 and L3 structures on the new machine.
+**When to invoke:** When you receive a Che archive and want to set it up in your local environment.
+**Agent action:**
+1. Execute: `python3 -m che_core.cli import "$PATH" ${WORKSPACE:+--workspace "$WORKSPACE"}`.
+2. Resolve naming conflicts by appending `--import-YYYYMMDD-HHMM` to slugs if they already exist.
+3. Parse JSON response and report the new slugs and directories to the user.
 
 ---
 
