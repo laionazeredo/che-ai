@@ -312,6 +312,21 @@ Restaura um projeto a partir de um archive gerado por `/che-export`.
 
 Se você é um agente de IA ou desenvolvedor querendo estender o Che, por favor leia o **[AGENTS.md](./AGENTS.md)** primeiro. Ele descreve a Arquitetura de 3 Camadas em detalhe, a regra do core em Python (zero bash para lógica), o sistema de hooks Python e como manipular o filesystem L1-L4 com segurança.
 
+### 📘 Normas de Documentação Obrigatórias (Engenharia + Agentes)
+
+Toda feature, mudança ou adição no Che **DEVE** provocar uma auto-verificação de documentação antes de ser considerada concluída. A regra canônica está em [engineering-contracts §22](skills/engineering-contracts/SKILL.md), e o gate automático é o `che-scope-checker CHECK 3`. Três pilares:
+
+1. **Sempre se perguntar sobre relevância de atualizar docs.** Responda 2 perguntas: (a) "Esta mudança altera contrato público, comandos, UX/UI, onboarding, premissas arquiteturais, deploy/runbooks ou APIs?" (SIM = obrigatório atualizar); (b) "Um humano ou agente daqui a 3 meses se beneficiaria de uma explicação?" (TALVEZ/SIM = obrigatório). Três destinos cobrem:
+   - **Humanos:** `README.md`, `docs/*.md`, changelogs
+   - **Agentes:** `AGENTS.md`, `CLAUDE.md`, `skills/*/SKILL.md`, `CHE_RULES.md`, `CHE_COMMANDS.md`
+   - **Runbooks:** `docs/runbook-*.md`, `.github/workflows/*.yml` (comentários)
+2. **Docstrings / JSDoc / TSDoc no código (Clean Code Rule).** Sem exagero:
+   - ✅ Documente **propósito** de funções/métodos/classes públicas, módulos, tipos customizados difíceis
+   - ✅ Documente **partes intrincadas**, workarounds, contracts implícitos, ordenações específicas
+   - ❌ Não documente inputs/outputs se **há tipagem forte** (TS, Python com type hints, Rust, Go) — a tipagem já faz isso
+   - ❌ Não repita o nome da função literalmente nem documente lógica trivial 2-linhas
+3. **Gate de validação automático.** O `che-scope-checker CHECK 3` roda em `/che-ship` e em reviews de PR, verificando explicitamente os 2 itens acima. Se diff grande (>5 arquivos ou >150 linhas) e docs foram pulados, justificativa de 1 linha é obrigatória no `decisions.log`.
+
 ### Fluxo de Aprovação e Contribuição
 Para garantir a estabilidade e segurança do framework, o Che impõe um fluxo de contribuição rigoroso:
 - **Proteção de Branch**: Pushes diretos na `main` são bloqueados. Todas as alterações devem ser enviadas via Pull Requests.
