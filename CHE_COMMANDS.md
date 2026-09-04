@@ -13,8 +13,8 @@ The agent MUST recognize these and react immediately.
 > **Diferença conceitual:** Commands = UX entry point (slash `/che-X`) ↔ Skills = conteúdo/executor do trabalho.
 > NÃO transformar TODOS os commands em skills. A separação abaixo é intencional (KISS).
 
-### Categoria A — 14 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invocam Skill correspondente:
-| Command | Skill invocada | Por que wrapper separado? |
+### Categoria A — 19 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invocam Skill / módulo CLI correspondente:
+| Command | Skill / módulo | Por que wrapper separado? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
 | `/che-xray [worktree]` | `che-xray` | Scans tech stack, structure, and patterns. |
@@ -31,8 +31,13 @@ The agent MUST recognize these and react immediately.
 | `/che-pr-comments` | `che-pr-comments` | Preflight `gh auth` + PR URL → skill baixa comentários + classification + triage. |
 | `/che-ci-fix` | `che-ci-fixer` | Preflight `gh auth` + worktree → skill classifica R1-R9 + aplica minimal fix. |
 | `/che-design` / `/che-figma` | `che-social-ui-designer` | Pergunta modo (A Social Media / B UI-UX / C Design System) + path save arquivo → skill usa open-pencil MCP p/ construir tudo localmente. |
-| `/che-export` | `portability` | Exports project durable data (L2+L3) to a portable archive. |
-| `/che-import` | `portability` | Imports project durable data from an archive, resolving conflicts. |
+| `/che-export [--include-db] [--db-size-limit-mb=N]` | `che_core.portability` | Exports project durable data (L2+L3) to a portable archive. **NOVO: flag `--include-db` OPCIONAL inclui bancos SQLite state+rag se tamanho <= limite (default 250MB). |
+| `/che-import [--include-db]` | `che_core.portability` | Imports project durable data from an archive, resolving conflicts. **NOVO: flag `--include-db` OPCIONAL restaura também bancos SQLite (conflito = sufixo `--import-<timestamp>`). |
+| `/che-task [list|show|resume|set-status|graph-summary]` | `che_core.task_engine` | Multi-domain task graph picker + bind ACTIVE_TASK_ID no registry + recomenda comando downstream (che-act / che-design / che-spec) por domínio da task envelope. |
+| `/che-query --sql "..." [--bind ...] [--force]` | `che_core.state_store` | SQL parametrizada (?) no state store SQLite. Default SÓ READ (SELECT / EXPLAIN / PRAGMA). Para writes precisa `--force` explícito. |
+| `/che-sanitize [--max-age-days=N] [--max-decisions=N] [--dry-run]` | `che_core.state_store` | Sanitize state store: purge decisions/bindings/sessions antigos + VACUUM. **`--dry-run` OBRIGATÓRIO default antes de efetivar (flag só passa no 2º comando sem dry-run. **SSOT filesystem INTACTO**: purge reversível via `rebuild-index`. |
+| `/che-search "..." [--top-k=N] [--scope=all\|tasks\|specs\|decisions\|envelopes]` | `che_core.state_store` | Full-text search FTS5 + BM25 ranking. Pré-flight: rebuild se DB mais velho que decisions.log mtime. |
+| `/che-rag [build-index|search] [--provider=auto\|none\|openai\|st] [--top-k=N] [--no-hybrid]` | `che_core.rag` | RAG híbrido BM25(40%) + vetor(60%). Build incremental por chunk hash. sqlite-vec OPCIONAL. Zero-dep fallback `none` SEMPRE funciona sem pip install. |
 
 ### Categoria B — 5 "light" commands = inline leves (5 linhas ler/escrever markdown) → **NÃO viram skills (KISS)**:
 | Command | Implementação inline | Por que NÃO é skill? |
