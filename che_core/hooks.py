@@ -64,7 +64,20 @@ def pretooluse_worktree_binding(input_json: Dict[str, Any]) -> Dict[str, Any]:
     tool_name = input_json.get("toolName") or input_json.get("tool_name", "")
     tool_args = input_json.get("toolArgs") or input_json.get("tool_input", {})
 
-    guarded_tools = {"Read", "Glob", "Grep", "Edit", "Write", "RunCommand", "DeleteFile", "LS", "SearchCodebase", "Bash", "exec_command", "apply_patch"}
+    guarded_tools = {
+        "Read",
+        "Glob",
+        "Grep",
+        "Edit",
+        "Write",
+        "RunCommand",
+        "DeleteFile",
+        "LS",
+        "SearchCodebase",
+        "Bash",
+        "exec_command",
+        "apply_patch",
+    }
     if tool_name not in guarded_tools:
         return {"decision": "allow", "reason": "Tool not in guarded list"}
 
