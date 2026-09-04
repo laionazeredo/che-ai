@@ -230,7 +230,19 @@ Procedimento de cruzamento:
 
 ## 4. CHECK 3 — 📘 Documentação ATUALIZADA (AGENTS / README / runbooks / CLAUDE)
 
-### 4.1 Heurísticas de trigger (QUANDO documentar)
+### 4.0 Pre-check OBRIGATÓRIO (ANTES de usar heurísticas) — Relevância + Docstrings
+
+Esta etapa NÃO é opcional. Rode em TODO diff, mesmo pequeno.
+
+| Item Obrigatório | Pergunta a responder (verificação) | Verdict | Evidence |
+|---|---|---|---|
+| **Relevance Check 1** (engineering-contracts §22.1) | "Esta mudança altera contrato público, comandos, UX/UI, onboarding, premissas arquiteturais, fluxos deploy/runbook, ou APIs públicas?" Se SIM → docs obrigatórios. Se NÃO → justificar 1 linha se diff >5 arquivos ou >150 linhas. | 🟢 Respondido | Linha justificativa em decisions.log OU marcado SIM/NÃO em report |
+| **Relevance Check 2** (engineering-contracts §22.1) | "Um humano ou agente lendo este código daqui a 3 meses se beneficia de uma explicação?" Se TALVEZ ou SIM → docs obrigatórios. | 🟢 Respondido | Decisão registrada no report |
+| **Docstrings Públicos** (engineering-contracts §22.2) | Diff adicionou ou alterou funções/métodos/classes públicas, módulos, tipos customizados difíceis? Cada item novo tem docstring/JSDoc/TSDoc com PROPÓSITO + observações intrincadas (NÃO inputs/outputs se há tipagem)? Funções privadas intrincadas também devem ter. | 🟢 FULL / 🟡 PARCIAL / 🔴 ZERO | Lista arquivos/fns faltando docstring |
+
+> **HARD FAIL:** Se os 3 itens acima NÃO forem verificados explicitamente, CHECK 3 não pode ser marcado 🟢 de forma alguma.
+
+### 4.1 Heurísticas de trigger (QUANDO documentar — depois do pre-check 4.0)
 
 | Mudança no diff | Documento OBRIGATÓRIO atualizar |
 |---|---|

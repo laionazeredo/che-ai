@@ -695,6 +695,54 @@ Binding contract:
 
 ---
 
+### 22. 🔴 DOCUMENTAÇÃO OBRIGATÓRIA — Relevância Check + Docstrings/JSDoc Clean Code (HARD RULE. Falha de aplicação = HIGH issue §0.9.2 CODE-REVIEW.)
+
+> **Regra VERBATIM do Usuário (canonical source of truth):** Toda feature, mudança ou adição deve provocar uma auto-pergunta: "esta mudança merece atualização na documentação?" — e a resposta deve ser aplicada. Além disso, código público deve ter documentação em código (docstrings/JSDoc/TSDoc) seguindo a regra do Clean Code: sem exagero, documentando propósito, partes intrincadas e tipos difíceis.
+
+#### 22.1 Pilar 1 — Docs para Humanos + Agentes + Runbooks (Sempre se perguntar sobre relevância)
+
+**Antes de declarar uma task como DONE, você OBRIGATORIAMENTE deve responder a estas 2 perguntas mentalmente ou por escrito (se ambíguo):**
+
+1. **(Pergunta de Contrato)** Esta mudança altera: contrato público, comandos/CLI novos ou alterados, UX/UI visível ao usuário final, onboarding de novos devs/agentes, premissas arquiteturais, fluxos de deploy/runbook, ou APIs públicas? Se SIM → docs são obrigatórias.
+2. **(Pergunta de Longevidade)** Um humano ou agente tentando entender este código daqui a 3 meses iria se beneficiar de uma linha ou parágrafo explicando esta mudança? Se resposta for "talvez" ou "sim" → docs são obrigatórias.
+
+**3 Destinos Obrigatórios onde aplicar (mapeamento heurístico):**
+
+| Tipo de Mudança | Docs para HUMANOS (Obrigatório se aplicar) | Docs para AGENTES (Obrigatório se aplicar) | Runbooks (Obrigatório se aplicar) |
+|---|---|---|---|
+| Nova feature, novo comando, nova skill, nova regra de arquitetura | `README.md` do repo/package, `docs/*.md` se existir, changelog | `AGENTS.md` (repo ou package), `CLAUDE.md`, `CURSOR.md`, `skills/*/SKILL.md` (L3 Che), `CHE_RULES.md` / `CHE_COMMANDS.md` (L2 routers se cross-cutting) | N/A a menos que altere deploy |
+| Alteração em fluxo de deploy, CI, migração DB, onboarding, incident response | `docs/runbook-*.md`, `docs/operations.md` se existir | `AGENTS.md` seção infra/CI | `runbook-onboarding.md`, `runbook-deploy.md`, `runbook-incident.md` |
+| Nova env var, nova configuração runtime | `README.md` seção env vars, `.env.example` comentários | `packages/config/AGENTS.md`, `CHE_RULES.md` se transversal | `runbook-env-setup.md` se houver |
+| Refatoração interna SEM mudança de contrato público | Opcional (changelog interno se grande) | Opcional (decision log entry se trade-off) | N/A |
+
+**Se decidir NÃO atualizar docs e a mudança for > 5 arquivos OU > 150 linhas diff:** justifique com 1 linha no `decisions.log.jsonl` (campo `skip_docs_reason`). Isso é para auditoria futura.
+
+#### 22.2 Pilar 2 — Docstrings / JSDoc / TSDoc / Rust Doc / Go Docstrings em Código (Clean Code Rule)
+
+> **§3 REPO STYLE WINS:** Se o projeto já define um padrão oficial de docstring (ex: NumPy/Sphinx para Python, Google style, TSDoc, GoDoc, Rust doc comments) → USE O PADRÃO DO REPO. Esta regra é o FALLBACK se o projeto NÃO define um padrão.
+
+**O QUE documentar (obrigatório se existir):**
+1. **Propósito de funções públicas / métodos públicos / classes públicas / módulos.** Explicar "por que existe" e "o que faz de alto nível" — não repetir o nome da função.
+2. **Partes intrincadas, workarounds não-obvious, contracts implícitos, ordenações específicas, dependências de estado global ou contexto escondido.** Se um colega de trabalho olharia e diz "por que diabos isso está escrito assim?", você deve documentar com 1-3 linhas de comentário (ou linha dentro da docstring).
+3. **Tipos customizados difíceis de entender só olhando:** enums com flags bitwise, tagged unions sem nome auto-explicativo, aliases opacos, tipos genéricos aninhados, bitmask constants.
+
+**O QUE NÃO documentar (evitar ruído):**
+1. **Inputs e outputs se HÁ tipagem forte.** TypeScript, Python com type hints, Rust, Go, Java — tipagem já documenta tipo. Não escreva `@param {string} userId The user ID` se já existe `userId: string`. Exceção: se o parâmetro tem uma semântica não-obvious apesar do tipo (ex: `userId: string` mas precisa ser UUID v4 formatado, ou GBP em pence integer, ou UK timezone).
+2. **Lógica trivial.** Se o corpo da função tem 2 linhas óbvias e o nome já explica tudo, a docstring pode ser omitida para funções privadas internas.
+3. **Repetição literal do nome da função.** `def calculate_total(): """Calculates the total."""` → proibido. Substitua por propósito se necessário ou remova.
+
+**Relação com §16 CODE REVIEW (max 2 linhas comment block):**
+- Docstrings/JSDoc/TSDoc/doc comments de FUNÇÕES PÚBLICAS e CLASSES PÚBLICAS NÃO contam no limite de 2 linhas do §16. Já era exceção implícita em §16 L248-250; agora oficializada.
+- Comentários inline de partes intrincadas contam no limite do §16 → mantenha-os curtos (≤2 linhas) ou mova a explicação para a docstring pública da função (que não conta no limite).
+
+#### 22.3 Pilar 3 — Contexto de quando aplicar e validação
+
+**Validação canônica:** O gate `che-scope-checker CHECK 3` (docs atualizadas) roda automaticamente em `/che-ship` e PR reviews, e agora inclui explicitamente:
+- Check item: "Relevance check perguntas 22.1 aplicadas e respondidas"
+- Check item: "Novas funções/métodos/classes públicas têm docstring propósito + observações intrincadas"
+
+---
+
 ## Appendix A — Hard Conflict Resolution Table (CANONICAL)
 
 If you face a trade-off where two rules seem to pull opposite directions:
