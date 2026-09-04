@@ -1,13 +1,13 @@
 import json
-import os
 import shutil
 import tarfile
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
-from che_core.paths import compute_paths, get_workspaces_root, get_che_home
+from che_core.paths import compute_paths, get_workspaces_root
+
 
 def export_project(worktree_root: str, output_file: str) -> str:
     """
@@ -16,16 +16,16 @@ def export_project(worktree_root: str, output_file: str) -> str:
     """
     # Use a dummy session ID as we don't care about session data
     paths = compute_paths(worktree_root, "export-session")
-    
+
     project_dir = Path(paths["CHE_PROJECT_DIR"])
     workspace_shared = Path(paths["CHE_WORKSPACE_SHARED"])
-    
+
     if not project_dir.exists():
         raise FileNotFoundError(f"Project directory not found: {project_dir}")
-        
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
-        
+
         # Metadata
         metadata = {
             "version": "1.0",
@@ -33,28 +33,35 @@ def export_project(worktree_root: str, output_file: str) -> str:
             "project_slug": paths["CHE_PROJECT_SLUG"],
             "worktree_slug": paths["CHE_WORKTREE_SLUG"],
             "workspace_name": paths["CHE_WORKSPACE_NAME"],
-            "original_worktree_root": str(Path(worktree_root).resolve())
+            "original_worktree_root": str(Path(worktree_root).resolve()),
         }
-        
+
         with open(tmp_path / "metadata.json", "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2)
-            
+
         # Copy Project Level (L2)
         shutil.copytree(project_dir, tmp_path / "project")
-        
+
         # Copy Worktree Shared Level (L3)
         if workspace_shared.exists():
-            shutil.copytree(workspace_shared, tmp_path / "worktree_shared")
-            
+            # Exclude sessions explicitly even if it's supposed to be outside
+            def ignore_sessions(path, names):
+                if "sessions" in names:
+                    return ["sessions"]
+                return []
+
+            shutil.copytree(workspace_shared, tmp_path / "worktree_shared", ignore=ignore_sessions)
+
         # Create archive
         output_path = Path(output_file).resolve()
         if output_path.suffix != ".gz":
             output_path = output_path.with_suffix(".che.tar.gz")
-            
+
         with tarfile.open(output_path, "w:gz") as tar:
             tar.add(tmp_path, arcname=".")
-            
+
         return str(output_path)
+
 
 def import_project(archive_path: str, target_workspace: Optional[str] = None) -> Dict[str, Any]:
     """
@@ -64,44 +71,44 @@ def import_project(archive_path: str, target_workspace: Optional[str] = None) ->
     archive_path = Path(archive_path).resolve()
     if not archive_path.exists():
         raise FileNotFoundError(f"Archive not found: {archive_path}")
-        
+
     workspaces_root = get_workspaces_root()
-    
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
-        
+
         with tarfile.open(archive_path, "r:gz") as tar:
             tar.extractall(path=tmp_path)
-            
+
         metadata_file = tmp_path / "metadata.json"
         if not metadata_file.exists():
             raise ValueError("Invalid Che archive: metadata.json missing")
-            
+
         with open(metadata_file, "r", encoding="utf-8") as f:
             metadata = json.load(f)
-            
+
         project_slug = metadata["project_slug"]
         worktree_slug = metadata["worktree_slug"]
         workspace_name = target_workspace or metadata["workspace_name"]
-        
+
         # Resolve Project Dir (L2)
         target_project_dir = workspaces_root / ".registry" / "projects" / project_slug
         if target_project_dir.exists():
-            suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
-            project_slug = f"{project_slug}--imported-{suffix}"
+            suffix = datetime.now().strftime("%Y%m%d-%H%M")
+            project_slug = f"{project_slug}--import-{suffix}"
             target_project_dir = workspaces_root / ".registry" / "projects" / project_slug
-            
+
         # Resolve Worktree Shared (L3)
         target_workspace_dir = workspaces_root / workspace_name / worktree_slug
         if target_workspace_dir.exists():
-            suffix = datetime.now().strftime("%Y%m%d-%H%M%S")
-            worktree_slug = f"{worktree_slug}--imported-{suffix}"
+            suffix = datetime.now().strftime("%Y%m%d-%H%M")
+            worktree_slug = f"{worktree_slug}--import-{suffix}"
             target_workspace_dir = workspaces_root / workspace_name / worktree_slug
-            
+
         # Move Project Level
         target_project_dir.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(tmp_path / "project"), str(target_project_dir))
-        
+
         # Move Worktree Shared Level
         imported_shared_path = tmp_path / "worktree_shared"
         target_shared_path = target_workspace_dir / ".wt"
@@ -116,11 +123,11 @@ def import_project(archive_path: str, target_workspace: Optional[str] = None) ->
                     else:
                         dest.unlink()
                 shutil.move(str(item), str(dest))
-                
+
         return {
             "project_slug": project_slug,
             "worktree_slug": worktree_slug,
             "workspace_name": workspace_name,
             "project_dir": str(target_project_dir),
-            "worktree_dir": str(target_workspace_dir)
+            "worktree_dir": str(target_workspace_dir),
         }
