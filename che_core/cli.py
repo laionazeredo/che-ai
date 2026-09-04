@@ -5,6 +5,7 @@ import sys
 from che_core.decisions import append_decision_jsonl
 from che_core.paths import compute_paths, ensure_session_dirs
 from che_core.registry import registry_append_jsonl, registry_lookup_last
+from che_core.portability import export_project, import_project
 
 
 def main():
@@ -42,6 +43,16 @@ def main():
     parser_dec_app.add_argument("--session-id", default=None)
     parser_dec_app.add_argument("--spec-id", default=None)
 
+    # export
+    parser_export = subparsers.add_parser("export")
+    parser_export.add_argument("worktree_root")
+    parser_export.add_argument("output_file")
+
+    # import
+    parser_import = subparsers.add_parser("import")
+    parser_import.add_argument("archive_path")
+    parser_import.add_argument("--workspace", default=None)
+
     args = parser.parse_args()
 
     if args.command == "compute_paths":
@@ -67,6 +78,14 @@ def main():
         append_decision_jsonl(
             args.worktree_root, args.event_type, args.payload, session_id=args.session_id, spec_id=args.spec_id
         )
+
+    elif args.command == "export":
+        out = export_project(args.worktree_root, args.output_file)
+        print(f"Project exported to: {out}")
+
+    elif args.command == "import":
+        res = import_project(args.archive_path, target_workspace=args.workspace)
+        print(json.dumps(res, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

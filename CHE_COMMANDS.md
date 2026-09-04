@@ -31,6 +31,8 @@ The agent MUST recognize these and react immediately.
 | `/che-pr-comments` | `che-pr-comments` | Preflight `gh auth` + PR URL → skill baixa comentários + classification + triage. |
 | `/che-ci-fix` | `che-ci-fixer` | Preflight `gh auth` + worktree → skill classifica R1-R9 + aplica minimal fix. |
 | `/che-design` / `/che-figma` | `che-social-ui-designer` | Pergunta modo (A Social Media / B UI-UX / C Design System) + path save arquivo → skill usa open-pencil MCP p/ construir tudo localmente. |
+| `/che-export` | `portability` | Exports project durable data (L2+L3) to a portable archive. |
+| `/che-import` | `portability` | Imports project durable data from an archive, resolving conflicts. |
 
 ### Categoria B — 5 "light" commands = inline leves (5 linhas ler/escrever markdown) → **NÃO viram skills (KISS)**:
 | Command | Implementação inline | Por que NÃO é skill? |

@@ -12,7 +12,7 @@ Che is designed to be portable across different AI agents. After installation, i
 - **Claude Code**: Slash commands in `~/.claude/commands/` and skills in `~/.claude/skills/`.
 - **Cursor**: Integrated rules and skills via `.cursor/rules/`.
 
-All agents share the same **Engineering Contracts**, **Expert Skills**, and **Durable Memory**, ensuring a consistent experience regardless of the tool you use.
+All agents share the same **Engineering Contracts**, **Expert Skills**, and **Durable Memory**, ensuring a consistent experience regardless of the tool you use. Durable project data can be moved between machines using the **Portability Commands** (`/che-export` and `/che-import`).
 
 ## 🚀 Quick Install
 
@@ -70,6 +70,8 @@ Once installed, Che exposes its capabilities directly inside your AI assistant's
 - `/che-fix` — Scientific debug loop to reproduce and fix a specific bug.
 - `/che-design` — Orchestrates a complete UX/UI design pipeline.
 - `/che-review` — Performs a strict code review against the default branch.
+- `/che-export` — Packages durable project data (architecture, specs, decisions) for portability.
+- `/che-import` — Imports a project archive, resolving naming conflicts automatically.
 
 ## 🏗 Contributing & Architecture
 
