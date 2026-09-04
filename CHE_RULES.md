@@ -108,7 +108,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 > - **Corpo completo destas regras + thresholds:** `engineering-contracts` SKILL §15 (Agile BDD Incremental) + §16 (Code Review Optimization)
 
 Para QUALQUER implementação de feature / bugfix com mais de um passo:
-1. **SCRUM MASTER (`che-scrum-master`):**
+1. **SCRUM MASTER (`che-act`):**
    - **Preflight 0.5 (SPEC GATE — substitui PRD legado)** — Valida se já existe **SPEC Approved** em `$CHE_WORKSPACE_SHARED/` (glob `spec_*.md` → parse YAML `status: Approved`). Se 0 → **invoca skill `che-spec` interativo automaticamente** (4 fontes input: existente / ticket URL / legacy-project PRD .md path / descrição breve). Captura 2 linhas retorno: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → libera §1 scope capture; `Draft` → oferece (A) Override sem Approved append `[SPEC-OVERRIDE] <razão>` em `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` ou (B) Parar, terminar SPEC depois via `/che-spec` standalone.
    - **Entende escopo → valida ACs →** (se grande) **planeja gh-stack multi-PR** → monta TASK GRAPH (ou aprova lista existente) → cria TASK ENVELOPE por task.
 2. **DEVELOPER (`che-developer`):** SOMENTE chamado por SM, com ENVELOPE formal.
@@ -409,7 +409,7 @@ Se `LANG_PT_CHECK = DISABLED` legacy existir em flags de sessão → mapeia auto
 
 ## 🟠 CHE ESPECÍFICOS POR TIPO DE TAREFA
 
-### Feature (che normal): `/che-start` → SM + Dev + QA + Compliance
+### Feature (che normal): `/che-act` → SM + Dev + QA + Compliance
 - TASK GRAPH obrigatório.
 - TASK ENVELOPE por task obrigatório.
 - Repo onboarding Q1-Q5 antes de codar (inclui stack match IDE available_skills).
@@ -524,7 +524,7 @@ KISS ganha sempre. Parallel é OTIMIZAÇÃO, não OBRIGATORIEDADE.
 >
 > Visão rápida (14 comandos total):
 > - 9 **pesados (workflow)** → wrapper de validação preflight + `Skill(...)`:
->   `/che-spec` | `/che-start` | `/che-parallel` | `/che-ship` | `/che-fix` | `/che-review` | `/che-diff` | `/che-manual-test` | `/che-pr-comments` | `/che-ci-fix` | `/che-design` | `/che-figma` | `/che-scope-check` | `/che-merge`
+>   `/che-spec` | `/che-act` | `/che-parallel` | `/che-ship` | `/che-fix` | `/che-review` | `/che-diff` | `/che-manual-test` | `/che-pr-comments` | `/che-ci-fix` | `/che-design` | `/che-figma` | `/che-scope-check` | `/che-merge`
 > - 5 **leves (operação em arquivo)**: inline, NÃO viram skill (ler/escrever markdown, KISS → não criar skill de 3 linhas):
 >   `/che-status` | `/che-skip` | `/che-decisions` | `/che-summary` | `/che-abort`
 > - Contagem atualizada: consultar `CHE_COMMANDS.md` §Architecture Commands vs Skills para Category A (heavy) + Category B (light) exata.

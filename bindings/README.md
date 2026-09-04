@@ -8,12 +8,12 @@ O arquivo único de verdade aqui é `registry.jsonl` — ele é **ESCRITO APENAS
 
 - Cada `registry.jsonl` guarda session_ids e worktree paths HARDCODED da máquina LOCAL.
 - Fazer pull de registry.jsonl de outra pessoa → binding quebrado + paths inexistentes.
-- Cada sessão do che bootstrappa **em runtime** quando você roda `/che-start` ou `/che-spec`.
+- Cada sessão do che bootstrappa **em runtime** quando você roda `/che-act` ou `/che-spec`.
 
 ## Quando esta pasta ganha conteúdo?
 
 ```
-1. Você: /che-start <worktree>
+1. Você: /che-act <worktree>
    → contracts helper cria entrada BOUND no registry.jsonl LOCAL
    → hook pretooluse-worktree-binding.sh lê ela e faz scissor dos paths
 2. Fim da sessão: /che-ship ou /che-abort

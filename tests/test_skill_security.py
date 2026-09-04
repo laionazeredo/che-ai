@@ -26,10 +26,18 @@ EXCLUDED_FILES = [
     "skills/che-qa/SKILL.md",
     "skills/che-executor-dispatcher/SKILL.md",
     "skills/che-developer/SKILL.md",
-    "skills/che-project-knowledge/SKILL.md",
+    "skills/che-onboarding/SKILL.md",
     "skills/che-graph/SKILL.md",
     "skills/che-compliance/SKILL.md",
     "skills/che-social-ui-designer/SKILL.md",
+    "skills/typescript-expert/SKILL.md",
+    "skills/rust-expert/SKILL.md",
+    "skills/python-expert/SKILL.md",
+    "skills/golang-expert/SKILL.md",
+    "skills/frontend-modern-stack/SKILL.md",
+    "skills/postgres-supabase-expert/SKILL.md",
+    "skills/ai-agent-orchestrator/SKILL.md",
+    "skills/devops-infra-expert/SKILL.md",
 ]
 
 # Patterns that we explicitly want to allow

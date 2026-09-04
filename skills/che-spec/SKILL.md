@@ -10,18 +10,18 @@ description: "Generate or validate a Che Execution Specification (SPEC). 4 input
 > - Path resolution (WORKSPACE_NAME, WORKTREE_SLUG, CHE_WORKSPACE_SHARED, CHE_SESSION_DIR): `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"`, call `che_compute_paths WT SID CWD`
 > - Worktree binding 2-LEVEL (Level1 registry, Level2 sessions dir): engineering-contracts §19
 
-Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~60–120 lines, 7 sections). Replaces project-specific legacy PRD artifacts. Gate before scope capture in `/che-start` and standalone runnable via `/che-spec`.
+Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~60–120 lines, 7 sections). Replaces project-specific legacy PRD artifacts. Gate before scope capture in `/che-act` and standalone runnable via `/che-spec`.
 
 ---
 
 ## §0 PURPOSE & INTEGRATION
 
 When called:
-1. **From `/che-start` (embedded)**: runs AFTER binding §19 + ensure_dirs, BEFORE scope capture §1. User says which SPEC to use or generates new.
+1. **From `/che-act` (embedded)**: runs AFTER binding §19 + ensure_dirs, BEFORE scope capture §1. User says which SPEC to use or generates new.
 2. **Standalone** via `/che-spec`: runs independently; performs binding if needed, then generates or edits spec.
 
 On completion this skill **returns to the caller** two values printed in the last 2 lines of the transcript:
-- `SPEC_PATH=<absolute-path-to-spec>` — used by che-scrum-master
+- `SPEC_PATH=<absolute-path-to-spec>` — used by che-act
 - `SPEC_STATUS=Approved|Draft` — only `Approved` unlocks subsequent execution in SM.
 
 ---
@@ -368,27 +368,26 @@ This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bila
    - Re-run §4 VALIDATION.
    - Re-show ONE TIME only.
    - User now either Approves → update frontmatter Approved → SAVE. OR says "more edits" → tell user to re-run `/che-spec` fresh (avoid infinite loops).
-4. **If user says "Cancel":** Write Draft (no Approved flag) → SAVE anyway for future work. Print warning: `SPEC_STATUS=Draft (not Approved — che-start will re-prompt when you run it)`. End.
+4. **If user says "Cancel":** Write Draft (no Approved flag) → SAVE anyway for future work. Print warning: `SPEC_STATUS=Draft (not Approved — che-act will re-prompt when you run it)`. End.
 
 ---
 
 ## §6 SAVE (atomic write via contrato helpers)
 
 1. **Final sanitize slug:** `slug = frontmatter.spec_id` sanitized `[^a-zA-Z0-9_-] → -`.
-2. **Construir path ÚNICO via `che_output_path` (NUNCA manual):**
+2. **Construir path ÚNICO na RAIZ do workspace (NUNCA manual):**
    ```bash
-   # type=spec → subpasta specs/ (WORKSPACE_SHARED, durável multi-session)
-   # related_id = slug spec → agrupa versões futuras v2/v3 se houver
+   # related_id = "" para salvar na raiz de $CHE_WORKSPACE_SHARED/specs/
    # scope = workspace → DURÁVEL
-   SPEC_FINAL_PATH="$(che_output_path "spec" "spec" "${slug}" "workspace" "md")"
+   SPEC_FINAL_PATH="$(che_output_path "spec" "spec" "${slug}" "workspace" "md" "")"
    ```
-   Resultado exemplo: `$CHE_WORKSPACE_SHARED/specs/feat-refund-pipeline/20260902-120000-spec.md`
-   → Timestamp no prefix: se gerar v2 depois, `20260902-150000-spec.md` ordena DEPOIS automaticamente.
+   Resultado esperado: `$CHE_WORKSPACE_SHARED/specs/spec_<slug>.md`
+   → Note: O SM /che-act busca por `$CHE_WORKSPACE_SHARED/spec_*.md`. Vamos alinhar para que o spec seja salvo diretamente no padrão esperado pelo gate de execução.
 3. **Check existing overwrite:** If file already exists AND status in existing is Approved → ask "Overwrite Approved spec? Yes/No" before writing. Yes = overwrite. No = append suffix `-v2`, `-v3` to slug until unused.
 4. **Escrever EXCLUSIVAMENTE via atomic write helper:**
    ```bash
-   # NÃO escreva .tmp manual. Use o helper canônico tmp → mv atômico:
-   cat <<'SPEC_EOF' | che_write_file_atomic "$SPEC_FINAL_PATH"
+   # Salva na raiz do workspace shared para ser visível ao /che-act
+   che_write_file_atomic "$CHE_WORKSPACE_SHARED/spec_${slug}.md" <<'SPEC_EOF'
    ---
    # YAML frontmatter completo aqui
    ---

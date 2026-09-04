@@ -1,5 +1,5 @@
 ---
-description: "Generate or update a Che Execution Specification (SPEC). Standalone, or called by /che-start. Accepts 4 inputs: existing spec, ticket URL, legacy-project PRD .md path, inline description."
+description: "Generate or update a Che Execution Specification (SPEC). Standalone, or called by /che-act. Accepts 4 inputs: existing spec, ticket URL, legacy-project PRD .md path, inline description."
 arguments:
   - name: input
     description: "One of: path-to-existing-spec, ticket-URL, path-to-legacy-project-PRD.md, or inline description text. Optional; if omitted, interactive prompt picks source."

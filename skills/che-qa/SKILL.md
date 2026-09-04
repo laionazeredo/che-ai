@@ -1,6 +1,6 @@
 ---
 name: "che-qa"
-description: "Auto-detects project tech stack, runs build → lint → typecheck → tests in the correct order. Invoke ONLY by che-scrum-master after Developer completes a task and scope validation passes. QA reports ficam FORA worktree em $CHE_SESSION_DIR/qa/<related_id>/ com prefixo timestamp ordenável."
+description: "Auto-detects project tech stack, runs build → lint → typecheck → tests in the correct order. Invoke ONLY by che-act after Developer completes a task and scope validation passes. QA reports ficam FORA worktree em $CHE_SESSION_DIR/qa/<related_id>/ com prefixo timestamp ordenável."
 ---
 
 # Che — QA

@@ -15,7 +15,7 @@ arguments:
     required: false
 ---
 
-IMMEDIATELY invoke **`che-scrum-master`** Skill with `force_parallel=true`.
+IMMEDIATELY invoke **`che-act`** Skill with `force_parallel=true`.
 
 Preflight:
 1. If worktree missing → ASK.

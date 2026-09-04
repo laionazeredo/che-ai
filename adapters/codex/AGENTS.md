@@ -14,15 +14,18 @@ Do not duplicate engineering rules in this file.
 
 Feature/refactor workflow:
 
-1. che-spec
-2. che-scrum-master
-3. che-developer
-4. che-qa
-5. che-compliance
-6. che-scope-checker
-7. che-ship
+1. che-architect
+2. che-onboarding
+3. che-spec
+4. che-plan
+5. che-act
+6. che-developer
+7. che-qa
+8. che-compliance
+9. che-scope-checker
+10. che-ship
 
-Bug workflow uses che-debugger-bugfix.
+Bug workflow uses che-fix.
 
 ## Runtime
 

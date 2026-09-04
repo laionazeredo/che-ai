@@ -13,12 +13,16 @@ The agent MUST recognize these and react immediately.
 > **Diferença conceitual:** Commands = UX entry point (slash `/che-X`) ↔ Skills = conteúdo/executor do trabalho.
 > NÃO transformar TODOS os commands em skills. A separação abaixo é intencional (KISS).
 
-### Categoria A — 9 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invocam Skill correspondente:
+### Categoria A — 14 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invocam Skill correspondente:
 | Command | Skill invocada | Por que wrapper separado? |
 |---|---|---|
-| `/che-spec [input] [worktree] [slug]` | `che-spec` | Preflight binding §19 (worktree confirmado + nível 2 criado) → skill gera/valida SPEC em $CHE_WORKSPACE_SHARED. 4 fontes input. Gate Approved. **NÃO depende de /che-start — roda sozinho.** |
-| `/che-start` | `che-scrum-master` | Preflight worktree → skill executa §0.5 SPEC GATE (auto-invoca che-spec se não houver Approved) → scope capture + TASK GRAPH. |
-| `/che-parallel` | `che-scrum-master` → `che-executor-dispatcher` | Preflight worktree + force_parallel flag + error if not parallelizable. |
+| `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
+| `/che-xray [worktree]` | `che-xray` | Scans tech stack, structure, and patterns. |
+| `/che-onboarding [worktree]` | `che-onboarding` | Interactive Product & Architecture context capture. |
+| `/che-spec [input] [worktree] [slug]` | `che-spec` | Preflight binding §19 (worktree confirmado + nível 2 criado) → skill gera/valida SPEC em $CHE_WORKSPACE_SHARED. 4 fontes input. Gate Approved. **NÃO depende de /che-act — roda sozinho.** |
+| `/che-plan [worktree] [slug]` | `che-plan` | Preflight SPEC Approved → skill transforma spec em tickets Jira/Linear/ClickUp com BDD ACs. |
+| `/che-act` | `che-act` | Preflight worktree → skill executa §0.5 SPEC GATE (auto-invoca che-spec se não houver Approved) → scope capture + TASK GRAPH. |
+| `/che-parallel` | `che-act` → `che-executor-dispatcher` | Preflight worktree + force_parallel flag + error if not parallelizable. |
 | `/che-ship` | `che-ship` | Preflight worktree + `gh auth` + no-secret-staged check → skill commits/push/PR. |
 | `/che-fix` | `che-debugger-bugfix` | Preflight worktree + capture 4 required inputs → skill roda scientific debug loop. |
 | `/che-review` | `che-code-review` | Preflight `gh auth` + PR URL parseable → skill puxa diff + metadata + 4-category review. |
@@ -44,10 +48,31 @@ The agent MUST recognize these and react immediately.
 
 ---
 
+## `/che-xray [worktree]`
+**What it does:** Scans the repository to identify tech stack, monorepo structure, folder conventions, code patterns, tests, CI, DB, and services. Generates a 12-section `project_profile.md` persisted in the global project registry (Level 1.5).
+**When to invoke:** First time Che touches a repo, or to refresh context after significant architectural changes.
+**Agent action:** Call `che-xray` skill.
+
+---
+
+## `/che-onboarding [mode:--show|--bootstrap] [worktree]`
+**What it does:** Captures durable **human** context: Product Pitch, Personas, Roadmap, Business Logic, and Manual Architecture. Complements `/che-xray`. Stored in `.registry/projects/<slug>/`.
+**When to invoke:** After `/che-xray` and before `/che-spec` for new projects.
+**Agent action:** Call `che-onboarding` skill.
+
+---
+
+## `/che-architect`
+**What it does:** A strategic architecture partner that helps design a complete system from a business idea. Iteratively covers stack, infra, security, compliance, accessibility, localization, observability, and operations.
+**When to invoke:** Before starting a new repository or when refactoring/designing a major new system component.
+**Agent action:** Call `che-architect` skill.
+
+---
+
 ## `/che-spec [input_type:ticket|prd-flockr|desc|existing] [input_value] [worktree] [slug]`
 
 **What it does:** Standalone entry-point for generating or validating a **Che Execution Specification (SPEC)** — artefato de planejamento anti-alucinação/anti-scope-drift que substitui o PRD Flockr legado. Salva DURÁVEL em `$CHE_WORKSPACE_SHARED/spec_<slug>.md` (fora sessions/, fora worktree user). 4 fontes input aceitas: (A) SPEC Approved existente; (B) Ticket URL (Linear FLO-XXX / ClickUp / GitHub Issue); (C) PRD Flockr legado path (.md); (D) Descrição breve inline com prompts iterativos.
-**When to invoke:** User quer redigir/atualizar um SPEC **antes** do /che-start, ou standalone para documento de planejamento, ou quando /che-start SM §0.5 o invoca automaticamente por não haver Approved.
+**When to invoke:** User quer redigir/atualizar um SPEC **antes** do /che-act, ou standalone para documento de planejamento, ou quando /che-act SM §0.5 o invoca automaticamente por não haver Approved.
 **Agent action on this command:**
 1. IMMEDIATELY call `che-spec` skill.
 2. Preflight: verifica binding §19 Level1 existente; se não houver, pergunta worktree + cria binding 2-LEVEL antes.
@@ -68,21 +93,28 @@ The agent MUST recognize these and react immediately.
 
 ---
 
-## `/che-start [input_type:ticket|prd-flockr|desc] [input_value] [--slug=slug]`
+## `/che-plan [worktree] [slug]`
+**What it does:** Transforms an Approved SPEC into structured tickets in project management tools (Linear, ClickUp, Jira). Decomposes complex specs into Epics with sub-tasks, goals, and dependency graphs.
+**When to invoke:** After `/che-spec` is Approved and before `/che-act` starts, to sync technical plans with the team's project management tool.
+**Agent action:** Call `che-plan` skill.
+
+---
+
+## `/che-act [input_type:ticket|prd-flockr|desc] [input_value] [--slug=slug]`
 
 **What it does:** Triggers the full che flow from Phase 0. **SM §0.5 auto-invoca `/che-spec` automaticamente se não houver SPEC Approved na worktree**, aceitando os mesmos args de input (ticket/prd/desc) e passando-os para che-spec.
 **When to invoke:** User wants to start implementing a feature/bugfix through the simulated Agile team.
 **Agent action on this command:**
-1. IMMEDIATELY call `che-scrum-master` skill.
+1. IMMEDIATELY call `che-act` skill.
 2. Scrum Master executes Pre-Flight (worktree path + `che_compute_paths` → ensure_dirs + Level2 binding).
 3. **SM §0.5 SPEC GATE (antes scope capture):** Glob `$CHE_WORKSPACE_SHARED/spec_*.md` → parse Approved. Se 0 OU usuário forneceu input → **invoca che-spec Skill automaticamente**, passando args de entrada do usuário (ticket/prd/desc).
 4. Captura 2 linhas retorno: `SPEC_PATH` + `SPEC_STATUS`. Gate: Approved → libera Scope Capture; Draft → oferece (A) Override `[SPEC-OVERRIDE]` logado em decisions / (B) Parar, terminar SPEC depois via `/che-spec` standalone.
 5. Scrum Master proceeds to Scope Capture.
 **Syntax examples:**
 ```
-/che-start "Implement Stripe Connect onboarding flow"
-/che-start --slug=feat-stripe-connect input=ticket https://linear.app/flockr/issue/FLO-123
-/che-start input=prd-flockr docs/prd/stripe-connect.md --slug=feat-stripe-connect
+/che-act "Implement Stripe Connect onboarding flow"
+/che-act --slug=feat-stripe-connect input=ticket https://linear.app/flockr/issue/FLO-123
+/che-act input=prd-flockr docs/prd/stripe-connect.md --slug=feat-stripe-connect
 ```
 
 ---
@@ -93,7 +125,7 @@ The agent MUST recognize these and react immediately.
 **When to invoke:** User wants to see where we are in the TASK GRAPH progress.
 **Agent action:**
 1. Source `$HOME/.trae/contracts/che_sessions_contract.sh` → `che_compute_paths WORKTREE_ROOT` → look for `task_graph.md` at `$CHE_WORKSPACE_SHARED/task_graph.md` (FORA worktree).
-2. If not found → "Nenhuma sessão do che ativa nesta worktree. Use `/che-start`."
+2. If not found → "Nenhuma sessão do che ativa nesta worktree. Use `/che-act`."
 3. If found → print in Portuguese:
    - Qual task está IN_PROGRESS e em qual fase (scope/qa/compliance)
    - Contagem: Total / TODO / SCOPE_OK / QA_OK / DONE / BLOCKED
@@ -151,13 +183,13 @@ Agent action: ask confirmation first.
 
 ## `/che-parallel <optional worktree> [--max-parallel=3] [--serial]`
 
-**What it does:** Explicit trigger for the parallel execution mode of the che. Different from `/che-start`: `/che-start` auto-picks serial vs parallel based on preconditions and asks you to confirm; `/che-parallel` explicitly ENABLES parallel mode and errors out early (instead of falling back) if parallel preconditions can't be satisfied.
-**When to invoke:** You KNOW your tasks in task_graph.md are parallel-safe (independent files) and you want to force fan-out of 2-4 Devs at once instead of sequential. Or if auto-detection in /che-start passed but you want to override `max_parallel` cap.
+**What it does:** Explicit trigger for the parallel execution mode of the che. Different from `/che-act`: `/che-act` auto-picks serial vs parallel based on preconditions and asks you to confirm; `/che-parallel` explicitly ENABLES parallel mode and errors out early (instead of falling back) if parallel preconditions can't be satisfied.
+**When to invoke:** You KNOW your tasks in task_graph.md are parallel-safe (independent files) and you want to force fan-out of 2-4 Devs at once instead of sequential. Or if auto-detection in /che-act passed but you want to override `max_parallel` cap.
 **Agent action:**
-1. Invoke `che-scrum-master` with flag `force_parallel=true`.
+1. Invoke `che-act` with flag `force_parallel=true`.
 2. If any task envelope's `Blast Radius` still has globs → ERROR + demand user enumerates files (NO serial fallback). Parallel-or-bust when command is explicitly `/che-parallel`.
 3. Otherwise: user confirm → call `che-executor-dispatcher`.
-4. Same outputs as che-start (execution_batches.md, merge_audit, batch_execution_report, manual_test_plan, final_summary).
+4. Same outputs as che-act (execution_batches.md, merge_audit, batch_execution_report, manual_test_plan, final_summary).
 **Flags:**
 - `--serial`: Forces sequential, one task at a time. Use when parallel causes issues and you want debug single-task mode.
 - `--max-parallel=N`: Overrides concurrency cap. Max allowed value 4; if user passes >4, clamp to 4 + warning.
@@ -355,9 +387,9 @@ Agent action: ask confirmation first.
 
 | Command | Primary skill invoked |
 |---|---|
-| `/che-spec` | `che-spec` (4 input sources: existing / ticket URL / PRD Flockr path / brief description; YAML frontmatter + 7 canonical sections; Approved gate; saves DURÁVEL workspace-shared; standalone ou invocado automaticamente por /che-start SM §0.5) |
-| `/che-start` | `che-scrum-master` (§0.5 auto-invokes che-spec if no Approved SPEC; auto-detects serial vs parallel; falls back serial if any precondition fails) |
-| `/che-parallel` | `che-scrum-master` → `che-executor-dispatcher` (explicit parallel; ERROR if can't parallelize; no serial fallback) |
+| `/che-spec` | `che-spec` (4 input sources: existing / ticket URL / PRD Flockr path / brief description; YAML frontmatter + 7 canonical sections; Approved gate; saves DURÁVEL workspace-shared; standalone ou invocado automaticamente por /che-act SM §0.5) |
+| `/che-act` | `che-act` (§0.5 auto-invokes che-spec if no Approved SPEC; auto-detects serial vs parallel; falls back serial if any precondition fails) |
+| `/che-parallel` | `che-act` → `che-executor-dispatcher` (explicit parallel; ERROR if can't parallelize; no serial fallback) |
 | `/che-ship` | `che-ship` (commits → push → DRAFT PR → assign) |
 | `/che-fix` | `che-debugger-bugfix` (scientific debug loop, different from features) |
 | `/che-review` | `che-code-review` (HIGH / CRITICAL + scope only) |
@@ -381,5 +413,5 @@ Agent action: ask confirmation first.
 3. **Do NOT invent new commands.** Only those listed above, plus any repo-local `/flockr-*` commands already defined per-worktree.
 4. **Logging.** Every command execution results in a new entry to `session.md` under `$CHE_SESSION_DIR/` (resolvido via contract `che_compute_paths`; NÃO mais em worktree/.trae — MORATÓRIA §19.1).
 5. **SPEC GATE ordem de precedência para planejamento:**
-   - `/che-spec` standalone = apenas documento (sem scope-capture / dev), roda antes do che-start.
-   - `/che-start` = SM §0.5 auto-chama che-spec SE não houver SPEC Approved, passando args input (ticket/prd/desc) do usuário; Approved libera scope-capture.
+   - `/che-spec` standalone = apenas documento (sem scope-capture / dev), roda antes do che-act.
+   - `/che-act` = SM §0.5 auto-chama che-spec SE não houver SPEC Approved, passando args input (ticket/prd/desc) do usuário; Approved libera scope-capture.

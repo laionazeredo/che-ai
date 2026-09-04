@@ -14,12 +14,14 @@ This file documents runtime mappings between the shared Che and Codex.
 | Worktree binding | canonical contract | canonical contract |
 | Durable artifacts | `$CHE_SESSIONS_ROOT` | `$CHE_SESSIONS_ROOT` |
 | Figma design backend | Runtime integration | Figma MCP may be available; detect effective capability per session |
-| SPEC | `/che-spec` | `$che-spec` |
-| Start/orchestration | `/che-start` | `$che-scrum-master` |
-| QA | Che QA | `$che-qa` |
-| Review | `/che-review` | `$che-code-review` |
-| Scope check | `/che-scope-check` | `$che-scope-checker` |
-| Ship | `/che-ship` | `$che-ship` |
+| Strategic design | `/che-architect` | `/che-architect` |
+| SPEC | `/che-spec` | `/che-spec` |
+| Plan/Tickets | `/che-plan` | `/che-plan` |
+| Start/orchestration | `/che-act` | `/che-act` |
+| QA | Che QA | `/che-qa` |
+| Review | `/che-review` | `/che-review` |
+| Scope check | `/che-scope-check` | `/che-scope-check` |
+| Ship | `/che-ship` | `/che-ship` |
 
 ## Compatibility rule
 

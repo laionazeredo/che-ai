@@ -1,6 +1,6 @@
 ---
 name: "che-developer"
-description: "Implements one task at a time following engineering contracts, mandatory repo onboarding, TDD flow, and strict blast radius. Invoke ONLY by che-scrum-master after TASK ENVELOPE is approved."
+description: "Implements one task at a time following engineering contracts, mandatory repo onboarding, TDD flow, and strict blast radius. Invoke ONLY by che-act after TASK ENVELOPE is approved."
 ---
 
 # Che — Developer

@@ -7,34 +7,60 @@ CHE_REPO="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
 SKILLS_TARGET="$AGENTS_HOME/skills"
+COMMANDS_TARGET="$CODEX_HOME/commands"
 
-AGENTS_TARGET="$CODEX_HOME/AGENTS.md"
-AGENTS_SOURCE="$SCRIPT_DIR/AGENTS.md"
+echo "Uninstalling Codex Che adapter..."
 
-REMOVED=0
-
-if [ -L "$AGENTS_TARGET" ] &&
-   [ "$(readlink -f "$AGENTS_TARGET")" = "$(readlink -f "$AGENTS_SOURCE")" ]; then
-  rm "$AGENTS_TARGET"
-  echo "Removed: $AGENTS_TARGET"
+# 1. Remove AGENTS.md
+if [ -L "$CODEX_HOME/AGENTS.md" ]; then
+  rm "$CODEX_HOME/AGENTS.md"
+  if [ -e "$CODEX_HOME/AGENTS.md.bak" ]; then
+    mv "$CODEX_HOME/AGENTS.md.bak" "$CODEX_HOME/AGENTS.md"
+  fi
 fi
 
+# 2. Remove skill symlinks
+REMOVED_SKILLS=0
 if [ -d "$SKILLS_TARGET" ]; then
   for target in "$SKILLS_TARGET"/*; do
     [ -L "$target" ] || continue
-
     resolved="$(readlink -f "$target" 2>/dev/null || true)"
-
     case "$resolved" in
       "$CHE_REPO"/skills/*)
         rm "$target"
-        echo "Removed: $target"
-        REMOVED=$((REMOVED + 1))
+        REMOVED_SKILLS=$((REMOVED_SKILLS + 1))
         ;;
     esac
   done
 fi
 
+# 3. Remove command symlinks
+REMOVED_COMMANDS=0
+if [ -d "$COMMANDS_TARGET" ]; then
+  for target in "$COMMANDS_TARGET"/*; do
+    [ -L "$target" ] || continue
+    resolved="$(readlink -f "$target" 2>/dev/null || true)"
+    case "$resolved" in
+      "$CHE_REPO"/commands/*)
+        rm "$target"
+        REMOVED_COMMANDS=$((REMOVED_COMMANDS + 1))
+        ;;
+    esac
+  done
+fi
+
+# 4. Remove hooks.json
+if [ -f "$CODEX_HOME/hooks.json" ]; then
+  rm "$CODEX_HOME/hooks.json"
+fi
+
+# 5. Disable hooks in config.toml
+CONFIG_TOML="$CODEX_HOME/config.toml"
+if [ -f "$CONFIG_TOML" ]; then
+  sed -i '/hooks = true/d' "$CONFIG_TOML"
+fi
+
 echo
-echo "Codex Che adapter removed."
-echo "Skill links removed: $REMOVED"
+echo "Codex Che adapter removed successfully."
+echo "Skill links removed  : $REMOVED_SKILLS"
+echo "Command links removed: $REMOVED_COMMANDS"

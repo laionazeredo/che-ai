@@ -65,7 +65,7 @@
 ---
 
 ## 🟠 REGRA 3: TIME ÁGIL SIMULADO — ORDEM OBRIGATÓRIA
-1. SCRUM MASTER (`che-scrum-master`) → scope + task graph + envelopes.
+1. SCRUM MASTER (`che-act`) → scope + task graph + envelopes.
 2. DEVELOPER (`che-developer`) → SÓ por SM com envelope formal. Primeiro invoca `engineering-contracts`.
 3. SCOPE VALIDATION (SM ↔ Dev). Máx 2 iterações → PERGUNTE ao user.
 4. QA (`che-qa`) → build/lint/typecheck/tests (terceira pessoa).
@@ -78,7 +78,7 @@
 
 ## 🟠 REGRA 4: MAPEAMENTO DE COMANDOS (use o certo por fase)
 - **Início (especificação):** `/che-spec` → SPEC otimizado p/ agente + che (4 fontes: existente/ticket URL/PRD Flockr/inline). 7 seções + YAML frontmatter + gate Approved ANTES scope capture.
-- **Implementação feature/longa:** `/che-start` (auto serial vs parallel) OU `/che-parallel` (force parallel-or-bust). SM invoca `/che-spec` automaticamente no preflight §0.5 se não houver Approved.
+- **Implementação feature/longa:** `/che-act` (auto serial vs parallel) OU `/che-parallel` (force parallel-or-bust). SM invoca `/che-spec` automaticamente no preflight §0.5 se não houver Approved.
 - **Bug fix:** `/che-fix` (loop científico; reproduz ANTES)
 - **Ship:** `/che-ship` (commits atômicos conventional, push --no-verify, PR DRAFT + gh-stack se múltiplos PRs). **PRÉ-REQUISITO GATE FAIL-CLOSED:** `/che-scope-check` com 4 verdicts. Qualquer 🔴 bloqueia abertura do Draft PR até resolver.
 - **Review/comments/CI/auditoria escopo/**merge conflito**:`/che-review` (BLOCKING runtime/PII/deps/scope), `/che-pr-comments`, `/che-ci-fix`, **`/che-scope-check` (4-checks audit: entrega+testes+docs+env vars a partir de PRD/ticket/task-graph)**, **`/che-merge` (resolve conflitos merge hunk-a-hunk default OURS, ask em ambiguidade, 0 blast-radius min)**.
@@ -313,7 +313,7 @@ Outros anti padrões de TÍTULO (se bater, revise antes de PR):
 ---
 
 ## 🟥 REGRA 8: SPEC + PARALELISMO (corpo em CHE_RULES)
-- **SPEC**: substitui PRD legacy; 4 fontes input (existente / ticket URL / PRD Flockr path / inline breve); 7 seções canônicas + YAML frontmatter required fields; gate **Approved obrigatório** ANTES scope capture no §0.5 do che-scrum-master; override SPEC-OVERRIDE com log em decisions.
+- **SPEC**: substitui PRD legacy; 4 fontes input (existente / ticket URL / PRD Flockr path / inline breve); 7 seções canônicas + YAML frontmatter required fields; gate **Approved obrigatório** ANTES scope capture no §0.5 do che-act; override SPEC-OVERRIDE com log em decisions.
 - **Paralelismo:** Kahn waves + conflict graph coloring + file locks + single-writer shared artifacts. Cap 4 paralelo. Se overhead > serial, KISS vence.
 - **Corpo completo:** `CHE_RULES.md` §🔴 PARALELISMO + §🟣 SPEC Rules (gate + validation + approval loop)
 

@@ -2,7 +2,17 @@
 
 **Che** is an IDE-agnostic Agentic Engineering Harness designed to run inside modern AI coding assistants (such as Trae, Codex, Cursor, Claude Code, and OpenCode). 
 
-Instead of treating the AI as just an autocomplete tool, Che acts as a "plugin" that orchestrates the AI to simulate a full Agile team—including a Scrum Master, Software Engineer, QA, UX Designer, and Compliance Officer. It enforces strict Software Development Life Cycle (SDLC) practices, deterministic project memory, and automated quality gates.
+It acts as a "plugin" that orchestrates the AI to simulate a full Agile team—including a Scrum Master, Software Engineer, QA, UX Designer, and Compliance Officer. It enforces strict Software Development Life Cycle (SDLC) practices, deterministic project memory, and automated quality gates.
+
+## 🚀 Multi-Agent Support
+
+Che is designed to be portable across different AI agents. After installation, it automatically configures adapters for:
+- **Trae**: Native support via root directory.
+- **Codex**: Slash commands in `~/.codex/commands/` and skills in `~/.agents/skills/`.
+- **Claude Code**: Slash commands in `~/.claude/commands/` and skills in `~/.claude/skills/`.
+- **Cursor**: Integrated rules and skills via `.cursor/rules/`.
+
+All agents share the same **Engineering Contracts**, **Expert Skills**, and **Durable Memory**, ensuring a consistent experience regardless of the tool you use.
 
 ## 🚀 Quick Install
 
@@ -25,14 +35,40 @@ Che is built on the philosophy that **Agentic Engineering requires boundaries an
    - **L4 (Session Level)**: `<L3>/sessions/<CHE_SESSION_ID>/` (Ephemeral logs & debug context)
 4. **Automated Quality Gates**: When you ship code via `/che-ship`, Che automatically enforces Scope Checks, Code Review, Security Compliance, and runs your test suite before opening a Draft PR.
 
+## 🔄 Workflow
+
+```mermaid
+flowchart TD
+    Idea[Business Idea] --> Arch["/che-architect"]
+    Arch --> Repo[New Repository]
+    Repo --> B["/che-xray"]
+    A[Existing Repository] --> B
+    B --> C[Technical Raio-X]
+    C --> D["/che-onboarding"]
+    D --> E[Human Product & Architecture Context]
+    E --> F["/che-spec"]
+    F --> G[Approved Execution Specification]
+    G --> H["/che-plan"]
+    H --> I[External Tickets Jira/Linear/ClickUp]
+    I --> J["/che-act"]
+    J --> K[Task Graph & Implementation]
+    K --> L["/che-ship"]
+    L --> M[Pull Request]
+```
+
 ## 🛠 Usage (Slash Commands)
 
 Once installed, Che exposes its capabilities directly inside your AI assistant's chat interface via slash commands. For example:
 
-- `/che-start` — Decomposes a feature request into a task graph and begins implementation.
-- `/che-ship` — Runs quality gates, commits, and opens a Pull Request.
+- `/che-architect` — Strategic architecture partner to design systems from scratch. Covers stack, infra, security, compliance, accessibility, and operations.
 - `/che-xray` — Scans a new repository and generates a technical profile (stack, patterns, DB, CI/CD).
-- `/che-design` — Orchestrates a complete UX/UI design pipeline (Social Media, Web Features, Design Systems).
+- `/che-onboarding` — Interactive session to capture human context (Roadmap, Business Logic, Personas).
+- `/che-spec` — Generates a precise Execution Specification from a ticket or PRD.
+- `/che-plan` — Transforms an Approved SPEC into structured tickets (Linear, ClickUp, Jira) with BDD ACs.
+- `/che-act` — Decomposes a feature request into a task graph and begins implementation.
+- `/che-ship` — Runs quality gates, commits, and opens a Pull Request.
+- `/che-fix` — Scientific debug loop to reproduce and fix a specific bug.
+- `/che-design` — Orchestrates a complete UX/UI design pipeline.
 - `/che-review` — Performs a strict code review against the default branch.
 
 ## 🏗 Contributing & Architecture

@@ -60,11 +60,24 @@ def _git_worktree_root(candidate: str) -> str:
 
 
 def pretooluse_worktree_binding(input_json: Dict[str, Any]) -> Dict[str, Any]:
-    session_id = input_json.get("sessionId", "")
-    tool_name = input_json.get("toolName", "")
-    tool_args = input_json.get("toolArgs", {})
+    session_id = input_json.get("sessionId") or input_json.get("session_id", "")
+    tool_name = input_json.get("toolName") or input_json.get("tool_name", "")
+    tool_args = input_json.get("toolArgs") or input_json.get("tool_input", {})
 
-    guarded_tools = {"Read", "Glob", "Grep", "Edit", "Write", "RunCommand", "DeleteFile", "LS", "SearchCodebase"}
+    guarded_tools = {
+        "Read",
+        "Glob",
+        "Grep",
+        "Edit",
+        "Write",
+        "RunCommand",
+        "DeleteFile",
+        "LS",
+        "SearchCodebase",
+        "Bash",
+        "exec_command",
+        "apply_patch",
+    }
     if tool_name not in guarded_tools:
         return {"decision": "allow", "reason": "Tool not in guarded list"}
 
@@ -121,11 +134,11 @@ def pretooluse_worktree_binding(input_json: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def posttooluse_lang_pt_check(input_json: Dict[str, Any]) -> Dict[str, Any]:
-    session_id = input_json.get("sessionId", "")
-    tool_name = input_json.get("toolName", "")
-    tool_args = input_json.get("toolArgs", {})
+    session_id = input_json.get("sessionId") or input_json.get("session_id", "")
+    tool_name = input_json.get("toolName") or input_json.get("tool_name", "")
+    tool_args = input_json.get("toolArgs") or input_json.get("tool_input", {})
 
-    if tool_name not in {"Edit", "Write"}:
+    if tool_name not in {"Edit", "Write", "apply_patch"}:
         return {"decision": "allow", "reason": "Hook3 lang-pt: tool not Edit/Write, skip."}
 
     file_path = tool_args.get("file_path", "")
@@ -286,10 +299,10 @@ File analyzed: {file_path}"""
 
 
 def posttooluse_3layer_dedup(input_json: Dict[str, Any]) -> Dict[str, Any]:
-    tool_name = input_json.get("toolName", "")
-    tool_args = input_json.get("toolArgs", {})
+    tool_name = input_json.get("toolName") or input_json.get("tool_name", "")
+    tool_args = input_json.get("toolArgs") or input_json.get("tool_input", {})
 
-    if tool_name not in {"Edit", "Write"}:
+    if tool_name not in {"Edit", "Write", "apply_patch"}:
         return {"decision": "allow"}
 
     file_path = tool_args.get("file_path", "")
