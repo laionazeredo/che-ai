@@ -4,8 +4,8 @@ import sys
 
 from che_core.decisions import append_decision_jsonl
 from che_core.paths import compute_paths, ensure_session_dirs
-from che_core.registry import registry_append_jsonl, registry_lookup_last
 from che_core.portability import export_project, import_project
+from che_core.registry import registry_append_jsonl, registry_lookup_last
 
 
 def main():
