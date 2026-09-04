@@ -1,77 +1,77 @@
 # Che AI ☭
 
-**Che** is an IDE-agnostic Agentic Engineering Harness designed to run inside modern AI coding assistants (such as Trae, Codex, Cursor, Claude Code, and OpenCode). 
+**Che** é um Harness de Engenharia Agêntica agnóstico a IDE, projetado para rodar dentro de assistentes de codificação de IA modernos (como Trae, Codex, Cursor, Claude Code e OpenCode).
 
-It acts as a "plugin" that orchestrates the AI to simulate a full Agile team—including a Scrum Master, Software Engineer, QA, UX Designer, and Compliance Officer. It enforces strict Software Development Life Cycle (SDLC) practices, deterministic project memory, and automated quality gates.
+Ele atua como um "plugin" que orquestra a IA para simular uma equipe Agile completa — incluindo Scrum Master, Engenheiro de Software, QA, Designer de UX e Oficial de Compliance. Ele impõe práticas rigorosas de Ciclo de Vida de Desenvolvimento de Software (SDLC), memória de projeto determinística e portões de qualidade automatizados.
 
-## 🚀 Multi-Agent Support
+## 🚀 Suporte Multi-Agente
 
-Che is designed to be portable across different AI agents. After installation, it automatically configures adapters for:
-- **Trae**: Native support via root directory.
-- **Codex**: Slash commands in `~/.codex/commands/` and skills in `~/.agents/skills/`.
-- **Claude Code**: Slash commands in `~/.claude/commands/` and skills in `~/.claude/skills/`.
-- **Cursor**: Integrated rules and skills via `.cursor/rules/`.
+O Che foi projetado para ser portátil entre diferentes agentes de IA. Após a instalação, ele configura automaticamente adaptadores para:
+- **Trae**: Suporte nativo via diretório raiz.
+- **Codex**: Comandos slash em `~/.codex/commands/` e skills em `~/.agents/skills/`.
+- **Claude Code**: Comandos slash em `~/.claude/commands/` e skills em `~/.claude/skills/`.
+- **Cursor**: Regras e skills integradas via `.cursor/rules/`.
 
-All agents share the same **Engineering Contracts**, **Expert Skills**, and **Durable Memory**, ensuring a consistent experience regardless of the tool you use. Durable project data can be moved between machines using the **Portability Commands** (`/che-export` and `/che-import`).
+Todos os agentes compartilham os mesmos **Contratos de Engenharia**, **Expert Skills** e **Memória Durável**, garantindo uma experiência consistente independentemente da ferramenta utilizada. Dados duráveis do projeto podem ser movidos entre máquinas usando os **Comandos de Portabilidade** (`/che-export` e `/che-import`).
 
-## 🚀 Quick Install
+## 🚀 Instalação Rápida
 
-To install Che into your local environment (defaults to `~/.trae`), run:
+Para instalar o Che em seu ambiente local (padrão em `~/.trae`), execute:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.sh | bash
 ```
 
-## 🧠 Core Concepts
+## 🧠 Conceitos Principais
 
-Che is built on the philosophy that **Agentic Engineering requires boundaries and memory**. 
+O Che é construído sobre a filosofia de que a **Engenharia Agêntica requer limites e memória**.
 
-1. **Zero-Build Core**: The core logic of Che is written in pure Python (`che_core/`), avoiding heavy Node.js dependencies and compilation steps.
-2. **Declarative Skills**: AI behaviors and boundaries are defined in simple, declarative Markdown files (`skills/*/SKILL.md`).
-3. **Structured Memory**: Che isolates generated artifacts (design tokens, QA reports, decisions, and execution logs) from your user code. It uses a strict 4-level hierarchy:
-   - **L1 (Workspace Root)**: `~/.che-workspaces/<workspace-slug>/`
-   - **L2 (Project Level)**: `<L1>/<repo-slug>/.project/` (Durable architecture & product knowledge)
-   - **L3 (Worktree Level)**: `<L2>/../.wt/__<branch-slug>/` (Shared info across sessions in the same branch)
-   - **L4 (Session Level)**: `<L3>/sessions/<CHE_SESSION_ID>/` (Ephemeral logs & debug context)
-4. **Automated Quality Gates**: When you ship code via `/che-ship`, Che automatically enforces Scope Checks, Code Review, Security Compliance, and runs your test suite before opening a Draft PR.
+1. **Core Zero-Build**: A lógica central do Che é escrita em Python puro (`che_core/`), evitando dependências pesadas de Node.js e etapas de compilação.
+2. **Skills Declarativas**: Comportamentos e limites da IA são definidos em arquivos Markdown simples e declarativos (`skills/*/SKILL.md`).
+3. **Memória Estruturada**: O Che isola artefatos gerados (tokens de design, relatórios de QA, decisões e logs de execução) do seu código de usuário. Ele usa uma hierarquia estrita de 4 níveis:
+   - **L1 (Raiz do Workspace)**: `~/.che-workspaces/<workspace-slug>/`
+   - **L2 (Nível de Projeto)**: `<L1>/<repo-slug>/.project/` (Arquitetura durável e conhecimento de produto)
+   - **L3 (Nível de Worktree)**: `<L2>/../.wt/__<branch-slug>/` (Informações compartilhadas entre sessões na mesma branch)
+   - **L4 (Nível de Sessão)**: `<L3>/sessions/<CHE_SESSION_ID>/` (Logs efêmeros e contexto de debug)
+4. **Portões de Qualidade Automatizados**: Ao enviar código via `/che-ship`, o Che impõe automaticamente Verificações de Escopo, Revisão de Código, Conformidade de Segurança e executa sua suíte de testes antes de abrir um Draft PR.
 
-## 🔄 Workflow
+## 🔄 Fluxo de Trabalho
 
 ```mermaid
 flowchart TD
-    Idea[Business Idea] --> Arch["/che-architect"]
-    Arch --> Repo[New Repository]
+    Idea[Ideia de Negócio] --> Arch["/che-architect"]
+    Arch --> Repo[Novo Repositório]
     Repo --> B["/che-xray"]
-    A[Existing Repository] --> B
-    B --> C[Technical Raio-X]
+    A[Repositório Existente] --> B
+    B --> C[Raio-X Técnico]
     C --> D["/che-onboarding"]
-    D --> E[Human Product & Architecture Context]
+    D --> E[Contexto Humano de Produto e Arquitetura]
     E --> F["/che-spec"]
-    F --> G[Approved Execution Specification]
+    F --> G[Especificação de Execução Aprovada]
     G --> H["/che-plan"]
-    H --> I[External Tickets Jira/Linear/ClickUp]
+    H --> I[Tickets Externos Jira/Linear/ClickUp]
     I --> J["/che-act"]
-    J --> K[Task Graph & Implementation]
+    J --> K[Grafo de Tarefas e Implementação]
     K --> L["/che-ship"]
     L --> M[Pull Request]
 ```
 
-## 🛠 Usage (Slash Commands)
+## 🛠 Uso (Comandos Slash)
 
-Once installed, Che exposes its capabilities directly inside your AI assistant's chat interface via slash commands. For example:
+Uma vez instalado, o Che expõe suas capacidades diretamente na interface de chat do seu assistente de IA via comandos slash. Por exemplo:
 
-- `/che-architect` — Strategic architecture partner to design systems from scratch. Covers stack, infra, security, compliance, accessibility, and operations.
-- `/che-xray` — Scans a new repository and generates a technical profile (stack, patterns, DB, CI/CD).
-- `/che-onboarding` — Interactive session to capture human context (Roadmap, Business Logic, Personas).
-- `/che-spec` — Generates a precise Execution Specification from a ticket or PRD.
-- `/che-plan` — Transforms an Approved SPEC into structured tickets (Linear, ClickUp, Jira) with BDD ACs.
-- `/che-act` — Decomposes a feature request into a task graph and begins implementation.
-- `/che-ship` — Runs quality gates, commits, and opens a Pull Request.
-- `/che-fix` — Scientific debug loop to reproduce and fix a specific bug.
-- `/che-design` — Orchestrates a complete UX/UI design pipeline.
-- `/che-review` — Performs a strict code review against the default branch.
-- `/che-export` — Packages durable project data (architecture, specs, decisions) for portability.
-- `/che-import` — Imports a project archive, resolving naming conflicts automatically.
+- `/che-architect` — Parceiro estratégico de arquitetura para projetar sistemas do zero. Cobre stack, infra, segurança, compliance, acessibilidade e operações.
+- `/che-xray` — Escaneia um novo repositório e gera um perfil técnico (stack, padrões, DB, CI/CD).
+- `/che-onboarding` — Sessão interativa para capturar contexto humano (Roadmap, Lógica de Negócio, Personas).
+- `/che-spec` — Gera uma Especificação de Execução precisa a partir de um ticket ou PRD.
+- `/che-plan` — Transforma uma SPEC Aprovada em tickets estruturados (Linear, ClickUp, Jira) com ACs em BDD.
+- `/che-act` — Decompõe uma solicitação de funcionalidade em um grafo de tarefas e inicia a implementação.
+- `/che-ship` — Executa portões de qualidade, commita e abre um Pull Request.
+- `/che-fix` — Loop de debug científico para reproduzir e corrigir um bug específico.
+- `/che-design` — Orquestra um pipeline completo de design UX/UI.
+- `/che-review` — Realiza uma revisão de código rigorosa contra a branch padrão.
+- `/che-export` — Empacota dados duráveis do projeto (arquitetura, specs, decisões) para portabilidade.
+- `/che-import` — Importa um arquivo de projeto, resolvendo conflitos de nomes automaticamente.
 
 ### 📦 Portabilidade
 
@@ -90,27 +90,27 @@ Este comando restaura um projeto a partir de um arquivo gerado pelo `/che-export
 - **Uso**: `/che-import <caminho_do_arquivo> [nome_do_workspace_destino]`
 - **Exemplo**: `/che-import backup.che.tar.gz main-workspace`
 
-## 🏗 Contributing & Architecture
+## 🏗 Contribuição e Arquitetura
 
-If you are an AI agent or developer looking to extend Che, please read **[AGENTS.md](./AGENTS.md)** first. It outlines the strict 3-Layer Architecture, the Python core rule, and how to safely manipulate the file system.
+Se você é um agente de IA ou desenvolvedor querendo estender o Che, por favor leia o **[AGENTS.md](./AGENTS.md)** primeiro. Ele descreve a Arquitetura de 3 Camadas, a regra do core em Python e como manipular o sistema de arquivos com segurança.
 
-### Approval & Contribution Workflow
-To ensure the stability and security of the framework, Che enforces a strict contribution workflow:
-- **Branch Protection**: Direct pushes to `main` are blocked. All changes must be submitted via Pull Requests.
-- **Code Owners**: The `.github/CODEOWNERS` file mandates explicit review and approval from `@laionazeredo` before any PR can be merged.
-- **Zero-Build Policy**: No Node.js dependencies (`package.json`) or complex build steps. The core is pure Python. Bash is strictly reserved for the bootstrap/install scripts.
-- **Worktree Hygiene**: Temporary scripts, logs, and untracked files must not be left in the repository root. Ephemeral data belongs in the Session Level (L4) folders.
+### Fluxo de Aprovação e Contribuição
+Para garantir a estabilidade e segurança do framework, o Che impõe um fluxo de contribuição rigoroso:
+- **Proteção de Branch**: Pushes diretos na `main` são bloqueados. Todas as alterações devem ser enviadas via Pull Requests.
+- **Code Owners**: O arquivo `.github/CODEOWNERS` exige revisão e aprovação explícita de `@laionazeredo` antes que qualquer PR possa ser mergeada.
+- **Política Zero-Build**: Sem dependências de Node.js (`package.json`) ou etapas complexas de build. O core é Python puro. Bash é estritamente reservado para os scripts de bootstrap/instalação.
+- **Higiene da Worktree**: Scripts temporários, logs e arquivos não rastreados não devem ser deixados na raiz do repositório. Dados efêmeros pertencem às pastas de Nível de Sessão (L4).
 
-## 🛡️ Quality & Security
+## 🛡️ Qualidade e Segurança
 
-Che employs a robust Continuous Integration (CI) pipeline via GitHub Actions to maintain code quality and prevent security regressions:
-- **Linting & Formatting**: Python code is strictly linted and formatted using `ruff`. Markdown files are validated with `markdownlint-cli2`.
-- **Unit & Security Testing**: `pytest` runs unit tests for the core logic (e.g., path resolution) and executes static security analysis (`test_skill_security.py`) on `SKILL.md` files. This ensures no destructive Bash commands (like `rm -r`, `curl`, `eval`) are embedded in Markdown and limits Python blocks to a maximum of 15 lines, forcing complex logic into the `che_core` package.
-- **Secret Scanning**: `TruffleHog` runs on every push and PR to prevent accidental commits of secrets, API keys, or passwords by AI agents.
+O Che emprega um pipeline de Integração Contínua (CI) robusto via GitHub Actions para manter a qualidade do código e prevenir regressões de segurança:
+- **Linting e Formatação**: O código Python é estritamente lintado e formatado usando `ruff`. Arquivos Markdown são validados com `markdownlint-cli2`.
+- **Testes de Unidade e Segurança**: `pytest` roda testes de unidade para a lógica central (ex: resolução de caminhos) e executa análise estática de segurança (`test_skill_security.py`) nos arquivos `SKILL.md`. Isso garante que nenhum comando Bash destrutivo (como `rm -r`, `curl`, `eval`) seja embutido em Markdown e limita blocos Python a um máximo de 15 linhas, forçando a lógica complexa para o pacote `che_core`.
+- **Escaneamento de Segredos**: `TruffleHog` roda em cada push e PR para prevenir commits acidentais de segredos, chaves de API ou senhas por agentes de IA.
 
-## 🔄 Updating
+## 🔄 Atualizando
 
-To fetch the latest version of Che:
+Para buscar a versão mais recente do Che:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/update-che.sh | bash
