@@ -16,7 +16,7 @@
         "description": "Enforces HARD STOP 3-Layer Architecture: Layer 1/2 (user_rules, CHE_RULES/COMMANDS) are title+link only. Layer 3 skills/*/SKILL.md owns the rule BODY. Warns with additionalContext when >=4 identical lines found in both Layer 1/2 AND any Layer 3 SKILL.md; never blocks post-hoc but flags to agent.",
         "matcher": "Edit,Write",
         "type": "command",
-        "command": "__HARNESS_TARGET__/hooks/posttooluse-3layer-dedup.sh",
+        "command": "__HARNESS_TARGET__/hooks/posttooluse-3layer-dedup.py",
         "timeout": 10
       },
       {
@@ -25,6 +25,14 @@
         "matcher": "Edit,Write",
         "type": "command",
         "command": "__HARNESS_TARGET__/hooks/posttooluse-lang-pt-check.py",
+        "timeout": 8
+      },
+      {
+        "name": "git-worktree-auto-l3-manage",
+        "description": "AUTO-only (never blocks, never wraps git): detects `git worktree add` commands via RunCommand/Bash to auto-create L3 worktree shared dirs (ensure_session_dirs). Detects `git worktree remove/prune` to auto-move L3 dir to lixeira (.trash). Canonical git command is always the primary API; this hook enriches the Che 4-level hierarchy transparently.",
+        "matcher": "RunCommand,Bash,exec_command",
+        "type": "command",
+        "command": "__HARNESS_TARGET__/hooks/posttooluse-git-worktree.py",
         "timeout": 8
       }
     ]
