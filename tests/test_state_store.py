@@ -1,4 +1,5 @@
 """Smoke test state_store: rebuild, sanitize(dry-run), search, query SQL whitelist."""
+
 from __future__ import annotations
 
 import json
@@ -54,7 +55,7 @@ def _setup_wt_with_content(tmp_path: Path):
                     "ts": ts,
                     "event": f"TEST_{i}",
                     "worktree_root": str(wt),
-                    "task_id": f"T{i%2+1}",
+                    "task_id": f"T{i % 2 + 1}",
                     "payload": {"dec_num": i, "note": f"decisao antiga {i}"},
                 }
             )

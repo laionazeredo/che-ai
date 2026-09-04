@@ -1,4 +1,5 @@
 """Smoke test portability: export/import com flag include_db; DB > 1MB deve ser SKIPPED."""
+
 from __future__ import annotations
 
 import json
@@ -70,7 +71,7 @@ def test_export_with_db_big_size_limit_skips(tmp_path: Path):
         f = tf.extractfile("./_db/SKIPPED.txt" if "./_db/SKIPPED.txt" in tf.getnames() else "_db/SKIPPED.txt")
         assert f
         content = f.read().decode("utf-8")
-        assert ("exceeded" in content.lower() or "limite" in content.lower() or "MB" in content)
+        assert "exceeded" in content.lower() or "limite" in content.lower() or "MB" in content
 
 
 def test_import_restores_files(tmp_path: Path):

@@ -1,4 +1,5 @@
 """Smoke test para task_graph: parse, DAG build, waves, summary."""
+
 from __future__ import annotations
 
 import os

@@ -32,9 +32,7 @@ def list_tasks(worktree_root: str, filters: Optional[Dict[str, Any]] = None) -> 
         tasks = [t for t in tasks if t["domain"] in filters["domain"]]
     if filters.get("ready_only"):
         ready_ids = {
-            check_task_ready(graph, tid)["task"]
-            for tid in graph["tasks"]
-            if check_task_ready(graph, tid)["ready"]
+            check_task_ready(graph, tid)["task"] for tid in graph["tasks"] if check_task_ready(graph, tid)["ready"]
         }
         tasks = [t for t in tasks if t["id"] in ready_ids]
 

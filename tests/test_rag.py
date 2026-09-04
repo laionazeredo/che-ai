@@ -1,4 +1,5 @@
 """Smoke test RAG: provider none sempre funciona, build incremental, search não crasha."""
+
 from __future__ import annotations
 
 import json

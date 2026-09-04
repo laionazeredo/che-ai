@@ -93,9 +93,7 @@ def parse_task_graph(worktree_root: str, session_id: str = "task-graph-session")
     metadata: Dict[str, Any] = {}
     table_header_idx = -1
     for i, line in enumerate(lines):
-        if line.startswith("- **Created:**") or line.startswith("- **Worktree:**") or line.startswith(
-            "- **Feature"
-        ):
+        if line.startswith("- **Created:**") or line.startswith("- **Worktree:**") or line.startswith("- **Feature"):
             m = re.match(r"-\s+\*\*(.+?)\*\*:\s*(.+)", line)
             if m:
                 metadata[m.group(1).strip().lower()] = m.group(2).strip()

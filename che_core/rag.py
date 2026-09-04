@@ -464,9 +464,7 @@ def build_rag_index(
         deleted = cur.rowcount or 0
         if vec_loaded:
             try:
-                conn.execute(
-                    "DELETE FROM vec_documents WHERE rowid IN ({})".format(",".join("?" * len(stale))), stale
-                )
+                conn.execute("DELETE FROM vec_documents WHERE rowid IN ({})".format(",".join("?" * len(stale))), stale)
             except Exception:
                 pass
     conn.commit()
@@ -530,7 +528,7 @@ def search_rag(
             items = sres.get("results") or []
             for r in items:
                 # r.keys variam por scope; melhor: construir key por source_path se existir, senão por id
-                key = r.get("path") or r.get("source_path") or f"lex-{r.get('scope','x')}-{r.get('id','?')}"
+                key = r.get("path") or r.get("source_path") or f"lex-{r.get('scope', 'x')}-{r.get('id', '?')}"
                 score = float(r.get("score_bm25") or r.get("score") or 0.0)
                 lexical_hits[key] = max(lexical_hits.get(key, 0.0), score)
                 lexical_results.append({**r, "_join_key": key})

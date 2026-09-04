@@ -87,9 +87,15 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
     try:
-        conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(title, envelope_body, content=tasks, content_rowid=rowid)")
-        conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS decisions_fts USING fts5(payload, content=decisions, content_rowid=id)")
-        conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS specs_fts USING fts5(body, content=specs, content_rowid=rowid)")
+        conn.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS tasks_fts USING fts5(title, envelope_body, content=tasks, content_rowid=rowid)"
+        )
+        conn.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS decisions_fts USING fts5(payload, content=decisions, content_rowid=id)"
+        )
+        conn.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS specs_fts USING fts5(body, content=specs, content_rowid=rowid)"
+        )
     except sqlite3.OperationalError:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_title ON tasks(title)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_decisions_ts ON decisions(ts)")
@@ -337,9 +343,7 @@ def query_state_db(
             )
     db_path = _get_state_db_path(worktree_root=worktree_root)
     if not db_path.exists():
-        raise FileNotFoundError(
-            f"State store ainda não existe em: {db_path}. Rode `che state rebuild-index` primeiro."
-        )
+        raise FileNotFoundError(f"State store ainda não existe em: {db_path}. Rode `che state rebuild-index` primeiro.")
     conn = _connect(db_path, read_only=(not force))
     try:
         cur = conn.execute(sql, binds)
@@ -421,9 +425,7 @@ def sanitize_state(
                 (cutoff,),
             )
             result["deleted"]["tasks_done_old"] = int(cur.fetchone()["c"])
-            cur = conn.execute(
-                "SELECT COUNT(*) AS total FROM decisions"
-            )
+            cur = conn.execute("SELECT COUNT(*) AS total FROM decisions")
             total_decisions = int(cur.fetchone()["total"])
             over_cap = max(0, total_decisions - max_decisions)
             result["deleted"]["decisions_over_cap"] = over_cap

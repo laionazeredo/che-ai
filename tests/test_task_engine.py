@@ -1,4 +1,5 @@
 """Smoke test para task_engine: list/show/set-status. Sem task_graph não crasha."""
+
 from __future__ import annotations
 
 import json

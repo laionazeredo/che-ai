@@ -110,6 +110,7 @@ def export_project(
         shutil.copytree(project_dir, tmp_path / "project", ignore=_db_ignore)
 
         if workspace_shared.exists():
+
             def ignore_sessions(path, names):
                 if "sessions" in names:
                     return ["sessions"]
@@ -213,7 +214,9 @@ def import_project(
         elif include_db and not archive_include_db:
             db_skipped["reason"] = "archive was created without --include-db flag (metadata.include_db=false)"
         elif include_db and archive_db_skipped:
-            db_skipped["reason"] = f"archive created with --include-db but DBs exceeded size limit during export: {archive_db_skipped}"
+            db_skipped["reason"] = (
+                f"archive created with --include-db but DBs exceeded size limit during export: {archive_db_skipped}"
+            )
 
         result: Dict[str, Any] = {
             "project_slug": project_slug,
