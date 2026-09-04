@@ -155,11 +155,37 @@ MERGE_AUDIT_PATH_Tn="$(che_output_path "merge_audit" "merge-audit" "batch-${BATC
 
 ---
 
+### 0.25 Task Resume Auto-Hook (Cross-domain Kahn Wave picker)
+
+Runs **AFTER** binding 0.1 + contract path resolution + 0.2 preflight storage, **BEFORE** §0.3 Domain Context Auto-Load and §0.5 Approved SPEC gate. Executes ONLY if ANY condition below is true; else SKIP silently (zero overhead).
+
+**Trigger conditions (OR):**
+a) User called `/che-act --task TID` with an explicit `--task` flag.
+b) The Level 1 registry BOUND entry for the current `SESSION_ID` already contains `flags.ACTIVE_TASK_ID` (set previously by `/che-task resume TID` in another window/session).
+
+**Execution logic:**
+1. Extract `TID` value: if (a) → use flag value; if (b) → use `flags.ACTIVE_TASK_ID` from the BOUND entry payload.
+2. Run: `RESULT=$(python3 -m che_core.cli task resume "$WORKTREE_ROOT" "$TID" "$(che_current_session_id)" --json)` — this call handles all the internal work: re-bind registry with ACTIVE_DOMAIN/ACTIVE_TASK_ID flags, append TASK_RESUME decision, validate task readiness (deps + handoff), auto-load the envelope domain's profile/playbook/gates, and return `{ready, domain, recommended_action:{slash_command, description}, expert_skills[]}`.
+3. If `RESULT.ready == false`: STOP. Show the pending blockers list (which parent tasks are not DONE, which handoff_output files are missing). Offer user: "(A) Continue anyway (log SPEC-OVERRIDE equivalent TASK-OVERRIDE to decisions) / (B) Stop here and run parent tasks first".
+4. If `RESULT.ready == true`: Display the returned `recommended_action` prominently. Example UX output:
+   ```
+   TASK T3 READY · Domain: ux · Experts: [penpot-uiux-designer]
+   Recomendado: /che-design (design UI/UX screen via Penpot MCP)
+   ```
+   Ask user: `Executar comando recomendado agora? (Y/n)`. **Default Y = immediately invoke the recommended slash command** passing current worktree + TID context. If user says N → fall through to normal §0.3 domain selection.
+5. **Domain precedence override:** If the returned envelope `domain` is NOT `engineering` → it OVERRIDES ALL 3 sources in §0.3 (SPEC frontmatter, project registry, default). The envelope domain becomes the canonical domain for this session.
+
+**Fall-through to §0.3:** If no trigger condition matched, OR user explicitly declined the recommended command → proceed normally to §0.3 below with the 3-source domain selection (SPEC → registry → default engineering).
+
+---
+
 ### 0.3 Domain Context Auto-Load (Three-Layer Domains v2.1 · 7 domínios físicos SEM exceção)
 
-Runs **AFTER** binding 0.1 + contract path resolution, **BEFORE** §0.5 Approved SPEC gate and §1 scope capture.
+Runs **AFTER** binding 0.1 + contract path resolution + 0.25 Task Resume hook (if ran), **BEFORE** §0.5 Approved SPEC gate and §1 scope capture.
 
 Purpose: Automatically load domain persona/rules and playbook into session context BEFORE asking any scope capture questions — for **ALL 7 domains including `engineering`**. Guarantees domain-specific hard rules (WCAG, design tokens, contracts §1-21 engineering quickref, SEO thresholds, copy length) are enforced from minute 0, not retroactively at ship gate.
+
+**HIGH-PRECEDENCE OVERRIDE (from §0.25):** If step 0.25 ran and returned a non-`engineering` `envelope.domain` → SKIP steps 1, 2, 3 below and use that value directly. Only fall through to 1→2→3 if the task envelope domain was explicitly `engineering` OR §0.25 did not run.
 
 Execution logic (in order — STOP at first match):
 1. **Parse SPEC candidate domain:** Read the SPEC YAML frontmatter (from §0.5 gate or user-provided existing SPEC path). Extract field `domain:`.

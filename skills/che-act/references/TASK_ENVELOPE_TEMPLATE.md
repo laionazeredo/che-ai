@@ -10,10 +10,13 @@
 |---|---|
 | Task ID | `T<NN>` |
 | Title | `<short imperative title, English>` |
+| domain: | `engineering \| product \| ux \| devops \| copywriting \| social \| seo-analytics` (default: engineering) |
+| expert_skills: | `[skill-a, skill-b]` or `[]` (auto-loaded by domain + envelope) |
 | Part of session (task-id slug) | `<slug>` |
 | Worktree | `<absolute path>` |
 | SM created on | `<ISO datetime>` |
 | Depends on tasks | `T1, T3` or `-` |
+| handoff_output: (must exist before dependents run) | `[tasks/T3/dev-handoff-dashboard.md, ...]` or `[]` |
 
 ## Goal / Business Value
 
@@ -52,6 +55,8 @@ Use Given / When / Then where possible:
 - [ ] No new dependencies added (or reuse-checked + SM-approved logged)
 - [ ] Passes all QA gates (build / lint / typecheck / tests)
 - [ ] Passes Compliance LIGHT (per-task stage)
+- [ ] (domain != engineering only) Domain gates passed — che-ship §0.9.5
+- [ ] handoff_output[] files written and SHA256 checksum logged (if this task is dependency for others)
 
 ---
 
@@ -131,6 +136,7 @@ A:
 - [ ] Blast radius: files count = `N` ; N ≤ 10 OR SM exception logged
 - [ ] All touched files in allowed list OR SM exception logged
 - [ ] No new dependencies without reuse check + SM approval
+- [ ] handoff_output files generated for dependents (if list non-empty)
 
 **Risks / Open Questions:**
 - ...

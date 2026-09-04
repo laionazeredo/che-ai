@@ -29,31 +29,41 @@
 
 ## Task Table
 
-| ID | Title | Depends on | Status | DONE criteria (testable) |
-|----|-------|-----------|--------|---------------------------|
-| T1 | `<imperative title>` | - | TODO | `<1-2 sentences: what is "done" for this task>` |
-| T2 | `<imperative title>` | T1 | TODO | ... |
-| T3 | `<imperative title>` | T2 | TODO | ... |
+| ID | Title | Depends on | Status | Domain | DONE criteria (testable) |
+|----|-------|-----------|--------|--------|---------------------------|
+| T1 | `<imperative title>` | - | TODO | engineering | `<1-2 sentences: what is "done" for this task>` |
+| T2 | `<imperative title>` | T1 | TODO | ux | ... |
+| T3 | `<imperative title>` | T2 | TODO | engineering | ... |
 
 Statuses flow: `TODO` → `IN_PROGRESS` → `SCOPE_OK` → `QA_OK` → `DONE`.
 Failure state: `BLOCKED:<reason short>`.
+
+Domain enum (7 slugs canônicos): `engineering` | `product` | `ux` | `devops` | `copywriting` | `social` | `seo-analytics`. Default = `engineering`.
 
 ## Dependency Graph (visual)
 
 ```mermaid
 graph TD
-    T1["T1: <title>"] --> T2["T2: <title>"]
-    T2 --> T3["T3: <title>"]
+    T1["T1: <title> <br/> domain: engineering"] --> T2["T2: <title> <br/> domain: ux"]
+    T2 --> T3["T3: <title> <br/> domain: engineering"]
 ```
+
+## Kahn Wave Groups (parallel execution)
+
+| Wave | Domains | Tasks | Can run in parallel? |
+|------|---------|-------|----------------------|
+| 0 | engineering | T1 | No (single) |
+| 1 | ux | T2 | — |
+| 2 | engineering | T3 | — |
 
 ## Legend — which agent owns each transition
 
 | Transition | Owner | Checklists applied |
 |---|---|---|
-| TODO → IN_PROGRESS | SM | TASK ENVELOPE fully written; blast radius approved |
+| TODO → IN_PROGRESS | SM | TASK ENVELOPE fully written; domain field set; handoff_output declared; blast radius approved |
 | IN_PROGRESS → SCOPE_OK | SM | Developer pre-report vs envelope AC match |
 | SCOPE_OK → QA_OK | QA | Build + Lint + Typecheck + Tests 0 failing |
-| QA_OK → DONE | Compliance | Per-task LIGHT scan, 0 CRITICAL / HIGH |
+| QA_OK → DONE | Compliance | Per-task LIGHT scan, 0 CRITICAL / HIGH + Domain gates if domain != engineering |
 | Any → BLOCKED | SM | 2 consecutive fails without progress; pending user input |
 
 ---
