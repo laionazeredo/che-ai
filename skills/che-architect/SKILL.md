@@ -6,9 +6,9 @@ description: "Iteratively helps architect complete systems from business ideas. 
 # Che Architect (System Design & Strategy)
 
 > **SHARED REFERENCES:**
-> - ADR documentation: `adr-architecture` skill
-> - Mermaid visualization: `mermaid-diagram-specialist` skill
-> - Database modeling: `database-architect` and `database-schema-designer` skills
+> - ADR documentation: `architecture-strategy-expert` skill
+> - Mermaid visualization: Use valid `mermaid` code blocks for user journeys, feature maps, C4 diagrams, and ERDs; keep labels clear and relationships explicit.
+> - Database modeling: `database-design-expert` skill
 > - Engineering principles: `engineering-contracts` (KISS, YAGNI, SOLID)
 
 This skill acts as a Strategic Technical Partner. It doesn't just write code; it designs the foundations of a system through an iterative dialogue with the user.

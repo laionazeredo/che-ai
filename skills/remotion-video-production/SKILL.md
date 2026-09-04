@@ -101,7 +101,7 @@ export const RemotionVideo: React.FC = () => {
     <>
       <Composition
         id="ProductIntro"
-        component={ProductIntro}
+        component={IntroScene}
         durationInFrames={1800} // 60s at 30fps
         fps={30}
         width={1920}

@@ -375,20 +375,19 @@ This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bila
 ## §6 SAVE (atomic write via contrato helpers)
 
 1. **Final sanitize slug:** `slug = frontmatter.spec_id` sanitized `[^a-zA-Z0-9_-] → -`.
-2. **Construir path ÚNICO via `che_output_path` (NUNCA manual):**
+2. **Construir path ÚNICO na RAIZ do workspace (NUNCA manual):**
    ```bash
-   # type=spec → subpasta specs/ (WORKSPACE_SHARED, durável multi-session)
-   # related_id = slug spec → agrupa versões futuras v2/v3 se houver
+   # related_id = "" para salvar na raiz de $CHE_WORKSPACE_SHARED/specs/
    # scope = workspace → DURÁVEL
-   SPEC_FINAL_PATH="$(che_output_path "spec" "spec" "${slug}" "workspace" "md")"
+   SPEC_FINAL_PATH="$(che_output_path "spec" "spec" "${slug}" "workspace" "md" "")"
    ```
-   Resultado exemplo: `$CHE_WORKSPACE_SHARED/specs/feat-refund-pipeline/20260902-120000-spec.md`
-   → Timestamp no prefix: se gerar v2 depois, `20260902-150000-spec.md` ordena DEPOIS automaticamente.
+   Resultado esperado: `$CHE_WORKSPACE_SHARED/specs/spec_<slug>.md`
+   → Note: O SM /che-act busca por `$CHE_WORKSPACE_SHARED/spec_*.md`. Vamos alinhar para que o spec seja salvo diretamente no padrão esperado pelo gate de execução.
 3. **Check existing overwrite:** If file already exists AND status in existing is Approved → ask "Overwrite Approved spec? Yes/No" before writing. Yes = overwrite. No = append suffix `-v2`, `-v3` to slug until unused.
 4. **Escrever EXCLUSIVAMENTE via atomic write helper:**
    ```bash
-   # NÃO escreva .tmp manual. Use o helper canônico tmp → mv atômico:
-   cat <<'SPEC_EOF' | che_write_file_atomic "$SPEC_FINAL_PATH"
+   # Salva na raiz do workspace shared para ser visível ao /che-act
+   che_write_file_atomic "$CHE_WORKSPACE_SHARED/spec_${slug}.md" <<'SPEC_EOF'
    ---
    # YAML frontmatter completo aqui
    ---
