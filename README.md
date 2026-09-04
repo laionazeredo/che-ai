@@ -1,4 +1,4 @@
-# Che AI 🧉
+# Che AI ☭
 
 **Che** is an IDE-agnostic Agentic Engineering Harness designed to run inside modern AI coding assistants (such as Trae, Codex, Cursor, Claude Code, and OpenCode). 
 
