@@ -4,14 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHE_REPO="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
-AGENTS_HOME="${AGENTS_HOME:-$HOME/.agents}"
-SKILLS_TARGET="$AGENTS_HOME/skills"
-COMMANDS_TARGET="$CODEX_HOME/commands"
+CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
+SKILLS_TARGET="$CLAUDE_HOME/skills"
+COMMANDS_TARGET="$CLAUDE_HOME/commands"
 
 echo "Che repo      : $CHE_REPO"
-echo "Codex home    : $CODEX_HOME"
-echo "Agents home   : $AGENTS_HOME"
+echo "Claude home   : $CLAUDE_HOME"
 echo "Skills target : $SKILLS_TARGET"
 echo "Commands target: $COMMANDS_TARGET"
 
@@ -44,13 +42,13 @@ if not any(line.startswith("description:") for line in frontmatter):
 PY
 }
 
-mkdir -p "$CODEX_HOME"
+mkdir -p "$CLAUDE_HOME"
 mkdir -p "$SKILLS_TARGET"
 mkdir -p "$COMMANDS_TARGET"
 
-# 1. Link AGENTS.md
-AGENTS_TARGET="$CODEX_HOME/AGENTS.md"
-AGENTS_SOURCE="$SCRIPT_DIR/AGENTS.md"
+# 1. Link CLAUDE.md
+AGENTS_TARGET="$CLAUDE_HOME/CLAUDE.md"
+AGENTS_SOURCE="$SCRIPT_DIR/CLAUDE.md"
 
 if [ -e "$AGENTS_TARGET" ] && [ ! -L "$AGENTS_TARGET" ]; then
   echo "WARN: $AGENTS_TARGET already exists and is not a symlink. Backing up..."
@@ -95,55 +93,53 @@ for cmd_file in "$CHE_REPO"/commands/*.md; do
   INSTALLED_COMMANDS=$((INSTALLED_COMMANDS + 1))
 done
 
-# 4. Setup Hooks
-HOOKS_CONFIG="$CODEX_HOME/hooks.json"
-cat <<EOF > "$HOOKS_CONFIG"
-{
-  "hooks": {
+# 4. Setup Hooks in settings.json
+# Note: Claude Code uses settings.json for hooks. 
+# This script uses python to merge the hooks configuration into existing settings.json.
+python3 - "$CHE_REPO" "$CLAUDE_HOME" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+che_repo = sys.argv[1]
+claude_home = Path(sys.argv[2])
+settings_path = claude_home / "settings.json"
+
+new_hooks = {
     "PreToolUse": [
-      {
-        "type": "command",
-        "command": "python3 $CHE_REPO/hooks/pretooluse-worktree-binding.py",
-        "statusMessage": "Verifying worktree binding..."
-      }
+        {
+            "command": f"python3 {che_repo}/hooks/pretooluse-worktree-binding.py"
+        }
     ],
     "PostToolUse": [
-      {
-        "type": "command",
-        "command": "python3 $CHE_REPO/hooks/posttooluse-3layer-dedup.py",
-        "statusMessage": "Deduplicating rules..."
-      },
-      {
-        "type": "command",
-        "command": "python3 $CHE_REPO/hooks/posttooluse-lang-pt-check.py",
-        "statusMessage": "Checking language consistency..."
-      }
+        {
+            "command": f"python3 {che_repo}/hooks/posttooluse-3layer-dedup.py"
+        },
+        {
+            "command": f"python3 {che_repo}/hooks/posttooluse-lang-pt-check.py"
+        }
     ]
-  }
 }
-EOF
 
-# 5. Enable hooks in config.toml if not already enabled
-CONFIG_TOML="$CODEX_HOME/config.toml"
-if [ -f "$CONFIG_TOML" ]; then
-  if ! grep -q "hooks = true" "$CONFIG_TOML"; then
-    echo -e "\n[features]\nhooks = true" >> "$CONFIG_TOML"
-  fi
-else
-  cat <<EOF > "$CONFIG_TOML"
-[features]
-hooks = true
+settings = {}
+if settings_path.exists():
+    try:
+        with open(settings_path, "r") as f:
+            settings = json.load(f)
+    except Exception:
+        pass
 
-[shell_environment_policy]
-inherit = "all"
-EOF
-fi
+settings["hooks"] = new_hooks
+
+with open(settings_path, "w") as f:
+    json.dump(settings, f, indent=2)
+PY
 
 echo
-echo "Codex Che adapter installed successfully!"
+echo "Claude Code Che adapter installed successfully!"
 echo "Skills linked   : $INSTALLED_SKILLS"
 echo "Commands linked : $INSTALLED_COMMANDS"
-echo "Hooks configured: $HOOKS_CONFIG"
+echo "Hooks configured in: $CLAUDE_HOME/settings.json"
 echo
 echo "For this checkout use:"
 echo "  export CHE_HOME=\"$CHE_REPO\""

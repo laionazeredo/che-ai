@@ -1,6 +1,6 @@
-# Shared Engineering Che — Codex Adapter
+# Shared Engineering Che — Cursor Adapter
 
-This Codex environment uses the shared Trae/Codex Engineering Che.
+This Cursor environment uses the shared Trae/Codex/Claude/Cursor Engineering Che.
 
 ## Canonical engineering rules
 
@@ -33,8 +33,7 @@ The Che runtime is resolved through:
 
 $CHE_HOME/contracts/che_sessions_contract.sh
 
-Codex sessions use CHE_SESSION_ID.
-Trae compatibility continues through SESSION_ID.
+Cursor sessions use SESSION_ID (compatible with Trae).
 
 ## Worktree safety
 
@@ -42,8 +41,9 @@ One Che session is bound to one worktree.
 
 Generated Che artifacts must use the canonical session contract and must never be written inside the user's source worktree.
 
-## Skills
+## Rules & Skills
 
 Prefer Che skills from the shared skills directory.
 
-When a Che skill conflicts with generic agent behavior, follow the Che skill.
+In Cursor, skills are mapped to `.cursor/rules/*.mdc`.
+Slash commands are available via the Agent interface.

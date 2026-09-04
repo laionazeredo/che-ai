@@ -145,7 +145,7 @@ Granularity:
 
 ### 13. 🟢 LANGUAGE CONFIGURATION — 4 EIXOS INDEPENDENTES (por projeto/sessão, NUNCA MISTURAR)
 
-> **HARD RULE VERBATIM USER (contractual):** "nunca misturar linguagens". Cada eixo abaixo tem EXATAMENTE 1 idioma configurado por arquivo/sessão/projeto. Strings UI traduzidas = artefato de i18n em JSON separado (não conta como LANG_CODE).
+> **HARD RULE VERBATIM USER (contractual):** "nunca misturar linguagens". Cada eixo abaixo tem EXATAMENTE 1 idioma configurado por arquivo/sessão/projeto. Strings UI traduzidas = artefato de i18n em JSON separado (não conta como LANG_CODE). **ALL implementation MUST maintain compatibility with Trae, Codex, Claude Code, and Cursor.**
 
 **Precedência de configuração (HIGH → LOW):**
 1. **Override sessão Level 1 registry flags** (`che_registry_append_jsonl … FLAGS … '{"flags":{"LANG_DOCS":"pt-BR"}}'`) — temporário, só esta sessão.

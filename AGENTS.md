@@ -7,11 +7,12 @@ This file is intended for **AI coding agents** (Trae, Cursor, Codex, Claude Code
 **Che** is an IDE-agnostic, plugin-like framework that simulates an Agile team (Scrum Master, Developer, QA, UI Designer, Compliance, etc.) inside an AI coding assistant. It enforces Software Development Life Cycle (SDLC) best practices, automated quality gates, and deterministic project memory.
 
 - **Repository Name**: `che-ai` (formerly `trae-config`).
-- **Installation Path**: By default, it runs from `~/.trae` on the user's machine (legacy Trae path kept for convenience), but the internal variables use the `CHE_` prefix.
+- **Installation Path**: By default, it runs from `~/.trae` on the user's machine.
+- **Multi-Agent Adapters**: `adapters/` (links core logic to Codex, Claude Code, and Cursor).
 
 ## 1. Project Architecture (3-Layer Architecture)
 
-Che follows a strict 3-layer architecture. **HARD STOP:** Never duplicate rule bodies across layers.
+Che follows a strict 3-layer architecture. **HARD STOP:** Never duplicate rule bodies across layers. **ALL new features MUST be implemented in compatibility with Codex, Claude Code, Cursor, and Trae.**
 
 - **Layer 1 (User Profiles & Runbooks)**: `domains/` and user-level configs. Used for high-level domain specific instructions (e.g., UX, Product, Engineering).
 - **Layer 2 (Framework Rules)**: `CHE_RULES.md` and `CHE_COMMANDS.md`. These files ONLY contain titles and links to Layer 3 skills. They should **not** contain the logic/body of the rule.

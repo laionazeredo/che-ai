@@ -1,6 +1,6 @@
-# Shared Engineering Che — Codex Adapter
+# Shared Engineering Che — Claude Code Adapter
 
-This Codex environment uses the shared Trae/Codex Engineering Che.
+This Claude environment uses the shared Trae/Codex/Claude Engineering Che.
 
 ## Canonical engineering rules
 
@@ -33,8 +33,7 @@ The Che runtime is resolved through:
 
 $CHE_HOME/contracts/che_sessions_contract.sh
 
-Codex sessions use CHE_SESSION_ID.
-Trae compatibility continues through SESSION_ID.
+Claude sessions use SESSION_ID.
 
 ## Worktree safety
 

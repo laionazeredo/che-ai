@@ -498,4 +498,9 @@ else
   if [ "$UPDATE" -eq 1 ]; then
     echo "  5. Rollback manual: se quiser desfazer um arquivo, mv <arquivo>.bak-${TIMESTAMP} <arquivo>"
   fi
+  
+  # PASSO FINAL: Instalar adapters para outros agentes (Codex, Claude Code)
+  if [ -f "$TARGET/scripts/setup-adapters.sh" ]; then
+    bash "$TARGET/scripts/setup-adapters.sh"
+  fi
 fi

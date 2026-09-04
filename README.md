@@ -2,7 +2,17 @@
 
 **Che** is an IDE-agnostic Agentic Engineering Harness designed to run inside modern AI coding assistants (such as Trae, Codex, Cursor, Claude Code, and OpenCode). 
 
-Instead of treating the AI as just an autocomplete tool, Che acts as a "plugin" that orchestrates the AI to simulate a full Agile team—including a Scrum Master, Software Engineer, QA, UX Designer, and Compliance Officer. It enforces strict Software Development Life Cycle (SDLC) practices, deterministic project memory, and automated quality gates.
+It acts as a "plugin" that orchestrates the AI to simulate a full Agile team—including a Scrum Master, Software Engineer, QA, UX Designer, and Compliance Officer. It enforces strict Software Development Life Cycle (SDLC) practices, deterministic project memory, and automated quality gates.
+
+## 🚀 Multi-Agent Support
+
+Che is designed to be portable across different AI agents. After installation, it automatically configures adapters for:
+- **Trae**: Native support via root directory.
+- **Codex**: Slash commands in `~/.codex/commands/` and skills in `~/.agents/skills/`.
+- **Claude Code**: Slash commands in `~/.claude/commands/` and skills in `~/.claude/skills/`.
+- **Cursor**: Integrated rules and skills via `.cursor/rules/`.
+
+All agents share the same **Engineering Contracts**, **Expert Skills**, and **Durable Memory**, ensuring a consistent experience regardless of the tool you use.
 
 ## 🚀 Quick Install
 
