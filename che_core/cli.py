@@ -200,6 +200,72 @@ def main():
         help="Busca híbrida BM25 + rerank vetorial (default True).",
     )
 
+    # WORKSPACE MGMT SUBCOMMANDS (L1) =============================================
+    parser_ws = subparsers.add_parser("workspace", help="Gerencia workspaces Che (L1 workspaces root).")
+    ws_subs = parser_ws.add_subparsers(dest="ws_cmd", required=True)
+
+    pw_add = ws_subs.add_parser("add")
+    pw_add.add_argument("name", help="Nome do workspace (será slugged).")
+    pw_add.add_argument("--worktree-root", default=None, help="Worktree opcional para definir workspace principal.")
+
+    ws_subs.add_parser("list", help="Lista workspaces existentes + projects count.")
+
+    pw_remove = ws_subs.add_parser("remove")
+    pw_remove.add_argument("name", help="Workspace slug a mover para lixeira (NÃO apaga, move para .trash/).")
+    pw_remove.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=True,
+        help="Default: só mostra, NÃO move. Set --no-dry-run para efetivar.",
+    )
+    pw_remove.add_argument(
+        "--no-dry-run", dest="dry_run", action="store_false", help="Efetivamente move. Requer também --confirm."
+    )
+    pw_remove.add_argument(
+        "--confirm",
+        dest="confirmed",
+        action="store_true",
+        default=False,
+        help="Safety gate obrigatório após revisão do --dry-run.",
+    )
+
+    pw_restore = ws_subs.add_parser("restore")
+    pw_restore.add_argument("trash_slug", help="Slug da entrada na lixeira (ex: workspace--foo--20260904-235959).")
+
+    ws_subs.add_parser("trash-list", help="Conteúdo da lixeira .trash/.")
+
+    # PROJECT MGMT SUBCOMMANDS (L2) =============================================
+    parser_proj = subparsers.add_parser("project", help="Gerencia projects L2 (.registry/projects/<slug>).")
+    proj_subs = parser_proj.add_subparsers(dest="proj_cmd", required=True)
+
+    pj_init = proj_subs.add_parser("init")
+    pj_init.add_argument("worktree_root", help="Worktree root do projeto a inicializar.")
+    pj_init.add_argument("--workspace", default=None, help="Override workspace name (default = resolve via paths.py).")
+    pj_init.add_argument(
+        "--domain",
+        default="engineering",
+        help="Domínio Politburo default: engineering|ux|product|devops|copywriting|social|seo-analytics.",
+    )
+    pj_init.add_argument(
+        "--name", dest="friendly_name", default=None, help="Nome amigável (default: slug from git origin)."
+    )
+    pj_init.add_argument("--session-id", default="project-init-cli", help="Session id para criar L3 dirs iniciais.")
+
+    proj_subs.add_parser("list", help="Lista projects L2 + arquitetura/profile/db existentes.")
+
+    pj_remove = proj_subs.add_parser("remove")
+    pj_remove.add_argument("project_slug", help="Slug do projeto a mover para lixeira (NÃO apaga, move para .trash/).")
+    pj_remove.add_argument("--dry-run", action="store_true", default=True, help="Default: só mostra, NÃO move.")
+    pj_remove.add_argument(
+        "--no-dry-run", dest="dry_run", action="store_false", help="Efetivamente move. Requer também --confirm."
+    )
+    pj_remove.add_argument(
+        "--confirm", dest="confirmed", action="store_true", default=False, help="Safety gate obrigatório."
+    )
+
+    pj_restore = proj_subs.add_parser("restore")
+    pj_restore.add_argument("trash_slug", help="Slug da entrada na lixeira.")
+
     args = parser.parse_args()
 
     if args.command == "compute_paths":
@@ -333,6 +399,48 @@ def main():
                 hybrid=args.hybrid,
             )
             _print_json(res)
+        return
+
+    if args.command == "workspace":
+        from che_core.workspaces import add_workspace, list_trash, list_workspaces, remove_workspace, restore_workspace
+
+        if args.ws_cmd == "add":
+            res = add_workspace(args.name, worktree_root=args.worktree_root)
+        elif args.ws_cmd == "list":
+            res = list_workspaces()
+        elif args.ws_cmd == "remove":
+            res = remove_workspace(args.name, dry_run=args.dry_run, confirmed=args.confirmed)
+        elif args.ws_cmd == "restore":
+            res = restore_workspace(args.trash_slug)
+        elif args.ws_cmd == "trash-list":
+            res = list_trash()
+        else:
+            parser.error(f"Unknown workspace subcommand: {args.ws_cmd}")
+            return
+        _print_json(res)
+        return
+
+    if args.command == "project":
+        from che_core.workspaces import init_project, list_projects, remove_project, restore_project
+
+        if args.proj_cmd == "init":
+            res = init_project(
+                args.worktree_root,
+                workspace_name=args.workspace,
+                domain=args.domain,
+                friendly_name=args.friendly_name,
+                session_id=args.session_id,
+            )
+        elif args.proj_cmd == "list":
+            res = list_projects()
+        elif args.proj_cmd == "remove":
+            res = remove_project(args.project_slug, dry_run=args.dry_run, confirmed=args.confirmed)
+        elif args.proj_cmd == "restore":
+            res = restore_project(args.trash_slug)
+        else:
+            parser.error(f"Unknown project subcommand: {args.proj_cmd}")
+            return
+        _print_json(res)
         return
 
 
