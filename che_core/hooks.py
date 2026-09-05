@@ -1,3 +1,4 @@
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -372,3 +373,72 @@ def posttooluse_3layer_dedup(input_json: Dict[str, Any]) -> Dict[str, Any]:
     warning_msg = f"{layer_desc} | {action_needed} | Top hits: {top_hits}"
 
     return {"decision": "allow", "additionalContext": warning_msg}
+
+
+def posttooluse_git_worktree(input_json: Dict[str, Any]) -> Dict[str, Any]:
+    """Hook PONTO-3: detecta `git worktree add/remove/prune` via RunCommand e auto-manage L3 .wt/__branch/
+
+    NÃO é um wrapper de `git worktree` — NÃO criamos comando novo.
+    Só detectamos quando o usuário usa a ferramenta canônica (git) e enriquecemos o Che.
+    """
+    tool_name = input_json.get("toolName") or input_json.get("tool_name", "")
+    tool_args = input_json.get("toolArgs") or input_json.get("tool_input", {})
+
+    if tool_name not in {"RunCommand", "Bash", "exec_command"}:
+        return {"decision": "allow", "reason": "Hook worktree: não é um comando shell."}
+
+    command = ""
+    for key in ("command", "cmd", "script"):
+        if isinstance(tool_args.get(key), str):
+            command = tool_args[key]
+            break
+
+    if not command:
+        return {"decision": "allow", "reason": "Hook worktree: sem texto de comando shell."}
+
+    cmd_clean = re.sub(r"\s+", " ", command.strip())
+
+    worktree_add_match = re.search(r"git(?:\.exe)?\s+worktree\s+add\s+(?:-[^\s]+\s+)*([^\s|;|&]+)", cmd_clean)
+    worktree_remove_match = re.search(r"git(?:\.exe)?\s+worktree\s+(?:remove|prune)\b", cmd_clean)
+
+    if not worktree_add_match and not worktree_remove_match:
+        return {"decision": "allow", "reason": "Hook worktree: nenhum `git worktree add/remove/prune` detectado."}
+
+    from che_core.workspaces import cleanup_worktree_l3, ensure_worktree_l3_dirs
+
+    notes: List[str] = []
+    acted = False
+
+    if worktree_add_match:
+        worktree_path = worktree_add_match.group(1).strip().strip('"').strip("'")
+        if worktree_path:
+            try:
+                resolved = Path(worktree_path).expanduser()
+                if not resolved.is_absolute():
+                    cwd = tool_args.get("cwd") or str(Path.cwd())
+                    resolved = (Path(cwd) / resolved).resolve()
+                res = ensure_worktree_l3_dirs(str(resolved), session_id="git-worktree-add-hook")
+                acted = True
+                notes.append(
+                    f"AUTO: criado L3 .wt/__branch/ para nova worktree detectada em {resolved}. "
+                    f"CHE_WORKSPACE_SHARED={res.get('CHE_WORKSPACE_SHARED')}."
+                )
+            except Exception as e:
+                notes.append(f"WARN: falhou bootstrap L3 para {worktree_path}: {e}")
+
+    if worktree_remove_match:
+        cwd = tool_args.get("cwd") or str(Path.cwd())
+        try:
+            res = cleanup_worktree_l3(str(cwd))
+            acted = True
+            notes.append(
+                f"AUTO: L3 movido para lixeira após git worktree remove/prune detectado. Result={json.dumps(res, default=str)}."
+            )
+        except Exception as e:
+            notes.append(f"WARN: falhou cleanup L3 em cwd={cwd}: {e}")
+
+    ctx = " | ".join(notes) if notes else ""
+    out: Dict[str, Any] = {"decision": "allow", "reason": f"Hook worktree: acted={acted}."}
+    if ctx:
+        out["additionalContext"] = f"[git worktree hook] {ctx}"
+    return out
