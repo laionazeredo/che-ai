@@ -152,7 +152,9 @@ def test_copy_install_moves_whitelist_preserves_blacklist(tmp_path):
     trash_dir = Path(step_move["trash_dir"])
     assert trash_dir.is_dir()
     assert step_move["moved_count"] >= 7  # CHE_RULES.md, CHE_COMMANDS, README, che_core, skills, commands, scripts
-    assert step_move["kept_blacklist_count"] >= 4  # user_rules, bindings, memory, node_modules (copy-install não tem .git)
+    assert (
+        step_move["kept_blacklist_count"] >= 4
+    )  # user_rules, bindings, memory, node_modules (copy-install não tem .git)
 
     # Whitelist FORA de che_home / DENTRO da trash
     assert not (che / "CHE_RULES.md").exists()
