@@ -13,7 +13,7 @@ The agent MUST recognize these and react immediately.
 > **Diferença conceitual:** Commands = UX entry point (slash `/che-X`) ↔ Skills = conteúdo/executor do trabalho.
 > NÃO transformar TODOS os commands em skills. A separação abaixo é intencional (KISS).
 
-### Categoria A — 21 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invocam Skill / módulo CLI correspondente:
+### Categoria A — 22 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invocam Skill / módulo CLI correspondente:
 | Command | Skill / módulo | Por que wrapper separado? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
@@ -36,6 +36,7 @@ The agent MUST recognize these and react immediately.
 | `/che-task [list|show|resume|set-status|graph-summary]` | `che_core.task_engine` | Multi-domain task graph picker + bind ACTIVE_TASK_ID no registry + recomenda comando downstream (che-act / che-design / che-spec) por domínio da task envelope. |
 | `/che-workspace [add|list|remove|restore|trash-list]` | `che_core.workspaces` | **NOVO:** Gerencia workspaces L1 (`~/.che-workspaces/<slug>/`). 3 safety gates: dry-run default + --confirm obrigatório + move para lixeira (nunca rm -rf). Wrapper preflight resolve workspace context bindings. |
 | `/che-project [init|list|remove|restore]` | `che_core.workspaces` | **NOVO:** Inicializa scaffold determinístico L2 (.registry/projects/<slug>/) com 8 artefatos (architecture, project_profile, roles, roadmap, product_context, registry.jsonl, _db) + garante L3 dirs `.wt/__branch/`. Wrapper preflight valida domínio Politburo. |
+| `/che-eject [plan|trash-list|restore]` | `che_core.eject` | **NOVO:** Ejeta Che de forma segura e reversível. Detecta install_kind (git-clone / copy-install), desinstala adapters via scripts oficiais, move whitelist para `.trash/che-eject/` (nunca rm), limpa snippets `.gitignore` de clientes + restore. 3 safety gates obrigatórios: `--dry-run default`, `--confirmed`, `--i-know-what-im-doing`. Blacklist absoluta: `user_rules/`, `bindings/registry.jsonl`, `memory/`, `.git/`, `node_modules/`. |
 | `/che-query --sql "..." [--bind ...] [--force]` | `che_core.state_store` | SQL parametrizada (?) no state store SQLite. Default SÓ READ (SELECT / EXPLAIN / PRAGMA). Para writes precisa `--force` explícito. |
 | `/che-sanitize [--max-age-days=N] [--max-decisions=N] [--dry-run]` | `che_core.state_store` | Sanitize state store: purge decisions/bindings/sessions antigos + VACUUM. **`--dry-run` OBRIGATÓRIO default antes de efetivar (flag só passa no 2º comando sem dry-run. **SSOT filesystem INTACTO**: purge reversível via `rebuild-index`. |
 | `/che-search "..." [--top-k=N] [--scope=all\|tasks\|specs\|decisions\|envelopes]` | `che_core.state_store` | Full-text search FTS5 + BM25 ranking. Pré-flight: rebuild se DB mais velho que decisions.log mtime. |
