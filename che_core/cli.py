@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from che_core.decisions import append_decision_jsonl
 from che_core.paths import compute_paths, ensure_session_dirs
@@ -266,6 +267,99 @@ def main():
     pj_restore = proj_subs.add_parser("restore")
     pj_restore.add_argument("trash_slug", help="Slug da entrada na lixeira.")
 
+    # EJECT SUBCOMMANDS (desinstalação segura do Che) ============================
+    parser_eject = subparsers.add_parser(
+        "eject",
+        help="Ejetar Che de forma segura: desinstala adapters, move não-blacklist para lixeira, restaura.",
+    )
+    parser_eject.add_argument(
+        "--che-home",
+        default=None,
+        help="Override do diretório Che (default: resolve ~/.trae automaticamente).",
+    )
+    parser_eject.add_argument(
+        "--trash-root",
+        default=None,
+        help="Override da raiz da lixeira (default: ~/.che-workspaces/.trash/che-eject).",
+    )
+    parser_eject.add_argument(
+        "--keep-git-repo",
+        action="store_true",
+        default=True,
+        help="(git-clone apenas) Mantém .git/ intacto pós-eject (default True). Use --no-keep-git-repo para remover junto.",
+    )
+    parser_eject.add_argument(
+        "--no-keep-git-repo",
+        dest="keep_git_repo",
+        action="store_false",
+        help="Remove também o diretório .git/ no eject (apenas install_kind copy-install ou se explicitamente sobrescrito).",
+    )
+    parser_eject.add_argument(
+        "--scan-client-repos",
+        nargs="*",
+        default=None,
+        help="Lista opcional de projetos clientes para limpar o snippet CHE PLANNING ARTIFACTS BLACKLIST do .gitignore.",
+    )
+    parser_eject.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=True,
+        help="Default: só exibe o plano, NÃO escreve nada. Use --apply para efetivar.",
+    )
+    parser_eject.add_argument(
+        "--apply",
+        dest="dry_run",
+        action="store_false",
+        help="Efetivamente aplica o eject. Requer também --confirmed e --i-know-what-im-doing.",
+    )
+    parser_eject.add_argument(
+        "--confirmed",
+        action="store_true",
+        default=False,
+        help="Safety gate 1/2: confirmação explícita após revisar --dry-run.",
+    )
+    parser_eject.add_argument(
+        "--i-know-what-im-doing",
+        action="store_true",
+        default=False,
+        help="Safety gate 2/2: confirmação dupla de que o usuário tem ciência do risco.",
+    )
+    eject_subs = parser_eject.add_subparsers(dest="eject_cmd", required=True)
+
+    eject_subs.add_parser(
+        "plan",
+        help="(default) Gera o plano de eject, aplica ou só exibe de acordo com --dry-run/--apply.",
+    )
+
+    eject_subs.add_parser(
+        "trash-list",
+        help="Lista todos os ejects já enviados para a lixeira (com manifests JSON).",
+    )
+
+    pe_restore = eject_subs.add_parser(
+        "restore",
+        help="Restaura um eject anterior de volta, movendo da lixeira para che_home e rodando setup-adapters.",
+    )
+    pe_restore.add_argument("trash_slug", help="Slug da entrada na lixeira (ex: che-eject--abc123--20260904-235959).")
+    pe_restore.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=True,
+        help="Default: só exibe o plano de restore. Use --apply para efetivar.",
+    )
+    pe_restore.add_argument(
+        "--apply",
+        dest="dry_run",
+        action="store_false",
+        help="Efetivamente restaura. Requer também --confirmed.",
+    )
+    pe_restore.add_argument(
+        "--confirmed",
+        action="store_true",
+        default=False,
+        help="Safety gate obrigatório para aplicar o restore.",
+    )
+
     args = parser.parse_args()
 
     if args.command == "compute_paths":
@@ -439,6 +533,40 @@ def main():
             res = restore_project(args.trash_slug)
         else:
             parser.error(f"Unknown project subcommand: {args.proj_cmd}")
+            return
+        _print_json(res)
+        return
+
+    if args.command == "eject":
+        from che_core.eject import eject_apply, eject_plan, eject_restore, eject_trash_list
+
+        if args.eject_cmd == "plan":
+            scan_repos = [Path(p).expanduser().resolve() for p in (args.scan_client_repos or [])] or None
+            plan = eject_plan(
+                che_home=Path(args.che_home).expanduser().resolve() if args.che_home else None,
+                trash_root=Path(args.trash_root).expanduser().resolve() if args.trash_root else None,
+                keep_git_repo=args.keep_git_repo,
+                scan_client_repos=scan_repos,
+            )
+            res = eject_apply(
+                plan,
+                dry_run=args.dry_run,
+                confirmed=args.confirmed,
+                i_know_what_im_doing=args.i_know_what_im_doing,
+            )
+        elif args.eject_cmd == "trash-list":
+            res = eject_trash_list(
+                trash_root=Path(args.trash_root).expanduser().resolve() if args.trash_root else None,
+            )
+        elif args.eject_cmd == "restore":
+            res = eject_restore(
+                args.trash_slug,
+                trash_root=Path(args.trash_root).expanduser().resolve() if args.trash_root else None,
+                dry_run=args.dry_run,
+                confirmed=args.confirmed,
+            )
+        else:
+            parser.error(f"Unknown eject subcommand: {args.eject_cmd}")
             return
         _print_json(res)
         return
