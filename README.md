@@ -184,15 +184,17 @@ Como ler o fluxo acima com Politburo:
 
 ---
 
-## 🛠 Comandos Slash (19 heavy + 5 light)
+## 🛠 Comandos Slash (22 heavy + 5 light)
 
-Uma vez instalado, o Che expõe suas capacidades diretamente na interface de chat via comandos slash. Os 5 NOVOS (Sprint 1/2/3) estão marcados com ✨.
+Uma vez instalado, o Che expõe suas capacidades diretamente na interface de chat via comandos slash. Os 3 NOVOS de workspace/projeto/eject estão marcados com ✨.
 
-### Categoria A — 19 Heavy Commands
+### Categoria A — 22 Heavy Commands
 
 | Comando | O que faz (resumo) | Politburo Domain Default |
 |---|---|---|
 | `/che-architect` | Parceiro estratégico de arquitetura de sistemas (stack, infra, segurança, compliance). | devops + engineering |
+| `/che-workspace [list\|add\|remove\|trash-list\|restore]` | ✨ **NOVO**: Gerencia workspaces L1 (`~/.che-workspaces/<slug>/`). 3 safety gates + trash canônico. | engineering |
+| `/che-project [list\|init\|remove\|trash-list\|restore]` | ✨ **NOVO**: Inicializa projeto L2 (scaffold `architecture.md`, `project_profile.md`, registry) e remove via trash. | engineering |
 | `/che-xray [worktree]` | Scan repo → gera project_profile.md 12 seções. | engineering |
 | `/che-onboarding [worktree]` | Contexto humano interativo (roadmap, personas, lógica negócio). | product (+ copywriting / ux se ativado) |
 | `/che-spec [input] [worktree] [slug]` | Gera/valida Especificação de Execução (SPEC Approved). | product |
@@ -207,13 +209,14 @@ Uma vez instalado, o Che expõe suas capacidades diretamente na interface de cha
 | `/che-pr-comments` | Classifica e tria comentários do GitHub PR. | engineering |
 | `/che-ci-fix` | Diagnóstico e fix de falha de CI GitHub Actions. | devops |
 | `/che-design` · `/che-figma` | Orquestra design UI/UX ou social media via open-pencil MCP. | **ux** (default) / social |
-| `/che-export [--include-db] [--db-size-limit-mb=N]` | 📦 Empacota L2+L3 para portabilidade. Flags novas abaixo. | engineering |
-| `/che-import [--include-db]` | 📦 Restaura archive. Novo: `--include-db` se quiser trazer também SQLite caches. | engineering |
-| `/che-task [list\|show\|resume\|set-status]` | ✨ **NOVO Sprint 1**: Multi-domain DAG task picker. Resume grava ACTIVE_* flags + recomenda comando downstream por domain. | *(lê envelope domain:)* |
-| `/che-query --sql "..." [--bind ...] [--force]` | ✨ **NOVO Sprint 2**: SQL parametrizada ? no state SQLite. Read-only DEFAULT. | engineering |
-| `/che-sanitize [--max-age-days=180] [--max-decisions=5000] [--dry-run]` | ✨ **NOVO Sprint 2**: Purge + VACUUM. dry-run DEFAULT ON. | engineering |
-| `/che-search "..." [--top-k=N] [--scope=...]` | ✨ **NOVO Sprint 2**: FTS5 BM25 lexical. | engineering |
-| `/che-rag [build-index\|search] [--provider=auto/none/openai/anthropic]` | ✨ **NOVO Sprint 3**: RAG híbrido BM25+vetor. `none` SEMPRE funciona (zero pip). | engineering |
+| `/che-export [--include-db] [--db-size-limit-mb=N]` | 📦 Empacota L2+L3 para portabilidade. | engineering |
+| `/che-import [--include-db]` | 📦 Restaura archive. SQLite é opcional via `--include-db`. | engineering |
+| `/che-task [list\|show\|resume\|set-status]` | Multi-domain DAG task picker. Resume grava ACTIVE_* flags. | *(lê envelope domain:)* |
+| `/che-query --sql "..." [--bind ...] [--force]` | SQL parametrizada no state SQLite. Read-only DEFAULT. | engineering |
+| `/che-sanitize [--max-age-days=180] [--max-decisions=5000] [--dry-run]` | Purge + VACUUM. dry-run DEFAULT ON. | engineering |
+| `/che-search "..." [--top-k=N] [--scope=...]` | FTS5 BM25 lexical. | engineering |
+| `/che-rag [build-index\|search] [--provider=auto/none/openai/anthropic]` | RAG híbrido BM25+vetor. `none` sempre funciona (zero pip). | engineering |
+| `/che-eject [plan\|trash-list\|restore]` | ✨ **NOVO**: Ejetar Che com segurança. Desinstala adapters, move whitelist para trash, limpa snippets .gitignore. | engineering |
 
 ### Categoria B — 5 Light Commands (<15 linhas, inline, não viram skill)
 `/che-status`, `/che-skip`, `/che-decisions`, `/che-summary`, `/che-abort`.
@@ -249,6 +252,150 @@ Restaura um projeto a partir de um archive gerado por `/che-export`.
 - **Sem `--include-db`**: apenas L2+L3 metadados. State e RAG são reconstruídos no destino via `/che state rebuild-index`.
 - **Com `--include-db`**: também copia `_db/*.sqlite` de volta para a pasta CHE_PROJECT_DIR do destino. Se já houver DB com mesmo nome → resolve conflito adicionando sufixo `--import-YYYYmmdd-HHMM` (não destrói nada, não overwrita).
 - Qualquer conflito de slug de projeto → sufixo timestamp não destrutivo.
+
+---
+
+## 🗂 Gerenciamento Determinístico Workspace (L1) + Projetos (L2)
+
+O Che **não cria `.trae/` dentro dos seus projetos cliente**. Toda memória, arquitetura e artefatos ficam em uma **hierarquia canônica 4 níveis** em `~/.che-workspaces/`, gerenciada por comandos idempotentes e 3 safety gates iguais em toda operação destrutiva: `--dry-run` sempre default ON + `--confirmed` + `--i-know-what-im-doing` obrigatórios. NUNCA é usado `rm -rf` — tudo é movido para uma **lixeira canônica** com restore disponível.
+
+### 🧩 O que é L1 Workspace vs L2 Projeto
+
+| Nível | Caminho físico | O que guarda | Quando criar |
+|---|---|---|---|
+| **L1 Workspace** | `~/.che-workspaces/<ws-slug>/` | Agrupa N projetos de uma mesma **organização / equipe / contexto** (ex: `flockr`, `general-config`, `cliente-xpto`). | Uma vez por equipe/empresa. Normalmente você tem 2~3 workspaces no máximo. |
+| **L2 Projeto** | `<L1>/<repo-slug>/.project/` | Dados **duráveis** do projeto: `architecture.md`, `project_profile.md`, `registry.jsonl`, bancos SQLite L2 (`che_state.sqlite`, `che_rag.sqlite`). Sobrevive a troca de worktree. | Um por repositório cliente. Criado **antes** de rodar `/che-spec` ou `/che-act`. |
+| **L3 Worktree** | `<L2>/../.wt/__<branch-slug>/` | Dados **compartilhados entre sessões** da mesma branch: `task_graph.md`, `decisions.log.jsonl`, `spec_*.md`, envelopes, `qa/`, `designs/`. Criado **automaticamente via hook PostToolUse** quando você roda `git worktree add`. | Automático — NÃO use comandos do Che para criar/remover worktrees Git (use `git worktree` canônico; o hook cuida do resto). |
+| **L4 Sessão** | `<L3>/sessions/<CHE_SESSION_ID>/` | Dados **efêmeros** de uma sessão: logs, debug, payloads. | Automático — nunca exporta, nunca commita. |
+
+### ⭐ 3 Regras de Ouro antes de usar
+
+1. **Git worktree é canônico, não o Che.** Use `git worktree add/remove/prune` normalmente. O hook `posttooluse-3layer-dedup.py` detecta automaticamente e cria/apaga as pastas L3 correspondentes — não crie wrappers.
+2. **Remoção = move para trash, nunca delete.** Todo `remove` move arquivos para `~/.che-workspaces/.trash/<kind>/<slug--timestamp>/` com manifesto. Use `restore` para voltar.
+3. **3 Safety Gates em TUDO destrutivo:** `--dry-run` default ON + `--confirmed` + `--i-know-what-im-doing`. Falta um → operação bloqueada com status `blocked-safety-gates`.
+
+---
+
+### `/che-workspace` — Gerencia Workspaces L1
+
+**Quando usar:** Quando você vai começar com um cliente/equipe nova e quer um container para múltiplos projetos. Ou para listar/auditar workspaces existentes.
+
+#### Subcomandos
+
+| Subcomando | O que faz |
+|---|---|
+| `list` | Lista todos workspaces ativos em `~/.che-workspaces/` (JSON com slug, path, qtd projetos, last_modified). |
+| `add --slug <nome> [--path PATH]` | Cria workspace L1 + scaffolding vazio. Default path = `~/.che-workspaces/<slug>/`. Idempotente. |
+| `remove --slug <nome>` | ⚠️ Destrutivo. Move workspace INTEIRO para trash (todos projetos dentro). **3 safety gates obrigatórios.** |
+| `trash-list` | Lista entradas na lixeira com manifesto JSON. |
+| `restore --trash-slug <slug--timestamp>` | Restaura workspace de volta da lixeira. Conflitos de slug → sufixo restore. |
+
+#### Exemplos práticos
+
+```bash
+# 1) Listar workspaces existentes (leitura, sempre seguro)
+/che-workspace list
+
+# 2) Criar workspace para um cliente novo
+/che-workspace add --slug cliente-xpto
+
+# 3) Remover workspace obsoleto — PRIMEIRO dry-run default
+/che-workspace remove --slug cliente-xpto
+# Retorna status "dry-run" mostrando quantos arquivos/projetos seriam movidos.
+# Concorda? Então desliga o dry-run + flags de confirmação dupla:
+/che-workspace remove --slug cliente-xpto --no-dry-run --confirmed --i-know-what-im-doing
+
+# 4) Ver lixeira de workspaces
+/che-workspace trash-list
+
+# 5) Restaurar um workspace removido por engano
+/che-workspace restore --trash-slug cliente-xpto--20260904-201530 --no-dry-run --confirmed
+```
+
+---
+
+### `/che-project` — Gerencia Projetos L2
+
+**Quando usar:** Quando você clonou um repo cliente e quer **inicializar a estrutura durável L2** antes de começar a trabalhar. OU quando quer listar projetos dentro de um workspace. OU quando quer arquivar um projeto sem perder a memória.
+
+#### Subcomandos
+
+| Subcomando | O que faz |
+|---|---|
+| `list [--workspace <ws-slug>]` | Lista projetos de um workspace (ou todos se omitir). Retorna slug, path, last_modified, tem_L3_branch. |
+| `init --slug <repo-slug> --workspace <ws-slug> [--git-dir /abs/path/do/repo]` | ⭐ Mais usado. Cria o scaffolding L2 obrigatório com **8 artefatos**: `architecture.md` vazio, `project_profile.md` 12-seções template, `registry.jsonl` header, roles vazio, pastas `_db/` e `.wt/` para L3, e registra o binding `git_dir → <ws-slug>/<project-slug>` (para o hook L3 encontrar o caminho certo quando `git worktree add` rodar). |
+| `remove --slug <repo-slug> --workspace <ws-slug>` | ⚠️ Destrutivo. Move pasta `.project/` + `_db/` + `.wt/` para trash. **3 safety gates obrigatórios.** Preserva o repositório Git do usuário — NUNCA toca no código cliente. |
+| `trash-list [--workspace <ws-slug>]` | Lista projetos na lixeira. |
+| `restore --trash-slug <slug--timestamp> --workspace <ws-slug>` | Restaura projeto da lixeira. |
+
+#### Exemplos práticos
+
+```bash
+# 1) Inicializar um projeto L2 — passo MAIS IMPORTANTE, rodar ANTES de /che-spec ou /che-act.
+#    Contexto: estou trabalhando no repositório /home/laion/code/flockr/Lumos.
+#    Quero associá-lo ao workspace "flockr" com slug do projeto "lumos".
+/che-project init --slug lumos \
+                  --workspace flockr \
+                  --git-dir /home/laion/code/flockr/Lumos
+# Isto cria:
+#   ~/.che-workspaces/flockr/lumos/.project/architecture.md
+#   ~/.che-workspaces/flockr/lumos/.project/project_profile.md (template 12 seções)
+#   ~/.che-workspaces/flockr/lumos/.project/registry.jsonl
+#   ~/.che-workspaces/flockr/lumos/.project/roles
+#   ~/.che-workspaces/flockr/lumos/_db/   (← para SQLite L2)
+#   ~/.che-workspaces/flockr/lumos/.wt/   (← o hook L3 vai criar subpastas __<branch> aqui)
+# + registra binding no registry:  git_dir=/home/laion/code/flockr/Lumos  →  flockr/lumos
+
+# 2) Listar projetos no workspace flockr
+/che-project list --workspace flockr
+
+# 3) Dry-run para remover um projeto arquivado
+/che-project remove --slug projeto-legado --workspace flockr
+# (mostra plano: 18 arquivos em ~/.che-workspaces/.trash/project/...)
+
+# 4) Aplicar remoção com segurança
+/che-project remove --slug projeto-legado --workspace flockr \
+    --no-dry-run --confirmed --i-know-what-im-doing
+
+# 5) Restaurar projeto removido sem querer
+/che-project restore --trash-slug projeto-legado--20260904-202000 \
+                     --workspace flockr --no-dry-run --confirmed
+```
+
+---
+
+### 🔗 Como se encaixa no SDLC completo
+
+```
+Nova ideia ou repo cliente novo
+    │
+    ▼
+1. /che-workspace add --slug minha-equipe      (se workspace não existir)
+    │
+    ▼
+2. /che-project init --slug meu-repo \        (ASSOCIA git_dir → workspace/projeto L2
+                      --workspace minha-equipe \  registra binding, cria 8 artefatos L2)
+                      --git-dir /abs/path/meu-repo
+    │
+    ▼
+3. git clone / git worktree add minha-feature  (USE Git canônico — hook PostToolUse
+    │                                            detecta e cria L3 .wt/__minha-feature/)
+    ▼
+4. /che-xray → /che-onboarding → /che-spec     (agora SPEC e decisions logam
+    │                                            no PROJETO CERTO, não em paths globais)
+    ▼
+5. /che-act → Task Graph DAG com col Domain → /che-task resume T1 → parallel
+    │
+    ▼
+6. Terminou ciclo? git worktree remove feat-X  (hook move a pasta L3 para trash idempotente)
+    │
+    ▼
+7. Projeto arquivado? /che-project remove ...  (move .project/ + _db/ + .wt/ para trash)
+```
+
+**Resumo mental:** `/che-workspace` = **organização**, `/che-project init` = **vincular repo físico ao armazenamento durável do Che** (o binding mais crítico de todos). Sem `init` correto, os hooks L3 não encontram o destino para criar `.wt/__<branch>/` e suas sessões ficam órfãs.
+
+> 💡 **Dica:** Se você já tem um repositório clonado e quer "adotá-lo" no Che sem perder nada, é só rodar o `/che-project init` — ele nunca toca no diretório do seu código cliente, só cria estrutura **fora** em `~/.che-workspaces/`.
 
 ---
 
@@ -311,21 +458,6 @@ Restaura um projeto a partir de um archive gerado por `/che-export`.
 ## 🏗 Contribuição e Arquitetura
 
 Se você é um agente de IA ou desenvolvedor querendo estender o Che, por favor leia o **[AGENTS.md](./AGENTS.md)** primeiro. Ele descreve a Arquitetura de 3 Camadas em detalhe, a regra do core em Python (zero bash para lógica), o sistema de hooks Python e como manipular o filesystem L1-L4 com segurança.
-
-### 📘 Normas de Documentação Obrigatórias (Engenharia + Agentes)
-
-Toda feature, mudança ou adição no Che **DEVE** provocar uma auto-verificação de documentação antes de ser considerada concluída. A regra canônica está em [engineering-contracts §22](skills/engineering-contracts/SKILL.md), e o gate automático é o `che-scope-checker CHECK 3`. Três pilares:
-
-1. **Sempre se perguntar sobre relevância de atualizar docs.** Responda 2 perguntas: (a) "Esta mudança altera contrato público, comandos, UX/UI, onboarding, premissas arquiteturais, deploy/runbooks ou APIs?" (SIM = obrigatório atualizar); (b) "Um humano ou agente daqui a 3 meses se beneficiaria de uma explicação?" (TALVEZ/SIM = obrigatório). Três destinos cobrem:
-   - **Humanos:** `README.md`, `docs/*.md`, changelogs
-   - **Agentes:** `AGENTS.md`, `CLAUDE.md`, `skills/*/SKILL.md`, `CHE_RULES.md`, `CHE_COMMANDS.md`
-   - **Runbooks:** `docs/runbook-*.md`, `.github/workflows/*.yml` (comentários)
-2. **Docstrings / JSDoc / TSDoc no código (Clean Code Rule).** Sem exagero:
-   - ✅ Documente **propósito** de funções/métodos/classes públicas, módulos, tipos customizados difíceis
-   - ✅ Documente **partes intrincadas**, workarounds, contracts implícitos, ordenações específicas
-   - ❌ Não documente inputs/outputs se **há tipagem forte** (TS, Python com type hints, Rust, Go) — a tipagem já faz isso
-   - ❌ Não repita o nome da função literalmente nem documente lógica trivial 2-linhas
-3. **Gate de validação automático.** O `che-scope-checker CHECK 3` roda em `/che-ship` e em reviews de PR, verificando explicitamente os 2 itens acima. Se diff grande (>5 arquivos ou >150 linhas) e docs foram pulados, justificativa de 1 linha é obrigatória no `decisions.log`.
 
 ### Fluxo de Aprovação e Contribuição
 Para garantir a estabilidade e segurança do framework, o Che impõe um fluxo de contribuição rigoroso:
