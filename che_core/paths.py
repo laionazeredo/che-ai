@@ -168,10 +168,22 @@ def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[st
     project_slug = project_slug_from_git_origin(str(wt_root))
 
     workspaces_root = get_workspaces_root()
-    project_dir = workspaces_root / ".registry" / "projects" / project_slug
-    workspace_dir = workspaces_root / workspace_name
-    worktree_dir = workspace_dir / worktree_slug
-    workspace_shared = worktree_dir / ".wt"
+
+    # New Specflow-aligned Hierarchy
+    # L1: Workspace Level
+    workspace_dir = workspaces_root / "workspaces" / workspace_name
+
+    # L2: Project Level (Strategic - Intent, Roadmap)
+    project_dir = workspace_dir / project_slug / ".project"
+
+    # L3: Worktree Level (Tactical - Implementation)
+    worktrees_base = workspace_dir / project_slug / "worktrees"
+    worktree_dir = worktrees_base / worktree_slug
+
+    # Shared Tactical Assets (Live directly in the worktree folder for clarity)
+    workspace_shared = worktree_dir
+
+    # L4: Session Level (Ephemeral - Logs, Debug)
     session_dir = worktree_dir / "sessions" / session_id
 
     paths = {
@@ -222,6 +234,7 @@ def ensure_session_dirs(worktree_root: str, session_id: str, cwd_override: Optio
         Path(paths["CHE_WORKSPACE_DIR"]),
         Path(paths["CHE_WORKTREE_DIR"]),
         Path(paths["CHE_WORKSPACE_SHARED"]),
+        # Tactical Assets (Shared across sessions in the same worktree)
         Path(paths["CHE_WORKSPACE_SHARED"]) / "design",
         Path(paths["CHE_WORKSPACE_SHARED"]) / "tasks",
         Path(paths["CHE_WORKSPACE_SHARED"]) / "specs",
@@ -229,25 +242,26 @@ def ensure_session_dirs(worktree_root: str, session_id: str, cwd_override: Optio
         Path(paths["CHE_WORKSPACE_SHARED"]) / "architecture",
         Path(paths["CHE_WORKSPACE_SHARED"]) / "gh_stack",
         Path(paths["CHE_WORKSPACE_SHARED"]) / "legacy_binding_cleanup",
+        Path(paths["CHE_WORKSPACE_SHARED"]) / "qa",
+        Path(paths["CHE_WORKSPACE_SHARED"]) / "qa" / "screenshots",
+        Path(paths["CHE_WORKSPACE_SHARED"]) / "qa" / "evidence",
+        # Ephemeral Assets (Per-session isolation)
         Path(paths["CHE_SESSION_DIR"]),
-        Path(paths["CHE_SESSION_DIR"]) / "reports",
-        Path(paths["CHE_SESSION_DIR"]) / "reviews",
-        Path(paths["CHE_SESSION_DIR"]) / "qa",
-        Path(paths["CHE_SESSION_DIR"]) / "qa" / "screenshots",
-        Path(paths["CHE_SESSION_DIR"]) / "qa" / "evidence",
-        Path(paths["CHE_SESSION_DIR"]) / "specs",
-        Path(paths["CHE_SESSION_DIR"]) / "design",
-        Path(paths["CHE_SESSION_DIR"]) / "tasks",
-        Path(paths["CHE_SESSION_DIR"]) / "diff_contexts",
-        Path(paths["CHE_SESSION_DIR"]) / "pr_comments",
-        Path(paths["CHE_SESSION_DIR"]) / "merge_audits",
         Path(paths["CHE_SESSION_DIR"]) / "execution",
-        Path(paths["CHE_SESSION_DIR"]) / "graph",
         Path(paths["CHE_SESSION_DIR"]) / "debugger",
+        Path(paths["CHE_SESSION_DIR"]) / "temp",
     ]
+
+    # Ensure the parent 'worktrees' directory exists
+    worktrees_base = Path(paths["CHE_WORKTREE_DIR"]).parent
+    worktrees_base.mkdir(parents=True, exist_ok=True)
 
     for d in dirs_to_create:
         d.mkdir(parents=True, exist_ok=True)
+
+    # Ensure the project-level _db directory exists
+    db_dir = Path(paths["CHE_PROJECT_DIR"]).parent / "_db"
+    db_dir.mkdir(parents=True, exist_ok=True)
 
     registry_file = Path(paths["CHE_PROJECT_REGISTRY"])
     if not registry_file.exists():

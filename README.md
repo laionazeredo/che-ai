@@ -87,28 +87,29 @@ Comportamentos e limites da IA são definidos em arquivos Markdown simples e dec
 
 ---
 
-### 5. Memória Estruturada — 4 Níveis Hierárquicos
+### 5. Memória Estruturada — 4 Níveis (Specflow Aligned)
 
-O Che isola artefatos gerados (tokens de design, relatórios de QA, decisões e logs de execução) do seu código de usuário. Ele usa uma hierarquia estrita de 4 níveis resolvidos por [`che_core/paths.py`](file:///home/laion/.trae/che_core/paths.py):
+O Che isola artefatos gerados em uma hierarquia clara que separa o nível **Estratégico** (Projeto) do **Tático** (Worktree).
 
 ```
-~/.che-workspaces/  ← L1 Raiz do Workspace (um slug por organização/equipe)
-└── <repo-slug>/    ← L2 Nível de Projeto DURÁVEL · arquitetura + registry + SQLite DBs
-│   ├── .project/   ← L2 canonical: architecture.md, project_profile.md, roles
-│   └── che_state.sqlite  ← ⭐ SQLite FTS5 (L2, não L3 — sobrevive troca de worktree)
-│   └── che_rag.sqlite    ← ⭐ SQLite vetores (sqlite-vec optional)
-└── .wt/__<branch-slug>/  ← L3 Nível Worktree COMPARTILHADO entre sessões
-    ├── decisions.log.jsonl  ← SSOT (decisões)
-    ├── task_graph.md        ← DAG com 6 colunas (incluindo Domain)
-    ├── tasks/<TID>/envelope.md  ← Envelope com domain/expert_skills/handoff_output
-    ├── spec_*.md, qa/, designs/
-    └── sessions/<CHE_SESSION_ID>/  ← L4 Nível Sessão EFÊMERO (logs, debug)
+~/.che-workspaces/
+├── workspaces/          ← Container de Workspaces
+│   └── <workspace-slug>/
+│       └── <project-slug>/
+│           ├── .project/       ← L2: Estratégico (intent.md, roadmap.md, profile)
+│           ├── _db/            ← L2: SQLite DBs (che_state.sqlite)
+│           └── worktrees/      ← Container de Worktrees
+│               └── <wt-slug>/  ← L3: Tático (Shared Assets)
+│                   ├── task_graph.md, decisions.log.jsonl, spec_*.md
+│                   ├── design/, qa/, reports/
+│                   └── sessions/   ← L4: Efêmero (Logs por sessão)
+├── .registry/           ← Metadados Globais (Session Bindings)
+└── .trash/              ← Lixeira Canônica
 ```
 
-- **L2 exportável via `/che-export`**: memória durável do projeto que acompanha o repo em qualquer máquina.
-- **L3 compartilhado**: task graph, decisões e envelopes que são iguais para qualquer sessão trabalhando na mesma branch.
-- **L4 jogado fora**: nunca exportado, sempre efêmero.
-- Retrocompat: variáveis de ambiente antigas `HARNESS_*` e `LANG_PT_CHECK=DISABLED` continuam funcionando via fallback.
+- **L2 Projeto**: Memória durável que guarda o "Porquê" e o "Para Onde" (Specflow Phase 1 & 2).
+- **L3 Worktree**: Área de trabalho compartilhada para implementação tática. Múltiplas sessões lendo o mesmo histórico.
+- **L4 Sessão**: Apenas logs e dados temporários de execução.
 
 ---
 
