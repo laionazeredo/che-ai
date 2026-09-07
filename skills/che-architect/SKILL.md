@@ -25,26 +25,23 @@ To transform a high-level business vision into a comprehensive technical bluepri
 
 Do NOT generate the whole plan at once. Proceed step-by-step, asking for user feedback after each phase.
 
-### Step 1: Discovery & Macro Scope
-- **Goal**: Understand the "Why" and the core value proposition.
+### Step 1: Discovery & Intent Capture
+- **Goal**: Define the "Why" and the core vision.
 - **Output**: 
-  - Business Problem Statement.
+  - **Intent Document** (`intent.md`): Vision, Problem Statement, Success Criteria, Constraints, and Non-Goals.
   - Core Personas.
   - **Macro Business Rules**: Key constraints and mandatory behaviors.
-  - **Compliance & Privacy**: Initial assessment of PII, regional regulations (GDPR, LGPD), and industry-specific rules (Fintech, Health, etc.).
-  - **User Journey Map**: Mermaid User Journey diagram showing the main user flows.
-  - **Feature Map**: Structured visual map of features categorized by module/priority.
-  - High-level Feature List (MoSCoW).
-  - **Constraint Check**: Scale requirements, budget, and accessibility/localization needs.
+  - **Compliance & Privacy**: Initial assessment of PII and regulations.
+  - **User Journey Map**: Mermaid User Journey diagram.
+  - **Feature Map**: Visual map of features categorized by module.
 
-### Step 2: Technical Stack & Buy vs Build
-- **Goal**: Choose the right tools for the job.
+### Step 2: Roadmap Planning
+- **Goal**: Plan the phases and milestones.
 - **Output**:
-  - **Language/Frameworks**: Frontend (Accessibility/i18n ready), Backend, Mobile.
-  - **Data Stores**: SQL, NoSQL, Cache, Vector DB.
-  - **Security Profile**: Determine system criticality (e.g., Financial/High vs Landing/Low) and required security depth.
-  - **Buy vs Build Matrix**: Analysis for critical components (e.g., Auth, Payments, Search).
-  - **Rationale**: Why these choices fit the constraints.
+  - **Project Roadmap** (`roadmap.md`): 3-5 major phases (Foundation, Core, Enhancement, etc.) with goals, deliverables, and dependencies.
+  - **Technical Stack**: Language/Frameworks (Accessibility/i18n ready).
+  - **Security Profile**: Criticality assessment.
+  - **Buy vs Build Matrix**.
 
 ### Step 3: Architecture & Modules
 - **Goal**: Design the internal structure and boundaries.
@@ -66,10 +63,14 @@ Do NOT generate the whole plan at once. Proceed step-by-step, asking for user fe
   - **Operations & Support**: User support plan, incident response, and operational roadmap.
   - **Resource Estimation**: Estimated cost per month (low/high) and effort (Man-months/Sprints).
 
-### Step 5: The Blueprint (Final Artifact)
-- **Goal**: Save the durable architecture documentation.
-- **Action**: Save the final plan to `$CHE_WORKSPACE_SHARED/projects/<slug>/architecture.md`.
-- **Action**: Create initial ADRs for critical decisions.
+### Step 5: The Blueprint (Final Artifacts)
+- **Goal**: Save the durable architecture and planning documentation to ensure long-term navigability.
+- **Action**: Save the final artifacts to `$CHE_WORKSPACE_SHARED/projects/<slug>/`:
+  - `intent.md`: The high-level "Why", Success Criteria, and Non-Goals (Specflow Phase 1).
+  - `roadmap.md`: The phased timeline, feature map, and milestones (Specflow Phase 2).
+  - `architecture.md`: The technical blueprint (C4, ERD, Security).
+- **Action**: Create initial ADRs for critical decisions in `$CHE_WORKSPACE_SHARED/projects/<slug>/adr/`.
+- **Navigability**: Ensure all future tasks can reference IDs defined in `roadmap.md`.
 
 ---
 

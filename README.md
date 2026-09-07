@@ -145,42 +145,36 @@ Só depois dos 4 aprovados: atomic conventional commits → push `--no-verify` �
 
 ---
 
-## 🔄 Fluxo SDLC Oficial com Politburo
+## 🔄 Fluxo SDLC Oficial: Specflow + SbE
 
-O ciclo completo, do início ao fim, envolve o Politburo escolhendo automaticamente o domínio correto em cada etapa — e o Task Graph DAG permite paralelismo multi-sessão entre domínios.
+O Che unifica a visão estratégica do [**Specflow**](https://www.specflow.com/) (Intent → Roadmap) com o rigor tático do [**Specification by Example**](https://martinfowler.com/bliki/SpecificationByExample.html) (Tasks → Execute → Refine).
 
 ```mermaid
 flowchart TD
-    IDEA["Ideia de Negócio<br/>(Produto)"] --> ARCH["/che-architect<br/>🟥 Politburo=devops+engineering"]
-    ARCH --> REPO["Novo Repo"] --> XRAY["/che-xray"]
-    EXISTING["Repo Existente"] --> XRAY
-    XRAY --> ONBOARD["/che-onboarding<br/>🟨 Politburo=product+copywriting<br/>Captura personas, roadmap, tom de voz"]
-    ONBOARD --> SPEC["/che-spec<br/>🟨 Politburo=product<br/>Escreve SPEC Approved + frontmatter domain:"]
-    SPEC --> PLAN["/che-plan<br/>🟨 Politburo=product<br/>Cria tickets Linear/Jira/ClickUp BDD ACs"]
-    PLAN --> ACT["/che-act<br/>★ Pivotal: cria TASK GRAPH DAG (col Domain)<br/>Kahn Waves paralelizáveis multi-domínio"]
+    subgraph STRATEGIC["1. Nível Estratégico (Specflow)"]
+        IDEA["Ideia de Negócio"] --> INTENT["/che-architect Step 1<br/><b>INTENT.MD</b><br/>(Why / Who / Success)"]
+        INTENT --> ROADMAP["/che-architect Step 2<br/><b>ROADMAP.MD</b><br/>(Phases / Feature Map)"]
+    end
 
-    ACT --> UX_WAVE["💡 UX Wave (T1·T2·T4)<br/>🟦 Politburo=ux<br/>Sessão separada rodando /che-design"]
-    ACT --> ENG_WAVE["🛠 Eng Wave (T3·T5 depois de UX)<br/>🟩 Politburo=engineering<br/>Sessão separada rodando /che-act"]
-    ACT --> COPY_WAVE["✍️ Copy Wave (rodando paralelo)<br/>🟪 Politburo=copywriting+social"]
+    subgraph TACTICAL["2. Nível Tático (SbE)"]
+        ROADMAP --> SPEC["/che-spec<br/><b>SPEC_SLUG.MD</b><br/>(Behavior Examples GWT)"]
+        SPEC --> PLAN["/che-plan<br/><b>Tickets (Linear/Jira)</b><br/>(BDD ACs + Collab Tags)"]
+    end
 
-    UX_WAVE --> ENVELOPE_HOOK["★ Hook che-act §0.25<br/>/che-task resume TID → lê envelope domain: ux<br/>ACTIVE_DOMAIN=ux gravado → recomenda /che-design"]
-    ENG_WAVE --> RESUME_HOOK["/che-task resume TID → envelope domain: eng<br/>→ recomenda /che-act /che-ship"]
+    subgraph EXECUTION["3. Nível de Execução"]
+        PLAN --> ACT["/che-act<br/><b>TASK GRAPH DAG</b><br/>(Parallel Implementation)"]
+        ACT --> SHIP["/che-ship<br/><b>DRAFT PR</b><br/>(Storytelling Commits)"]
+    end
 
-    ENVELOPE_HOOK --> DONE1["UX entregue → mark T1 DONE no graph"]
-    RESUME_HOOK --> DONE2["Eng entregue → /che-ship abre Draft PR"]
-    COPY_WAVE --> DONE3
-
-    DONE1 --> ALL_DONE["★ Graph ALL DONE?<br/>Politburo=engineering → /che-ship FINAL"]
-    DONE2 --> ALL_DONE
-    DONE3 --> ALL_DONE
-    ALL_DONE --> PR["Draft PR self-assigned → review → merge"]
+    SHIP --> REFINE["Refinamento & Feedback<br/>(Loop p/ Roadmap/Intent)"]
+    REFINE --> ROADMAP
 ```
 
-Como ler o fluxo acima com Politburo:
-1. **O Task Graph é o SSOT de paralelismo** — o usuário declara no início (via `/che-act`) quais tarefas são de qual domínio do Politburo.
-2. **Kahn Waves dividem em ondas**: tarefas no mesmo wave com indegree 0 são rodáveis em sessões DIFERENTES (ex: UX na sua branch com `/che-design`, Eng na sua branch com `/che-act`).
-3. **Task Envelope resolve a precedência de domínio**: mesmo que o usuário esqueça de passar `domain:` na SPEC, o envelope vence.
-4. **`/che-task resume T<N>`** é o ponto de entrada multi-sessão: qualquer assistente em qualquer máquina roda isso, lê o envelope compartilhado (L3), grava flags `ACTIVE_*` no registry e pega o comando downstream correto.
+### Como a Navegabilidade funciona:
+1.  **Intent & Roadmap**: Criam a "Espinha Dorsal" do projeto. Estão sempre disponíveis em `$CHE_WORKSPACE_SHARED/projects/<slug>/`.
+2.  **Spec-to-Roadmap**: Cada tarefa (`spec_*.md`) carrega o `roadmap_phase` no frontmatter, permitindo ao agente entender onde ela se encaixa no plano maior.
+3.  **SbE Contracts**: As tabelas de comportamento (B-IDs) na SPEC são os contratos de verdade. O agente não pode "inventar" lógica; ele deve satisfazer os exemplos.
+4.  **Storytelling History**: Os commits no formato CDJ (Contexto, Decisão, Justificativa) permitem que futuros agentes "leiam o passado" para tomar decisões melhores no presente.
 
 ---
 
@@ -193,6 +187,7 @@ Uma vez instalado, o Che expõe suas capacidades diretamente na interface de cha
 | Comando | O que faz (resumo) | Politburo Domain Default |
 |---|---|---|
 | `/che-architect` | Parceiro estratégico de arquitetura de sistemas (stack, infra, segurança, compliance). | devops + engineering |
+| `/che-archeology` | Infere Intent e Roadmap a partir do histórico git e PRs. | product |
 | `/che-workspace [list\|add\|remove\|trash-list\|restore]` | ✨ **NOVO**: Gerencia workspaces L1 (`~/.che-workspaces/<slug>/`). 3 safety gates + trash canônico. | engineering |
 | `/che-project [list\|init\|remove\|trash-list\|restore]` | ✨ **NOVO**: Inicializa projeto L2 (scaffold `architecture.md`, `project_profile.md`, registry) e remove via trash. | engineering |
 | `/che-xray [worktree]` | Scan repo → gera project_profile.md 12 seções. | engineering |

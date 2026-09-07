@@ -109,6 +109,20 @@ fi
   > `EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE: vamos lançar essa feature crítica numa sexta 22h, vou criar lib flags manualmente agora mesmo nesta PR`
 - Se usuário digitou o literal → salvar como decision.log: `che_append_decision_jsonl "SPEC_PREFLIGHT_OVERRIDE" "preflight=§1.4_feature_flags type=EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE rationale=<1-linha user verbatim> risk_level=${risk_level}"`. Depois PODE obrigar flags em seções da spec normalmente. Se NÃO digitou literal → Branch B é HARD STOP, não há discussão.
 
+### §1.5 Strategic Roadmap Preflight (MANDATORY)
+
+> **Purpose:** Ensure the task is aligned with the project's strategic roadmap (Specflow Phase 2).
+
+**GATILHO de execução:**
+- SE `$CHE_WORKSPACE_SHARED/projects/<slug>/roadmap.md` existir → **EXECUTAR passos abaixo.**
+- SE NÃO existir → avisar usuário: "Roadmap estratégico não encontrado. Recomenda-se rodar `/che-architect` Step 2 antes para melhor navegabilidade."
+
+**Ação:**
+1. Ler `roadmap.md`.
+2. Listar fases disponíveis (IDs e Títulos).
+3. Pedir ao usuário para confirmar a qual fase este SPEC pertence, ou inferir do `ticket_ref`.
+4. Preencher frontmatter `roadmap_phase: <ID>`.
+
 ---
 
 ## §2 SOURCE SELECTION (4 inputs)
@@ -132,6 +146,7 @@ Write the draft in-memory first. File starts with YAML frontmatter, THEN 9 markd
 ```yaml
 ---
 spec_id: <slug-sanitized-alphanum-dash-underscore>
+roadmap_phase: <ID_DA_FASE_NO_ROADMAP.MD> # Link to the strategic roadmap phase
 ticket_ref: <"FLO-745" or "NONE">
 worktree_root: <absolute-path>
 change_class: feature|bug|refactor|perf|ops

@@ -32,11 +32,15 @@ This skill acts as a bridge between technical specification and project manageme
    - **Epic/Feature**: Otherwise. Create a parent Epic/Feature and decompose into sub-tasks.
 
 ### Step 2: Content Formatting (MANDATORY TEMPLATE)
-Every ticket (single or sub-task) MUST follow this structure:
+Every ticket (single or sub-task) MUST follow this structure to ensure alignment with Specflow Phase 3:
 
 ```markdown
-# [ID] Title (Short & Action-oriented)
+# [ID] [COLLABORATION_TAG] Title (Short & Action-oriented)
 
+> **Tag**: [AI-Assisted] | [Human-Driven] | [Collaborative]
+> **Roadmap Phase**: [ID from roadmap.md] (Specflow Phase 2)
+> **Strategic Intent**: [Link to intent.md] (Specflow Phase 1)
+```
 ## 📝 Problem Description
 [Extract from SPEC §1 WHY]
 

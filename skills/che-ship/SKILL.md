@@ -464,7 +464,7 @@ git commit -m "type(scope): imperative description in English, lowercase, max 72
 Rules:
 - NEVER run `git add .` — always add per-file or per-directory explicitly.
 - Before EVERY `git add`, run the `git reset HEAD -- <blacklist patterns>` line above. (Fail-closed — cost 1 ms per commit, prevents a whole class of PR-pollution bugs.)
-- Every commit message in ENGLISH, strict conventional commit.
+- Every commit message in **ENGLISH** by default (Header and Body), following the **Storytelling Conventional Commit** rule. Only use pt-BR if explicitly requested.
 - After last commit → run `git log --oneline -20` to present final chain to user.
 - **POST-COMMIT ASSERT (after all commits applied):** `git show --name-only --pretty=format: HEAD~10..HEAD` → scan file names for §0.8 blacklist patterns. If any commit contains a blacklisted file → **STOP, DO NOT PUSH.** Report to user, offer `git reset HEAD~N` + re-apply cleanly, then continue.
 

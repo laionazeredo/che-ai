@@ -17,6 +17,7 @@ The agent MUST recognize these and react immediately.
 | Command | Skill / módulo | Por que wrapper separado? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
+| `/che-archeology` | `che-archeology` | Infers project Intent and Roadmap from git history and merged PRs. |
 | `/che-xray [worktree]` | `che-xray` | Scans tech stack, structure, and patterns. |
 | `/che-onboarding [worktree]` | `che-onboarding` | Interactive Product & Architecture context capture. |
 | `/che-spec [input] [worktree] [slug]` | `che-spec` | Preflight binding §19 (worktree confirmado + nível 2 criado) → skill gera/valida SPEC em $CHE_WORKSPACE_SHARED. 4 fontes input. Gate Approved. **NÃO depende de /che-act — roda sozinho.** |
@@ -76,6 +77,13 @@ The agent MUST recognize these and react immediately.
 **What it does:** A strategic architecture partner that helps design a complete system from a business idea. Iteratively covers stack, infra, security, compliance, accessibility, localization, observability, and operations.
 **When to invoke:** Before starting a new repository or when refactoring/designing a major new system component.
 **Agent action:** Call `che-architect` skill.
+
+---
+
+## `/che-archeology`
+**What it does:** Infers the project's strategic backbone (Intent and Roadmap) by analyzing git history, merged PRs, and README evolution.
+**When to invoke:** When adopting an existing project into the Che framework to establish Specflow alignment.
+**Agent action:** Call `che-archeology` skill.
 
 ---
 
