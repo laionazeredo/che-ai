@@ -33,7 +33,7 @@ Che follows a strict 3-layer architecture. **HARD STOP:** Never duplicate rule b
 Che organizes the user's projects into a strict 4-level hierarchy. Do not create `.trae/` folders inside user projects. **Portability between machines is supported via `/che-export` and `/che-import` of durable info (L2 and L3).**
 
 1. **L1 (Workspace Root)**: `~/.che-workspaces/<workspace-slug>/`
-2. **L2 (Project Level)**: `<L1>/<repo-slug>/.project/` (Durable info: `architecture.md`, `project_profile.md`, roles)
+2. **L2 (Project Level)**: `<L1>/<repo-slug>/project/` (Durable info: `architecture.md`, `project_profile.md`, roles)
 3. **L3 (Worktree Level)**: `<L2>/../.wt/__<branch-slug>/` (Shared info across sessions in the same branch: `gh_stack/`, `qa/`, `designs/`, `decisions.log.jsonl`)
 4. **L4 (Session Level)**: `<L3>/sessions/<CHE_SESSION_ID>/` (Ephemeral info: execution logs, diff context, isolated debugger state)
 

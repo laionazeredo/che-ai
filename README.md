@@ -96,7 +96,7 @@ O Che isola artefatos gerados em uma hierarquia clara que separa o nível **Estr
 ├── workspaces/          ← Container de Workspaces
 │   └── <workspace-slug>/
 │       └── <project-slug>/
-│           ├── .project/       ← L2: Estratégico (intent.md, roadmap.md, profile)
+│           ├── project/        ← L2: Estratégico (intent.md, roadmap.md, profile)
 │           ├── _db/            ← L2: SQLite DBs (che_state.sqlite)
 │           └── worktrees/      ← Container de Worktrees
 │               └── <wt-slug>/  ← L3: Tático (Shared Assets)
@@ -260,7 +260,7 @@ O Che **não cria `.trae/` dentro dos seus projetos cliente**. Toda memória, ar
 | Nível | Caminho físico | O que guarda | Quando criar |
 |---|---|---|---|
 | **L1 Workspace** | `~/.che-workspaces/<ws-slug>/` | Agrupa N projetos de uma mesma **organização / equipe / contexto** (ex: `flockr`, `general-config`, `cliente-xpto`). | Uma vez por equipe/empresa. Normalmente você tem 2~3 workspaces no máximo. |
-| **L2 Projeto** | `<L1>/<repo-slug>/.project/` | Dados **duráveis** do projeto: `architecture.md`, `project_profile.md`, `registry.jsonl`, bancos SQLite L2 (`che_state.sqlite`, `che_rag.sqlite`). Sobrevive a troca de worktree. | Um por repositório cliente. Criado **antes** de rodar `/che-spec` ou `/che-act`. |
+| **L2 Projeto** | `<L1>/<repo-slug>/project/` | Dados **duráveis** do projeto: `architecture.md`, `project_profile.md`, `registry.jsonl`, bancos SQLite L2 (`che_state.sqlite`, `che_rag.sqlite`). Sobrevive a troca de worktree. | Um por repositório cliente. Criado **antes** de rodar `/che-spec` ou `/che-act`. |
 | **L3 Worktree** | `<L2>/../.wt/__<branch-slug>/` | Dados **compartilhados entre sessões** da mesma branch: `task_graph.md`, `decisions.log.jsonl`, `spec_*.md`, envelopes, `qa/`, `designs/`. Criado **automaticamente via hook PostToolUse** quando você roda `git worktree add`. | Automático — NÃO use comandos do Che para criar/remover worktrees Git (use `git worktree` canônico; o hook cuida do resto). |
 | **L4 Sessão** | `<L3>/sessions/<CHE_SESSION_ID>/` | Dados **efêmeros** de uma sessão: logs, debug, payloads. | Automático — nunca exporta, nunca commita. |
 
@@ -320,7 +320,7 @@ O Che **não cria `.trae/` dentro dos seus projetos cliente**. Toda memória, ar
 |---|---|
 | `list [--workspace <ws-slug>]` | Lista projetos de um workspace (ou todos se omitir). Retorna slug, path, last_modified, tem_L3_branch. |
 | `init --slug <repo-slug> --workspace <ws-slug> [--git-dir /abs/path/do/repo]` | ⭐ Mais usado. Cria o scaffolding L2 obrigatório com **8 artefatos**: `architecture.md` vazio, `project_profile.md` 12-seções template, `registry.jsonl` header, roles vazio, pastas `_db/` e `.wt/` para L3, e registra o binding `git_dir → <ws-slug>/<project-slug>` (para o hook L3 encontrar o caminho certo quando `git worktree add` rodar). |
-| `remove --slug <repo-slug> --workspace <ws-slug>` | ⚠️ Destrutivo. Move pasta `.project/` + `_db/` + `.wt/` para trash. **3 safety gates obrigatórios.** Preserva o repositório Git do usuário — NUNCA toca no código cliente. |
+| `remove --slug <repo-slug> --workspace <ws-slug>` | ⚠️ Destrutivo. Move pasta `project/` + `_db/` + `.wt/` para trash. **3 safety gates obrigatórios.** Preserva o repositório Git do usuário — NUNCA toca no código cliente. |
 | `trash-list [--workspace <ws-slug>]` | Lista projetos na lixeira. |
 | `restore --trash-slug <slug--timestamp> --workspace <ws-slug>` | Restaura projeto da lixeira. |
 
@@ -334,10 +334,10 @@ O Che **não cria `.trae/` dentro dos seus projetos cliente**. Toda memória, ar
                   --workspace flockr \
                   --git-dir /home/laion/code/flockr/Lumos
 # Isto cria:
-#   ~/.che-workspaces/flockr/lumos/.project/architecture.md
-#   ~/.che-workspaces/flockr/lumos/.project/project_profile.md (template 12 seções)
-#   ~/.che-workspaces/flockr/lumos/.project/registry.jsonl
-#   ~/.che-workspaces/flockr/lumos/.project/roles
+#   ~/.che-workspaces/flockr/lumos/project/architecture.md
+#   ~/.che-workspaces/flockr/lumos/project/project_profile.md (template 12 seções)
+#   ~/.che-workspaces/flockr/lumos/project/registry.jsonl
+#   ~/.che-workspaces/flockr/lumos/project/roles
 #   ~/.che-workspaces/flockr/lumos/_db/   (← para SQLite L2)
 #   ~/.che-workspaces/flockr/lumos/.wt/   (← o hook L3 vai criar subpastas __<branch> aqui)
 # + registra binding no registry:  git_dir=/home/laion/code/flockr/Lumos  →  flockr/lumos
@@ -386,7 +386,7 @@ Nova ideia ou repo cliente novo
 6. Terminou ciclo? git worktree remove feat-X  (hook move a pasta L3 para trash idempotente)
     │
     ▼
-7. Projeto arquivado? /che-project remove ...  (move .project/ + _db/ + .wt/ para trash)
+7. Projeto arquivado? /che-project remove ...  (move project/ + _db/ + .wt/ para trash)
 ```
 
 **Resumo mental:** `/che-workspace` = **organização**, `/che-project init` = **vincular repo físico ao armazenamento durável do Che** (o binding mais crítico de todos). Sem `init` correto, os hooks L3 não encontram o destino para criar `.wt/__<branch>/` e suas sessões ficam órfãs.

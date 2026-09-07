@@ -8,7 +8,7 @@ description: "Wrapper canônico e genérico do Graphify CLI (pipx package graphi
 > **Canonical default tool:** Graphify CLI (PyPI: `graphifyy`, double `y`)
 > **Instalar (RECOMENDADO default):** `pipx install graphifyy`
 > **Version tested:** 0.9.x+
-> **Onde gera output:** `$CHE_WORKSPACE_SHARED/graphify/<related_id>/` (FORA worktree do usuário; nunca commita; não precisa de .gitignore)
+>11→> **Onde gera output:** `CHE_PROJECT_GRAPH_DIR` (`project/graphify/` no nível L2 do projeto).
 
 ---
 
@@ -30,12 +30,8 @@ che_ensure_session_dirs "$WORKTREE_ROOT"
 che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR"
 che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
 
-# 5. Constrói UMA VEZ paths de output do graph (todos FORA worktree)
-WORKTREE_SLUG_CANONICAL="$(basename "$WORKTREE_ROOT" | sed 's/[^A-Za-z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')"
-GRAPHIFY_RELATED_ID="${GRAPHIFY_RELATED_ID:-graphify-${WORKTREE_SLUG_CANONICAL}}"
-
-# Truque: gerar um filename dummy via helper, dirname() nos dá a subpasta canônica
-GRAPHIFY_OUTPUT_ROOT="$(dirname -- "$(che_output_path "graphify" ".keep" "${GRAPHIFY_RELATED_ID}" "workspace" "md")")"
+# 5. Constrói UMA VEZ paths de output do graph (todos em L2)
+GRAPHIFY_OUTPUT_ROOT="${CHE_PROJECT_GRAPH_DIR}"
 che_assert_outside_worktree "$GRAPHIFY_OUTPUT_ROOT" "$WORKTREE_ROOT" "GRAPHIFY_OUTPUT_ROOT"
 mkdir -p "$GRAPHIFY_OUTPUT_ROOT"
 

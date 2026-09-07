@@ -26,7 +26,7 @@ CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)  ← L1 — WORKSPACE (IDE workspac
 │  │
 │  ├─ vc-educar-corp-website/                  ← L2 — PROJECT (1 repo git, slug-safe nome)
 │  │  │
-│  │  ├─ .project/                              ← L2-PERENE: TUDO que dura ENTRE worktrees e ENTRE sessões
+│  │  ├─ project/                              ← L2-PERENE: TUDO que dura ENTRE worktrees e ENTRE sessões
 │  │  │  ├─ xray.md                             ←   raio-X do projeto (stack, entrypoints, idiomas, testes, CI, DB)
 │  │  │  ├─ architecture.md                     ←   diagrama arquitetural + decisões perenes (Fora RADAR)
 │  │  │  ├─ roles.md                            ←   papéis, stakeholders, PM, design, dev, owner GitHub/Linear
@@ -69,7 +69,7 @@ CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)  ← L1 — WORKSPACE (IDE workspac
 │  │     └─ sessions/                           ← L4 sessions APENAS desta worktree
 │  │
 │  ├─ outro-projeto-xyz/                        ← L2 OUTRO PROJECT dentro do mesmo workspace manifesto48
-│  │  ├─ .project/                               ← L2-PERENE
+│  │  ├─ project/                               ← L2-PERENE
 │  │  └─ __main/                                 ← L3 + L4
 │  │
 │  └─ .migration_reports/                       ← L1-OPCIONAL: migration reports de quando este workspace foi movido
@@ -77,7 +77,7 @@ CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)  ← L1 — WORKSPACE (IDE workspac
 │
 └─ flockr/                                       ← L1 OUTRO workspace: conjunto de repos Flockr (Lumos etc.)
    └─ Lumos/                                     ← L2 PROJECT Flockr Lumos repo git
-      ├─ .project/
+      ├─ project/
       ├─ __main/
       └─ feat-FLO-732--Create-dedicated-S3/
 ```
@@ -90,11 +90,11 @@ CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)  ← L1 — WORKSPACE (IDE workspac
 | # | Invariante | Exemplo de VIOLAÇÃO (proibido) |
 |---|-----------|--------------------------------|
 | I1 | **Sessões SEMPRE ficam dentro de uma L3 worktree.** | Criar `sessions/` diretamente dentro do L2 project ou L1 workspace = FAIL. |
-| I2 | **Info perene (xray, arquitetura, papeis) fica em L2 `.project/` FORA de qualquer worktree.** | Colocar `architecture.md` dentro de `__main/.wt/` = FAIL (vai sumir se apagar a worktree). |
+| I2 | **Info perene (xray, arquitetura, papeis) fica em L2 `project/` FORA de qualquer worktree.** | Colocar `architecture.md` dentro de `__main/.wt/` = FAIL (vai sumir se apagar a worktree). |
 | I3 | **Info compartilhada NA MESMA worktree fica em L3 `.wt/`.** | Colocar `decisions.log.jsonl` dentro de 1 sessão específica = FAIL (outras sessões não veem). |
 | I4 | **Nome de worktree branch = `__<branch-slug-safe>` (DOIS underscores prefixo).** Branch `main` → `__main`. Branch `feat/FLO-513/refund` → `feat-FLO-513--refund` (com DOIS traços substitui `/`, DOIS underscores prefixo). | Criar pasta `main/` sem prefixo `__` = FAIL. |
 | I5 | **NÃO existe pasta chamada `workspace/` (colisão semântica IDE L1 workspace).** Duráveis worktree usam `.wt/`. | Qualquer path com nome literal `workspace/` no nível L2/L3 = FAIL. |
-| I6 | **NUNCA delete `.project/_legacy_uncategorized/` (1 release retenção mínima).** | `rm -rf` items uncategorized automaticamente = FAIL. Requer revisão humana. |
+| I6 | **NUNCA delete `project/_legacy_uncategorized/` (1 release retenção mínima).** | `rm -rf` items uncategorized automaticamente = FAIL. Requer revisão humana. |
 | I7 | **Migration SEMPRE NÃO DESTRUTIVA (apenas `mv -n`, nunca `cp -r` depois `rm -rf`).** | Copiar tudo, depois deletar a pasta antiga de uma vez = FAIL. Princípio 0 perda. |
 | I8 | **Paths nunca tem espaços ou caracteres unicode.** Slug-safe sempre: `[a-z0-9._-]`, espaço → `-`, maiúsculo → minúsculo. | Nome pasta `Minha Proposta/` com espaço = FAIL. |
 
@@ -151,7 +151,7 @@ fi
 
 ### 4.2. Estrutura antiga (harness-sessions) "espúria" — como é lida
 Se o usuário ainda não migrou um workspace (ex: `manifesto48/` está no fallback `$HOME/code/harness-sessions` com a estrutura BAGUNÇADA antiga):
-- Skills primeiramente **TENTAM** ler da estrutura NOVA L1-L4 (`.project/`, `.wt/`, `sessions/<ID>/`).
+- Skills primeiramente **TENTAM** ler da estrutura NOVA L1-L4 (`project/`, `.wt/`, `sessions/<ID>/`).
 - Se falhar (estrutura nova não existe), **CAI PARA LEITURA DA ESTRUTURA ANTIGA** (compat mode).
 - **NUNCA escreve na estrutura antiga** em compat mode — primeiro executa a migration G3 item-a-item (pedir confirmação user se estrutura antiga for detectada).
 
@@ -175,12 +175,12 @@ Ordem NÃO NEGOCIÁVEL (0 perda, rollback simples):
 |-------|------|---------------|
 | M1 | LS profundo antigo workspace → arquivo texto. | `find /harness-sessions/manifesto48 -maxdepth 6 \| sort > /tmp/pre-migration-filelist.txt` |
 | M2 | Classificação CSV A/B/C cada item: | 3 colunas: `path_original \| CATEGORIA \| path_novo_destino` |
-| | **A = .project (L2 perene)** | xray.md, architecture.md, roles/, product/, decisions/ perenes, onboarding.md |
+| | **A = project (L2 perene)** | xray.md, architecture.md, roles/, product/, decisions/ perenes, onboarding.md |
 | | **B = .wt (L3 shared worktree)** | decisions.log.jsonl, envelopes/, gh_stack/, reports/ COMPARTILHADOS, specs/, designs/, qa durável |
 | | **C = session-specific (L4)** | tudo dentro sessions/<ID>/, debugger, diffs_context, execution, reports efêmeros |
-| | **UNCATEGORIZED** | item que não cai em nenhum A/B/C → `.project/_legacy_uncategorized/<caminho-original-mantido>` |
-| M3 | mkdir estrutura NOVA VAZIA. | `mkdir -p` L1→L2→L3→L4 (.project + __main/.wt + __main/sessions — NÃO move nenhum arquivo ainda) |
+| | **UNCATEGORIZED** | item que não cai em nenhum A/B/C → `project/_legacy_uncategorized/<caminho-original-mantido>` |
+| M3 | mkdir estrutura NOVA VAZIA. | `mkdir -p` L1→L2→L3→L4 (project + __main/.wt + __main/sessions — NÃO move nenhum arquivo ainda) |
 | M4 | Loop CSV cada linha → `mv -n ORIGEM DESTINO`. | Log em `.migration_reports/2026-09-03_migration_manifesto48.csv` a cada item (status: OK/JÁ_EXISTIA/SKIP). |
-| M5 | `rmdir` (apenas diretórios VAZIOS) nas pastas antigas (`workspace/`, `sessions/` do projeto antigo). | Se `rmdir` FALHAR (tem arquivos que ninguém classificou em M2) → **TUDO que sobra** move para `.project/_legacy_uncategorized/` com estrutura de subdiretórios ORIGINAL intacta. |
+| M5 | `rmdir` (apenas diretórios VAZIOS) nas pastas antigas (`workspace/`, `sessions/` do projeto antigo). | Se `rmdir` FALHAR (tem arquivos que ninguém classificou em M2) → **TUDO que sobra** move para `project/_legacy_uncategorized/` com estrutura de subdiretórios ORIGINAL intacta. |
 | M6 | Escreve relatório final md com counts A/B/C/UNCAT + comando rollback. | Arquivo: `.migration_reports/YYYY-MM-DD_migration_<workspace-name>_report.md` |
 | M7 | Comando ROLLBACK documentado (se deu ruim): | `rsync -a --remove-source-files $NOVO $ANTIGO` (1 comando, desfaz tudo — item-a-item volta original). |

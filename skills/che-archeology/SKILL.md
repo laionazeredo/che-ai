@@ -48,7 +48,7 @@ Draft the following artifacts in memory:
 
 ### Step 5: Approval & Persistence
 1. Show the draft to the user.
-2. Upon approval, save to `CHE_PROJECT_DIR` (`.project/` inside the project folder).
+2. Upon approval, save to `CHE_PROJECT_DIR` (`project/` inside the project folder).
 
 ---
 

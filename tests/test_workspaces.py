@@ -148,7 +148,7 @@ def test_project_init_scaffold_8_files_and_ensure_l3(tmp_path):
         p = project_dir / rel
         assert p.is_file(), f"Faltando scaffold file: {rel} em {project_dir}"
 
-    # _db/README.txt agora é vizinho de .project
+    # _db/README.txt agora é vizinho de project
     db_readme = project_dir.parent / "_db" / "README.txt"
     assert db_readme.is_file(), f"Faltando scaffold file: _db/README.txt em {project_dir.parent}"
 

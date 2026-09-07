@@ -48,13 +48,12 @@ python3 -m che_core.xray "$WORKTREE_ROOT" "$SESSION_ID" --finalize --files-scann
 
 ## 2. 7-PASSO SCAN PIPELINE (ordem fixa)
 
-### Passo 1 — Graphify first (se CLI disponível, ~15s)
+### Passo 1 — Graphify (Obrigatório, ~15s)
 ```
-/graphify refresh          # gera graphify-out/ no worktree (gitignored)
-/graphify stats            # extrai contagem símbolos, linguagens, arquivos
-/graphify query "quais sao os entry points deste projeto? onde fica a camada de dados? onde ficam os testes?"
+/che-graph refresh          # gera Knowledge Graph no nível L2 do projeto (project/graphify/)
+/che-graph stats            # extrai contagem símbolos, linguagens, arquivos
 ```
-Extrai automaticamente do graph output:
+Extrai automaticamente do graph output (L2):
 - entry points (Next.js apps, package.json main, server.ts, main.py)
 - data layer tables/entities/repositories
 - test framework detection (Vitest/Jest/Pytest)

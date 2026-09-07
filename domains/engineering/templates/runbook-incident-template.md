@@ -69,7 +69,7 @@ Para incidentes. Checklist step-by-step de ações a tomar em T+0 / T+5m / T+15m
 | 4.1 | **Validation checklist**: 5 minutos sem erro novo, baseline métricas (latência p95, error rate, volume), usuários reportados resolvidos 100% (se N conhecido) | |
 | 4.2 | Postar mensagem RESOLVIDO no canal #incidents + #geral: | |
 | | `✅ INCIDENTE P<X> RESOLVIDO @ <UTC time>. Duração: T total. Impacto final: <números>. Mitigação aplicada: <o que foi feito>. Hotfix PR: <link>. Próximos passos: postmortem em 48h úteis. Agradecimentos a @lista por responder rápido.` | |
-| 4.3 | Arquivar evidências em `$CHE_WORKSPACES_ROOT/<ws>/<proj>/.project/postmortems/inc-<id>/evidence/` | |
+| 4.3 | Arquivar evidências em `$CHE_WORKSPACES_ROOT/<ws>/<proj>/project/postmortems/inc-<id>/evidence/` | |
 | 4.4 | Criar issue Postmortem no board com due date ≤ 2 dias úteis, atribuir ao IC. | |
 
 ---
