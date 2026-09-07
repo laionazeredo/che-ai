@@ -168,21 +168,21 @@ def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[st
     project_slug = project_slug_from_git_origin(str(wt_root))
 
     workspaces_root = get_workspaces_root()
-    
+
     # New Specflow-aligned Hierarchy
     # L1: Workspace Level
     workspace_dir = workspaces_root / "workspaces" / workspace_name
-    
+
     # L2: Project Level (Strategic - Intent, Roadmap)
     project_dir = workspace_dir / project_slug / ".project"
-    
+
     # L3: Worktree Level (Tactical - Implementation)
     worktrees_base = workspace_dir / project_slug / "worktrees"
     worktree_dir = worktrees_base / worktree_slug
-    
+
     # Shared Tactical Assets (Live directly in the worktree folder for clarity)
     workspace_shared = worktree_dir
-    
+
     # L4: Session Level (Ephemeral - Logs, Debug)
     session_dir = worktree_dir / "sessions" / session_id
 

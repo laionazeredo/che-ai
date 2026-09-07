@@ -387,29 +387,29 @@ def list_projects(workspace_name: Optional[str] = None) -> List[Dict[str, Any]]:
     ws_root = get_workspaces_root() / "workspaces"
     if not ws_root.is_dir():
         return []
-    
+
     out = []
     # If workspace_name is provided, only scan that workspace
     # Else scan all workspaces
     workspaces_to_scan = [ws_root / workspace_name] if workspace_name else ws_root.iterdir()
-    
+
     for ws_dir in workspaces_to_scan:
         if not ws_dir.is_dir():
             continue
-            
+
         for d in sorted(ws_dir.iterdir()):
             if not d.is_dir():
                 continue
-            
+
             project_l2 = d / ".project"
             if not project_l2.is_dir():
                 continue
-                
+
             has_arch = (project_l2 / "architecture.md").is_file()
             has_profile = (project_l2 / "project_profile.md").is_file()
             db_dir = d / "_db"
             db_files = sorted([p.name for p in db_dir.glob("*.sqlite")]) if db_dir.is_dir() else []
-            
+
             out.append(
                 {
                     "slug": d.name,
