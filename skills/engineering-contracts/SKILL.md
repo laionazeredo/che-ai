@@ -36,7 +36,7 @@ It is invoked by `che-developer` FIRST, and its rules **trump local repo convent
   - **Lista VERMELHA de complexidade acidental (qualquer 1 item é motivo para STOP + re-design):**
     - ✋ Interface / Protocol / Abstract class com APENAS 1 implementação concreta HOJE (se não tem 2 implementações hoje, não precisa da abstração ainda)
     - ✋ Dependency Injection container / IoC para ≤5 services (construa manualmente — fábrica de 3 linhas)
-    - ✋ Strategy pattern com ≤2 estratégias E a 2ª é "default que quase nunca muda"
+    - ✋ Strategy pattern with ≤2 estratégias E a 2ª é "default que quase nunca muda"
     - ✋ Event bus / PubSub interno com ≤2 subscribers (chame direto)
     - ✋ Config / yaml / toml de ambiente para ≤3 flags fixas (env var única basta)
     - ✋ Micro-serviço splitado sem necessidade de deploy independente provada (monólito modular primeiro)
@@ -535,148 +535,25 @@ try { ... } catch(e) { throw new Error("failed") /* PERDEU stack e causa raiz */
 
 ---
 
-### 20. 🔴 WORKTREE SESSION BINDING — One Session = One Worktree. Doubt = Ask.
+### 20. 🔴 WORKTREE SESSION BINDING — Specflow & Tactical Clarity.
 
-> **This rule controls worktree scoping during a chat session. It is a HARD SCISSORS rule — violating it causes wrong-code commits on wrong worktrees (data loss). Higher precedence than "be helpful / be efficient" defaults. Lower precedence only than safety rules (§2 Security / §6 DbC). It applies to ALL che skills and direct chat file operations.**
+> **Hierarchy (Specflow Aligned):**
+> 1. **L1 Workspace**: `~/.che-workspaces/workspaces/<ws-slug>/` (Organization/Team).
+> 2. **L2 Project (Strategic)**: `<L1>/<project-slug>/.project/` (Intent, Roadmap, Durable Memory).
+> 3. **L3 Worktree (Tactical)**: `<L1>/<project-slug>/worktrees/<wt-slug>/` (Shared history, Specs, Graph, Designs).
+> 4. **L4 Session (Ephemeral)**: `<L3>/sessions/<sid>/` (Execution logs, Debug state).
 
-#### 20.1 CHE WORKSPACES ROOT (PATH CONTRACT — all mutable/generated data lives here)
+#### 20.1 Path Contract — One Worktree = One Base of Truth.
 
-**Immutable che code (skills, commands, hooks, rules, references) STAYS in `$CHE_HOME/`.** Never put generated output there.
-**Generated output (session bindings, task graphs, decisions, QA evidence, design docs, summaries) MUST LIVE under `$CHE_SESSIONS_ROOT` (default: `$HOME/code/che-sessions`).** One flat parent folder per user.
+- **Durable Assets**: `intent.md`, `roadmap.md`, and `architecture.md` live at the Project level (L2).
+- **Tactical Assets**: `task_graph.md`, `decisions.log.jsonl`, and `spec_*.md` live at the Worktree level (L3).
+- **Shared History**: Multiple sessions working on the same worktree MUST read from the same L3 tactical assets to ensure consistency.
+- **Session Isolation**: Only execution logs and isolated debugger state live in the L4 session folder.
 
-Path layout (CANONICAL — all skills/commands MUST build paths by calling the contract script `$CHE_HOME/contracts/che_sessions_contract.sh`; NEVER hardcode):
-```
-$CHE_SESSIONS_ROOT/
-└── <WORKSPACE_NAME>/                            # Ex: Flockr  (from Flockr.code-workspace)
-    └── <WORKTREE_SLUG>/                         # CANONICAL <repo>__<branch-or-worktree-basename>  (2 underscores)
-        │                                        #   Lumos worktree pattern: parent dir Lumos.worktrees/<slug> → slug = Lumos__<slug>
-        │                                        #   Plain repo pattern: git dir Lumos, branch feat/X → slug = Lumos__feat--X
-        ├── workspace/                           # DURÁVEL / per-worktree. Compartilhado entre múltiplas sessões. NUNCA apaga.
-        │   ├── task_graph.md                    # (OBSOLETE per-task layout: agora um task_graph compartilhado por worktree por task-id)
-        │   ├── decisions.log.jsonl                 # trade-offs / exceções / non-obvious decisions
-        │   ├── gh_stack_plan.md                 # se ≥3 tasks ou >15 arquivos
-        │   ├── manual_test_plan.md              # plano manual de smoke/QA
-        │   ├── design/                          # (seu item 4:) documentos de design do che, ADRs, figures
-        │   └── tasks/<TASK_ID>/                 # arquivos PER-TASK duráveis (envelope, scope, acceptance criteria)
-        │
-        └── sessions/
-            └── <SESSION_ID>/                    # EFÊMERO / per-sessão. Apagável após sessão fechar (exceto binding history audit).
-                ├── binding.md                   # Level 2 DETAIL (§19.3) — audit/rebind chain
-                ├── qa/                          # evidências de /che-manual-test
-                │   ├── screenshots/*.png
-                │   └── logs/*.jsonl
-                ├── reports/                     # PR review reports, diff reports, batch reports
-                └── summary.md                   # re-summaries / milestones da sessão
-
-RESOLVER (authoritative): `$CHE_HOME/contracts/che_sessions_contract.sh`
-
-Runtime portability:
-- `CHE_HOME` is the canonical Che installation root.
-- Default for Trae compatibility: `CHE_HOME=$HOME/.trae`.
-- Skills MUST NOT resolve runtime paths by directly reading `$HOME/.trae` after runtime bootstrap.
-- The only permitted legacy bootstrap is `${CHE_HOME:-$HOME/.trae}` to locate and source the canonical contract; after sourcing it, use `CHE_HOME` and canonical helper functions.
-- Effective session identity MUST be obtained through `che_current_session_id`.
-- `CHE_SESSION_ID` has precedence when present (Codex/runtime-neutral).
-- `SESSION_ID` remains the backward-compatible Trae fallback.
-- Level 1 registry path MUST be obtained through `che_registry_path`.
-
-  - source che_sessions_contract.sh
-  - che_compute_paths <WORKTREE_ROOT> [<EFFECTIVE_SESSION_ID>] <current-cwd>
-  - exports: CHE_WORKSPACE_NAME / CHE_WORKTREE_SLUG / CHE_WORKSPACE_SHARED / CHE_SESSION_DIR / CHE_LEVEL2_BINDING
-  - ensure dirs: che_ensure_session_dirs
-```
-
-MORATÓRIA (HARD STOP — EXPANDIDA PARA TODA WORKTREE DO USUÁRIO):
-> **REGRA VERBATIM USUÁRIO:** "Nenhum asset do trabalho do che deve ser criado na worktree. Apenas quando solicitado. tudo deve ser organizado no che-sessions."
->
-> NENHUM arquivo `.md` / `.json` / `.jsonl` / `.csv` / `.png` / `.pdf` / `.html` / `.log` / **qualquer extensão** gerado pelo che é escrito em **QUALQUER LUGAR** dentro de `<WORKTREE_ROOT>/*` por padrão. Isso INCLUI e ULTRAPASSA: `.trae/*`, `reports/`, `docs/`, raiz do repo, `packages/*/`, `apps/*/`, qualquer subpasta do código do usuário.
->
-> ÚNICA EXCEÇÃO (não tem grey area): usuário pedir VERBATIM, EXPLICITAMENTE, que um arquivo específico seja salvo dentro da worktree. Sem pedido verbal explícito e claro, default = **FORA WORKTREE, em `$CHE_SESSIONS_ROOT` via helper `che_output_path`.**
->
-> Isso evita: (1) `git status` permanentemente sujo; (2) commit acidental de evidências QA, decisions, reports; (3) colisão de nomenclatura entre sessões paralelas; (4) poluição do diff do usuário com lixo do pipeline.
->
-> Enforcer canônico = `che_assert_outside_worktree` do contract. Chamado automaticamente pelo helper único `che_output_path` (DUVIDA? CHAMA ELE. NUNCA construa paths manualmente).
->
-> Output path helper canônico OBRIGATÓRIO para TODO write:
->   `che_output_path <type=report|review|qa|...> <slug=che-code-review> <related_id=pr-382|""> <scope=session|workspace> <ext=md|json> [suffix]`
->
->   Garante: (a) timestamp UTC prefix no filename ↔ sort alfabético = cronológico; (b) subpastas `<type>/<related_id>/` ↔ arquivos relacionados mesma PR/task ficam juntos; (c) assert outside automático em baixo nível; (d) atomic writes via `che_write_file_atomic`.
-
-Binding contract:
-
-1. **1 session ↔ 1 WORKTREE_ROOT by default.**
-   - The very first operation of a che flow (or first file access in a worktree scoped session) MUST produce a binding decision: which absolute worktree path is this session attached to?
-   - **MOVE FORWARD: O usuário deve ser perguntado qual o FRIENDLY_NAME da pasta desta sessão imediatamente após binding ser criado. Regra: Pergunta 1 única, no momento em que binding é criado: "Qual o nome amigável dessa pasta (slug short)?". Resposta user é salva em Level1 campo FRIENDLY_NAME e vira sub-papel de SESSION_DIR se definido. NÃO é obrigatório.**
-   - **2-LEVEL LAYOUT (resolves chicken-and-egg + multi-session parallelism + zero race condition + per-session FLAGS + never pollutes worktree git status:**
-     - **Level 1 (GLOBAL INDEX / CHICKEN-AND-EGG SOLVER):** 1 unique per user, outside worktrees + sessions dir. Path: resolved by `che_registry_path` (default `$CHE_HOME/bindings/registry.jsonl`). One entry per SESSION_ID, append-only (never overwrite, just add new lines).
-       ```
-       SESSION_ID: <effective-session-id-from-che_current_session_id>
-       WORKTREE_ROOT: <absolute path>
-       TASK_ID: <slug or manual>
-       FRIENDLY_NAME: <optional slug-for-user, pergunta na hora do binding>
-       BOUND_AT: <ISO timestamp>
-       STATUS: BOUND
-       FLAGS: LANG_PT_CHECK=DISABLED   (optional line — OMIT line entirely when default ENABLED)
-       ---
-       ```
-       Optional fields (OMIT when defaults suffice — keep registry minimal):
-       - `LANG_PT_CHECK=DISABLED`: Disables the PostToolUse Portuguese-text detector hook for THIS SESSION ONLY. When line omitted → default ENABLED (hook runs normally). Hook 3 reads this flag per SESSION_ID from Level 1.
-       - `FRIENDLY_NAME`: short slug. Se user forneceu no momento do binding, CHE_SESSION_DIR vira `<WORKTREE>/sessions/<SESSION_ID>--<FRIENDLY_NAME>/` (facilita navegação humana).
-     - **Level 2 (PER-SESSION DETAIL / SESSIONS DIR — NUNCA DENTRO DA WORKTREE DO USUÁRIO):** 1 file per session, **inside the sessions dir da worktree DENTRO DE $CHE_SESSIONS_ROOT.** Canonical path:
-       ```
-       $CHE_SESSIONS_ROOT/<WORKSPACE>/<WORKTREE_SLUG>/sessions/<SESSION_ID>[--<FRIENDLY_NAME>]/binding.md
-       ```
-       Stores re-binding chain history & audit (PREV/NEXT only if worktree switched)+ FLAGS mirror for human readability. Not used for hook scissor checks (only SM/Ship/Dev read it for re-binding audit).
-       ```
-       SESSION_ID: <session-identifier>
-       WORKTREE_ROOT: <absolute path>
-       TASK_ID: <slug>
-       FRIENDLY_NAME: <same as Level 1 if provided; omit if default>
-       BOUND_AT: <ISO timestamp>
-       STATUS: BOUND
-       FLAGS: LANG_PT_CHECK=DISABLED   (same value as Level 1 if set; omit line if default)
-       WORKSPACE_NAME: <canonical from .code-workspace>
-       WORKTREE_SLUG: <canonical repo__branch>
-       CHE_SESSION_DIR: <absolute>  (facilita debug)
-       CHE_WORKSPACE_SHARED: <absolute>
-       # PREV_BINDING: <old detail md path> (after first switch)
-       # NEXT_BINDING: <new detail md path> (after switch)
-       ```
-   - Write once into BOTH during initial binding decision:
-     1. Append Level 1 entry via HELPER OFICIAL: `source che_sessions_contract.sh && che_registry_append_jsonl <sid> BOUND <wt_root> <payload_json>`. Add Level 2 file inside `$CHE_SESSIONS_ROOT/...` (use resolver contract `che_compute_paths`). Idempotência built-in: helper deduplica por conteúdo sha256, não duplica mesma entry SESSION_ID+STATUS=BOUND já existente. NÃO use Edit/Write manual no registry.jsonl.
-   - Scissor checks (hook 1) ONLY use Level 1 registry index; never enter sessions dir to lookup. If SESSION_ID not in Level 1 → binding doesn't exist yet (agent proceeds to binding decision flow §19.2).
-
-2. **Initial binding decision rules (order of precedence — STOP at first match):**
-   a. **Explicit user mention:** User said "worktree X" or gave a path → BIND TO X. Confirm once.
-   b. **Open files / context window:** User has 1+ files open that are all inside the same worktree → BIND to that worktree. (If files span 2+ worktrees → fall to c.)
-   c. **Working directories in <env>:** If there is a single most-relevant working directory (check recent session memory / prior messages) → propose it; else GO TO (2e).
-   d. **Binding file exists in sessions dir matched via contract resolver:** Use that.
-   e. **Ambiguous (≥2 candidates or 0 clear matches):** STOP. Do NOT guess. Use AskUserQuestion with ≤2 concrete options + "other (type path)".
-
-3. **Re-binding (switching worktree in same session):**
-   - Switching is ONLY allowed after EXPLICIT user confirmation: "Yes, switch to worktree X now."
-   - When switching (update BOTH levels atomically + contract resolver re-run):
-     1. **Level 1 registry update**: Find the SESSION_ID entry, set `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_WORKTREE_ROOT: <newpath>`, then append NEW BOUND entry for the same SESSION_ID pointing to new worktree.
-     2. **Level 2 detail file update**: OLD detail file inside OLD `CHE_SESSION_DIR/binding.md` → `STATUS: RELEASED | RELEASED_AT: <ts> | NEXT_BINDING: <new-detail-md-path>`. Create NEW detail file inside NEW worktree sessão dir → `STATUS: BOUND + PREV_BINDING: <old-detail-md-path>`
-     3. Announce the switch in the next Status section output.
-   - Agent-initiated switches (without user saying so) = violation. Never "oh, this code is in worktree B so let me touch it" without asking first.
-
-4. **Per-operation scissor check (MANDATORY before any git/Glob/Grep/file-write):**
-   - Before any file-system write or git command: LOOKUP the effective session id from `che_current_session_id` in **Level 1 registry resolved by `che_registry_path`** (ONLY). Use WORKTREE_ROOT from that entry.
-   - If target path is a **USER CODE** file (ou seja, está dentro de WORKTREE_ROOT mas NÃO é um arquivo gerado em $CHE_SESSIONS_ROOT) E fica FORA WORKTREE_ROOT → BLOCK. Two outcomes:
-     a. User confirms "yes, write outside worktree scope this one user code file" → log decision.log.
-     b. Otherwise abort and ask: "This target is outside worktree <X>. Switch first? (A = switch, B = cancel)"
-   - Exception to scissor check for CHE_GENERATED paths: Arquivos que ficam em **$CHE_SESSIONS_ROOT/** são explicitamente FORA do worktree e SEMPRE podem ser escritos após binding criado; não precisa de pergunta por operação.
-   - No silent cross-worktree reads without user made aware.
-
-5. **Doubt / ambiguity → ask. Never guess.**
-   - "User said refund feature; ≥2 worktrees have refund branches → list ≤2 concrete options AskUserQuestion.
-   - Binding Level1 says X but context hints Y → ASK. Never silent switch.
-   - User não forneceu FRIENDLY_NAME ainda → perguntar 1 única vez antes de criar arquivos na CHE_SESSION_DIR.
-
-6. **Pre-send self-check for scoping:**
-   - If draft response contains references to files in ≥2 different worktrees (without user explicitly asking cross-worktree comparison): STOP. Trim. Either focus on 1 worktree, or ask which one first.
-   - References (code links) in the output must NOT mix worktree paths unless the user explicitly asked for a cross-worktree diff/comparison.
+#### 20.2 Scissor Check & Safety.
+- Every write operation MUST be validated against the Level 1 registry to ensure it stays outside the user's source code (unless explicitly requested).
+- **Generated Assets**: Never committed to the user's repository. Always stored in the hierarchy above.
+- **Doubt = Ask**: If the worktree binding is ambiguous, the agent must ask the user before proceeding.
 
 ---
 
