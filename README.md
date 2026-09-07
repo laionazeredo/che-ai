@@ -187,6 +187,7 @@ Uma vez instalado, o Che expõe suas capacidades diretamente na interface de cha
 | Comando | O que faz (resumo) | Politburo Domain Default |
 |---|---|---|
 | `/che-architect` | Parceiro estratégico de arquitetura de sistemas (stack, infra, segurança, compliance). | devops + engineering |
+| `/che-archeology` | Infere Intent e Roadmap a partir do histórico git e PRs. | product |
 | `/che-workspace [list\|add\|remove\|trash-list\|restore]` | ✨ **NOVO**: Gerencia workspaces L1 (`~/.che-workspaces/<slug>/`). 3 safety gates + trash canônico. | engineering |
 | `/che-project [list\|init\|remove\|trash-list\|restore]` | ✨ **NOVO**: Inicializa projeto L2 (scaffold `architecture.md`, `project_profile.md`, registry) e remove via trash. | engineering |
 | `/che-xray [worktree]` | Scan repo → gera project_profile.md 12 seções. | engineering |
