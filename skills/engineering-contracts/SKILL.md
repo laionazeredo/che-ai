@@ -539,7 +539,7 @@ try { ... } catch(e) { throw new Error("failed") /* PERDEU stack e causa raiz */
 
 > **Hierarchy (Specflow Aligned):**
 > 1. **L1 Workspace**: `~/.che-workspaces/workspaces/<ws-slug>/` (Organization/Team).
-> 2. **L2 Project (Strategic)**: `<L1>/<project-slug>/.project/` (Intent, Roadmap, Durable Memory).
+> 2. **L2 Project (Strategic)**: `<L1>/<project-slug>/project/` (Intent, Roadmap, Durable Memory).
 > 3. **L3 Worktree (Tactical)**: `<L1>/<project-slug>/worktrees/<wt-slug>/` (Shared history, Specs, Graph, Designs).
 > 4. **L4 Session (Ephemeral)**: `<L3>/sessions/<sid>/` (Execution logs, Debug state).
 

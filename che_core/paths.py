@@ -174,7 +174,8 @@ def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[st
     workspace_dir = workspaces_root / "workspaces" / workspace_name
 
     # L2: Project Level (Strategic - Intent, Roadmap)
-    project_dir = workspace_dir / project_slug / ".project"
+    project_dir = workspace_dir / project_slug / "project"
+    project_graph_dir = project_dir / "graphify"
 
     # L3: Worktree Level (Tactical - Implementation)
     worktrees_base = workspace_dir / project_slug / "worktrees"
@@ -191,6 +192,7 @@ def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[st
         "CHE_WORKTREE_SLUG": worktree_slug,
         "CHE_PROJECT_SLUG": project_slug,
         "CHE_PROJECT_DIR": str(project_dir),
+        "CHE_PROJECT_GRAPH_DIR": str(project_graph_dir),
         "CHE_WORKSPACE_DIR": str(workspace_dir),
         "CHE_WORKTREE_DIR": str(worktree_dir),
         "CHE_WORKSPACE_SHARED": str(workspace_shared),
@@ -216,6 +218,7 @@ def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[st
             pass
 
     assert_outside(project_dir, "CHE_PROJECT_DIR")
+    assert_outside(project_graph_dir, "CHE_PROJECT_GRAPH_DIR")
     assert_outside(workspace_dir, "CHE_WORKSPACE_DIR")
     assert_outside(worktree_dir, "CHE_WORKTREE_DIR")
     assert_outside(workspace_shared, "CHE_WORKSPACE_SHARED")
@@ -231,6 +234,7 @@ def ensure_session_dirs(worktree_root: str, session_id: str, cwd_override: Optio
     # Create directories
     dirs_to_create = [
         Path(paths["CHE_PROJECT_DIR"]),
+        Path(paths["CHE_PROJECT_GRAPH_DIR"]),
         Path(paths["CHE_WORKSPACE_DIR"]),
         Path(paths["CHE_WORKTREE_DIR"]),
         Path(paths["CHE_WORKSPACE_SHARED"]),

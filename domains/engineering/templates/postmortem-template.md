@@ -99,5 +99,5 @@ Cada ação tem DONO + DATA LIMITE + TIPO (HARDEN / MONITOR / DOC / TEST / PROCE
 
 ---
 
-### Link permanente (salvo em projeto .project/postmortems/)
-- `$CHE_WORKSPACES_ROOT/<workspace>/<project>/.project/postmortems/inc-YYYYMMDD-<N>.md`
+### Link permanente (salvo em projeto project/postmortems/)
+- `$CHE_WORKSPACES_ROOT/<workspace>/<project>/project/postmortems/inc-YYYYMMDD-<N>.md`

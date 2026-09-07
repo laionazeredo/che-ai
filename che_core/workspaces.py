@@ -228,7 +228,7 @@ def list_workspaces() -> List[Dict[str, Any]]:
         if not d.is_dir():
             continue
         # Only list top-level directories in 'workspaces/' as workspace names
-        projects = sorted([p.name for p in d.iterdir() if p.is_dir() and (p / ".project").is_dir()])
+        projects = sorted([p.name for p in d.iterdir() if p.is_dir() and (p / "project").is_dir()])
         out.append(
             {
                 "name": d.name,
@@ -401,7 +401,7 @@ def list_projects(workspace_name: Optional[str] = None) -> List[Dict[str, Any]]:
             if not d.is_dir():
                 continue
 
-            project_l2 = d / ".project"
+            project_l2 = d / "project"
             if not project_l2.is_dir():
                 continue
 
