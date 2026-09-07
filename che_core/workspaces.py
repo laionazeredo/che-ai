@@ -220,16 +220,15 @@ def _git_origin_of(worktree_root: Optional[str]) -> str:
 
 
 def list_workspaces() -> List[Dict[str, Any]]:
-    ws_root = get_workspaces_root()
+    ws_root = get_workspaces_root() / "workspaces"
     if not ws_root.is_dir():
         return []
     out = []
     for d in sorted(ws_root.iterdir()):
         if not d.is_dir():
             continue
-        if d.name in {".trash", ".registry"}:
-            continue
-        projects = sorted([p.name for p in d.iterdir() if p.is_dir()])
+        # Only list top-level directories in 'workspaces/' as workspace names
+        projects = sorted([p.name for p in d.iterdir() if p.is_dir() and (p / ".project").is_dir()])
         out.append(
             {
                 "name": d.name,
@@ -246,14 +245,12 @@ def add_workspace(name: str, *, worktree_root: Optional[str] = None) -> Dict[str
         print("add_workspace: `name` is required.", file=sys.stderr)
         sys.exit(2)
     slug = _slugify(name) or "default"
-    ws_root = get_workspaces_root()
+    ws_root = get_workspaces_root() / "workspaces"
     ws_dir = ws_root / slug
     created = False
     if not ws_dir.is_dir():
         ws_dir.mkdir(parents=True, exist_ok=True)
         created = True
-    registry_dir = ws_root / ".registry" / "projects"
-    registry_dir.mkdir(parents=True, exist_ok=True)
     return {
         "name": slug,
         "path": str(ws_dir),
@@ -387,27 +384,42 @@ def restore_workspace(trash_slug: str) -> Dict[str, Any]:
 
 
 def list_projects(workspace_name: Optional[str] = None) -> List[Dict[str, Any]]:
-    ws_root = get_workspaces_root()
-    registry = ws_root / ".registry" / "projects"
-    if not registry.is_dir():
+    ws_root = get_workspaces_root() / "workspaces"
+    if not ws_root.is_dir():
         return []
+    
     out = []
-    for d in sorted(registry.iterdir()):
-        if not d.is_dir():
+    # If workspace_name is provided, only scan that workspace
+    # Else scan all workspaces
+    workspaces_to_scan = [ws_root / workspace_name] if workspace_name else ws_root.iterdir()
+    
+    for ws_dir in workspaces_to_scan:
+        if not ws_dir.is_dir():
             continue
-        has_arch = (d / "architecture.md").is_file()
-        has_profile = (d / "project_profile.md").is_file()
-        db_dir = d / "_db"
-        db_files = sorted([p.name for p in db_dir.glob("*.sqlite")]) if db_dir.is_dir() else []
-        out.append(
-            {
-                "slug": d.name,
-                "path": str(d),
-                "architecture_exists": has_arch,
-                "project_profile_exists": has_profile,
-                "db_files": db_files,
-            }
-        )
+            
+        for d in sorted(ws_dir.iterdir()):
+            if not d.is_dir():
+                continue
+            
+            project_l2 = d / ".project"
+            if not project_l2.is_dir():
+                continue
+                
+            has_arch = (project_l2 / "architecture.md").is_file()
+            has_profile = (project_l2 / "project_profile.md").is_file()
+            db_dir = d / "_db"
+            db_files = sorted([p.name for p in db_dir.glob("*.sqlite")]) if db_dir.is_dir() else []
+            
+            out.append(
+                {
+                    "slug": d.name,
+                    "workspace": ws_dir.name,
+                    "path": str(d),
+                    "architecture_exists": has_arch,
+                    "project_profile_exists": has_profile,
+                    "db_files": db_files,
+                }
+            )
     return out
 
 
@@ -479,7 +491,7 @@ def init_project(
         reg_file.touch()
         created_files.append(str(reg_file))
 
-    db_dir = project_dir / "_db"
+    db_dir = project_dir.parent / "_db"
     db_dir.mkdir(parents=True, exist_ok=True)
     readme_db = db_dir / "README.txt"
     if not readme_db.is_file():
@@ -515,13 +527,19 @@ def init_project(
     }
 
 
-def remove_project(project_slug: str, *, dry_run: bool = True, confirmed: bool = False) -> Dict[str, Any]:
+def remove_project(
+    project_slug: str, workspace_name: str, *, dry_run: bool = True, confirmed: bool = False
+) -> Dict[str, Any]:
     if not project_slug:
         print("remove_project: `project_slug` is required.", file=sys.stderr)
         sys.exit(2)
+    if not workspace_name:
+        print("remove_project: `workspace_name` is required.", file=sys.stderr)
+        sys.exit(2)
+
     slug = _slugify(project_slug) or project_slug
-    ws_root = get_workspaces_root()
-    project_dir = ws_root / ".registry" / "projects" / slug
+    ws_root = get_workspaces_root() / "workspaces"
+    project_dir = ws_root / workspace_name / slug
     if not project_dir.is_dir():
         return {"error": f"Project L2 '{slug}' não existe em {project_dir.parent}", "dry_run": dry_run}
 
