@@ -177,13 +177,30 @@ function calculateLoyaltyCashback(orderTotalPence: number, tier: BuyerTier): num
 function calculaCashbackFidelidade(valorTotalCentavos: number, nivel: NivelComprador): number {...}
 ```
 
-### 14. 🟢 ATOMIC COMMITS + CONVENTIONAL COMMITS (default; override only if repo defines own)
+### 14. 🔴 STORYTELLING CONVENTIONAL COMMITS (HARD RULE)
 
-- Break large implementations into **atomic, meaningful commits** (one logical change each with a clear diff intent).
-- Follow conventional commits pattern:
-  `type(scope): imperative description`
-- **FULL types list + regex + examples:** Appendix B (canonical).
-- **Important:** If repo already defines its own commit convention (Rule 3) → repo convention WINS. This is the DEFAULT only when undefined.
+> **Purpose:** Commit messages are the **canonical historical record** of the system's evolution. A future agent or human must be able to understand the entire system, its core decisions, and the *why* behind them simply by reading the git log from start to finish.
+
+1. **Header (Line 1):** MUST follow the **Conventional Commits** pattern (`type(scope): imperative summary`) and MUST be in **ENGLISH** by default.
+2. **Body (Description):** MUST delineate the implementation from a **non-technical perspective** and MUST be in **ENGLISH** by default.
+   - **Context**: What was the system's state or the problem being solved?
+   - **Decision**: What was the strategic path chosen?
+   - **Rationale**: WHY was this specific path chosen over others?
+3. **Language Exception:** Only use Portuguese (pt-BR) if the user explicitly requests it for a specific session or project. Absent explicit mention, the git log remains an English-only historical record.
+4. **No Implementation Noise:** DO NOT include technical details like "refactored class X" or "changed line 42". Focus on the **business logic and system state**.
+5. **Agent Guidance:** Write the body so it serves as a map for future agents to understand the "soul" of the project.
+
+**Example:**
+```
+feat(auth): implement multi-factor authentication via email
+
+To increase security for high-value accounts, we are introducing a second layer of verification. 
+Instead of relying only on passwords, the system now requires a one-time code sent to the registered email. 
+We chose email over SMS for the initial rollout to avoid external telephony costs and simplify the global 
+availability of the feature, prioritizing reach and zero-cost over the higher security of hardware keys.
+```
+
+---
 
 ### 15. 🔴 AGILE BDD INCREMENTAL DELIVERY WITH SOLID (NEW — HARD RULE)
 
