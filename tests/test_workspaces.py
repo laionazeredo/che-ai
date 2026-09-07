@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from che_core.hooks import posttooluse_git_worktree
-from che_core.paths import resolve_workspace_name, resolve_worktree_slug
+from che_core.paths import project_slug_from_git_origin, resolve_workspace_name, resolve_worktree_slug
 from che_core.workspaces import ensure_worktree_l3_dirs
 
 CHE_CLI_CMD = [sys.executable, "-m", "che_core.cli"]
@@ -143,19 +143,23 @@ def test_project_init_scaffold_8_files_and_ensure_l3(tmp_path):
         "roadmap.md",
         "roles/index.md",
         "registry.jsonl",
-        "_db/README.txt",
     ]
     for rel in expected_files:
         p = project_dir / rel
         assert p.is_file(), f"Faltando scaffold file: {rel} em {project_dir}"
 
+    # _db/README.txt agora é vizinho de .project
+    db_readme = project_dir.parent / "_db" / "README.txt"
+    assert db_readme.is_file(), f"Faltando scaffold file: _db/README.txt em {project_dir.parent}"
+
     arch_content = (project_dir / "architecture.md").read_text()
     assert "C4 L1" in arch_content or "System Context" in arch_content
 
-    # L3 worktree shared dir é FORA do worktree (contrato canônico paths.py §162-209):
-    # fica em CHE_WORKSPACES_ROOT / <workspace> / <worktree_slug> / .wt
+    # L3 worktree shared dir é FORA do worktree (contrato canônico paths.py):
+    # agora é o próprio diretório da worktree dentro da hierarquia do che
     ws_shared = Path(d["paths"]["CHE_WORKSPACE_SHARED"])
     assert ws_shared.is_dir(), f"L3 CHE_WORKSPACE_SHARED deveria existir: {ws_shared}"
+    assert ws_shared.name == resolve_worktree_slug(str(wt))
 
 
 def test_project_remove_and_restore_safety():
@@ -168,24 +172,26 @@ def test_project_remove_and_restore_safety():
         lst = _parse_json(out_list)
         assert isinstance(lst, list) and len(lst) >= 1
         slug = lst[0]["slug"]
+        workspace = lst[0]["workspace"]
 
         # dry-run default
-        code, out, _ = _run_cli("project", "remove", slug)
-        assert code == 0
+        code, out, _ = _run_cli("project", "remove", slug, workspace)
+        assert code == 0, f"exit={code} stdout={out}"
         dr = _parse_json(out)
         assert dr["dry_run"] is True
         assert "action_would_be" in dr
 
         # no-dry-run sem confirm = aborted
-        code2, out2, _ = _run_cli("project", "remove", slug, "--no-dry-run")
+        code2, out2, _ = _run_cli("project", "remove", slug, workspace, "--no-dry-run")
         d2 = _parse_json(out2)
         assert d2["aborted"] is True
 
         # com dupla flag = moved
-        code3, out3, _ = _run_cli("project", "remove", slug, "--no-dry-run", "--confirm")
+        code3, out3, _ = _run_cli("project", "remove", slug, workspace, "--no-dry-run", "--confirm")
         d3 = _parse_json(out3)
         assert d3["moved"] is True
-        trash_slug = Path(d3["to"]).name
+        trash_target = Path(d3["to"])
+        trash_slug = trash_target.name
 
         # restore traz de volta
         code4, out4, _ = _run_cli("project", "restore", trash_slug)
@@ -212,11 +218,12 @@ def test_hook_worktree_add_payload_creates_l3(tmp_path):
     ctx = result.get("additionalContext", "")
     assert "L3" in ctx or "AUTO" in ctx or "criado" in ctx or "CHE_WORKSPACE_SHARED" in ctx
 
-    # L3 shared dir existe em CHE_WORKSPACES_ROOT/<workspace>/<worktree_slug>/.wt (NÃO dentro de target/.wt!)
+    # L3 shared dir existe em CHE_WORKSPACES_ROOT/workspaces/<workspace>/<project>/worktrees/<worktree_slug>
     ws_name = resolve_workspace_name(str(target))
     wt_slug = resolve_worktree_slug(str(target))
+    project_slug = project_slug_from_git_origin(str(target))
     ws_root = Path(os.environ["CHE_WORKSPACES_ROOT"])
-    l3_shared = ws_root / ws_name / wt_slug / ".wt"
+    l3_shared = ws_root / "workspaces" / ws_name / project_slug / "worktrees" / wt_slug
     assert l3_shared.is_dir(), f"L3 shared deveria existir em {l3_shared}"
 
 
@@ -227,11 +234,12 @@ def test_hook_worktree_remove_payload_moves_to_trash(tmp_path):
     (target / ".git").mkdir(exist_ok=True)
     ensure_worktree_l3_dirs(str(target))
 
-    # ANTES: confirma L3 shared existe (via paths canônicos, NÃO via target/.wt)
+    # ANTES: confirma L3 shared existe (via paths canônicos)
     ws_name = resolve_workspace_name(str(target))
     wt_slug = resolve_worktree_slug(str(target))
+    project_slug = project_slug_from_git_origin(str(target))
     ws_root = Path(os.environ["CHE_WORKSPACES_ROOT"])
-    l3_parent = ws_root / ws_name / wt_slug
+    l3_parent = ws_root / "workspaces" / ws_name / project_slug / "worktrees" / wt_slug
     assert l3_parent.is_dir(), f"L3 parent deveria existir ANTES do remove: {l3_parent}"
 
     payload = {

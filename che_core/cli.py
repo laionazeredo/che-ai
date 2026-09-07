@@ -256,6 +256,7 @@ def main():
 
     pj_remove = proj_subs.add_parser("remove")
     pj_remove.add_argument("project_slug", help="Slug do projeto a mover para lixeira (NÃO apaga, move para .trash/).")
+    pj_remove.add_argument("workspace_name", help="Nome do workspace que contém o projeto.")
     pj_remove.add_argument("--dry-run", action="store_true", default=True, help="Default: só mostra, NÃO move.")
     pj_remove.add_argument(
         "--no-dry-run", dest="dry_run", action="store_false", help="Efetivamente move. Requer também --confirm."
@@ -528,7 +529,7 @@ def main():
         elif args.proj_cmd == "list":
             res = list_projects()
         elif args.proj_cmd == "remove":
-            res = remove_project(args.project_slug, dry_run=args.dry_run, confirmed=args.confirmed)
+            res = remove_project(args.project_slug, args.workspace_name, dry_run=args.dry_run, confirmed=args.confirmed)
         elif args.proj_cmd == "restore":
             res = restore_project(args.trash_slug)
         else:

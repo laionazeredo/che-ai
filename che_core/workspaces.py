@@ -307,7 +307,7 @@ def remove_workspace(name: str, *, dry_run: bool = True, confirmed: bool = False
         print("remove_workspace: `name` is required.", file=sys.stderr)
         sys.exit(2)
     slug = _slugify(name) or "default"
-    ws_root = get_workspaces_root()
+    ws_root = get_workspaces_root() / "workspaces"
     ws_dir = ws_root / slug
     if not ws_dir.is_dir():
         return {"error": f"Workspace '{slug}' não existe em {ws_root}", "dry_run": dry_run}
@@ -609,8 +609,9 @@ def cleanup_worktree_l3(worktree_root: str) -> Dict[str, Any]:
     wt = Path(worktree_root).resolve()
     worktree_slug = resolve_worktree_slug(str(wt))
     workspace_name = resolve_workspace_name(str(wt))
+    project_slug = project_slug_from_git_origin(str(wt))
     ws_root = get_workspaces_root()
-    wt_l3_parent = ws_root / workspace_name / worktree_slug
+    wt_l3_parent = ws_root / "workspaces" / workspace_name / project_slug / "worktrees" / worktree_slug
     if not wt_l3_parent.is_dir():
         return {"nothing_to_clean": True, "expected_l3_path": str(wt_l3_parent)}
     ts = _ts_slug()
