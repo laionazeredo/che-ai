@@ -202,7 +202,33 @@ availability of the feature, prioritizing reach and zero-cost over the higher se
 
 ---
 
-### 15. 🔴 AGILE BDD INCREMENTAL DELIVERY WITH SOLID (NEW — HARD RULE)
+### 15. 🔴 AGENTIC SDLC WITH SPECFLOW & SbE (HARD RULE)
+
+> **Philosophy:** "Plan First, Act Second". We merge the **Specflow** methodology (Strategic Roadmap) with **Specification by Example** (Tactical Contract) to ensure alignment, theoretical support, and long-term navigability.
+
+1.  **Phase 1: Intent (Vision)**:
+    - **Artifact**: `intent.md` (stored in `$CHE_WORKSPACE_SHARED/projects/<slug>/`).
+    - **Command**: `/che-architect` Step 1 or `/che-onboarding`.
+    - **Content**: The "Why", core vision, success criteria, and non-goals. Replaces vague ideas with a structured contract of intent.
+2.  **Phase 2: Roadmap (Navigation)**:
+    - **Artifact**: `roadmap.md` (stored in `$CHE_WORKSPACE_SHARED/projects/<slug>/`).
+    - **Command**: `/che-architect` Step 2.
+    - **Content**: Decomposition of intent into high-level phases (Foundations, Core, Enhancement) with feature maps and dependencies. Serves as the "Highway" and the source of truth for task relation.
+3.  **Phase 3: Tasks (Tactical Contracts)**:
+    - **Artifact**: `spec_<slug>.md` (stored in `$CHE_WORKSPACE_SHARED/`).
+    - **Command**: `/che-spec` and `/che-plan`.
+    - **Methodology**: **SbE (Spec by Example)** using Given/When/Then.
+    - **Navigability**: Every SPEC must link to a `roadmap_phase` ID from `roadmap.md`.
+4.  **Phase 4: Execute (Implementation)**:
+    - **Command**: `/che-act`.
+    - **Collaboration**: Tasks are tagged as `[AI-Assisted]`, `[Human-Driven]`, or `[Collaborative]` to clarify the division of labor.
+5.  **Phase 5: Refine (Iteration)**:
+    - **Command**: `/che-ship` + feedback loop.
+    - **Goal**: Adjust roadmap and intent based on implementation discoveries. Every delivery is a "learned lesson" that feeds back into the Strategic level.
+
+---
+
+### 16. 🔴 AGILE BDD INCREMENTAL DELIVERY WITH SOLID (NEW — HARD RULE)
 
 > **Problem this rule fights:**
 > LLMs + overly-complex PRDs → "kitchen sink" implementations anticipating 50 edge cases NOT in the AC → late delivery, overengineered, hard-to-review, fragile.
