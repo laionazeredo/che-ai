@@ -190,7 +190,7 @@ Uma vez instalado, o Che expõe suas capacidades diretamente na interface de cha
 | `/che-architect` | Parceiro estratégico de arquitetura de sistemas (stack, infra, segurança, compliance). | devops + engineering |
 | `/che-archeology` | Infere Intent e Roadmap a partir do histórico git e PRs. | product |
 | `/che-workspace [list\|create\|remove\|trash-list\|restore]` | ✨ **NOVO**: Gerencia workspaces L1 (`~/.che-workspaces/workspaces/<slug>/`). 3 safety gates + trash canônico. | engineering |
-| `/che-project [list\|add\|remove\|trash-list\|restore]` | ✨ **NOVO**: Inicializa projeto L2 (scaffold `architecture.md`, `project_profile.md`, registry) atrelado a um workspace. | engineering |
+| `/che-project [list\|create\|remove\|trash-list\|restore]` | ✨ **NOVO**: Inicializa projeto L2 (scaffold `architecture.md`, `project_profile.md`, registry) atrelado a um workspace. | engineering |
 | `/che-xray [worktree]` | Scan repo → gera project_profile.md 12 seções. | engineering |
 | `/che-onboarding [worktree]` | Contexto humano interativo (roadmap, personas, lógica negócio). | product (+ copywriting / ux se ativado) |
 | `/che-spec [input] <worktree> <project> [slug]` | Gera/valida Especificação de Execução (SPEC Approved). **Requer worktree e project.** | product |
@@ -313,16 +313,16 @@ O Che **não cria `.trae/` dentro dos seus projetos cliente**. Toda memória, ar
 | Subcomando | O que faz |
 |---|---|
 | `list [--workspace <ws-slug>]` | Lista projetos de um workspace (ou todos se omitir). |
-| `add <worktree-path> --workspace <ws-slug> [--name <friendly-name>]` | ⭐ Mais usado. Registra um projeto L2 no workspace informado. Se `--name` omitido, o fallback é `<workspace>--<folder>`. Valida se o workspace existe. |
-| `remove <project-slug> --workspace <ws-slug>` | ⚠️ Destrutivo. Move pasta `project/` + `_db/` para trash. **3 safety gates obrigatórios.** |
+| `create <worktree-path> --workspace <ws-slug> [--name <friendly-name>]` | ⭐ Mais usado. Registra um projeto L2 no workspace informado. Se `--name` omitido, o fallback é `<workspace>--<folder>`. Valida se o workspace existe. |
+| `remove <project-slug> --workspace <ws-slug>` | ⚠️ Destrutivo. Move pasta `project/` + `_db/` + `worktrees/` para trash. **3 safety gates obrigatórios.** |
 
 #### Exemplos práticos
 
 ```bash
-# 1) Adicionar um projeto L2 a um workspace existente
+# 1) Criar um projeto L2 associado a um workspace existente
 #    Contexto: repositório em /home/laion/code/flockr/Lumos
 #    Workspace: Flockr
-/che-project add /home/laion/code/flockr/Lumos --workspace Flockr
+/che-project create /home/laion/code/flockr/Lumos --workspace Flockr
 # Isto cria:
 #   ~/.che-workspaces/workspaces/Flockr/github-com-Flockr-platform-Lumos/project/ (ou nome amigável)
 # Fallback de nome se --name omitido: Flockr--Lumos
@@ -339,7 +339,7 @@ Nova ideia ou repo cliente novo
 1. /che-workspace create minha-equipe    (se workspace não existir)
     │
     ▼
-2. /che-project add meu-repo \           (ASSOCIA worktree → workspace L1
+2. /che-project create meu-repo \           (ASSOCIA worktree → workspace L1
                       --workspace minha-equipe \  registra L2, cria 8 artefatos)
     │
     ▼
@@ -355,12 +355,12 @@ Nova ideia ou repo cliente novo
 6. Terminou ciclo? git worktree remove feat-X  (hook move a pasta L3 para trash idempotente)
     │
     ▼
-7. Projeto arquivado? /che-project remove ...  (move project/ + _db/ + .wt/ para trash)
+7. Projeto arquivado? /che-project remove ...  (move project/ + _db/ + worktrees/ para trash)
 ```
 
-**Resumo mental:** `/che-workspace` = **organização**, `/che-project add` = **vincular repo físico ao armazenamento durável do Che** (o binding mais crítico de todos). Sem `add` correto, os hooks L3 não encontram o destino para criar `.wt/__<branch>/` e suas sessões ficam órfãs.
+**Resumo mental:** `/che-workspace` = **organização**, `/che-project create` = **vincular repo físico ao armazenamento durável do Che** (o binding mais crítico de todos). Sem `create` correto, os hooks L3 não encontram o destino para criar `.wt/__<branch>/` e suas sessões ficam órfãs.
 
-> 💡 **Dica:** Se você já tem um repositório clonado e quer "adotá-lo" no Che sem perder nada, é só rodar o `/che-project add --workspace <WS>` — ele nunca toca no diretório do seu código cliente, só cria estrutura **fora** em `~/.che-workspaces/`.
+> 💡 **Dica:** Se você já tem um repositório clonado e quer "adotá-lo" no Che sem perder nada, é só rodar o `/che-project create --workspace <WS>` — ele nunca toca no diretório do seu código cliente, só cria estrutura **fora** em `~/.che-workspaces/`.
 
 ---
 

@@ -240,19 +240,19 @@ def main():
     parser_proj = subparsers.add_parser("project", help="Gerencia projects L2 (.registry/projects/<slug>).")
     proj_subs = parser_proj.add_subparsers(dest="proj_cmd", required=True)
 
-    # add (primary) and init (alias)
-    pj_add = proj_subs.add_parser("add", aliases=["init"], help="Adiciona um projeto L2 a um workspace.")
-    pj_add.add_argument("worktree_root", help="Worktree root do projeto a adicionar.")
-    pj_add.add_argument("--workspace", required=True, help="Nome do workspace destino (OBRIGATÓRIO).")
-    pj_add.add_argument(
+    # create (primary), add and init (aliases)
+    pj_create = proj_subs.add_parser("create", aliases=["add", "init"], help="Cria/Adiciona um projeto L2 a um workspace.")
+    pj_create.add_argument("worktree_root", help="Worktree root do projeto a adicionar.")
+    pj_create.add_argument("--workspace", required=True, help="Nome do workspace destino (OBRIGATÓRIO).")
+    pj_create.add_argument(
         "--domain",
         default="engineering",
         help="Domínio Politburo default: engineering|ux|product|devops|copywriting|social|seo-analytics.",
     )
-    pj_add.add_argument(
+    pj_create.add_argument(
         "--name", dest="friendly_name", default=None, help="Nome amigável (default: <workspace>--<folder>)."
     )
-    pj_add.add_argument("--session-id", default="project-add-cli", help="Session id para criar L3 dirs iniciais.")
+    pj_create.add_argument("--session-id", default="project-create-cli", help="Session id para criar L3 dirs iniciais.")
 
     proj_subs.add_parser("list", help="Lista projects L2 + arquitetura/profile/db existentes.")
 
@@ -520,7 +520,7 @@ def main():
     if args.command == "project":
         from che_core.workspaces import init_project, list_projects, remove_project, restore_project
 
-        if args.proj_cmd in ["init", "add"]:
+        if args.proj_cmd in ["create", "add", "init"]:
             res = init_project(
                 args.worktree_root,
                 workspace_name=args.workspace,

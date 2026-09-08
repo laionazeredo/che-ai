@@ -1,5 +1,5 @@
 ---
-description: "Gerencia workspaces Che (L1 ~/.che-workspaces/workspaces/<slug>). 4 subcommands: create NAME | list | remove NAME [--dry-run|--no-dry-run --confirm] | restore TRASH_SLUG | trash-list. Workspaces são a camada L1 da hierarquia 4-nível do Che."
+description: "Gerencia workspaces Che (L1 ~/.che-workspaces/workspaces/<slug>). 4 subcommands: create <NAME> | list | remove <NAME> [--no-dry-run --confirm] | restore <TRASH_SLUG> | trash-list."
 arguments:
   - name: subcommand
     description: "Required positional: create <NAME> | list | remove <NAME> [--no-dry-run --confirm] | restore <TRASH_SLUG> | trash-list. Remoção NUNCA apaga: move para .trash/. Dry-run DEFAULT. Exemplos: /che-workspace create flockr / /che-workspace list / /che-workspace remove foo / /che-workspace remove foo --no-dry-run --confirm / /che-workspace restore workspace--foo--20260904-235959 / /che-workspace trash-list"

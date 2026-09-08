@@ -39,7 +39,7 @@ Che organizes the user's projects into a strict 4-level hierarchy. Do not create
 
 **Agent Guidance — Hierarchy Management:**
 - **L1 Creation**: Use `che-workspace create <name>`.
-- **L2 Registration**: Use `che-project add <worktree-path> --workspace <name>`. Fallback name is `<workspace>--<folder>`.
+- **L2 Registration**: Use `che-project create <worktree-path> --workspace <name>`. Fallback name is `<workspace>--<folder>`.
 - **L3 Execution**: Commands like `che-spec` and `che-act` **MUST** receive both `worktree` and `project` parameters. If missing, ASK the user.
 
 ## 4. Hook Architecture
