@@ -6,33 +6,93 @@ CHE_REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "--- Che Multi-Agent Setup ---"
 echo "Che Repo: $CHE_REPO"
+echo
 
-# 1. Setup Codex if installed
-if command -v codex >/dev/null 2>&1; then
-  echo "Detected Codex CLI. Installing adapter..."
-  "$CHE_REPO/adapters/codex/install.sh"
+# Detection
+HAS_CODEX=0
+command -v codex >/dev/null 2>&1 && HAS_CODEX=1
+
+HAS_CLAUDE=0
+command -v claude >/dev/null 2>&1 && HAS_CLAUDE=1
+
+HAS_CURSOR=0
+(command -v cursor >/dev/null 2>&1 || [ -d "/Applications/Cursor.app" ] || [ -d "$HOME/.cursor" ]) && HAS_CURSOR=1
+
+echo "Detected agents:"
+[ $HAS_CODEX -eq 1 ] && echo "  [X] Codex" || echo "  [ ] Codex (not found)"
+[ $HAS_CLAUDE -eq 1 ] && echo "  [X] Claude Code" || echo "  [ ] Claude Code (not found)"
+[ $HAS_CURSOR -eq 1 ] && echo "  [X] Cursor" || echo "  [ ] Cursor (not found)"
+echo "  [X] Trae (Default)"
+echo
+
+# Interactive selection if running in a terminal
+if [ -t 0 ]; then
+    echo "Select adapters to install (comma separated numbers, e.g. 1,2,4):"
+    echo "1) Codex"
+    echo "2) Claude Code"
+    echo "3) Cursor"
+    echo "4) Trae (Global rules)"
+    echo "5) ALL detected"
+    echo "q) Quit"
+    read -p "Selection: " choice
+
+    if [[ "$choice" == "q" ]]; then
+        echo "Setup aborted."
+        exit 0
+    fi
+
+    install_codex=0
+    install_claude=0
+    install_cursor=0
+    install_trae=0
+
+    if [[ "$choice" == "5" ]]; then
+        [ $HAS_CODEX -eq 1 ] && install_codex=1
+        [ $HAS_CLAUDE -eq 1 ] && install_claude=1
+        [ $HAS_CURSOR -eq 1 ] && install_cursor=1
+        install_trae=1
+    else
+        IFS=',' read -ra ADAPTERS <<< "$choice"
+        for a in "${ADAPTERS[@]}"; do
+            case $a in
+                1) install_codex=1 ;;
+                2) install_claude=1 ;;
+                3) install_cursor=1 ;;
+                4) install_trae=1 ;;
+            esac
+        done
+    fi
 else
-  echo "Codex CLI not detected. Skipping."
+    # Non-interactive mode: install all detected
+    echo "Non-interactive mode detected. Installing all available adapters..."
+    install_codex=$HAS_CODEX
+    install_claude=$HAS_CLAUDE
+    install_cursor=$HAS_CURSOR
+    install_trae=1
 fi
 
-# 2. Setup Claude Code if installed
-if command -v claude >/dev/null 2>&1; then
-  echo "Detected Claude Code. Installing adapter..."
-  "$CHE_REPO/adapters/claude/install.sh"
-else
-  echo "Claude Code not detected. Skipping."
+# Execution
+if [ $install_codex -eq 1 ]; then
+    echo "Installing Codex adapter..."
+    "$CHE_REPO/adapters/codex/install.sh"
 fi
 
-# 3. Setup Cursor adapter
-if command -v cursor >/dev/null 2>&1 || [ -d "/Applications/Cursor.app" ] || [ -d "$HOME/.cursor" ]; then
-  echo "Detected Cursor IDE. Preparing adapter..."
-  "$CHE_REPO/adapters/cursor/install.sh"
-else
-  echo "Cursor IDE not detected. Skipping."
+if [ $install_claude -eq 1 ]; then
+    echo "Installing Claude Code adapter..."
+    "$CHE_REPO/adapters/claude/install.sh"
 fi
 
-# 4. Setup Trae (Default)
-# Trae uses the repository root directly, so no linking needed, 
-# but we can ensure global rules are set if needed.
+if [ $install_cursor -eq 1 ]; then
+    echo "Installing Cursor adapter..."
+    "$CHE_REPO/adapters/cursor/install.sh"
+fi
 
+if [ $install_trae -eq 1 ]; then
+    echo "Ensuring Trae global rules..."
+    # Trae uses the repo root directly, but we can ensure ~/.trae is current
+    # This is mostly a placeholder for future global Trae config
+    echo "Trae ready."
+fi
+
+echo
 echo "--- Setup Complete ---"

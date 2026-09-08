@@ -97,10 +97,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Resolve SOURCE: se vazio, assume pasta que contém este script, sobe um nível (dentro de .trae/scripts/).
+# Resolve SOURCE: se vazio, tenta descobrir localmente.
 if [ -z "$SOURCE" ]; then
-  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  SOURCE="$(cd "${SCRIPT_DIR}/.." && pwd)"
+  # Se o script está sendo rodado via curl | bash, o diretório pode não existir fisicamente ainda.
+  # Tentamos achar baseado no PWD se houver CHE_RULES.md, senão usamos o diretório do script.
+  if [ -f "CHE_RULES.md" ]; then
+    SOURCE="$(pwd)"
+  else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    SOURCE="$(cd "${SCRIPT_DIR}/.." && pwd)"
+  fi
 fi
 
 # Validações mínimas.
@@ -486,7 +492,8 @@ if [ "$UPDATE" -eq 1 ]; then
 fi
 
 if [ "$APPLY" -eq 0 ]; then
-  echo "⚠ dry-run. Para APLICAR de verdade: $0 $( [ "$UPDATE" -eq 1 ] && echo -n "--update " )--apply"
+  echo "⚠ dry-run. Para APLICAR de verdade, use a flag --apply."
+  echo "Exemplo: curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.sh | bash -s -- --apply"
 else
   echo "✔ target pronto em $TARGET"
   echo ""
@@ -494,7 +501,7 @@ else
   echo "  1. Abrir Trae de novo (ou recarregar)."
   echo "  2. Confirmar ~/.trae/README.md existe."
   echo "  3. Smoke : bash $TARGET/scripts/install-che.sh -h"
-  echo "  4. Decisions: corepack pnpm --dir $TARGET decisions --help 2>&1 | head"
+  echo "  4. Decisions: python3 -m che_core.cli --help"
   if [ "$UPDATE" -eq 1 ]; then
     echo "  5. Rollback manual: se quiser desfazer um arquivo, mv <arquivo>.bak-${TIMESTAMP} <arquivo>"
   fi
