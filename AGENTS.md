@@ -28,14 +28,19 @@ Che follows a strict 3-layer architecture. **HARD STOP:** Never duplicate rule b
 - There is NO `package.json` and NO Node.js dependency. Keep Che zero-build.
 - Python caches (`__pycache__/`) are gitignored and must **never** be committed.
 
-## 3. Workspaces Hierarchy (Path Canonicity)
+## 3. **Workspaces Hierarchy (Path Canonicity)**
 
 Che organizes the user's projects into a strict 4-level hierarchy. Do not create `.trae/` folders inside user projects. **Portability between machines is supported via `/che-export` and `/che-import` of durable info (L2 and L3).**
 
-1. **L1 (Workspace Root)**: `~/.che-workspaces/<workspace-slug>/`
-2. **L2 (Project Level)**: `<L1>/<repo-slug>/project/` (Durable info: `architecture.md`, `project_profile.md`, roles)
-3. **L3 (Worktree Level)**: `<L2>/../.wt/__<branch-slug>/` (Shared info across sessions in the same branch: `gh_stack/`, `qa/`, `designs/`, `decisions.log.jsonl`)
+1. **L1 (Workspace Root)**: `~/.che-workspaces/workspaces/<workspace-slug>/`
+2. **L2 (Project Level)**: `<L1>/<project-slug>/project/` (Durable info: `architecture.md`, `project_profile.md`, roles)
+3. **L3 (Worktree Level)**: `<L1>/<project-slug>/worktrees/<wt-slug>/` (Shared info across sessions in the same branch: `gh_stack/`, `qa/`, `designs/`, `decisions.log.jsonl`)
 4. **L4 (Session Level)**: `<L3>/sessions/<CHE_SESSION_ID>/` (Ephemeral info: execution logs, diff context, isolated debugger state)
+
+**Agent Guidance — Hierarchy Management:**
+- **L1 Creation**: Use `che-workspace create <name>`.
+- **L2 Registration**: Use `che-project create <worktree-path> --workspace <name>`. Fallback name is `<workspace>--<folder>`.
+- **L3 Execution**: Commands like `che-spec` and `che-act` **MUST** receive both `worktree` and `project` parameters. If missing, ASK the user.
 
 ## 4. Hook Architecture
 

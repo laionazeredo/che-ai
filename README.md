@@ -189,13 +189,13 @@ Uma vez instalado, o Che expõe suas capacidades diretamente na interface de cha
 |---|---|---|
 | `/che-architect` | Parceiro estratégico de arquitetura de sistemas (stack, infra, segurança, compliance). | devops + engineering |
 | `/che-archeology` | Infere Intent e Roadmap a partir do histórico git e PRs. | product |
-| `/che-workspace [list\|add\|remove\|trash-list\|restore]` | ✨ **NOVO**: Gerencia workspaces L1 (`~/.che-workspaces/<slug>/`). 3 safety gates + trash canônico. | engineering |
-| `/che-project [list\|init\|remove\|trash-list\|restore]` | ✨ **NOVO**: Inicializa projeto L2 (scaffold `architecture.md`, `project_profile.md`, registry) e remove via trash. | engineering |
+| `/che-workspace [list\|create\|remove\|trash-list\|restore]` | ✨ **NOVO**: Gerencia workspaces L1 (`~/.che-workspaces/workspaces/<slug>/`). 3 safety gates + trash canônico. | engineering |
+| `/che-project [list\|create\|remove\|trash-list\|restore]` | ✨ **NOVO**: Inicializa projeto L2 (scaffold `architecture.md`, `project_profile.md`, registry) atrelado a um workspace. | engineering |
 | `/che-xray [worktree]` | Scan repo → gera project_profile.md 12 seções. | engineering |
 | `/che-onboarding [worktree]` | Contexto humano interativo (roadmap, personas, lógica negócio). | product (+ copywriting / ux se ativado) |
-| `/che-spec [input] [worktree] [slug]` | Gera/valida Especificação de Execução (SPEC Approved). | product |
-| `/che-plan [worktree] [slug]` | SPEC aprovada → tickets estruturados Linear/Jira/ClickUp com BDD ACs. | product |
-| `/che-act` | ★ Central: SPEC GATE → scope capture → **Task Graph DAG (col Domain + Envelope)**. | engineering (lê envelope depois) |
+| `/che-spec [input] <worktree> <project> [slug]` | Gera/valida Especificação de Execução (SPEC Approved). **Requer worktree e project.** | product |
+| `/che-plan <worktree> <project> [slug]` | SPEC aprovada → tickets estruturados Linear/Jira/ClickUp com BDD ACs. | product |
+| `/che-act` | ★ Central: SPEC GATE → scope capture → **Task Graph DAG (col Domain + Envelope)**. **Requer worktree e project.** | engineering (lê envelope depois) |
 | `/che-parallel` | `/che-act` + force_parallel + che-executor-dispatcher (batches Kahn waves independentes). | engineering |
 | `/che-ship` | 4 executable gates → atomic commits → push → Draft PR self-assigned. | engineering |
 | `/che-fix` | Scientific debugging loop (hypothesize → instrument → reproduce → analyze → fix → verify). | engineering |
@@ -280,11 +280,11 @@ O Che **não cria `.trae/` dentro dos seus projetos cliente**. Toda memória, ar
 
 | Subcomando | O que faz |
 |---|---|
-| `list` | Lista todos workspaces ativos em `~/.che-workspaces/` (JSON com slug, path, qtd projetos, last_modified). |
-| `add --slug <nome> [--path PATH]` | Cria workspace L1 + scaffolding vazio. Default path = `~/.che-workspaces/<slug>/`. Idempotente. |
-| `remove --slug <nome>` | ⚠️ Destrutivo. Move workspace INTEIRO para trash (todos projetos dentro). **3 safety gates obrigatórios.** |
+| `list` | Lista todos workspaces ativos em `~/.che-workspaces/workspaces/` (JSON com slug, path, qtd projetos). |
+| `create <nome>` | Cria workspace L1 + scaffolding vazio. Default path = `~/.che-workspaces/workspaces/<slug>/`. Idempotente. |
+| `remove <nome>` | ⚠️ Destrutivo. Move workspace INTEIRO para trash (todos projetos dentro). **3 safety gates obrigatórios.** |
 | `trash-list` | Lista entradas na lixeira com manifesto JSON. |
-| `restore --trash-slug <slug--timestamp>` | Restaura workspace de volta da lixeira. Conflitos de slug → sufixo restore. |
+| `restore --trash-slug <slug--timestamp>` | Restaura workspace de volta da lixeira. |
 
 #### Exemplos práticos
 
@@ -293,69 +293,39 @@ O Che **não cria `.trae/` dentro dos seus projetos cliente**. Toda memória, ar
 /che-workspace list
 
 # 2) Criar workspace para um cliente novo
-/che-workspace add --slug cliente-xpto
+/che-workspace create cliente-xpto
 
 # 3) Remover workspace obsoleto — PRIMEIRO dry-run default
-/che-workspace remove --slug cliente-xpto
+/che-workspace remove cliente-xpto
 # Retorna status "dry-run" mostrando quantos arquivos/projetos seriam movidos.
 # Concorda? Então desliga o dry-run + flags de confirmação dupla:
-/che-workspace remove --slug cliente-xpto --no-dry-run --confirmed --i-know-what-im-doing
-
-# 4) Ver lixeira de workspaces
-/che-workspace trash-list
-
-# 5) Restaurar um workspace removido por engano
-/che-workspace restore --trash-slug cliente-xpto--20260904-201530 --no-dry-run --confirmed
+/che-workspace remove cliente-xpto --no-dry-run --confirmed --i-know-what-im-doing
 ```
 
 ---
 
 ### `/che-project` — Gerencia Projetos L2
 
-**Quando usar:** Quando você clonou um repo cliente e quer **inicializar a estrutura durável L2** antes de começar a trabalhar. OU quando quer listar projetos dentro de um workspace. OU quando quer arquivar um projeto sem perder a memória.
+**Quando usar:** Quando você clonou um repo cliente e quer **inicializar a estrutura durável L2** atrelada a um workspace L1.
 
 #### Subcomandos
 
 | Subcomando | O que faz |
 |---|---|
-| `list [--workspace <ws-slug>]` | Lista projetos de um workspace (ou todos se omitir). Retorna slug, path, last_modified, tem_L3_branch. |
-| `init --slug <repo-slug> --workspace <ws-slug> [--git-dir /abs/path/do/repo]` | ⭐ Mais usado. Cria o scaffolding L2 obrigatório com **8 artefatos**: `architecture.md` vazio, `project_profile.md` 12-seções template, `registry.jsonl` header, roles vazio, pastas `_db/` e `.wt/` para L3, e registra o binding `git_dir → <ws-slug>/<project-slug>` (para o hook L3 encontrar o caminho certo quando `git worktree add` rodar). |
-| `remove --slug <repo-slug> --workspace <ws-slug>` | ⚠️ Destrutivo. Move pasta `project/` + `_db/` + `.wt/` para trash. **3 safety gates obrigatórios.** Preserva o repositório Git do usuário — NUNCA toca no código cliente. |
-| `trash-list [--workspace <ws-slug>]` | Lista projetos na lixeira. |
-| `restore --trash-slug <slug--timestamp> --workspace <ws-slug>` | Restaura projeto da lixeira. |
+| `list [--workspace <ws-slug>]` | Lista projetos de um workspace (ou todos se omitir). |
+| `create <worktree-path> --workspace <ws-slug> [--name <friendly-name>]` | ⭐ Mais usado. Registra um projeto L2 no workspace informado. Se `--name` omitido, o fallback é `<workspace>--<folder>`. Valida se o workspace existe. |
+| `remove <project-slug> --workspace <ws-slug>` | ⚠️ Destrutivo. Move pasta `project/` + `_db/` + `worktrees/` para trash. **3 safety gates obrigatórios.** |
 
 #### Exemplos práticos
 
 ```bash
-# 1) Inicializar um projeto L2 — passo MAIS IMPORTANTE, rodar ANTES de /che-spec ou /che-act.
-#    Contexto: estou trabalhando no repositório /home/laion/code/flockr/Lumos.
-#    Quero associá-lo ao workspace "flockr" com slug do projeto "lumos".
-/che-project init --slug lumos \
-                  --workspace flockr \
-                  --git-dir /home/laion/code/flockr/Lumos
+# 1) Criar um projeto L2 associado a um workspace existente
+#    Contexto: repositório em /home/laion/code/flockr/Lumos
+#    Workspace: Flockr
+/che-project create /home/laion/code/flockr/Lumos --workspace Flockr
 # Isto cria:
-#   ~/.che-workspaces/flockr/lumos/project/architecture.md
-#   ~/.che-workspaces/flockr/lumos/project/project_profile.md (template 12 seções)
-#   ~/.che-workspaces/flockr/lumos/project/registry.jsonl
-#   ~/.che-workspaces/flockr/lumos/project/roles
-#   ~/.che-workspaces/flockr/lumos/_db/   (← para SQLite L2)
-#   ~/.che-workspaces/flockr/lumos/.wt/   (← o hook L3 vai criar subpastas __<branch> aqui)
-# + registra binding no registry:  git_dir=/home/laion/code/flockr/Lumos  →  flockr/lumos
-
-# 2) Listar projetos no workspace flockr
-/che-project list --workspace flockr
-
-# 3) Dry-run para remover um projeto arquivado
-/che-project remove --slug projeto-legado --workspace flockr
-# (mostra plano: 18 arquivos em ~/.che-workspaces/.trash/project/...)
-
-# 4) Aplicar remoção com segurança
-/che-project remove --slug projeto-legado --workspace flockr \
-    --no-dry-run --confirmed --i-know-what-im-doing
-
-# 5) Restaurar projeto removido sem querer
-/che-project restore --trash-slug projeto-legado--20260904-202000 \
-                     --workspace flockr --no-dry-run --confirmed
+#   ~/.che-workspaces/workspaces/Flockr/github-com-Flockr-platform-Lumos/project/ (ou nome amigável)
+# Fallback de nome se --name omitido: Flockr--Lumos
 ```
 
 ---
@@ -366,12 +336,11 @@ O Che **não cria `.trae/` dentro dos seus projetos cliente**. Toda memória, ar
 Nova ideia ou repo cliente novo
     │
     ▼
-1. /che-workspace add --slug minha-equipe      (se workspace não existir)
+1. /che-workspace create minha-equipe    (se workspace não existir)
     │
     ▼
-2. /che-project init --slug meu-repo \        (ASSOCIA git_dir → workspace/projeto L2
-                      --workspace minha-equipe \  registra binding, cria 8 artefatos L2)
-                      --git-dir /abs/path/meu-repo
+2. /che-project create meu-repo \           (ASSOCIA worktree → workspace L1
+                      --workspace minha-equipe \  registra L2, cria 8 artefatos)
     │
     ▼
 3. git clone / git worktree add minha-feature  (USE Git canônico — hook PostToolUse
@@ -386,12 +355,12 @@ Nova ideia ou repo cliente novo
 6. Terminou ciclo? git worktree remove feat-X  (hook move a pasta L3 para trash idempotente)
     │
     ▼
-7. Projeto arquivado? /che-project remove ...  (move project/ + _db/ + .wt/ para trash)
+7. Projeto arquivado? /che-project remove ...  (move project/ + _db/ + worktrees/ para trash)
 ```
 
-**Resumo mental:** `/che-workspace` = **organização**, `/che-project init` = **vincular repo físico ao armazenamento durável do Che** (o binding mais crítico de todos). Sem `init` correto, os hooks L3 não encontram o destino para criar `.wt/__<branch>/` e suas sessões ficam órfãs.
+**Resumo mental:** `/che-workspace` = **organização**, `/che-project create` = **vincular repo físico ao armazenamento durável do Che** (o binding mais crítico de todos). Sem `create` correto, os hooks L3 não encontram o destino para criar `.wt/__<branch>/` e suas sessões ficam órfãs.
 
-> 💡 **Dica:** Se você já tem um repositório clonado e quer "adotá-lo" no Che sem perder nada, é só rodar o `/che-project init` — ele nunca toca no diretório do seu código cliente, só cria estrutura **fora** em `~/.che-workspaces/`.
+> 💡 **Dica:** Se você já tem um repositório clonado e quer "adotá-lo" no Che sem perder nada, é só rodar o `/che-project create --workspace <WS>` — ele nunca toca no diretório do seu código cliente, só cria estrutura **fora** em `~/.che-workspaces/`.
 
 ---
 

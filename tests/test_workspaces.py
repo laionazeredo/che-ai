@@ -45,9 +45,9 @@ def _parse_json(s):
 # --- WORKSPACE TESTS (L1) -----------------------------------------------------
 
 
-def test_workspace_add_and_list_cli():
-    """che workspace add foo → cria dir; che workspace list → retorna entry."""
-    code, out, _ = _run_cli("workspace", "add", "Test WS")
+def test_workspace_create_and_list_cli():
+    """che workspace create foo → cria dir; che workspace list → retorna entry."""
+    code, out, _ = _run_cli("workspace", "create", "Test WS")
     assert code == 0, out
     data = _parse_json(out)
     assert data is not None
@@ -65,7 +65,7 @@ def test_workspace_add_and_list_cli():
 
 def test_workspace_remove_3_safety_gates():
     """remove segue 3 gates: (1) dry-run default (2) confirmed obrigatório (3) move pra trash não apaga."""
-    _run_cli("workspace", "add", "yolo-deleteme")
+    _run_cli("workspace", "create", "yolo-deleteme")
 
     # Gate 1: dry-run default → NÃO move
     code, out, _ = _run_cli("workspace", "remove", "yolo-deleteme")
@@ -100,7 +100,7 @@ def test_workspace_remove_3_safety_gates():
 
 def test_workspace_trash_list_and_restore():
     """remove → trash-list mostra → restore traz de volta, conflito-safe."""
-    _run_cli("workspace", "add", "restore-me")
+    _run_cli("workspace", "create", "restore-me")
     _, out_rm, _ = _run_cli("workspace", "remove", "restore-me", "--no-dry-run", "--confirm")
     rm = _parse_json(out_rm)
     trash_slug = Path(rm["to"]).name
@@ -122,14 +122,18 @@ def test_workspace_trash_list_and_restore():
 # --- PROJECT TESTS (L2) -------------------------------------------------------
 
 
-def test_project_init_scaffold_8_files_and_ensure_l3(tmp_path):
-    """che project init → scaffold 8 artefatos L2 + L3 no CHE_WORKSPACE_SHARED (fora do worktree, contratual §4)."""
+def test_project_create_scaffold_8_files_and_ensure_l3(tmp_path):
+    """che project create → scaffold 8 artefatos L2 + L3 no CHE_WORKSPACE_SHARED (fora do worktree, contratual §4)."""
+    # Create a workspace first
+    _run_cli("workspace", "create", "my-ws")
+
     wt = tmp_path / "myproj"
     wt.mkdir()
     (wt / ".git").mkdir()
     (wt / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
 
-    code, out, err = _run_cli("project", "init", str(wt))
+    # project create now requires --workspace
+    code, out, err = _run_cli("project", "create", str(wt), "--workspace", "my-ws")
     assert code == 0, f"exit={code} stderr={err} stdout={out}"
     d = _parse_json(out)
     assert d["initialized"] is True
@@ -164,10 +168,13 @@ def test_project_init_scaffold_8_files_and_ensure_l3(tmp_path):
 
 def test_project_remove_and_restore_safety():
     """project remove segue mesmas 3 safety gates + restore ok."""
+    # Create a workspace first
+    _run_cli("workspace", "create", "safety-ws")
+
     with tempfile.TemporaryDirectory() as td:
         tmpd = Path(td)
         (tmpd / ".git").mkdir()
-        _run_cli("project", "init", str(tmpd))
+        _run_cli("project", "create", str(tmpd), "--workspace", "safety-ws")
         _, out_list, _ = _run_cli("project", "list")
         lst = _parse_json(out_list)
         assert isinstance(lst, list) and len(lst) >= 1
