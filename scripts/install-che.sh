@@ -97,15 +97,29 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Resolve SOURCE: se vazio, tenta descobrir localmente.
+# Cleanup logic
+CLEANUP_PATHS=""
+cleanup() {
+  [ -n "$CLEANUP_PATHS" ] && rm -rf $CLEANUP_PATHS
+}
+trap cleanup EXIT
+
+# Resolve SOURCE: se vazio, tenta descobrir localmente ou clona o repo.
 if [ -z "$SOURCE" ]; then
   # Se o script está sendo rodado via curl | bash, o diretório pode não existir fisicamente ainda.
   # Tentamos achar baseado no PWD se houver CHE_RULES.md, senão usamos o diretório do script.
   if [ -f "CHE_RULES.md" ]; then
     SOURCE="$(pwd)"
-  else
+  elif [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     SOURCE="$(cd "${SCRIPT_DIR}/.." && pwd)"
+  else
+    # Execução via curl: clonar repo para pasta temporária
+    echo "    Execução remota detectada. Clonando repositório para instalação..."
+    TMP_SOURCE=$(mktemp -d)
+    git clone --depth 1 https://github.com/laionazeredo/che-ai.git "$TMP_SOURCE" >/dev/null 2>&1
+    SOURCE="$TMP_SOURCE"
+    CLEANUP_PATHS="$CLEANUP_PATHS $TMP_SOURCE"
   fi
 fi
 
@@ -259,7 +273,7 @@ backup_if_exists_and_diff() {
 # ============================================================
 NEEDS_PNPM_INSTALL=0
 RENDERED_HOOKS_JSON="$(mktemp)"
-trap 'rm -f "$RENDERED_HOOKS_JSON"' EXIT
+CLEANUP_PATHS="$CLEANUP_PATHS $RENDERED_HOOKS_JSON"
 python3 - "${SOURCE}/hooks.json" "$RENDERED_HOOKS_JSON" "$TARGET" <<'PY'
 import json
 from pathlib import Path
