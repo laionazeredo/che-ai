@@ -1,0 +1,79 @@
+name: Adapter Smoke Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  claude-adapter:
+    name: Claude Code Adapter Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run Claude Adapter Install
+        run: |
+          mkdir -p ~/.claude
+          cd adapters/claude
+          chmod +x install.sh
+          ./install.sh
+        env:
+          CLAUDE_HOME: ${{ github.workspace }}/mock-claude
+
+      - name: Verify Claude Installation
+        run: |
+          CLAUDE_MOCK="$GITHUB_WORKSPACE/mock-claude"
+          echo "Verifying symlinks in $CLAUDE_MOCK/commands..."
+          [ -L "$CLAUDE_MOCK/commands/che-workspace.md" ] || { echo "Missing che-workspace.md symlink"; exit 1; }
+          [ -L "$CLAUDE_MOCK/commands/che-project.md" ] || { echo "Missing che-project.md symlink"; exit 1; }
+          
+          echo "Verifying hooks in $CLAUDE_MOCK/settings.json..."
+          grep -q "pretooluse-worktree-binding.py" "$CLAUDE_MOCK/settings.json" || { echo "Hooks not found in settings.json"; exit 1; }
+
+  codex-adapter:
+    name: Codex Adapter Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run Codex Adapter Install
+        run: |
+          cd adapters/codex
+          chmod +x install.sh
+          ./install.sh
+        env:
+          CODEX_HOME: ${{ github.workspace }}/mock-codex
+          AGENTS_HOME: ${{ github.workspace }}/mock-agents
+
+      - name: Verify Codex Installation
+        run: |
+          CODEX_MOCK="$GITHUB_WORKSPACE/mock-codex"
+          AGENTS_MOCK="$GITHUB_WORKSPACE/mock-agents"
+          
+          echo "Verifying symlinks in $CODEX_MOCK/commands..."
+          [ -L "$CODEX_MOCK/commands/che-workspace.md" ] || { echo "Missing che-workspace.md symlink in codex"; exit 1; }
+          
+          echo "Verifying symlinks in $AGENTS_MOCK/skills..."
+          [ -L "$AGENTS_MOCK/skills/che-act" ] || { echo "Missing che-act skill symlink"; exit 1; }
+          
+          echo "Verifying hooks in $CODEX_MOCK/hooks.json..."
+          grep -q "posttooluse-3layer-dedup.py" "$CODEX_MOCK/hooks.json" || { echo "Hooks not found in hooks.json"; exit 1; }
+          
+          echo "Verifying config in $CODEX_MOCK/config.toml..."
+          grep -q "hooks = true" "$CODEX_MOCK/config.toml" || { echo "Hooks not enabled in config.toml"; exit 1; }
+
+      - name: Verify Che Core CLI
+        run: |
+          python3 -m che_core.cli --help
