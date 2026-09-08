@@ -260,18 +260,18 @@ This rule turns "agilidade" from vague talk into enforceable checkpoints:
    - If you need behavior breaking: NON-GOALS, Data Model + Migration with rollback plan, and explicit user approval.
 6. **Test-suite naming = behavior observable ONLY (REGRA 7.9 do che).**
 
-   **🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça ao contrário):**
-   > ❌ **ERRADO:** Escrever `it("FLO-714 T1.2 valida AC 3.1 deploy")` → IDs NO TÍTULO = antinômio da regra.
-   > ❌ **AINDA MAIS ERRADO:** Reclamar / corrigir um teste porque o título NÃO contém FLO/T/AC. Isso é o comportamento ESPERADO / BOM / COMPLIANT.
-   > ✅ **CORRETO:** Título DESCREVE comportamento observável, IDs vão em comentário trace acima / 1ª linha dentro do bloco.
+   **🔴 HARD RULE — REFERÊNCIAS EXTERNAS PROIBIDAS NO CÓDIGO (NUNCA faça):**
+   > ❌ **ERRADO:** Escrever `// @ac 3.1 | @task T2` ou colocar IDs em títulos de testes.
+   > ❌ **MOTIVO:** O plano estratégico e tático (Specflow/SbE) vive FORA da codebase (no Che Workspace). Referenciar IDs efêmeros de gestão no código fonte polui a codebase e cria referências impossíveis de validar sem o harness.
+   > ✅ **CORRETO:** Título do teste deve descrever o **comportamento observável** de forma clara e humana. A rastreabilidade entre Código ↔ Spec é feita pelo agente via `decisions.log.jsonl` e `task_graph.md` (L3), nunca injetada no `.ts/.py/.go`.
 
-   - **`describe("...")`** = module/feature/context UNDER TEST (domain grouping, not task IDs).
+   - **`describe("...")`** = module/feature/context UNDER TEST (domain grouping).
      ✅ `describe("POST /api/payments/refund")`
      ❌ `describe("FLO-513 T2 — process refund ACs 3.1-3.4")`
    - **`it("...")` / `test("...")`** = ONE observable behavior, starts with verb (returns/allows/blocks/calculates/emits/saves…) + condition + expected outcome. ONE assert when possible.
      ✅ `it("returns 409 Conflict when refunding an already-refunded payment")`
      ❌ `it("Task T2.3 valida regra do §4.2 se pagamento ja foi estornado")`
-   - **NEVER embed internal IDs (FLO-XXX / task T\d+ / AC\d+ / SPEC-\w+ / §N) in the TITLE STRING.** If you need traceability to an AC/ticket/spec: use a 1-line JSDoc comment ABOVE the block OR a single `// @ac 3.1 | @task T2 | @ticket FLO-513` comment as FIRST LINE INSIDE the test block body.
+   - **NEVER embed internal IDs (FLO-XXX / task T\d+ / AC\d+ / SPEC-\w+ / §N) ANYWHERE in the code.** If you need traceability, the agent must consult the `decisions.log.jsonl` or `task_graph.md` at Level 3.
    - Suite organization: group tests BY DOMAIN / CONTEXT. Nested `describe()` = more specific context (e.g. `describe("POST /refund").describe("with currency GBP")`).
 
 ### 16. 🔴 CODE REVIEW OPTIMIZATION + COMMENT LINE LIMIT (NEW — HARD RULE)
