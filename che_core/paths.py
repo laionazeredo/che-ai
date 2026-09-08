@@ -32,11 +32,13 @@ def _slugify(text: str) -> str:
     return safe
 
 
-def resolve_workspace_name(cwd_override: Optional[str] = None) -> str:
-    """Translates che_resolve_workspace_name"""
+def resolve_workspace_name(cwd_override: Optional[str] = None, project_slug_hint: Optional[str] = None) -> str:
+    """Translates che_resolve_workspace_name.
+    Prioritizes existing project directories in L2.
+    """
     cwd = Path(cwd_override or os.getcwd()).resolve()
 
-    # Environment overrides
+    # 1. Environment overrides
     override = os.environ.get("CHE_WORKSPACE_NAME_OVERRIDE") or os.environ.get("HARNESS_WORKSPACE_NAME_OVERRIDE")
     if override:
         return override
@@ -45,7 +47,29 @@ def resolve_workspace_name(cwd_override: Optional[str] = None) -> str:
     if env_name:
         return env_name
 
-    # Global code workspaces check
+    # 2. Priority: Scan for existing project directory in workspaces
+    if project_slug_hint:
+        workspaces_root = get_workspaces_root()
+        ws_container = workspaces_root / "workspaces"
+        if ws_container.is_dir():
+            matches = []
+            for ws_dir in ws_container.iterdir():
+                if ws_dir.is_dir():
+                    # Check if project folder exists AND has a 'project' subfolder (L2)
+                    if (ws_dir / project_slug_hint / "project").is_dir():
+                        matches.append(ws_dir.name)
+
+            if len(matches) == 1:
+                return matches[0]
+            elif len(matches) > 1:
+                # Ambiguous: if we are inside a path that matches one of the workspaces, use it
+                for m in matches:
+                    if m.lower() in str(cwd).lower():
+                        return m
+                # Otherwise, return the first one but it's risky
+                return matches[0]
+
+    # 3. Global code workspaces check
     code_ws_global = Path(
         os.environ.get("CHE_CODE_WORKSPACES_DIR")
         or os.environ.get("HARNESS_CODE_WORKSPACES_DIR")
@@ -163,9 +187,9 @@ def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[st
     """Translates che_compute_paths and returns dictionary of variables"""
     wt_root = Path(worktree_root).resolve()
 
-    workspace_name = resolve_workspace_name(cwd_override)
-    worktree_slug = resolve_worktree_slug(str(wt_root))
     project_slug = project_slug_from_git_origin(str(wt_root))
+    workspace_name = resolve_workspace_name(cwd_override, project_slug_hint=project_slug)
+    worktree_slug = resolve_worktree_slug(str(wt_root))
 
     workspaces_root = get_workspaces_root()
 
