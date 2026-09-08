@@ -16,26 +16,41 @@ All agents share the same **Engineering Contracts**, **Politburo Expert Skills**
 
 ## 🚀 Installation Guide
 
-### Quick Install (Recommended)
+Che can be installed from any directory using the remote install script.
 
-To install or update Che in your local environment (defaulting to `~/.trae`), run:
+### 1. Quick Install (One-Liner)
+
+Run the following command to download and execute the installer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.sh | bash -s -- --apply
 ```
 
-### Interactive Multi-Agent Setup
+### 2. Interactive Setup (Adapters)
 
-The installer will automatically prompt you to select which AI agents you want to configure. You can select multiple adapters:
+During the installation, the script will prompt you to select which AI agents you want to integrate with Che. You can select multiple adapters by entering their numbers separated by commas (e.g., `1,2,3`):
 
-1.  **Codex**: Links skills and commands to the OpenAI Codex CLI.
-2.  **Claude Code**: Configures Anthropic's Claude Code CLI with hooks and commands.
-3.  **Cursor**: Prepares rules for the Cursor IDE.
-4.  **Trae (Default)**: Ensures the core harness is ready for Trae.
+-   **1) Codex**: For the OpenAI Codex CLI.
+-   **2) Claude Code**: For Anthropic's Claude Code CLI.
+-   **3) Cursor**: For the Cursor IDE.
+-   **4) Trae (Global rules)**: Native rules for the Trae IDE.
+-   **5) ALL detected**: Automatically configures every agent found on your system.
 
-### Manual Adapter Setup
+### 3. Verification
 
-If you have already installed Che and want to add a new agent adapter later, run:
+After installation, verify that Che is correctly installed by running:
+
+```bash
+# Check CLI availability
+python3 -m che_core.cli --help
+
+# Verify global installation path
+ls -la ~/.trae/README.md
+```
+
+### 4. Adding Adapters Later
+
+If you skipped an adapter during the initial installation or installed a new AI agent later, you can re-run the setup assistant:
 
 ```bash
 bash ~/.trae/scripts/setup-adapters.sh

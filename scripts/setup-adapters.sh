@@ -26,7 +26,11 @@ echo "  [X] Trae (Default)"
 echo
 
 # Interactive selection if running in a terminal
-if [ -t 0 ]; then
+if [ -t 0 ] || [ -c /dev/tty ]; then
+    # Redirect stdin to /dev/tty to allow interactive input even if script is piped
+    exec 3<&0
+    exec < /dev/tty
+
     echo "Select adapters to install (comma separated numbers, e.g. 1,2,4):"
     echo "1) Codex"
     echo "2) Claude Code"
@@ -35,6 +39,10 @@ if [ -t 0 ]; then
     echo "5) ALL detected"
     echo "q) Quit"
     read -p "Selection: " choice
+
+    # Restore stdin
+    exec <&3
+    exec 3<&-
 
     if [[ "$choice" == "q" ]]; then
         echo "Setup aborted."
