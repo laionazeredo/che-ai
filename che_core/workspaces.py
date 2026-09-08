@@ -451,7 +451,7 @@ def init_project(
             "error": f"Workspace '{workspace}' não existe.",
             "suggestion": f"Crie o workspace primeiro com `che workspace create {workspace}` ou verifique o nome.",
             "workspace_missing": True,
-            "requested_workspace": workspace
+            "requested_workspace": workspace,
         }
 
     # Fallback name logic: <workspace>--<folder>

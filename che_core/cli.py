@@ -241,7 +241,9 @@ def main():
     proj_subs = parser_proj.add_subparsers(dest="proj_cmd", required=True)
 
     # create (primary), add and init (aliases)
-    pj_create = proj_subs.add_parser("create", aliases=["add", "init"], help="Cria/Adiciona um projeto L2 a um workspace.")
+    pj_create = proj_subs.add_parser(
+        "create", aliases=["add", "init"], help="Cria/Adiciona um projeto L2 a um workspace."
+    )
     pj_create.add_argument("worktree_root", help="Worktree root do projeto a adicionar.")
     pj_create.add_argument("--workspace", required=True, help="Nome do workspace destino (OBRIGATÓRIO).")
     pj_create.add_argument(
