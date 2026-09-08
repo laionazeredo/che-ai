@@ -5,7 +5,7 @@ arguments:
     description: "Absolute worktree path (obrigatório para `add`). Para list/remove/restore usa bindings atuais se omitido."
     required: false
   - name: subcommand
-    description: "Required positional: add <WORKTREE_ROOT> (alias: init) [--workspace WS] [--domain engineering] [--name FRIENDLY] [--session-id SID] | list | remove <PROJECT_SLUG> [--no-dry-run --confirm] | restore <TRASH_SLUG>. Domínios Politburo válidos: engineering | ux | product | devops | copywriting | social | seo-analytics. Default=engineering."
+    description: "Required positional: add <WORKTREE_ROOT> (alias: init) --workspace <WS> [--domain engineering] [--name FRIENDLY] [--session-id SID] | list | remove <PROJECT_SLUG> [--no-dry-run --confirm] | restore <TRASH_SLUG>. Domínios Politburo válidos: engineering | ux | product | devops | copywriting | social | seo-analytics. Default=engineering."
     required: true
 ---
 
@@ -32,8 +32,8 @@ Gerencia a **camada L2 (Project Durable Registry)** da hierarquia 4-nível do Ch
 
 | Subcommand | CLI invocation | Expected agent action after |
 |---|---|---|
-| `add <WT> [--workspace WS] [--domain D] [--name N] [--session-id S]` | `python3 -m che_core.cli project add "<WT>" [flags] --json` | **Entrada recomendada para onboarding:** roda `che project add` ANTES de che-xray/che-onboarding. Agent: (1) resolve workspace default via `resolve_workspace_name(WT)` se `--workspace` omitido; (2) mostra domínio default=engineering e pergunta se quer trocar (só lista 7 Politburo válidos); (3) detecta stack via probe de arquivos + git remote origin; (4) scaffold 8 files + ensure L3 dirs; (5) report `{project_slug, workspace, domain, stack, origin, files_created: 8, l3_created: true}`. |
-| `init <WT>` | `python3 -m che_core.cli project init "<WT>" --json` | Alias para `add`. Mantido para compatibilidade. |
+| `add <WT> --workspace <WS> [--domain D] [--name N] [--session-id S]` | `python3 -m che_core.cli project add "<WT>" --workspace "<WS>" [flags] --json` | **Entrada recomendada para onboarding:** roda `che project add` ANTES de che-xray/che-onboarding. Agent: (1) valida se o workspace `<WS>` existe; se não, pergunta se deve criar um novo; (2) mostra domínio default=engineering e pergunta se quer trocar (só lista 7 Politburo válidos); (3) detecta stack via probe de arquivos + git remote origin; (4) define `friendly_name` como `<workspace>--<folder>` se omitido; (5) scaffold 8 files + ensure L3 dirs; (6) report `{project_slug, workspace, domain, stack, origin, files_created: 8, l3_created: true}`. |
+| `init <WT> --workspace <WS>` | `python3 -m che_core.cli project init "<WT>" --workspace "<WS>" --json` | Alias para `add`. Mantido por histórico. |
 | `list` | `python3 -m che_core.cli project list --json` | Tabela: `Slug │ Workspace │ Domain │ Stack │ Has arch? │ Has profile? │ Has DB?` |
 | `remove <SLUG> [flags]` | `python3 -m che_core.cli project remove "<SLUG>" [flags] --json` | Mesmo protocolo 2-pass do `/che-workspace remove`: 1) dry-run → mostrar plano ao user; 2) user confirma → rodar com `--no-dry-run --confirm`. |
 | `restore <TRASH_SLUG>` | `python3 -m che_core.cli project restore "<TRASH_SLUG>" --json` | Restaura projeto da lixeira. Conflito slug → `--restored-<ts>` sufixo. |
