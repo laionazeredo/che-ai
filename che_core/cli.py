@@ -205,9 +205,10 @@ def main():
     parser_ws = subparsers.add_parser("workspace", help="Gerencia workspaces Che (L1 workspaces root).")
     ws_subs = parser_ws.add_subparsers(dest="ws_cmd", required=True)
 
-    pw_add = ws_subs.add_parser("add")
-    pw_add.add_argument("name", help="Nome do workspace (será slugged).")
-    pw_add.add_argument("--worktree-root", default=None, help="Worktree opcional para definir workspace principal.")
+    # create (primary) and add (alias)
+    pw_create = ws_subs.add_parser("create", aliases=["add"], help="Cria um novo workspace L1.")
+    pw_create.add_argument("name", help="Nome do workspace (será slugged).")
+    pw_create.add_argument("--worktree-root", default=None, help="Worktree opcional para definir workspace principal.")
 
     ws_subs.add_parser("list", help="Lista workspaces existentes + projects count.")
 
@@ -239,7 +240,8 @@ def main():
     parser_proj = subparsers.add_parser("project", help="Gerencia projects L2 (.registry/projects/<slug>).")
     proj_subs = parser_proj.add_subparsers(dest="proj_cmd", required=True)
 
-    pj_init = proj_subs.add_parser("init")
+    # init (legacy) and add (intuitive)
+    pj_init = proj_subs.add_parser("init", aliases=["add"], help="Inicializa/Adiciona um projeto L2 a um workspace.")
     pj_init.add_argument("worktree_root", help="Worktree root do projeto a inicializar.")
     pj_init.add_argument("--workspace", default=None, help="Override workspace name (default = resolve via paths.py).")
     pj_init.add_argument(
@@ -499,7 +501,7 @@ def main():
     if args.command == "workspace":
         from che_core.workspaces import add_workspace, list_trash, list_workspaces, remove_workspace, restore_workspace
 
-        if args.ws_cmd == "add":
+        if args.ws_cmd in ["create", "add"]:
             res = add_workspace(args.name, worktree_root=args.worktree_root)
         elif args.ws_cmd == "list":
             res = list_workspaces()
@@ -518,7 +520,7 @@ def main():
     if args.command == "project":
         from che_core.workspaces import init_project, list_projects, remove_project, restore_project
 
-        if args.proj_cmd == "init":
+        if args.proj_cmd in ["init", "add"]:
             res = init_project(
                 args.worktree_root,
                 workspace_name=args.workspace,
