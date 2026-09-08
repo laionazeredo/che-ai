@@ -441,6 +441,24 @@ def init_project(
 
     project_slug = project_slug_from_git_origin(str(wt))
     workspace = workspace_name or resolve_workspace_name(str(wt))
+
+    # Validate workspace existence
+    ws_root = get_workspaces_root() / "workspaces"
+    ws_dir = ws_root / workspace
+    if not ws_dir.is_dir():
+        return {
+            "initialized": False,
+            "error": f"Workspace '{workspace}' não existe.",
+            "suggestion": f"Crie o workspace primeiro com `che workspace create {workspace}` ou verifique o nome.",
+            "workspace_missing": True,
+            "requested_workspace": workspace
+        }
+
+    # Fallback name logic: <workspace>--<folder>
+    if not friendly_name:
+        folder_name = wt.name
+        friendly_name = f"{workspace}--{folder_name}"
+
     worktree_slug = resolve_worktree_slug(str(wt))
 
     paths = compute_paths(str(wt), session_id, cwd_override=str(wt))
@@ -451,7 +469,7 @@ def init_project(
 
     ts = _timestamp()
     fmt_vars = {
-        "project_slug": friendly_name or project_slug,
+        "project_slug": friendly_name,
         "ts": ts,
         "stack": _detect_stack(str(wt)),
         "domain": domain,
