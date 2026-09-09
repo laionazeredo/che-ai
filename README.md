@@ -13,7 +13,7 @@ The stack of ideas behind Che comes from four battle-tested methodologies we do 
 
 The result is a harness that:
 - **Scales a *whole team*, not just one agent.** Engineering + Product + UX share a single domain playbook layer. An agent writing a checkout screen and an agent writing a Figma screen both read the same product context and brand rules, without copy-pasting.
-- **Never puts planning / state / memory folders inside your repositories.** Project memory (specs, decisions, scopes, QA reports) lives **outside** user repos, in a canonical `~/.che-workspaces` user-home hierarchy. The rule configuration package itself lives where the IDE expects it — for Claude Code that is `~/.trae`, symlinked into Claude Code's adapter folders — never inside a customer's repo. (Pragmatic Programmer orthogonality: *team process state* does not live inside the *shipped artifact*).
+- **Never puts planning / state / memory folders inside your repositories.** Project memory (specs, decisions, scopes, QA reports) lives **outside** user repos, in a canonical `~/.che-workspaces` user-home hierarchy. The Che rule package itself installs into each IDE's *own* adapter directory — for Claude Code that means symlinks under `~/.claude/` (into `CLAUDE_HOME/skills`, `CLAUDE_HOME/commands`, plus a `CLAUDE_HOME/CLAUDE.md` and `settings.json` hooks). The source-of-truth checkout that feeds all adapter symlinks lives at `~/.trae` — it is never placed inside a customer's repo. (Pragmatic Programmer orthogonality: *team process state* does not live inside the *shipped artifact*).
 - **Never deletes anything permanently.** Every `remove` is a **move to trash** with a printed one-line restore command (Design by Contract postcondition: "after `remove X`, the state of X is recoverable in one deterministic command"). Hard-delete commands do not exist, and will not be added.
 - **Runs structural/admin operations deterministically as a terminal CLI.** Project onboarding, workspace creation, session config, task listing, state indexing, export/import portability, and safe eject are exposed as a zero-dependency stdlib Python CLI (`che-ai` / `che`), installed once and callable from any shell or CI. This is a feature for predictability and cost discipline, not the product's headline.
 - **Single-Source-of-Truth (SSoT), everywhere.** Every rule, score, playbook, template lives in exactly one canonical file. If you see the same body twice anywhere in the repo — that is a bug, report it. (DRY, The Pragmatic Programmer ch. 2.)
@@ -62,8 +62,11 @@ Che ships as a **zero-dependency PEP-621 Python package**. The two canonical bin
 Use **pipx** (isolated user-venv, never breaks system Python):
 
 ```bash
-# Claude Code's default adapter reads the Che config package from ~/.trae
-# (install-che.sh already clones it here when you run the quick install above)
+# The source-of-truth Che package checkout lives here (install-che.sh Step 1
+# already clones it for you in the quick install path). pipx needs to run
+# from this folder to find pyproject.toml. setup-adapters.sh (ran auto-
+# matically at the installer's end) then links skills/commands/rules into
+# Claude Code's real adapter home at ~/.claude/.
 cd ~/.trae
 pipx install -e . --force
 
