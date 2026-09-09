@@ -35,9 +35,7 @@ def _resolve_che_home(che_home: Optional[Path] = None) -> Path:
         cand = cand.expanduser().resolve()
         if _is_che_home(cand):
             return cand
-    raise FileNotFoundError(
-        "No Che directory (~/.trae) found. Use --che-home /path/to/.trae to provide it explicitly."
-    )
+    raise FileNotFoundError("No Che directory (~/.trae) found. Use --che-home /path/to/.trae to provide it explicitly.")
 
 
 def _detect_install_kind(che_home: Path) -> str:

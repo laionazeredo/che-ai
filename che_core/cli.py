@@ -73,7 +73,9 @@ def main():
     parser_config.add_argument("--lang-chat", choices=["en", "pt-BR"], help="Language for agent chat dialogue.")
     parser_config.add_argument("--lang-docs", choices=["en", "pt-BR"], help="Language for documentation and commits.")
     parser_config.add_argument("--lang-report", choices=["en", "pt-BR"], help="Language for generated reports.")
-    parser_config.add_argument("--pt-check", choices=["ENABLED", "DISABLED"], help="Enable/disable Portuguese text detection hook.")
+    parser_config.add_argument(
+        "--pt-check", choices=["ENABLED", "DISABLED"], help="Enable/disable Portuguese text detection hook."
+    )
     parser_config.add_argument("--flags", help="Raw JSON string of extra flags to merge.")
 
     # export
@@ -110,7 +112,9 @@ def main():
     pt_list.add_argument("worktree_root")
     pt_list.add_argument("--status", default=None, help="e.g. TODO,IN_PROGRESS,DONE")
     pt_list.add_argument("--domain", default=None, help="e.g. ux,engineering")
-    pt_list.add_argument("--ready-only", action="store_true", help="Only tasks with dependencies DONE + handoff existing.")
+    pt_list.add_argument(
+        "--ready-only", action="store_true", help="Only tasks with dependencies DONE + handoff existing."
+    )
 
     pt_show = task_subs.add_parser("show")
     pt_show.add_argument("worktree_root")
@@ -251,9 +255,7 @@ def main():
     proj_subs = parser_proj.add_subparsers(dest="proj_cmd", required=True)
 
     # create (primary), add and init (aliases)
-    pj_create = proj_subs.add_parser(
-        "create", aliases=["add", "init"], help="Create/Add an L2 project to a workspace."
-    )
+    pj_create = proj_subs.add_parser("create", aliases=["add", "init"], help="Create/Add an L2 project to a workspace.")
     pj_create.add_argument("worktree_root", help="Project worktree root to add.")
     pj_create.add_argument("--workspace", required=True, help="Target workspace name (MANDATORY).")
     pj_create.add_argument(
