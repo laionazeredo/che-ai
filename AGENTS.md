@@ -1,6 +1,6 @@
 # Che AI — Agent Technical Contracts
 
-This document defines the rules and architectural boundaries for **AI coding agents** contributing to or using the **Che** framework. It is the L2 Router for all engineering and architecture contracts inside Che's **3-Layer Rulebook** (Domains → Routers → Skills, topology inspired by [SpecFlow](https://specflow.org/)).
+This document defines the rules and architectural boundaries for **AI coding agents** contributing to or using the **Che** framework. It is the L2 Router for all engineering and architecture contracts inside Che's **3-Layer Rulebook** (Domains → Routers → Skills, topology inspired by [SpecFlow](https://www.specflow.com/)).
 
 **Che's purpose, in one line, for the agents reading this:** Che is the *shared team operating system* that lets an entire product delivery squad (Engineering, Product, UX, QA) run as a coordinated multi-agent system inside **Claude Code** (or any supported IDE). You are one *skill executor* inside that team — your job is to play your position cleanly, not to reinvent the game.
 
@@ -41,7 +41,7 @@ All structural/admin operations (`workspace create`, `project init`, `config` fl
 
 Che follows a strict 3-layer rulebook architecture. **NEVER** duplicate rule bodies across layers. A router layer links; it never repeats.
 
-This 3-layer topology is **directly inspired by [SpecFlow](https://specflow.org/) / Cucumber-school BDD**, where:
+This 3-layer topology is **directly inspired by [SpecFlow](https://www.specflow.com/) / Cucumber-school BDD**, where:
 - **L1 (Domains)**: `domains/` ↔ **SpecFlow Feature Files** (Gherkin, customer-language playbooks). Domain-specific human context (UX, Engineering, Product, etc.). Playbooks and principles live here; skill files reference them via links, not verbatim copy.
 - **L2 (Framework)**: `CHE_RULES.md` and `CHE_COMMANDS.md` ↔ **SpecFlow Step Bindings Registry** (`[Binding]` classes in C#). Routers containing **titles and links ONLY**, never rule bodies.
 - **L3 (Skills)**: `skills/*/SKILL.md` ↔ **SpecFlow Step Definitions + Hooks**. Declarative rules and task boundaries. Smallest reusable unit of Che behaviour.

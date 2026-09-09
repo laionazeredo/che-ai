@@ -42,7 +42,7 @@ The opinions above are **not new**. Che is a concrete, opinionated *implementati
 1. **[The Pragmatic Programmer](https://pragprog.com/the-pragmatic-programmer/) (Hunt & Thomas, 1999)** — Orthogonality, tracer bullets, DRY, good-enough software, plain-text ground truth, and the SSoT ethic. Every stance in §2 below traces back to one chapter.
 2. **[Design by Contract™](https://en.wikipedia.org/wiki/Design_by_contract) (Bertrand Meyer, 1986)** — Preconditions, postconditions, invariants, fail-fast boundaries. Every public `che_core/*` function and every `che-ai` argparse subcommand is a DbC contract. `/che-ship` is a four-gate DbC validator (scope → review → compliance → QA).
 3. **[Specification by Example / SBE](https://en.wikipedia.org/wiki/Specification_by_example) (Gojko Adzic, 2011)** — `/che-spec` always returns a spec *led by concrete customer examples*, never a TODO list. If you can't write the example, you don't understand the problem well enough to start. The whole team (Eng + Product + UX) signs off on examples, not on abstractions.
-4. **[SpecFlow](https://specflow.org/) / Cucumber-school BDD** — Che's 3-Layer Rulebook (§4) is **directly inspired by SpecFlow's 15-year enterprise onion topology**: L1 Domains = Feature Files (Gherkin customer language, readable by non-engineers), L2 Routers = Step Bindings Registry (titles + links only, like C# `[Binding]` classes), L3 Skills = Step Definitions + Hooks. The terminology is Che's; the topology is proven for 500-person release trains.
+4. **[SpecFlow](https://www.specflow.com/) / Cucumber-school BDD** — Che's 3-Layer Rulebook (§4) is **directly inspired by SpecFlow's 15-year enterprise onion topology**: L1 Domains = Feature Files (Gherkin customer language, readable by non-engineers), L2 Routers = Step Bindings Registry (titles + links only, like C# `[Binding]` classes), L3 Skills = Step Definitions + Hooks. The terminology is Che's; the topology is proven for 500-person release trains.
 
 > **Che's team-delivery promise.** If you onboard five repos to Che, then bring a sixth online six months later with a new agent and a new human engineer, all six participants (old agent + new agent + new engineer + CI + PR reviewer + spec writer) share the *exact same* team context, contracts and decision history. No one has to re-explain the brand or the SDLC.
 
@@ -106,7 +106,7 @@ No token. No auth. No feature flags. If any of these ever requires a network cal
 
 Che's rulebook (the part that lives *inside* the `~/.trae` installation, not inside a project) is a 3-layer onion. **No layer may embed a copy of a deeper layer's body.** A router layer links; it never repeats.
 
-This 3-layer topology is **directly inspired by [SpecFlow](https://specflow.org/)'s BDD onion** (used at enterprise .NET teams for 15+ years). The exact mapping:
+This 3-layer topology is **directly inspired by [SpecFlow](https://www.specflow.com/)'s BDD onion** (used at enterprise .NET teams for 15+ years). The exact mapping:
 
 | Che Layer | SpecFlow Equivalent | What that means in practice
 | :--- | :--- | :--- |
