@@ -4,22 +4,6 @@
 
 ---
 
-## Table of Contents
-
-1. [The Positioning Problem Che Is Trying to Solve](#1-the-positioning-problem-che-is-trying-to-solve)
-2. [The Opinionated Stance](#2-the-opinionated-stance)
-3. [The Structural-First Principle (CLI before skill)](#3-the-structural-first-principle-cli-before-skill)
-4. [3-Layer Rule (Framework Structure) — topology inspired by SpecFlow / Cucumber BDD](#4-3-layer-rule-framework-structure)
-5. [4-Level Worktree Hierarchy (Project Memory Model)](#5-4-level-worktree-hierarchy-project-memory-model)
-6. [Engineering Contracts — Non-negotiables](#6-engineering-contracts--non-negotiables)
-7. [The "Blast Radius + Trash-Safe" Principle](#7-the-blast-radius--trash-safe-principle)
-8. [Append-only Deterministic Memory (SSoT)](#8-append-only-deterministic-memory-ssot)
-9. [Language Policy & Dual-Register Documentation](#9-language-policy--dual-register-documentation)
-10. [What Che Deliberately Does NOT Do (Anti-goals)](#10-what-che-deliberately-does-not-do-anti-goals)
-11. [Appendix: Glossary & Equivalents](#11-appendix-glossary--equivalents)
-
----
-
 ## 1. The Positioning Problem Che Is Trying to Solve
 
 Most agent harnesses on the market fall into one of two buckets — and **both buckets are broken for professional product delivery teams**:
