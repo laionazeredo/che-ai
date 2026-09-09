@@ -1,17 +1,17 @@
 ---
-description: "Design V4 com preferência explícita por backend Figma quando disponível no runtime. Alias de /che-design — mesmo pipeline 4 modos: Social, UI-UX, Design System, OU Logotipo & Marca (SVG + brandbook)."
+description: "Design V4 with explicit preference for Figma backend when available in runtime. Alias of /che-design — same 4-mode pipeline: Social, UI-UX, Design System, OR Logo & Branding (SVG + brandbook)."
 arguments:
   - name: mode
-    description: "A (Social) / B (UI-UX) / C (Design System) / D (Logotipo & Marca SVG + brandbook). Opcional."
+    description: "A (Social) / B (UI-UX) / C (Design System) / D (Logo & Branding SVG + brandbook). Optional."
     required: false
   - name: palette
-    description: "Paleta HEX separada por vírgula"
+    description: "Comma-separated HEX palette"
     required: false
   - name: tone
-    description: "Tom de voz copy"
+    description: "Copy tone of voice"
     required: false
   - name: brand-refs
-    description: "(Modo D only) URLs marcas/logos referência separadas vírgula. Ex: https://nike.com,https://stripe.com"
+    description: "(Mode D only) Comma-separated reference brand/logo URLs. E.g.: https://nike.com,https://stripe.com"
     required: false
   - name: source-ref
     description: "Figma design/file URL to classify and consume with the Figma capability."
@@ -29,6 +29,6 @@ do not silently switch to an incompatible backend. OpenPencil remains supported
 when selected from the capabilities available in the session.
 
 Fallback behavior (alias `/che-design`) — same preflight checks:
-- mode prompt: 4 opções (A Social / B UI-UX / C Design System / **D Logotipo & Marca SVG**) se faltar;
-- brand-refs (Modo D): se faltar a Skill faz 5 lotes de perguntas D1-D5 automaticamente;
-- palette/tone prompt se faltar e modo ∈ {A,B,C}.
+32→- mode prompt: 4 options (A Social / B UI-UX / C Design System / **D Logo & Branding SVG**) if missing;
+33→- brand-refs (Mode D): if missing, the Skill automatically asks 5 batches of questions D1-D5;
+34→- palette/tone prompt if missing and mode ∈ {A,B,C}.

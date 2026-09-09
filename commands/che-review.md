@@ -18,4 +18,4 @@ Preflight:
 1. `gh auth status` must be OK.
 2. PR URL must be reachable and parseable.
 3. Pull ticket context / scope from args.
-4. Skill: 4-category review (Runtime / Security+PII / Deps-blast-radius / Scope deviation) → report saved to `.trae/review_PR-<N>_<YYYYMMDD>.md` → verdict 🔴 REQUEST CHANGES / 🟡 APPROVE WITH COMMENTS / 🟢 APPROVE in PT-BR.
+4.21→4. Skill: 4-category review (Runtime / Security+PII / Deps-blast-radius / Scope deviation) → report saved at `$CHE_SESSION_DIR/reviews/` → verdict 🔴 REQUEST CHANGES / 🟡 APPROVE WITH COMMENTS / 🟢 APPROVE in English.

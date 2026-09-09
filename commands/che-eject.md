@@ -1,29 +1,29 @@
 ---
-description: "Ejeta o Che de forma segura e reversível: desinstala adapters multi-agentes, move arquivos whitelist para lixeira, limpa snippets de .gitignore de projetos clientes e permite restore. 3 subcommands: plan [flags] | trash-list | restore TRASH_SLUG [flags]. 3 safety gates obrigatórios para operações destrutivas. NUNCA usa rm — só move para .trash/che-eject/. Blacklist absoluta (nunca toca): user_rules/, bindings/registry.jsonl, memory/, .git/, node_modules/."
+description: "Eject Che safely and reversibly: uninstall multi-agent adapters, move whitelist files to trash, clean up .gitignore snippets from client projects, and allow restore. 4 subcommands: plan [flags] | trash-list | restore TRASH_SLUG [flags]. 3 mandatory safety gates for destructive operations. NEVER uses rm — only moves to .trash/che-eject/. Absolute blacklist (never touched): user_rules/, bindings/registry.jsonl, memory/, .git/, node_modules/."
 arguments:
   - name: subcommand
-    description: "Required positional: plan [--che-home=PATH] [--keep-git-repo|--no-keep-git-repo] [--scan-client-repos PATH ...] [--dry-run (DEFAULT)|--apply --confirmed --i-know-what-im-doing] | trash-list | restore TRASH_SLUG [--dry-run (DEFAULT)|--apply --confirmed]. Exemplos: /che-eject plan / /che-eject plan --apply --confirmed --i-know-what-im-doing / /che-eject plan --scan-client-repos ~/code/foo ~/code/bar / /che-eject trash-list / /che-eject restore che-eject--abc123--20260904-235959 --apply --confirmed"
+    description: "Required positional: plan [--che-home=PATH] [--keep-git-repo|--no-keep-git-repo] [--scan-client-repos PATH ...] [--dry-run (DEFAULT)|--apply --confirmed --i-know-what-im-doing] | trash-list | restore TRASH_SLUG [--dry-run (DEFAULT)|--apply --confirmed]. Examples: /che-eject plan / /che-eject plan --apply --confirmed --i-know-what-im-doing / /che-eject plan --scan-client-repos ~/code/foo ~/code/bar / /che-eject trash-list / /che-eject restore che-eject--abc123--20260904-235959 --apply --confirmed"
     required: true
 ---
 
-Comando canônico para **desinstalar (ejetar) o Che de forma 100% reversível**, voltando ao estado original do ambiente do agente antes da instalação. Implementa a mesma filosofia de safety gates dos comandos de workspace/project:
+Canonical command to **uninstall (eject) Che in a 100% reversible way**, returning the agent environment to its original state before installation. Implements the same safety gate philosophy as workspace/project commands:
 
-**3 Safety Gates DESTRUTIVOS (operações NUNCA apagam, só movem):**
-1. **`--dry-run` é DEFAULT.** Sem flags: só exibe `eject_plan` completo (`would_uninstall_adapters`, `would_move_to_trash`, `would_cleanup_gitignores`), sem escrever nada em disco.
-2. Para efetivar o eject: **TRÊS flags juntas** `--apply --confirmed --i-know-what-im-doing` (as 3, faltando uma = bloqueia com erro).
-3. Mesmo confirmado: **move para `~/.che-workspaces/.trash/che-eject/<slug--ts>/`** (nunca rm -rf). Totalmente recuperável via `restore`.
+**3 DESTRUCTIVE Safety Gates (operations NEVER delete, only move):**
+1. **`--dry-run` is DEFAULT.** Without flags: only displays the complete `eject_plan` (`would_uninstall_adapters`, `would_move_to_trash`, `would_cleanup_gitignores`), without writing anything to disk.
+2. To apply the eject: **THREE flags together** `--apply --confirmed --i-know-what-im-doing` (all 3; missing one = block with error).
+3. Even when confirmed: **moves to `~/.che-workspaces/.trash/che-eject/<slug--ts>/`** (never rm -rf). Fully recoverable via `restore`.
 
-**Install Kinds detectados automaticamente:**
-- `git-clone`: `che_home/.git/` existe → DEFAULT `--keep-git-repo=True` (mantém clone/fork do usuário como repo Git comum; só desinstala adapters e limpa snippets de clientes; NÃO move arquivos whitelist). Use `--no-keep-git-repo` explicitamente se quiser mover tudo (incluindo .git).
-- `copy-install`: sem `.git/` → sempre move whitelist para trash (blacklist continua intacta).
+**Automatically detected Install Kinds:**
+- `git-clone`: `che_home/.git/` exists → DEFAULT `--keep-git-repo=True` (keeps user's clone/fork as a regular Git repo; only uninstalls adapters and cleans up client snippets; DOES NOT move whitelist files). Use `--no-keep-git-repo` explicitly if you want to move everything (including .git).
+- `copy-install`: no `.git/` → always moves whitelist to trash (blacklist remains intact).
 
-**Blacklist Absoluta (NUNCA toca em hipótese alguma):**
+**Absolute Blacklist (NEVER touched under any circumstances):**
 `user_rules/`, `bindings/registry.jsonl`, `memory/`, `.git/`, `node_modules/`.
 
 **Subcommand dispatch:**
 
 | Subcommand | CLI invocation | Expected agent action after |
 |---|---|---|
-| `plan [flags]` (default) | `python3 -m che_core.cli eject plan [--che-home PATH] [--keep-git-repo\|--no-keep-git-repo] [--scan-client-repos PATH ...] [--dry-run\|--apply --confirmed --i-know-what-im-doing]` | **1st run SEMPRE dry-run** (segurança). Agent só roda `--apply --confirmed --i-know-what-im-doing` APÓS user revisar a saída do dry-run e confirmar verbalmente. Reporta: `install_kind`, `adapters_detected`, `kept_blacklist_count`, `moved_count`, `uninstalled_adapters`, `cleaned_gitignores`, `trash_destination`. |
-| `trash-list` | `python3 -m che_core.cli eject trash-list [--trash-root PATH]` | Lista conteúdo da lixeira `che-eject`: mostra `trash_slug`, `original_che_home`, `ejected_at`, `install_kind`, `manifest_entries_count`. Útil antes do `restore`. |
-| `restore <TRASH_SLUG> [flags]` | `python3 -m che_core.cli eject restore "<TRASH_SLUG>" [--dry-run\|--apply --confirmed]` | Restaura eject da lixeira de volta para `che_home` original. Trata conflito de slug: não sobrescreve (avisa com erro). Pós-restore: executa `scripts/setup-adapters.sh` automaticamente para religar symlinks Codex/Claude/Cursor. |
+| `plan [flags]` (default) | `python3 -m che_core.cli eject plan [--che-home PATH] [--keep-git-repo\|--no-keep-git-repo] [--scan-client-repos PATH ...] [--dry-run\|--apply --confirmed --i-know-what-im-doing]` | **1st run ALWAYS dry-run** (safety). The agent only runs `--apply --confirmed --i-know-what-im-doing` AFTER the user reviews the dry-run output and confirms verbally. Reports: `install_kind`, `adapters_detected`, `kept_blacklist_count`, `moved_count`, `uninstalled_adapters`, `cleaned_gitignores`, `trash_destination`. |
+| `trash-list` | `python3 -m che_core.cli eject trash-list [--trash-root PATH]` | Lists the contents of the `che-eject` trash: shows `trash_slug`, `original_che_home`, `ejected_at`, `install_kind`, `manifest_entries_count`. Useful before `restore`. |
+| `restore <TRASH_SLUG> [flags]` | `python3 -m che_core.cli eject restore "<TRASH_SLUG>" [--dry-run\|--apply --confirmed]` | Restores an eject from the trash back to the original `che_home`. Handles slug conflicts: does not overwrite (warns with error). Post-restore: automatically executes `scripts/setup-adapters.sh` to reconnect Codex/Claude/Cursor symlinks. |

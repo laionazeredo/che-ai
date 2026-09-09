@@ -1,17 +1,17 @@
 ---
-description: "Design V4 backend-neutral para Social Media, UI/UX, Design System ou Logotipo & Marca."
+description: "Design V4 backend-neutral for Social Media, UI/UX, Design System, or Logo & Branding."
 arguments:
   - name: mode
-    description: "Modo: A (Social Media), B (UI-UX Feature), C (Design System), D (Logotipo & Marca + SVG). Opcional — se omitido, pergunta."
+    description: "Mode: A (Social Media), B (UI-UX Feature), C (Design System), D (Logo & Branding + SVG). Optional — if omitted, prompt user."
     required: false
   - name: palette
-    description: "Paleta HEX separada por vírgula. Ex: #6D28D9,#F59E0B,#111827,#F9FAFB"
+    description: "Comma-separated HEX palette. Ex: #6D28D9,#F59E0B,#111827,#F9FAFB"
     required: false
   - name: tone
-    description: "Tom de voz para copy. Ex: 'Luxo minimalista', 'Conversacional jovem'"
+    description: "Copy tone of voice. Ex: 'Minimalist luxury', 'Young conversational'"
     required: false
   - name: brand-refs
-    description: "(Modo D only) URLs de marcas/logos referência separadas por vírgula. Ex: https://nike.com,https://stripe.com"
+    description: "(Mode D only) Comma-separated reference brand/logo URLs. Ex: https://nike.com,https://stripe.com"
     required: false
   - name: source-ref
     description: "Figma design/file URL or existing local .pen/.openpencil file. Recognizable unsupported references fail closed."
