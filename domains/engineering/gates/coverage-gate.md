@@ -1,23 +1,25 @@
 # Gate G-ENG-2: Coverage (Lines · Branches · New Code)
 
-Rodado AUTOMATICALLY pelo ship §0.9.5 DOMAIN GATES quando domain=engineering.
+Run AUTOMATICALLY by ship §0.9.5 DOMAIN GATES when `domain=engineering`.
 
 ---
 
-## Thresholds numéricos (Defaults)
-| Métrica | Threshold | O que exclui do cálculo |
+## Numerical Thresholds (Defaults)
+
+| Metric | Threshold | What is excluded from calculation |
 |---|---|---|
-| **Lines coverage GERAL** (todo o pacote) | `≥ 70.0%` | `*.{test,spec}.{ts,rs,py}`, `**/migrations/**`, `**/*.config.*`, `**/vendor/**` |
-| **New code coverage** (apenas linhas alteradas no diff atual vs base branch main) | `≥ 80.0%` | Idem |
-| **Branch coverage GERAL** | `≥ 65.0%` | Idem |
-| **Critical paths** definidos no SPEC como obrigatório cobrir | `100%` (ou EXPLICIT_OVERRIDE) | Payment flow, auth gate, RLS, refund. |
+| **OVERALL Lines coverage** (entire package) | `≥ 70.0%` | `*.{test,spec}.{ts,rs,py}`, `**/migrations/**`, `**/*.config.*`, `**/vendor/**` |
+| **New code coverage** (only lines changed in current diff vs base branch main) | `≥ 80.0%` | Same |
+| **OVERALL Branch coverage** | `≥ 65.0%` | Same |
+| **Critical paths** defined in SPEC as mandatory to cover | `100%` (or EXPLICIT_OVERRIDE) | Payment flow, auth gate, RLS, refund. |
 
-> 💡 **Override regra**: thresholds NUMÉRICOS NUNCA são alterados pelo agente sem EXPLICIT_OVERRIDE do user logado em decisions.log. Valores acima são defaults razoáveis.
+> 💡 **Override rule**: NUMERICAL thresholds are NEVER altered by the agent without user EXPLICIT_OVERRIDE logged in decisions.log. Above values are reasonable defaults.
 
 ---
 
-## Exemplos ferramentas por stack
-| Stack | Comando canônico coverage | Output format |
+## Example tools per stack
+
+| Stack | Canonical coverage command | Output format |
 |---|---|---|
 | Vitest (TS/JS) | `vitest run --coverage` | `coverage/cobertura.xml` + `json-summary` |
 | Jest | `jest --coverage` | `coverage/lcov.info` |
@@ -26,26 +28,30 @@ Rodado AUTOMATICALLY pelo ship §0.9.5 DOMAIN GATES quando domain=engineering.
 
 ---
 
-## Retry + 2nd falha
-### 1st FAIL:
-- 1 retry automático re-roda coverage report (seed mesmo). Se mudou diff no workspace, roda diff coverage só nas linhas novas.
-- Reporta top 5 arquivos com coverage mais baixo + 10 linhas uncovered mais críticas.
+## Retry + 2nd failure
 
-### 2nd FAIL → HARD STOP (3 opções user):
-(A) Corrigir adicionando testes nas linhas faltantes. **Recomendado.**
-(B) **EXPLICIT_OVERRIDE** user literal logado em decisions.log com formato exato:
+### 1st FAIL:
+- 1 automatic retry re-runs coverage report (same seed). If diff in workspace changed, run diff coverage only on new lines.
+- Report top 5 files with lowest coverage + 10 most critical uncovered lines.
+
+### 2nd FAIL → HARD STOP (3 user options):
+(A) Fix by adding tests to missing lines. **Recommended.**
+(B) **EXPLICIT_OVERRIDE** user literal logged in decisions.log with exact format:
+
 ```
 [EXPLICIT_OVERRIDE] GATE=G-ENG-2
   original_thresholds={lines=70, new_code=80, branches=65}
   new_thresholds={lines=60, new_code=70, branches=55}
-  reason="<user verbatim literal 3 frases mínimo explicando PORQUÊ abaixou>"
+  reason="<user verbatim literal 3 sentences minimum explaining WHY it was lowered>"
   approver="<user_login>"
 ```
-(C) Cancelar ship.
+
+(C) Cancel ship.
 
 ---
 
 ## Artifacts
+
 ```
 reports/domain-gates/
 └── G-ENG-2--coverage_<timestamp>.json
@@ -63,9 +69,10 @@ reports/domain-gates/
 
 ---
 
-## Casos especiais
-| Cenário | Ação |
+## Special Cases
+
+| Scenario | Action |
 |---|---|
-| Refactor gigante sem novas features | Pode cair overall coverage um pouco. Requer EXPLICIT_OVERRIDE. |
-| Só docs / markdown mudou | Skip GATE, report `SKIPPED` com justificativa no JSON. |
-| 1 arquivo inteiro "não testável" (ex: binding gerado automaticamente) | Adicionar nos paths excluídos de coverage pelo config da ferramenta. Logar decision. |
+| Giant refactor without new features | Overall coverage may drop slightly. Requires EXPLICIT_OVERRIDE. |
+| Only docs / markdown changed | Skip GATE, report `SKIPPED` with justification in JSON. |
+| 1 entire file "not testable" (e.g. automatically generated binding) | Add to paths excluded from coverage in tool config. Log decision. |

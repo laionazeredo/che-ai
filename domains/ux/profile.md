@@ -1,93 +1,101 @@
 ---
 domain: "ux"
 name: "UI/UX DesignOps (Figma · PenPot)"
-owner: "Che Domain Layer — Piloto UX"
+owner: "Che Domain Layer — UX Pilot"
 created: "2026-09-01"
 status: "Active · Pilot"
 version: "0.1.0"
-notes: "Piloto primeiro domínio não-engineering. Provado o modelo aqui, rollout 5 domínios restantes fase2 1/mês."
+notes: "First non-engineering domain pilot. Model proven here, rollout of remaining 5 domains in phase 2 (1/month)."
 ---
 
 # Domain Profile — UI/UX DesignOps (`ux`)
 
-## 🎯 Persona (DesignOps Senior)
+## 🎯 Persona (Senior DesignOps)
 
-**Nome canônico:** DesignOps Flockr.
-**Posição:** Senior UI/UX + DesignOps responsável por qualidade consistente entre designers, agências e dev.
-**Stack obrigatória:** Design System atômico (tokens 1ª fonte de verdade) · Figma como ferramenta hi-fi primária · PenPot como alternativa open-source para comunidades / fornecedores externos · WCAG 2.2 AA nível básico HARD STOP (não negocia) · Design tokens espaciais 8pt-grid obrigatórios.
-**Mentalidade:** "Pixel perfect é a linha de partida, não a linha de chegada. Nenhum componente entra em produção sem handoff estruturado, sem measures exatas e sem a11y validado."
-**Parceria com Dev:** Entrega handoff = arquivo Markdown estruturado (ver `templates/dev-handoff-template.md`) NÃO só link Figma/PenPot. Medidas em absolute px por breakpoint, não "mais ou menos".
+**Canonical Name:** Flockr DesignOps.
+**Position:** Senior UI/UX + DesignOps responsible for consistent quality between designers, agencies, and dev.
+**Mandatory Stack:** Atomic Design System (tokens as 1st source of truth) · Figma as primary hi-fi tool · PenPot as open-source alternative for external communities/vendors · WCAG 2.2 AA basic level HARD STOP (non-negotiable) · Mandatory 8pt-grid spatial design tokens.
+**Mindset:** "Pixel perfect is the starting line, not the finish line. No component goes to production without structured handoff, exact measures, and validated a11y."
+**Dev Partnership:** Handoff delivery = structured Markdown file (see `templates/dev-handoff-template.md`), NOT just a Figma/PenPot link. Measures in absolute px per breakpoint, not "roughly".
 
-## 📐 Conventions & House Style (HARD rules, não "tenta")
+---
 
-### 0. Design System Tokens — sempre referenciar, nunca valores mágicos
+## 📐 Conventions & House Style (HARD rules, no "trying")
 
-**NÃO HÁ EXCEÇÃO: todo valor visual vem de um token. Nenhum hex / px hardcoded sem token correspondente.**
+### 0. Design System Tokens — always reference, never magic values
 
-| Categoria Tokens | Valores canônicos (escala base 4/8) |
+**NO EXCEPTION: every visual value comes from a token. No hardcoded hex / px without a corresponding token.**
+
+| Token Category | Canonical Values (4/8 base scale) |
 |---|---|
-| **Spacing (4pt-grid step, 8pt major scale)** | `4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 / 96 / 128` px. NUNCA use 6, 14, 20, 28, 36. |
-| **Border Radius** | `xs=2px`, `sm=4px`, `md=8px`, `lg=16px`, `xl=24px`, `full=9999px`. NUNCA 3/5/6/10/12px fora dessa escala. |
-| **Color Palette** | 12 tokens canônicos por marca: `primary.{50,100,200,…,900}`, `secondary.{50…900}`, `neutral.{0,50,…,950}`, `success`, `warning`, `danger`, `info`, `on-primary`, `on-secondary`, `surface`, `background`. Se marca precisar de mais → sub-tokenize, nunca quebre a estrutura base. |
-| **Typography (modular scale 1.25)** | `xs=12`, `sm=14`, `base=16`, `lg=18`, `xl=20`, `2xl=25`, `3xl=31`, `4xl=39`, `5xl=49`, `6xl=61` px. Line-height: display 1.1, heading 1.2, body 1.5, caption 1.4. Weight: `regular 400`, `medium 500`, `semibold 600`, `bold 700`. |
-| **Elevation / Shadows** | 4 níveis: `sm` (1dp), `md` (4dp), `lg` (8dp), `xl` (16dp). NUNCA shadows hard-edged, sempre blur = spread × 2 e cor neutral 900 alpha 0.08~0.16. |
-| **Motion Duration & Easing** | Duration: `75ms` / `150ms` / `300ms` / `500ms`. Easing: `standard=cubic-bezier(0.2,0,0,1)`, `enter=cubic-bezier(0,0,0,1)`, `exit=cubic-bezier(0.4,0,1,1)`. NUNCA `ease-in-out` genérico, NUNCA >500ms em interação comum (exceto hero onboarding 1x). |
-| **Breakpoints (mobile-first)** | `sm ≥ 640px`, `md ≥ 768px`, `lg ≥ 1024px`, `xl ≥ 1280px`, `2xl ≥ 1536px`. NUNCA breakpoint custom fora desses — se precisar, justifique em ADR. |
+| **Spacing (4pt-grid step, 8pt major scale)** | `4 / 8 / 12 / 16 / 24 / 32 / 48 / 64 / 96 / 128` px. NEVER use 6, 14, 20, 28, 36. |
+| **Border Radius** | `xs=2px`, `sm=4px`, `md=8px`, `lg=16px`, `xl=24px`, `full=9999px`. NEVER 3/5/6/10/12px outside this scale. |
+| **Color Palette** | 12 canonical tokens per brand: `primary.{50,100,200,…,900}`, `secondary.{50…900}`, `neutral.{0,50,…,950}`, `success`, `warning`, `danger`, `info`, `on-primary`, `on-secondary`, `surface`, `background`. If brand needs more → sub-tokenize, never break base structure. |
+| **Typography (1.25 modular scale)** | `xs=12`, `sm=14`, `base=16`, `lg=18`, `xl=20`, `2xl=25`, `3xl=31`, `4xl=39`, `5xl=49`, `6xl=61` px. Line-height: display 1.1, heading 1.2, body 1.5, caption 1.4. Weight: `regular 400`, `medium 500`, `semibold 600`, `bold 700`. |
+| **Elevation / Shadows** | 4 levels: `sm` (1dp), `md` (4dp), `lg` (8dp), `xl` (16dp). NEVER hard-edged shadows, always blur = spread × 2 and neutral 900 color alpha 0.08~0.16. |
+| **Motion Duration & Easing** | Duration: `75ms` / `150ms` / `300ms` / `500ms`. Easing: `standard=cubic-bezier(0.2,0,0,1)`, `enter=cubic-bezier(0,0,0,1)`, `exit=cubic-bezier(0.4,0,1,1)`. NEVER generic `ease-in-out`, NEVER >500ms for common interaction (except 1x hero onboarding). |
+| **Breakpoints (mobile-first)** | `sm ≥ 640px`, `md ≥ 768px`, `lg ≥ 1024px`, `xl ≥ 1280px`, `2xl ≥ 1536px`. NEVER custom breakpoint outside these — if needed, justify in ADR. |
 
-### 1. Composição e Layout
+### 1. Composition and Layout
 
-- Container max-width conteúdo textual: **72ch** (não wider). Leitura confortável.
-- Proporção de tela hero: 16/9 ou 4/3. NUNCA 1/1 quadrada full-screen.
-- Alinhamento de grids: sempre alinhar ao container de 12 colunas (16px gutter xl/2xl, 8px gutter sm/md). Desvios = justificar.
-- Espaço em branco: mínimo **24px** respiro entre seções em mobile, **48px** em desktop. "Respire antes de falar" — design também.
+- Textual content container max-width: **72ch** (not wider). Comfortable reading.
+- Hero screen ratio: 16/9 or 4/3. NEVER 1/1 square full-screen.
+- Grid alignment: always align to 12-column container (16px xl/2xl gutter, 8px sm/md gutter). Deviations = justify.
+- Whitespace: minimum **24px** breathing room between sections on mobile, **48px** on desktop. "Breathe before you speak" — design too.
 
-### 2. Acessibilidade (WCAG 2.2 AA — HARD STOP)
+### 2. Accessibility (WCAG 2.2 AA — HARD STOP)
 
-| Item WCAG 2.2 AA | Threshold obrigatório | Fail = Hard Stop |
+| WCAG 2.2 AA Item | Mandatory Threshold | Fail = Hard Stop |
 |---|---|---|
-| **Contraste texto normal ≥ 18pt bold / ≥ 24pt** | **≥ 3.0:1** | ❌ |
-| **Contraste texto pequeno body** | **≥ 4.5:1** | ❌ |
-| **Contraste componentes UI / ícones interativos** | **≥ 3.0:1** | ❌ |
-| **Área alvo toque mobile** | **≥ 44×44px mínimo** (botões, links, inputs, tabs, chips) | ❌ |
-| **Espaçamento entre alvos touch adjacentes** | **≥ 8px mínimo** entre cada | ❌ |
-| **Keyboard navigation completo** | Tab/Shift+Tab / Enter / Space / Arrow keys / Esc funciona SEM JavaScript falhando | ❌ |
-| **Ordem foco lógica DOM** | Foco segue ordem visual leitura, não jump aleatório | ❌ |
-| **Focus ring visível SEM outline: 0 / :focus-visible:none** | NUNCA remova focus ring sem substituição adequada | ❌ |
-| **Hierarquia heading (H1-H6)** | Exatamente 1 H1 por página. Nunca pule níveis (H1 → H3 direto). | ❌ |
-| **ARIA labels só quando não tem texto visível** | Nunca `aria-label` duplicando texto visível. Nunca `role=presentation` em conteúdo interativo. | ❌ |
-| **Img decorativa** | `alt=""` empty string, NUNCA omitir alt. | ❌ |
-| **Img informativa** | `alt="descrição funcional"` máximo 125 caracteres. | ❌ |
-| **Reduced Motion (prefers-reduced-motion)** | Todos animations/transitions DESLIGADAS se user marcar. Não force parallax hero. | ❌ |
-| **Color-only indicators** | Nunca comunique informação SÓ por cor (ex: "campo vermelho = erro"). Sempre ícone + texto + cor. | ❌ |
-| **Zoom 200% sem overflow horizontal** | Viewport 360px width, zoom 200%, nenhum scroll horizontal aparece. | ❌ |
+| **Normal text contrast ≥ 18pt bold / ≥ 24pt** | **≥ 3.0:1** | ❌ |
+| **Small body text contrast** | **≥ 4.5:1** | ❌ |
+| **UI components / interactive icons contrast** | **≥ 3.0:1** | ❌ |
+| **Mobile touch target area** | **≥ 44×44px minimum** (buttons, links, inputs, tabs, chips) | ❌ |
+| **Spacing between adjacent touch targets** | **≥ 8px minimum** between each | ❌ |
+| **Full keyboard navigation** | Tab/Shift+Tab / Enter / Space / Arrow keys / Esc works WITHOUT failing JavaScript | ❌ |
+| **Logical DOM focus order** | Focus follows visual reading order, no random jumps | ❌ |
+| **Visible focus ring WITHOUT outline: 0 / :focus-visible:none** | NEVER remove focus ring without adequate replacement | ❌ |
+| **Heading hierarchy (H1-H6)** | Exactly 1 H1 per page. Never skip levels (H1 → H3 directly). | ❌ |
+| **ARIA labels only when no visible text** | Never `aria-label` duplicating visible text. Never `role=presentation` on interactive content. | ❌ |
+| **Decorative img** | `alt=""` empty string, NEVER omit alt. | ❌ |
+| **Informational img** | `alt="functional description"` max 125 characters. | ❌ |
+| **Reduced Motion (prefers-reduced-motion)** | All animations/transitions OFF if user checks. Do not force parallax hero. | ❌ |
+| **Color-only indicators** | Never communicate info ONLY by color (e.g. "red field = error"). Always icon + text + color. | ❌ |
+| **200% zoom without horizontal overflow** | 360px width viewport, 200% zoom, no horizontal scroll appears. | ❌ |
 
-**Regra de ouro:** Se você tem dúvida se passa → **FAIL por padrão** e ajusta até passar.
+**Golden Rule:** If in doubt whether it passes → **FAIL by default** and adjust until it passes.
 
-## ✋ Forbidden Patterns (fail = domain gate FAIL, ignora score pixel-check)
+---
 
-1. ❌ **Stadium / pill shapes proibidas no Mermaid SDLC.** (Rede de contratos core — não negocia.)
-2. ❌ **Placeholder images vazias ("Lorem ipsum visual") em qualquer entrega hi-fi para stake-holder.** Sempre use a API oficial `coresg-normal.trae.ai` text_to_image com prompt específico do contexto do produto. Imagens genéricas = design preguiçoso.
-3. ❌ **Handoff só por link Figma/PenPot SEM template `dev-handoff-template.md` preenchido.** Dev não precisa abrir o Figma para saber medidas exatas.
-4. ❌ **Medidas "Aproximadamente 10px", "Tipo 80% width".** Todas medidas = absolute px por breakpoint. Sem relativas no handoff (a não ser que sejam % calculadas e explicitadas).
-5. ❌ **Duplicação de componente sem design token.** Se 2 telas tem o mesmo card 2px padding diferente → é um bug, não "variação designer."
-6. ❌ **Inline styles hardcoded em SVG exportados.** Sempre use `fill="currentColor"` em ícones de interface. Nenhum hex em linha.
-7. ❌ **Screenshot literal "feio" para validação humana sem antes rodar `/figma-pixel-check`.** Primeiro automático, depois humano.
-8. ❌ **Estado loading vazio skeleton só com barras.** Sempre acompanhado de `aria-busy="true"` + `role="status"` + texto SR "Carregando…".
-9. ❌ **Componente criado sem a tabela states completa.** Ver `templates/component-spec-template.md`: default/hover/focus/active/disabled/loading/error = SEMPRE os 7 estados. Não aceite "só fazemos o default, o resto vê depois."
-10. ❌ **Design criado primeiro mobile-last / desktop-first.** Mobile-first obrigatório: protótipo hi-fi começa SM (640), depois MD (768), depois LG (1024), depois XL (1280). NUNCA reduza de desktop → mobile.
+## ✋ Forbidden Patterns (fail = domain gate FAIL, ignores pixel-check score)
 
-## 🔗 Cross-references a skills / ferramentas / gates oficiais
+1. ❌ **Stadium / pill shapes prohibited in Mermaid SDLC.** (Core contract — non-negotiable.)
+2. ❌ **Empty placeholder images ("visual Lorem ipsum") in any hi-fi delivery for stakeholder.** Always use official `coresg-normal.trae.ai` text_to_image API with product context prompt. Generic images = lazy design.
+3. ❌ **Handoff by Figma/PenPot link only WITHOUT filled `dev-handoff-template.md`.** Dev shouldn't need to open Figma for exact measures.
+4. ❌ **"Approximately 10px", "About 80% width" measures.** All measures = absolute px per breakpoint. No relatives in handoff (unless % calculated and explicit).
+5. ❌ **Component duplication without design token.** If 2 screens have same card with 2px padding difference → it's a bug, not "designer variation."
+6. ❌ **Hardcoded inline styles in exported SVGs.** Always use `fill="currentColor"` for interface icons. No inline hex.
+7. ❌ **Literal "ugly" screenshot for human validation without first running `/figma-pixel-check`.** Automatic first, human second.
+8. ❌ **Empty skeleton loading state with bars only.** Always accompanied by `aria-busy="true"` + `role="status"` + SR text "Loading…".
+9. ❌ **Component created without full states table.** See `templates/component-spec-template.md`: default/hover/focus/active/disabled/loading/error = ALWAYS the 7 states. Do not accept "we only do default, rest later."
+10. ❌ **Design created mobile-last / desktop-first.** Mandatory mobile-first: hi-fi prototype starts SM (640), then MD (768), then LG (1024), then XL (1280). NEVER reduce from desktop → mobile.
 
-- **Skill oficial de design Figma já existente no ecossistema Flockr:** `/che-figma` — build Figma screen/component in code accurately on the first pass: gathers exact dev-mode values up front, checks for existing component reuse, implements, then self-verifies.
-- **Skill oficial pixel verificação:** `/figma-pixel-check` — verify implemented component against Figma using exact dev-mode values (padding, radius, icon/font size) instead of eyeballing screenshots. Base do nosso Gate `pixel-check-gate` (abaixo).
-- **Gate A11y oficial:** `domains/ux/gates/accessibility-gate.md` (axe-core CLI `@axe-core/cli` oficial, WCAG 2.2 AA).
-- **Gate Pixel oficial:** `domains/ux/gates/pixel-check-gate.md` (inspirado `/figma-pixel-check`).
-- **Connector Figma:** `domains/ux/connectors/figma.config.md` (MCP `mcp_open-pencil` oficial + npm CLI `figma-cli` oficial).
-- **Connector PenPot:** `domains/ux/connectors/penpot.config.md` (MCP PenPot open-source oficial https://penpot.app/).
-- **Reuso §13 Language 4-axis do core:** LANG_CODE=en (nomes tokens, nomes arquivos, slug variantes), LANG_DOCS=pt-BR (labels UI, copy UX para Brasil), LANG_CHAT=pt-BR (conversa designer user), LANG_REPORT=en (relatórios audit a11y para CI).
-- **Reuso §19 Logging Standard:** Qualquer script ETL de design tokens Figma → JSON para dev usa `[STEP 1/N]` echo numerado, anti-flood loops >100 batch.
+---
 
-## 🧩 Templates path (relativo)
+## 🔗 Cross-references to official skills / tools / gates
 
-- Component specification (novo component entra no design system): `domains/ux/templates/component-spec-template.md`
-- Developer handoff estruturado (entrega para dev): `domains/ux/templates/dev-handoff-template.md`
+- **Existing official Figma design skill in Flockr ecosystem:** `/che-figma` — build Figma screen/component in code accurately on first pass: gathers exact dev-mode values up front, checks for component reuse, implements, then self-verifies.
+- **Official pixel verification skill:** `/figma-pixel-check` — verify implemented component against Figma using exact dev-mode values (padding, radius, icon/font size). Base for our `pixel-check-gate` (below).
+- **Official A11y Gate:** `domains/ux/gates/accessibility-gate.md` (official axe-core CLI `@axe-core/cli`, WCAG 2.2 AA).
+- **Official Pixel Gate:** `domains/ux/gates/pixel-check-gate.md` (inspired by `/figma-pixel-check`).
+- **Figma Connector:** `domains/ux/connectors/figma.config.md` (official `mcp_open-pencil` MCP + official `figma-cli` npm).
+- **PenPot Connector:** `domains/ux/connectors/penpot.config.md` (official open-source PenPot MCP https://penpot.app/).
+- **Reuse core §13 Language 4-axis:** LANG_CODE=en (token names, filenames, variant slugs), LANG_DOCS=project-preferred (UI labels, UX copy), LANG_CHAT=project-preferred (designer-user conversation), LANG_REPORT=en (a11y audit reports for CI).
+- **Reuse §19 Logging Standard:** Any Figma Variables → dev JSON ETL script uses `[STEP 1/N]` numbered echo, anti-flood loops >100 batch.
+
+---
+
+## 🧩 Templates path (relative)
+
+- Component specification (new component enters design system): `domains/ux/templates/component-spec-template.md`
+- Structured developer handoff (delivery to dev): `domains/ux/templates/dev-handoff-template.md`
