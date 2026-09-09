@@ -43,10 +43,10 @@ Canonical flow per atomic task.
 ## Stage 2: Quality Gates (G-ENG-1 + G-ENG-2 mandatory)
 **Automatically run by ship §0.9.5 DOMAIN GATES** before opening Draft PR.
 
-| Gate ID | Name | Mandatory Numerical Threshold | Auto-retry | Human required after |
+| Gate ID | Name | Mandatory Numerical Threshold (per S14 CHE_RULES §X Engineering Gates) | Auto-retry | Human required after |
 |---|---|---|---|---|
-| G-ENG-1 | **Lint · Typecheck · Test Pass Rate** | `lint_errors=0`, `typecheck_errors=0`, `test_pass_rate=100%` (0 tests can FAIL). Warnings allowed if `--exact=false`. | 1 auto-retry if flaky detected (same seed 2x runs) | 2nd failure |
-| G-ENG-2 | **Coverage Gate** | `lines_coverage ≥ 70%` GLOBAL + `new_code ≥ 80%` + `branch_coverage ≥ 65%`. Excludes `**/*.test.*`, `**/migrations/**`, `**/*.config.*`. | 1 auto-retry rerun coverage report. | 2nd failure (threshold only lowered via logged user EXPLICIT_OVERRIDE). |
+| G-ENG-1 | **Lint · Typecheck · Test Pass Rate** | `lint_errors=0`, `typecheck_errors=0`, `test_pass_rate=100%` (0 tests can FAIL) — per S14. Warnings allowed if `--exact=false`. | 1 auto-retry if flaky detected (same seed 2x runs) | 2nd failure |
+| G-ENG-2 | **Coverage Gate** | `lines_coverage ≥ 70%` GLOBAL + `new_code ≥ 80%` + `branch_coverage ≥ 65%` — all per S14. Excludes `**/*.test.*`, `**/migrations/**`, `**/*.config.*`. | 1 auto-retry rerun coverage report. | 2nd failure (threshold only lowered via logged user EXPLICIT_OVERRIDE). |
 
 ### Override rules (same as ship §0.9.5):
 - 1st FAIL on any gate → agent applies 1 free retry with top-3 deviation suggestions.

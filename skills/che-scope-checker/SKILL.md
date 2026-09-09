@@ -332,10 +332,10 @@ Scanning rule:
    B_COVERED_BY_ANCHOR = count(SBE_BEHAVIORS.b_id ∋ appears in at least 1 regex match)
    BILATERAL_ANCHOR_COVERAGE_PCT = B_COVERED_BY_ANCHOR ÷ max(1, B_COUNT_SPEC) × 100
    ```
-4. **Severity / Verdict:**
-   - **🔴 BLOCK (hard stop):** BILATERAL_ANCHOR_COVERAGE_PCT = 0% → NO SbE behaviour has bilateral anchor. **Require EXPLICIT_OVERRIDE_BILATERAL_SKIP with justification + decision.log entry.**
-   - **🟡 WARN (action item):** BILATERAL_ANCHOR_COVERAGE_PCT < 70% OR ≥2 B-IDs missing individually even if global ≥70 → list missing B-IDs + expected test file(s) by keyword mapping.
-   - **🟢 FULLY LINKED:** ≥70% AND <2 individual missing B-IDs → green. §7.1 bonus score applied if ≥90%.
+4. **Severity / Verdict (per S15 CHE_RULES §X Bilateral Anchors Table):**
+   - **🔴 BLOCK (hard stop):** BILATERAL_ANCHOR_COVERAGE_PCT = 0% → NO SbE behaviour has bilateral anchor. **Require EXPLICIT_OVERRIDE_BILATERAL_SKIP with justification + decision.log entry.** (S15 threshold 0%)
+   - **🟡 WARN (action item):** BILATERAL_ANCHOR_COVERAGE_PCT < 70% OR ≥2 B-IDs missing individually even if global ≥70 → list missing B-IDs + expected test file(s) by keyword mapping. (S15 threshold <70%)
+   - **🟢 FULLY LINKED:** ≥70% AND <2 individual missing B-IDs → green. §7.1 bonus score applied if ≥90%. (S15 thresholds ≥70% + ≥90% bonus)
 
 **3.5.2 Bilateral 2/3 — SPEC §4.4 Mermaid B-ID refs set vs §4.2 real Behavior Table set (diagrams don't lie)**
 
@@ -509,68 +509,70 @@ For EACH category below, apply steps on the cumulative diff (NEW + MODIFIED file
 
 > **Canonical blocking gate used by che-ship §0.9.1. Combines delivery and lean quality into a comparable number.**
 
-### 7.1 SCOPE sub-score calculation (0-10)
+### 7.1 SCOPE sub-score calculation (0-10) — per S11 CHE_RULES §X
 
-Use CHECK 1 table verdicts:
+Use CHECK 1 table verdicts (formula and weights per S11 canonical):
 ```
 TOTAL_ACs          = (DELIVERED+PARTIAL+MISSING)   (OOS NOT counted)
-DELIVERED_weighted = count(🟢 DELIVERED)
-PARTIAL_weighted   = count(🟡 PARTIAL) × 0.5
-SCOPE_score = 10 × (DELIVERED_weighted + PARTIAL_weighted) / max(1, TOTAL_ACs)
+DELIVERED_weighted = count(🟢 DELIVERED)               × 1.0   (per S11)
+PARTIAL_weighted   = count(🟡 PARTIAL)                 × 0.5   (per S11)
+SCOPE_score = 10 × (DELIVERED_weighted + PARTIAL_weighted) / max(1, TOTAL_ACs)   (per S11 base)
 ```
 
-**⚡ SbE Bilateral Anchor Coverage adjustment (ONDA2 — only applies if SBE_EXTENSION_ENABLED=true):**
+**⚡ SbE Bilateral Anchor Coverage adjustment (per S11 bilateral + S15 CHE_RULES §X — only applies if SBE_EXTENSION_ENABLED=true):**
 ```
-# §3.5.1 coverage (already calculated)
 BILATERAL_ANCHOR_COVERAGE_PCT = (B_COVERED_BY_ANCHOR ÷ max(1, B_COUNT_SPEC)) × 100
-if (BILATERAL_ANCHOR_COVERAGE_PCT >= 90):
-    SCOPE_score = clamp(SCOPE_score + 0.5, 0, 10)   # Strong bilateral BONUS
-elif (BILATERAL_ANCHOR_COVERAGE_PCT < 70 AND BILATERAL_ANCHOR_COVERAGE_PCT > 0):
-    SCOPE_score = clamp(SCOPE_score - 1.0, 0, 10)   # Weak coverage PENALTY
-# 0% anchors = BLOCK regardless of score (§8.1 verdict has 🔴 check item)
+if (BILATERAL_ANCHOR_COVERAGE_PCT >= 90):                                      # per S11 / S15 bonus 90%
+    SCOPE_score = clamp(SCOPE_score + 0.5, 0, 10)
+elif (BILATERAL_ANCHOR_COVERAGE_PCT < 70 AND BILATERAL_ANCHOR_COVERAGE_PCT > 0):  # per S11 / S15 penalty <70%
+    SCOPE_score = clamp(SCOPE_score - 1.0, 0, 10)
+# 0% anchors = BLOCK regardless of score (§8.1 verdict has 🔴 check item — S15)
 ```
 
-Example: 8🟢 + 1🟡 + 1🔴 → base SCOPE = 10 × (8 + 0.5)/10 = **8.5**
-With 92% bilateral anchor coverage (SbE ON) → adjusted SCOPE = clamp(8.5 + 0.5, 0, 10) = **9.0**
+Example (per S11): 8🟢 + 1🟡 + 1🔴 → base SCOPE = 10 × (8 + 0.5)/10 = **8.5**
+With 92% bilateral anchor coverage (SbE ON, per S15 bonus) → adjusted SCOPE = clamp(8.5 + 0.5, 0, 10) = **9.0**
 
-### 7.2 LEAN sub-score calculation (0-10)
+### 7.2 LEAN sub-score calculation (0-10) — per S12 CHE_RULES §X
 
-Use CHECK 5 findings severities + NEW PREAMBLE TRIO (CANONICAL #0/#1/#2) flags:
+Use CHECK 5 findings severities + NEW PREAMBLE TRIO (CANONICAL #0/#1/#2) flags. All weights, caps, trio penalties and clamp formula per S12 canonical:
 ```
 LEAN_penalty =
-    (count(🔴 HIGH_check5) × 2)
-  + (count(🟡 MEDIUM_check5) × 1)
-  + (count(🔵 LOW_check5) × 0.3)
-  + (5 if (HORIZONTAL_PLAN_DETECTED === true AND HORIZONTAL_OVERRIDE_LOGGED === false) else 0)
-  + (min(ENTROPY_DELTA, 5) if (ENTROPY_DELTA > 2 AND ENTROPY_OVERRIDE_LOGGED === false) else 0)
-  + (4 if (WRAPPER_LEAKS_COUNT > 0 AND WRAPPER_OVERRIDE_OR_ANNOTATED === false) else 0)
-LEAN_score = clamp(10 − LEAN_penalty ÷ 2, 0, 10)
+    (count(🔴 HIGH_check5)   × 2)         # per S12 HIGH weight
+  + (count(🟡 MEDIUM_check5) × 1)         # per S12 MEDIUM weight
+  + (count(🔵 LOW_check5)    × 0.3)       # per S12 LOW weight
+  + (5 if (HORIZONTAL_PLAN_DETECTED === true AND HORIZONTAL_OVERRIDE_LOGGED === false) else 0)   # per S12 HOR +5
+  + (min(ENTROPY_DELTA, 5) if (ENTROPY_DELTA > 2 AND ENTROPY_OVERRIDE_LOGGED === false) else 0)  # per S12 ENT cap MIN(delta,5)
+  + (4 if (WRAPPER_LEAKS_COUNT > 0 AND WRAPPER_OVERRIDE_OR_ANNOTATED === false) else 0)          # per S12 WRAP +4
+LEAN_score = clamp(10 − LEAN_penalty ÷ 2, 0, 10)   # per S12 formula
 ```
-Where:
-- `HORIZONTAL_PLAN_DETECTED` = CHECK#0 §0.5 detector boolean. Override = `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN` literal OR decisions.log event.
-- `ENTROPY_DELTA` = CHECK#1 (§0.6) computed value. Override = `EXPLICIT_OVERRIDE_ENTROPY_DELTA` OR decisions.log event. Capped at +5 penalty (to avoid 100% kill from one huge lint batch) → scaled ÷2 = max 2.5 LEAN hit.
-- `WRAPPER_LEAKS_COUNT` = CHECK#2 (§0.7) total leaks without TECHNICAL COUPLING annotation OR override literal. Penalty 4 ÷ 2 = 2.0 LEAN points (enough to drop 7.5 Acceptable → 5.7 Attention).
-- **Penalty justification trio summary:** horizontal = ~2.5 pts, entropy high = ~0.5-2.5 pts, wrapper leak ~2.0 pts. Alone each is Attention-level; combined trio ensures the only way to get Excellent ≥9.0 is: clean vertical F0 + ≤+2 entropy + zero wrapper leaks (i.e. no broken windows).
+Where (see S12 rationale CHE_RULES §X):
+- `HORIZONTAL_PLAN_DETECTED` = CHECK#0 §0.5 detector boolean. Override = `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN` literal OR decisions.log event. Penalty ÷2 = ~2.5 pts.
+- `ENTROPY_DELTA` = CHECK#1 (§0.6) computed value. Override = `EXPLICIT_OVERRIDE_ENTROPY_DELTA` OR decisions.log event. **Capped at +5 penalty (per S12 MIN(ENT,5))** — ÷2 scaled = max 2.5 LEAN hit (see S12 rationale: avoids killing a huge legacy lint batch).
+- `WRAPPER_LEAKS_COUNT` = CHECK#2 (§0.7) total leaks without TECHNICAL COUPLING annotation OR override literal. **Penalty 4 (per S12)** ÷ 2 = 2.0 LEAN points (S12 rationale: drops 7.5 Acceptable → 5.7 Attention).
+- **S12 Combined trio rationale:** horizontal (~2.5) + entropy high (~0.5-2.5) + wrapper leak (~2.0). Alone each is Attention-level; combined trio ensures the only way to get Excellent ≥9.0 is: clean vertical F0 + ≤+2 entropy + zero wrapper leaks (no broken windows).
 
-Example: 1 HIGH + 5 MEDIUM + 7 LOW → penalty = 2 + 5 + 2.1 = 9.1 ÷ 2 = 4.55 → LEAN = **5.45**
-Example WITH horizontal plan + entropy 3.5 + 2 wrapper leaks (all un-overridden): 9.1 + 5 + 3.5 + 4 = 21.6 ÷ 2 = 10.8 → LEAN clamp = **0 (🔴 BLOCK via score <5.0)**
-Example CLEAN TRIO (horizontal OK, entropy 0, wrapper leaks 0): same 9.1 (check5 only) → LEAN = 5.45 (Attention because of legacy check5 findings; no new canonicals penalty added — correct behaviour).
+Examples (per S12):
+- 1 HIGH + 5 MEDIUM + 7 LOW → penalty = 2 + 5 + 2.1 = 9.1 ÷ 2 = 4.55 → LEAN = **5.45**
+- WITH horizontal plan + entropy 3.5 + 2 wrapper leaks (all un-overridden): 9.1 + 5 + 3.5 + 4 = 21.6 ÷ 2 = 10.8 → LEAN clamp = **0 (🔴 BLOCK via score <5.0)**
+- CLEAN TRIO (horizontal OK, entropy 0, wrapper leaks 0): same 9.1 (check5 only) → LEAN = 5.45 (Attention because of legacy check5 findings; no new canonicals penalty added — S12 correct behaviour).
 
-### 7.3 FINAL Score (geometric mean — requires BOTH to be good)
+### 7.3 FINAL Score (geometric mean — per S13 CHE_RULES §X — requires BOTH to be good)
 
 ```
-FINAL_score = sqrt(SCOPE_score × LEAN_score)
+FINAL_score = sqrt(SCOPE_score × LEAN_score)   # per S13 (geometric — anti-loophole)
 ```
-Example: sqrt(8.5 × 5.45) = sqrt(46.3) = **6.80**
+Example (S13 rationale in CHE_RULES §X): sqrt(8.5 × 5.45) = sqrt(46.3) = **6.80**
 
-### 7.4 FINAL CLASSIFICATION rule used in gate
+### 7.4 FINAL CLASSIFICATION rule used in gate — per S13 CHE_RULES §X
 
-| FINAL_score threshold | Level | che-ship §0.9 Action |
+| FINAL_score threshold (per S13) | Level | che-ship §0.9 Action |
 |---|---|---|
-| **≥ 9.0** | Excellent | Green + auto-proceed |
-| **≥ 7.0** | Acceptable | Green + auto-proceed (DEFAULT THRESHOLD) |
-| **5.0 – 6.9** | Attention | 🟡 CONDITIONS → show L-M action items → ask user to proceed? |
-| **< 5.0** | Poor | 🔴 BLOCK SHIP → fix first |
+| **≥ 9.0** (S13 Excellent band) | Excellent | Green + auto-proceed |
+| **≥ 7.0** (S13 Acceptable band — DEFAULT) | Acceptable | Green + auto-proceed (DEFAULT THRESHOLD) |
+| **5.0 – 6.9** (S13 Attention band) | Attention | 🟡 CONDITIONS → show L-M action items → ask user to proceed? |
+| **< 5.0** (S13 Poor band — HARD BLOCK) | Poor | 🔴 BLOCK SHIP → fix first |
+
+(See S13 DESIGN RATIONALE CHE_RULES §X: arithmetic (10+3)/2=6.5 passes → geometric SQRT(30)=5.47 barely = intentional anti-loophole.)
 
 In addition to the numerical score, **IF there is ANY 🔴 item in ANY of the 4 legacy checks (1-4), the final verdict automatically drops to 🔴 BLOCKED**, regardless of the score. This is the old §6.1 rule, preserved.
 
@@ -581,10 +583,10 @@ In addition to the numerical score, **IF there is ANY 🔴 item in ANY of the 4 
 ### 8.1 Calculation rule
 
 ```
-Verdict =
-  🔴 BLOCKED  if (ANY check has ≥1 🔴 item)  OR  (FINAL_score < 5.0)
-  🟡 CONDITIONS if (NO check has 🔴)  and  (ANY item has 🟡)  OR  (5.0 ≤ FINAL_score < 7.0)
-  🟢 APPROVED if (FINAL_score ≥ 7.0) AND (ALL items are 🟢/⚪/INFO) AND (ZERO 🔴 items)
+Verdict =                                                              # thresholds per S13 CHE_RULES §X
+  🔴 BLOCKED  if (ANY check has ≥1 🔴 item)  OR  (FINAL_score < 5.0)   # S13 Poor band <5.0
+  🟡 CONDITIONS if (NO check has 🔴)  and  (ANY item has 🟡)  OR  (5.0 ≤ FINAL_score < 7.0)  # S13 Attention 5-6.9
+  🟢 APPROVED if (FINAL_score ≥ 7.0) AND (ALL items are 🟢/⚪/INFO) AND (ZERO 🔴 items)  # S13 Acceptable ≥7.0 + Excellent ≥9.0
 ```
 
 ### 8.1 🔴 MANDATORY STORAGE PREFLIGHT (BEFORE WRITING REPORT)

@@ -204,7 +204,7 @@ command -v typesync >/dev/null 2>&1 && npx typesync  # Install missing @types pa
 **Tool Migration Decisions**
 
 | From | To | When | Migration Effort |
-|------|-----|------|-----------------|
+| --- | --- | --- | --- |
 | ESLint + Prettier | Biome | Need much faster speed, okay with fewer rules | Low (1 day) |
 | TSC for linting | Type-check only | Have 100+ files, need faster feedback | Medium (2-3 days) |
 | Lerna | Nx/Turborepo | Need caching, parallel builds | High (1 week) |
@@ -381,6 +381,100 @@ When reviewing TypeScript/JavaScript code, focus on these domain-specific aspect
 - [ ] Shared types in dedicated modules
 - [ ] Avoid global type augmentation when possible
 - [ ] Proper use of declaration files (.d.ts)
+
+---
+
+## Full-Stack TS Frameworks  (E01 Gap B06 · CHE_RULES §XI Table 2 rows 750-758)
+
+### 🛒 MedusaJS v2 — Modules · Workflows · API Routes
+
+Medusa v2 is module + IoC-container first. NEVER write top-level logic outside of a `MedusaModule(...)` registration.
+
+#### Module Structure (minimum per bounded context):
+```
+packages/medusa-app/src/modules/orders/
+  index.ts                 # MedusaModule({ services, subscribers, handlers })  ← ENTRYPOINT
+  services/
+    OrderService.ts        # extends BaseService — ALL business mutations live here
+  workflows/
+    place-order/
+      index.ts             # createWorkflows(STEP1→STEP2→COMPENSATE)  —  Sagas NON-NEGOTIABLE for distributed changes
+      steps/
+        validate-cart.ts
+        charge-payment.ts
+        create-order.ts    # if this fails →  COMPENSATE charge-payment (refund auto-runs)
+  subscribers/
+    order-placed.sub.ts    # event-driven: OrderService.Events.PLACED → send email
+  api/
+    store/
+      orders/route.ts      # Medusa API routes — validation via zod schema first
+    admin/
+      orders/route.ts      # separate auth scope (storefront vs admin)
+```
+NON-NEGOTIABLE: Every write-side operation > 2 aggregate touches MUST go through `createWorkflow` + explicit compensation steps per step. Raw `OrderService.create()` in a subscriber = footgun — it will leave orphan records when subsequent steps fail.
+
+#### Medusa + QA Detector Rules (che-scope-checker S14 companion):
+When scanning a `medusa-app/` the following patterns raise LEAN_penalty (per CHE_RULES §X S14):
+| Anti-Pattern | Penalty | Why |
+| --- | --- | --- |
+| HTTP handler writes directly to DB (TypeORM `repo.save`) outside Service | +3 | No module hooks / events fire → audit log / indexer / inventory drift silently |
+| `workflow.ts` with > 2 steps and 0 compensation functions | +5 | Saga without rollback = distributed corruption risk |
+| Raw `fetch('/admin/...')` in tests (not Medusa local API client) | +1 | Fragile to port changes / headers; use `createAdminClient({ apiKey })` |
+| Admin dashboard mutation without `useMutation` + `invalidatesTags` | +2 | Stale state on success refresh — S12 data-freshness penalty companion |
+
+### 📚 Payload CMS — Collections · Zod inference · Hooks · Plugin Local API
+
+#### Collection pattern (strongly-typed end-to-end):
+```ts
+// src/collections/Events.ts
+import type { CollectionConfig } from 'payload'
+import { z } from 'zod'
+
+// 1. Zod schema = SINGLE SOURCE OF TRUTH — drives frontend forms + backend validation
+export const EventSchema = z.object({
+  title: z.string().min(3).max(160),
+  startAt: z.coerce.date().min(new Date()),
+  capacity: z.number().int().positive().max(100_000),
+  status:  z.enum(['draft','published','archived']).default('draft'),
+})
+
+export type EventInput = z.input<typeof EventSchema>
+export type Event      = z.output<typeof EventSchema> & { id: string; updatedAt: string; createdAt: string }
+
+// 2. Payload collection config reuses Zod via hooks (no duplicated validation)
+export const Events: CollectionConfig = {
+  slug: 'events',
+  admin: { useAsTitle: 'title', defaultColumns: ['title','startAt','status','capacity'] },
+  hooks: {
+    beforeValidate: [async ({ data }) => EventSchema.parse(data)],   // Zod runs BEFORE payload
+    beforeChange:     [async ({ data, req }) => lockPastStartAt(data, req)],
+    afterChange:      [async ({ doc, req }) => req.payload.updateGlobal({ slug: 'analytics-cache', data: { lastEventId: doc.id } })],
+  },
+  access: {
+    read:   ({ req })  => true,                              // public events
+    create: ({ req })  => !!req.user?.roles.includes('event-admin'),
+    update: isOwnerOrAdmin,   // RBAC: owner row-level OR global admin role
+    delete: isOwnerOrAdmin,
+  },
+  fields: [
+    { name: 'title',    type: 'text',   required: true },
+    { name: 'startAt',  type: 'date',   required: true, admin: { date: { pickerAppearance: 'dayAndTime' } } },
+    { name: 'capacity', type: 'number', required: true, min: 1, max: 100_000 },
+    { name: 'status',   type: 'select', required: true, options: ['draft','published','archived'] },
+    { name: 'ownerId',  type: 'relationship', relationTo: 'users', required: true, admin: { readOnly: true } },
+  ],
+}
+```
+#### Local API — test + E2E NON-NEGOTIABLE pattern:
+```ts
+// NEVER hit Payload via `fetch()` inside unit tests. Use the Local API — 10× faster, no HTTP, AND runs hooks/access checks identically to HTTP.
+const adminPayload = await getPayload({ config })
+const event = await adminPayload.create({ collection: 'events', data: { title: 'Gala', startAt: new Date(2027,0,1), capacity: 400, ownerId: admin.id }, overrideAccess: true })
+```
+Over-use of `overrideAccess: true` beyond test setup = LEAN_penalty +2 per file (access control is the #1 regression source in Payload CMS — test without it whenever simulating a real user).
+
+#### Plugin ecosystem pattern:
+Extract cross-cutting concerns into reusable `plugins/` NOT collection hooks. Example plugins = audit-trail-plugin, scheduled-publish-plugin, backup-s3-plugin. A plugin that modifies 12 collections should be ONE file `plugins/audit-trail.ts` + tests, NOT 12 × duplicated `afterChange` hooks.
 
 ## Quick Decision Trees
 

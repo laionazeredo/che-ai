@@ -24,12 +24,12 @@ This skill acts as a bridge between technical specification and project manageme
    - **Case A (VERTICAL, default):** `frontmatter.tracer_f0_defined === true` AND §4.5 VERTICAL SLICES table has ≥1 F0 row with Layers Touched ≥ 2 → proceed normally.
    - **Case B (HORIZONTAL OVERRIDE, explicit only):** `frontmatter.vertical_slice_required === false` OR the literal `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN:` + 1-line justification appears verbatim in SPEC §2 SCOPE → proceed, but FIRST append a `[HORIZONTAL_TICKET_PLAN]` entry to decisions.log.jsonl containing the spec_slug, justification verbatim, and count of sub-tasks to be generated.
    - **Case C (INVALID — FAIL HARD):** Neither case above is true. → REJECT with canonical V16/V17 text.
-   4.2 **CANONICAL #1 — Reversibility Precondition (TRIGGER: estimated_files_max ≥ 5 OR external_deps_count ≥ 1)**:
+   4.2 **CANONICAL #1 — Reversibility Precondition (TRIGGER per S08 CHE_RULES §X: estimated_files_max >= 5 OR external_deps_count >= 1)**:
    - Parse SPEC for literal `EXPLICIT_OVERRIDE_REVERSIBILITY: <justif>` in §2 SCOPE OR check that header `### §4.6 REVERSIBILITY DECLARATIONS` exists with 3 non-empty sub-tables (V19a Wrapper Boundary, V19b Rollback Flags if applicable, V19c Forking Road).
-   - If NEITHER override NOR 3 tables present → REJECT before ticket generation: "CANONICAL #1 Reversibility precondition failed (che-plan §0.4.2). Approved SPEC scope ≥ 5 files or uses ≥ 1 external dep, but §4.6 Reversibility Declarations tables (V19a/b/c) are missing AND no EXPLICIT_OVERRIDE_REVERSIBILITY literal in §2. Either (A) re-run che-spec so V19 passes, or (B) get user to add literal `EXPLICIT_OVERRIDE_REVERSIBILITY: <1-line reason ≤120 chars>` to §2 SCOPE, re-approve, then retry."
-   4.3 **CANONICAL #3 — Assertive Programming Precondition (TRIGGER: B_COUNT ≥ 3)**:
-   - If scope `B_COUNT >= 3`: Either SPEC contains valid §4.7 Assertive Programming table (A-1..N rows ≥ ceil(B/3), all rows have "CRASH" in last col), OR §2 literal `EXPLICIT_OVERRIDE_DBC_ASSERTIONS: <justif>` exists.
-   - Else → REJECT: "CANONICAL #3 DbC Assertive precondition failed. B_COUNT=$B >= 3 requires §4.7 Assertive Programming invariants table (V20) OR explicit override literal. Re-run che-spec to pass V20, or add EXPLICIT_OVERRIDE_DBC_ASSERTIONS to §2."
+   - If NEITHER override NOR 3 tables present → REJECT before ticket generation: "CANONICAL #1 Reversibility precondition failed (che-plan §0.4.2). Approved SPEC scope ≥ 5 files or uses ≥ 1 external dep per S08 CHE_RULES, but §4.6 Reversibility Declarations tables (V19a/b/c) are missing AND no EXPLICIT_OVERRIDE_REVERSIBILITY literal in §2. Either (A) re-run che-spec so V19 passes, or (B) get user to add literal `EXPLICIT_OVERRIDE_REVERSIBILITY: <1-line reason ≤120 chars>` to §2 SCOPE, re-approve, then retry."
+   4.3 **CANONICAL #3 — Assertive Programming Precondition (TRIGGER per S09 CHE_RULES §X: B_COUNT >= 3)**:
+   - If scope `B_COUNT >= 3` (S09): Either SPEC contains valid §4.7 Assertive Programming table (A-1..N rows ≥ ceil(B/3) per S02 CHE_RULES §X), all rows have "CRASH" in last col), OR §2 literal `EXPLICIT_OVERRIDE_DBC_ASSERTIONS: <justif>` exists.
+   - Else → REJECT: "CANONICAL #3 DbC Assertive precondition failed per S09 CHE_RULES. B_COUNT=$B >= 3 requires §4.7 Assertive Programming invariants table (V20, density floor per S02) OR explicit override literal. Re-run che-spec to pass V20, or add EXPLICIT_OVERRIDE_DBC_ASSERTIONS to §2."
 
 ---
 
@@ -41,9 +41,9 @@ This skill acts as a bridge between technical specification and project manageme
 3. **Pre-decomposition vertical slice validation (G-VS-2 gate here):**
    - If `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN:` NOT found in §2 SCOPE AND `tracer_f0_defined !== true`: HARD REJECT before structure decision. Msg = identical to §0 Precondition #4 Case C.
    - Parse every sub-slice: compute `distinct_layers = len(set(slice.layers))`. Collect list `single_layer_slices = [s.id for s in slices if distinct_layers < 2 AND s.id[-12:] != 'H-OVERRIDE-1']`. If `len(single_layer_slices) >= 3` AND no override → REJECT: "Vertical slice decomposition has $N slices touching only 1 architectural layer each — this is horizontal planning disguised as vertical. Either add 2nd layer to each slice OR declare EXPLICIT_OVERRIDE_HORIZONTAL_PLAN in §2 SCOPE bullet with ≤120 char justification."
-4. **Structure Decision**:
-   - **Single Ticket**: If `B_COUNT <= 3` AND `estimated_files_max <= 5` AND `change_class` is not `feature`. If SPEC has exactly 1 slice (F0 only) → Single Ticket always.
-   - **Epic/Feature**: Otherwise. Create a parent Epic/Feature and decompose into sub-tasks with 1 SUB-TASK PER SLICE ID. DO NOT create sub-tasks that group multiple slices into one. F0 is ALWAYS the first sub-ticket, critical_path=True.
+4. **Structure Decision** (thresholds per S10 CHE_RULES §X):
+   - **Single Ticket**: If `B_COUNT <= 3` AND `estimated_files_max <= 5` AND `change_class` is not `feature` (S10 Single case). If SPEC has exactly 1 slice (F0 only) → Single Ticket always.
+   - **Epic/Feature**: Otherwise (S10 Epic case). Create a parent Epic/Feature and decompose into sub-tasks with 1 SUB-TASK PER SLICE ID. DO NOT create sub-tasks that group multiple slices into one. F0 is ALWAYS the first sub-ticket, critical_path=True.
 
 ### Step 2: Content Formatting (MANDATORY TEMPLATE)
 Every ticket (single or sub-task) MUST follow this structure to ensure alignment with Specflow Phase 3 and CANONICAL #0 Vertical Slicing:

@@ -54,7 +54,7 @@ If you detect a security or PII leak risk:
 - Never log secrets, API keys, raw passwords, JWTs, session tokens.
 - Never persist or log raw recipient email addresses or email bodies. Use hashing for correlation.
 - Never log full environment variables, especially with keys/secrets.
-- **Supabase Postgres DEFAULT RULE (see also §17):** Every NEW table created MUST have Row Level Security (RLS) enabled + explicit policies defined. Tables without RLS are blocked unless explicit exception logged + user approved in `decisions.log.jsonl` + Non-Goals of PRD.
+- **Database Security default (see postgres-supabase-expert §R-01 for Postgres/Supabase specifics):** When using a database platform, security defaults MUST follow the vendor-agreed least-privilege pattern declared in the language/provider expert skill. For PostgreSQL and Supabase this defaults to Row Level Security (RLS) enabled on every new table unless a double-approval exception (Non-Goals + decisions.log user approval) is logged. For other databases (MySQL, SQLite, MongoDB, Cassandra, etc.) consult the corresponding provider expert — DO NOT hardcode Postgres-specific RLS syntax on non-Postgres databases.
 
 ### 3. 🟠 REPO EXISTING STYLE & CONVENTIONS (win unless undefined)
 
@@ -300,19 +300,15 @@ Rules enforced on EVERY implementation:
 4. **gh-stack hierarchy for PR chains (see Appendix C).**
    - When multiple PRs: che uses gh-stack and each PR body shows "Depends on: #PR" — reviewer knows the correct order.
 
-### 17. 🟠 SUPABASE POSTGRES — ENABLE RLS BY DEFAULT (GLOBAL SECURITY RULE)
+### 17. 🟠 DATABASE SECURITY BY DEFAULT (Provider-Agnostic Pointer)
 
-> This is now a GLOBAL engineering rule, not just Flockr-specific. Any repo that uses Supabase / Postgres MUST follow this.
+> Moved to provider-specialised skills to avoid leaking Postgres/Supabase-specific syntax into the universal engineering rulebook.
 
-Rule:
-1. **For EVERY new table:** immediately add `ALTER TABLE <schema>.<table> ENABLE ROW LEVEL SECURITY;` in the migration.
-2. **Define explicit read/write policies per role** (e.g. `organizer_select_policy`, `admin_all_policy`). A table with RLS enabled but ZERO policies = no rows can be read/written (default deny) — good.
-3. **Add an Acceptance Criteria in the SPEC (if using che-spec standalone or /che-act SM §0.5 SPEC gate) specifically for RLS:** e.g. `- [MUST] AC-RLS GIVEN Organizer A authenticated WHEN querying tickets/events owned by Organizer B THEN HTTP 403 or 404 returned | TEST=qa_integration` literal format in §4. This is validated during QA.
-4. **ONLY exception (allowed logged + user approved double confirmation):**
-   - Pure lookup tables (enum reference tables, immutable public seed data for everyone) → RLS not needed, BUT:
-     - Explicitly mark in Non-Goals / Data Model notes.
-     - Log exception + user approval in `decisions.log.jsonl`
-     - Table name + reason documented in migration notes.
+Canonical rule location (per provider):
+- **PostgreSQL / Supabase** → consult `postgres-supabase-expert` skill **§R-01 RLS Default & Policy Enforcement** (RLS enable-migration, explicit policies, RLS-specific AC acceptance criteria, lookup-table exception workflow).
+- **MySQL / MariaDB** → if an expert skill exists, follow its default privilege pattern. No default = define column-level `GRANT` least privilege per role explicitly.
+- **SQLite** → file-level permission model: use `PRAGMA` + application-layer authorization per the provider guidance.
+- **MongoDB / Cassandra / DynamoDB / other NoSQL** → follow the corresponding expert skill (or define Non-Goals exception + log to `decisions.log.jsonl` if no expert skill exists yet).
 
 ---
 
@@ -432,9 +428,9 @@ console.log / console.info / echo (most basic level, ultima ratio)
 |---|---|---|---|
 | **trace** (or `silly`/`verbose`) | Internal implementation details: intermediate values, item-by-item iteration, loop steps. **NEVER in production without feature flag.** Deleted/`silent` by default in prod. | `log.trace({ itemId }, "Processing cart item 3/12")` | 100+/request (non-standard) |
 | **debug** | Decisions, branching, key inputs, crossed thresholds. Useful for investigating bugs without reading code. ON in dev + staging; OFF default prod (ON only for debugging session). | `log.debug({ tier, basePct, orderTotal }, "Applying loyalty cashback rule")` | 5–25/request (max.) |
-| **info** | SIGNIFICANT business events: start/end of flow (with `duration_ms`), external IO (Stripe/DB/HTTP call) success, state transition, auth, login/logout. You read an info log and understand WHAT happened without reading the code. **IDEAL PRODUCTION DEFAULT.** | `log.info({ paymentIntentId, customerHash, amountPence, duration_ms }, "Stripe payment intent confirmed OK")` | 3–15/request/job (Golden HEURISTIC RULE) |
+| **info** | SIGNIFICANT business events: start/end of flow (with `duration_ms`), external IO ({payment_provider}/DB/HTTP/saas call) success, state transition, auth, login/logout. You read an info log and understand WHAT happened without reading the code. **IDEAL PRODUCTION DEFAULT.** | `log.info({ paymentIntentId, customerHash, amountPence, duration_ms }, "{payment_provider} payment intent confirmed OK")` | 3–15/request/job (Golden HEURISTIC RULE) |
 | **warn** | UNUSUAL but HANDLED state (not a failure). Retry 1/N, timeout on 1 attempt but retried OK, missing optional data replaced by default, deprecated API called. **Human attention deserved WITHOUT immediate blocking.** | `log.warn({ sku, fallback_price_used: true }, "Product price tier missing; using default catalog price")` | 0–2/request (unusual peaks) |
-| **error** | REAL / scalable / non-recoverable failure. Always accompanied by structured context. DO NOT full stack trace dump to stdout by default (use `error.cause` or structured `stack` field). ERROR = pagerduty/alert triggered = **human action needed NOW.** | `log.error({ paymentIntentId, stripeErrorCode, httpStatus: 402, correlationId }, "Stripe charge declined — cannot proceed")` | 0–1/error event (very rare) |
+| **error** | REAL / scalable / non-recoverable failure. Always accompanied by structured context. DO NOT full stack trace dump to stdout by default (use `error.cause` or structured `stack` field). ERROR = pagerduty/alert triggered = **human action needed NOW.** | `log.error({ paymentIntentId, providerErrorCode, httpStatus: 402, correlationId }, "{payment_provider} charge declined — cannot proceed")` | 0–1/error event (very rare) |
 
 #### 19.2 MANDATORY fields in EVERY structured log (non-negotiable)
 
@@ -442,7 +438,7 @@ Whenever possible (JSON/structured logger), include **EVERY APPLICABLE FIELD** b
 
 | Field | When mandatory | Example |
 |---|---|---|
-| `op` / `event` / `msg` | ALWAYS (1st field, human-readable operation name) | `op: "stripe.refund.create"` |
+| `op` / `event` / `msg` | ALWAYS (1st field, human-readable operation name) | `op: "{payment_provider}.refund.create"` |
 | `traceId` / `spanId` | ALWAYS if OTel or tracing exists in the repo | `traceId: "4bf92f3577b34da6a3ce929d0e0e4736"` |
 | `correlationId` / `idempotencyKey` | External / financial / retry operations | `idempotencyKey: "refund_${orderId}_${attempt}"` |
 | `userId` / `orgId` / `customerId` | Any authenticated context (use HASH if PII) | `customerHash: hashPII(email)` |
@@ -520,10 +516,10 @@ Whenever you write `try { ... } catch`:
 ```typescript
 // ✅ GOOD — 3 properties in catch: (1) operation context, (2) identifier, (3) struct error fields
 try {
-  await stripe.refunds.create({...})
+  await paymentProvider.refunds.create({...})
 } catch (err) {
   // Here: op + id fields + err.code + err.message (don't need full stack dump by default)
-  logger.error({ op: "stripe.refund.create", paymentIntentId, err_code: (err as any)?.code, err_msg: (err as any)?.message }, "Refund Stripe API call failed")
+  logger.error({ op: "{payment_provider}.refund.create", paymentIntentId, err_code: (err as any)?.code, err_msg: (err as any)?.message }, "Refund {payment_provider} API call failed")
   // re-throw if this is not handled: throw err
 }
 
