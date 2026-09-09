@@ -7,13 +7,19 @@ Feature and bugfix development pipeline. **DO NOT SKIP STEPS.** Always complete 
 ## Stage 0: Spec Approved & Bounded Context (SM gates 0→1.5)
 Mandatory input: Approved SPEC with YAML frontmatter (domain = engineering by default).
 Sub-stages (all performed by Scrum Master §0→1.5, NOT by developer):
+- **0.0 F0 Tracer Bullet Defined & Stamped Complete (CANONICAL #0 — NON-NEGOTIABLE):**
+  1. Read Approved SPEC §4.5 VERTICAL SLICES table. Extract row F0 (first line). If SPEC has no §4.5 or no F0 row → STOP. Require user: "(A) Run /che-spec and add VERTICAL SLICES §4.5 with F0 Tracer / (B) Add EXPLICIT_OVERRIDE_HORIZONTAL_PLAN literal with ≤120 chars justification + log decision".
+  2. From F0 row extract: (a) `F0_BIDS` = list B-IDs covered, (b) `F0_LAYERS` = distinct count Layers Touched (MUST be ≥2) or literal "override", (c) `F0_DONE` = DONE criterion observable string.
+  3. Output stamped variable: `F0_STAMP = PENDING` at stage start.
+  4. **F0 must be 100% COMPLETE (all tests green · DONE criterion verifiable) BEFORE any F1/F2/FN task is UNBLOCKED in task-graph.** If any F1+ task has `Depends on = []` (no blockers) while `F0_STAMP != COMPLETE` → 🔴 INVALID task-graph, reorder Kahn to make F1..FN depend on T1=F0.
+  5. Transition rule: When che-qa reports 100% ACs PASS for T1=F0 → set `F0_STAMP = COMPLETE` (log event `[F0-TRACER-COMPLETE] spec=<slug> layers=<count> bids=<N>` via decisions helper). Only after T1 stamp are downstream tasks eligible for parallel dispatch.
 - 0.1 2-level binding approved (workspace + worktree).
 - 0.2 ADR if `change_class ∈ {arch, platform, large-migration}`.
 - 0.3 Topological task graph with atomic envelopes + file locks (where Kahn parallelism applies).
 - 0.4 Detected QA stack + compliance light plan.
-- 0.5 **GATE Approved**: SPEC stamped Approved. If not, loop back.
+- 0.5 **GATE Approved**: SPEC stamped Approved **AND F0_STAMP != INVALID**. If either fails, loop back.
 
-Output of this stage: `task_graph.md` + `tasks/<TASK_ID>/envelope.md` for each task.
+Output of this stage: `task_graph.md` + `tasks/<TASK_ID>/envelope.md` for each task + `F0_STAMP = PENDING | COMPLETE` global session state.
 
 ---
 

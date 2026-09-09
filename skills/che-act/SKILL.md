@@ -230,14 +230,45 @@ This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and 
    SPEC_PATH=<abs-path>
    SPEC_STATUS=Approved|Draft
    ```
-4. **Gate enforcement:**
-   - If `SPEC_STATUS=Approved` (existing or freshly approved) → unlock scope capture §1.1. Set `SESSION_SPEC_PATH=<path>` for downstream skills.
+4. **Gate enforcement (CANONICAL #0 — VERTICAL SLICING G-VS-3):**
+   - If `SPEC_STATUS=Approved` (existing or freshly approved):
+     1. Parse YAML frontmatter. Set `F0_OK = (frontmatter.vertical_slice_required === true AND frontmatter.tracer_f0_defined === true)`.
+     2. Search SPEC §2 SCOPE for literal `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN:` (case-sensitive, verbatim). Set `H_OVERRIDE_EXISTS = true` if found + justification is ≤120 chars.
+     3. **If F0_OK === false AND H_OVERRIDE_EXISTS === false → BLOCK (G-VS-3).** DO NOT unlock §1.1. Present user 2 options verbatim:
+        > "(A) Re-run che-spec and ADD VERTICAL SLICES TABLE §4.5 with F0 Tracer (≥1 B-ID · ≥2 layers) OR (B) Type 1-line justification ≤120 chars → I will write literal `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN: <your text>` into SPEC §2 SCOPE + log decision."
+     4. If F0_OK === true OR H_OVERRIDE_EXISTS === true → unlock scope capture §1.1. Set `SESSION_SPEC_PATH=<path>` for downstream skills. If H_OVERRIDE_EXISTS was used, log via step 5b below.
    - If `SPEC_STATUS=Draft` after che-spec (user cancelled Approval) → offer: "(A) Run scope capture WITHOUT approved SPEC (log override to decisions) / (B) Stop here, finish SPEC later via /che-spec".
 5. **Case A (override without Approved SPEC):** DO NOT manual append. Use OFFICIAL HELPER:
    ```bash
    che_append_decision_jsonl "SPEC-OVERRIDE" "scope capture started without Approved SPEC — user confirmed. Reason: <user typed reason or cancel-approval exit>"
    ```
-   Proceed to §1.
+5b. **Case B (HORIZONTAL override logged):** If H_OVERRIDE_EXISTS path used in step 4 → run helper BEFORE §1:
+   ```bash
+   che_append_decision_jsonl "EXPLICIT_OVERRIDE_HORIZONTAL_PLAN" "scope capture with explicit horizontal plan. justification=<1-linha from SPEC §2 verbatim, safe JSON escaped>"
+   ```
+6. **Gate enforcement — CANONICAL #1 REVERSIBILITY (G-REV-1 pass-through):**
+   - If `SPEC_STATUS=Approved`:
+     1. Parse YAML frontmatter + scan SPEC §4.6.1 Wrapper Boundary table (if exists). Count rows `WRAPPER_COUNT = rows in §4.6.1 table`.
+     2. Compute V19 trigger fired: `V19_FIRED = (estimated_files_max≥5 from frontmatter OR external_deps_count≥1 from frontmatter)`.
+     3. Search SPEC §2 SCOPE for literal `EXPLICIT_OVERRIDE_REVERSIBILITY:` (case-sensitive, verbatim). Set `R_OVERRIDE_EXISTS = true` if found + justification is ≤120 chars.
+     4. **If V19_FIRED === true AND WRAPPER_COUNT === 0 AND R_OVERRIDE_EXISTS === false → BLOCK (G-REV-1).** DO NOT unlock §1.1. Present user 2 options verbatim:
+        > "(A) Re-run che-spec and ADD WRAPPER BOUNDARY TABLE §4.6.1 (1 row per external SDK dep — single glob / folder each) AND §4.6.2 rollback flags IF critical path B-IDs exist AND §4.6.3 forking road test IF wrappers ≥2.  (B) Type 1-line justification ≤120 chars → I will write literal `EXPLICIT_OVERRIDE_REVERSIBILITY: <your text>` into SPEC §2 SCOPE + log decision."
+     5. If WRAPPER_COUNT > 0 OR R_OVERRIDE_EXISTS === true → proceed. If R_OVERRIDE_EXISTS was used, run helper BEFORE §1:
+        ```bash
+        che_append_decision_jsonl "EXPLICIT_OVERRIDE_REVERSIBILITY" "scope capture with explicit reversibility override. justification=<1-line from SPEC §2 verbatim, safe JSON escaped>"
+        ```
+7. **Gate enforcement — CANONICAL #3 DBC ASSERTIVE PROGRAMMING (G-DBC-1 pass-through):**
+   - If `SPEC_STATUS=Approved`:
+     1. Parse YAML frontmatter `B_COUNT`. Compute V20 trigger fired: `V20_FIRED = (B_COUNT >= 3)`.
+     2. Scan SPEC §4.7 Assertive Invariants table (if exists). Count rows with col-4 === literal word "CRASH" (case-sensitive). Set `ASSERTION_ROWS_OK = count of those rows >= ceil(B_COUNT / 3)`.
+     3. Search SPEC §2 SCOPE for literal `EXPLICIT_OVERRIDE_DBC_ASSERTIONS:` (case-sensitive, verbatim). Set `D_OVERRIDE_EXISTS = true` if found + justification ≤120 chars.
+     4. **If V20_FIRED === true AND ASSERTION_ROWS_OK === false AND D_OVERRIDE_EXISTS === false → BLOCK (G-DBC-1).** DO NOT unlock §1.1. Present user 2 options verbatim:
+        > "(A) Re-run che-spec and ADD ASSERTIVE INVARIANTS TABLE §4.7 with >= ceil(B/3) rows. Each invariant that is IMPOSSIBLE in correct code MUST have column 4 === literal 'CRASH'.  (B) Type 1-line justification ≤120 chars → I will write literal `EXPLICIT_OVERRIDE_DBC_ASSERTIONS: <your text>` into SPEC §2 SCOPE + log decision."
+     5. If ASSERTION_ROWS_OK === true OR D_OVERRIDE_EXISTS === true → proceed. If D_OVERRIDE_EXISTS was used, run helper BEFORE §1:
+        ```bash
+        che_append_decision_jsonl "EXPLICIT_OVERRIDE_DBC_ASSERTIONS" "scope capture with explicit DbC assertions override. justification=<1-line from SPEC §2 verbatim, safe JSON escaped>"
+        ```
+8. **Downstream propagation:** If gates 4+6+7 all passed → unlock scope capture §1.1. Persist into session L3 ephemeral: `SESSION_WRAPPERS = all rows from §4.6.1`, `SESSION_ASSERTIONS = all A-IDs from §4.7`, `SESSION_DRY_RULES = all Business Rule rows from §4.8`. Proceed to §1.
 
 ### 1.1 Input validation
 
@@ -255,12 +286,14 @@ Do **NOT** guess constraints or ACs.
 
 If user said "decompose into tasks" or did not provide a list:
 1. Produce initial task list:
-   - **Atomicity**: 1 logical, self-contained unit per task
-   - **Precedence**: dependencies come first
-   - **Size**: completable in < 1 day (conceptually)
+   - **Atomicity (CANONICAL #0 — VERTICAL SLICING)**: 1 task = 1 MINIMUM VERTICAL SLICE. Every task MUST touch ≥ 2 distinct architectural layers (UI · API · DB · External service · Config). PROHIBITED: task touching only 1 layer (only `models/`, only `pages/`, only `routes/` isolated). Exception: task ID suffix `-H-OVERRIDE-<N>` + corresponding entry in decisions.log via `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN`.
+   - **Precedence**: slice-to-slice dependencies only (F0 always first with no blockers). Never "API blocks UI" layer-style dependencies.
+   - **Size**: completable in < 1 day (conceptually); 1 vertical slice = 1 deliverable DONE observable by user.
 2. Present to user:
-   - For each task: short title + coverage + what it explicitly DOES NOT cover
-3. Wait for user APPROVAL.
+   - For each task: short title + `Vertical Slice Ref: <F0/F1/FN>` + `Layers Touched: <layer1 · layer2 · ...>` + coverage + what it explicitly DOES NOT cover
+3. If any task has `Layers Touched distinct count < 2` AND no `-H-OVERRIDE-` suffix → REJECT task list, present 2 options:
+   > "(A) Expand task to touch ≥2 layers (make it vertical) / (B) Add `-H-OVERRIDE-N` suffix + log EXPLICIT_OVERRIDE_HORIZONTAL_PLAN in decisions.log with 1-line justification."
+4. Wait for user APPROVAL.
 
 ### 1.3 Build TASK GRAPH
 
@@ -277,13 +310,14 @@ TASK_GRAPH_EOF
 ## Metadata
 - Created: <ISO datetime>
 - Worktree: <path>
+- Vertical Slicing Compliance (CANONICAL #0): <F0 defined in SPEC §4.5 | H-OVERRIDE logged | INVALID — reason>
 
 ## Task Table
 
-| ID | Title | Depends on | Status | DONE criteria |
-|----|-------|-----------|--------|---------------|
-| T1 | ...   | -         | TODO   | ...           |
-| T2 | ...   | T1        | TODO   | ...           |
+| ID | Title | Depends on | Status | DONE criteria | Vertical Slice (F0/FN) | Layers Touched (≥2 required) | Wrapper Boundaries Touched (CAN #1 Reversibility) | Assertion IDs Delivered (CAN #3 DbC) | DRY Rules Touched (V21 DRY Knowledge) |
+|----|-------|-----------|--------|---------------|------------------------|------------------------------|---------------------------------------------------|---------------------------------------|----------------------------------------|
+| T1 | ...   | -         | TODO   | ...           | F0                     | UI · API · DB                | [wrapper glob(s) from §4.6.1 whose files intersect T1, or "-"] | [A-1..N A-IDs from §4.7 whose code is edited, or "-"] | [Business Rule IDs from §4.8 whose SSoT path is edited, or "-"] |
+| T2 | ...   | T1        | TODO   | ...           | F1                     | pages · server · entities    | - | - | - |
 
 ## Dependency Graph (Mermaid)
 ```mermaid
@@ -296,6 +330,32 @@ graph TD
 **DONE criteria MUST be testable / verifiable.**
 Bad: "implements auth".
 Good: "User can POST /register with {email, password} and receives a JWT; invalid email returns 400 with error message."
+
+**CANONICAL #0 #1 #3 — TASK TABLE VALIDATION (G-VS-3 + G-REV-2 + G-DBC-2 post-build):**
+For EVERY row (T1..TN), run EXACT checks, STOP on first 🔴:
+1. **F0 position check:** Row T1 MUST have `Vertical Slice === F0` (unless H-OVERRIDE). If not → reorder T1 to F0 slice.
+2. **Layers count check:** Split `Layers Touched` on ` · ` → compute distinct set size. If `size < 2` AND ID does NOT contain `-H-OVERRIDE-` → 🔴 REJECT that individual task. Present 2 options verbatim:
+   > "(A) Add missing layer(s) to task to make it vertical (≥2 layers) / (B) Rename task ID to `<original-id>-H-OVERRIDE-<N>` and append decision via `che_append_decision_jsonl EXPLICIT_OVERRIDE_HORIZONTAL_PLAN` with 1-line justification ≤120 chars."
+3. **F0 completeness check:** If row is F0 → compare layers to SPEC §4.5 F0 row. If mismatch → 🔴 WARN and ask user: "F0 in task-graph has layers [A·B] but SPEC §4.5 F0 has [A·B·C]. Proceed (extra layers added in exec) OR revise SPEC first?"
+4. **Consecutive single-layer scan:** If ≥3 CONSECUTIVE rows all have `Layers Touched size === 1` AND none have `-H-OVERRIDE-` → 🔴 HORIZONTAL STACK DETECTED. Block entire task-graph. User fix required: regroup into ≥2-layer slices OR add 1 global H-OVERRIDE to SPEC §2.
+5. **CAN #1 REVERSIBILITY — Wrapper Boundary Touched mandatory fill (G-REV-2):**
+   - For task row Tn, compare its target files (use best-effort glob from title + ACs or explicit user-given file list) against `SESSION_WRAPPERS[].authoritative_path` globs from §0.5 step 8.
+   - Let `MATCHING_WRAPPERS = filter wrappers where path intersects any task file`.
+   - **If `MATCHING_WRAPPERS.length > 0` AND `Wrapper Boundaries Touched` column === "-" (empty placeholder) → 🔴 REJECT individual row.** Present 2 options verbatim:
+     > "(A) Fill Wrapper Boundaries Touched column with all matching wrapper globs (1 glob per wrapper, commas between if ≥2) — names from SPEC §4.6.1 column 2 / (B) If this task MUST intentionally leak SDK import outside wrapper (rare, technical debt), write `TECHNICAL_COUPLING: TODO(<PROJ-NNN>) <reason ≤80 chars>` and log decision."
+   - If task touches ZERO wrapper paths → column stays "-" = OK, no penalty.
+6. **CAN #3 DBC ASSERTIONS — Assertion IDs Delivered mandatory fill (G-DBC-2):**
+   - For task row Tn, compare its target files against `SESSION_ASSERTIONS[].assertion_path` from §0.5 step 8 (paths listed per A-ID in SPEC §4.7).
+   - Let `MATCHING_ASSERTIONS = filter A-IDs whose path intersects any task file`.
+   - **If `MATCHING_ASSERTIONS.length > 0` AND `Assertion IDs Delivered` column === "-" → 🔴 REJECT individual row.** Fill column with comma-separated matching A-IDs (A-2, A-5 etc).
+   - If no A-ID paths touched → column stays "-" = OK.
+7. **V21 DRY KNOWLEDGE — DRY Rules Touched mandatory fill:**
+   - For task row Tn, compare target files against `SESSION_DRY_RULES[].authoritative_path` from §0.5 step 8 (paths listed per Business Rule in SPEC §4.8).
+   - Let `MATCHING_DRY = filter DRY Rule IDs whose SSoT path intersects any task file`.
+   - **If `MATCHING_DRY.length > 0` AND `DRY Rules Touched` column === "-" → 🔴 REJECT individual row.** Fill column with comma-separated matching Rule IDs (R-3, R-7 etc).
+   - If no SSoT path edited → column stays "-" = OK. Rule consumers (imports / reads only) do NOT trigger this check — only edits to the authoritative source.
+
+**IMPORTANT:** TASK GRAPH with ANY 🔴 from validation above MUST NOT be written to `$TASK_GRAPH_PATH` until user resolves ALL 🔴 items. Present findings FIRST as a table, then ask for explicit resolution before atomic write.
 
 ---
 
@@ -335,12 +395,13 @@ GHSTACK_EOF
 # GH STACK PLAN — <task-id>
 Status: DRAFT (awaiting user approval)
 Triggered by: <tasks count> tasks OR <max-task-files> files max single-task estimate
+F0 Tracer Coverage: <PR1 CONTAINS complete F0 (all layers) | SPLIT-F0-BLOCKED — reason>
 
-| Order | Base branch | Head branch placeholder | Conventional commit title (PR) | Tasks/ACs covered | Est max files | Est max diff lines |
-|---|---|---|---|---|---|---|
-| 1 (bottom) | main | <branch-pr1> | feat(contracts): <slug> data model + enums | T1, AC-1..3 | ≤8 | ≤250 |
-| 2 | <branch-pr1> | <branch-pr2> | feat(payments): <slug> service layer + unit tests | T2/T3, AC-4..9 | ≤14 | ≤400 |
-| 3 (top) | <branch-pr2> | <branch-pr3> | feat(admin): <slug> dashboard UI + tRPC routes | T4/T5, AC-10..13 | ≤12 | ≤350 |
+| Order | Base branch | Head branch placeholder | Conventional commit title (PR) | Tasks/ACs covered | Est max files | Est max diff lines | Vertical Slice Ref | Wrapper Boundaries (CAN #1 Reversibility) |
+|---|---|---|---|---|---|---|---|---|
+| 1 (bottom) | main | <branch-pr1> | feat(f0-tracer): <slug> F0 tracer end-to-end | T1 (F0), AC-F0-1..N | ≤12 | ≤350 | F0 (complete — ALL layers) | [wrapper globs from TASK GRAPH union for tasks covered by this PR, or "-"] |
+| 2 | <branch-pr1> | <branch-pr2> | feat(f1): <slug> F1 slice + tests | T2/T3, AC-F1..N | ≤14 | ≤400 | F1 | - |
+| 3 (top) | <branch-pr2> | <branch-pr3> | feat(f2): <slug> F2 slice + polish | T4/T5, AC-F2..N | ≤12 | ≤350 | F2 | - |
 
 Review order: 1 → 2 → 3.
 Merge order: bottom-up (1 rebased on main, then 2, then 3).
@@ -353,6 +414,42 @@ Rules:
 1. Any single PR layer >20 files → RE-GROUP. No exceptions.
 2. Each PR has OWN ACs subset.
 3. Dependency chain strictly acyclic (3 → 2 → 1 → main).
+4. **CANONICAL #0 RULE (F0 PROTECTION — NON-NEGOTIABLE):**
+   - PR1 (bottom of stack) MUST contain the COMPLETE F0 Tracer slice — ALL layers listed in SPEC §4.5 F0 row.
+   - PROHIBITED: splitting F0 across multiple PRs (e.g. PR1 = DB layer only, PR2 = API, PR3 = UI for same F0). If detected → 🔴 BLOCKED, re-group PR1 so it ships F0 end-to-end alone.
+   - Justification: Tracer Bullet (Hunt & Thomas) = single real shot end-to-end. Splitting F0 layer-by-layer turns it into a throwaway prototype (violates canon). Exemption ONLY via explicit user-typed literal `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN: I want F0 split across PRs because <reason ≤120 chars>` logged in decisions.log.
+5. **CANONICAL #1 RULE — WRAPPER LEAK SCAN PER PR CANDIDATE (G-REV-3 — BEFORE plan saved as non-DRAFT):**
+   > Purpose: Reversibility / No Vendor Lock-in guard. A PR that modifies files inside a Wrapper Boundary Authoritative Path (from SPEC §4.6.1 col-2) MUST NOT also introduce NEW raw SDK imports (TS/JS/Python/Rust/C#) IN FILES OUTSIDE that wrapper glob. If it does → PR grouping leaks vendor coupling across the boundary.
+   - **Step A: Build scope.** For EACH row in the PR table (PR1..PRN):
+     1. Collect `PR_FILES = union of file globs / paths from all TASK GRAPH rows mapped to this PR via Tasks/ACs covered column`.
+     2. Collect `TOUCHED_WRAPPERS = SESSION_WRAPPERS[] entries whose authoritative_path glob intersects any file in PR_FILES`.
+     3. If `TOUCHED_WRAPPERS.length === 0` → skip this PR (no wrapper touched = nothing can leak).
+   - **Step B: Generic leak scan (stack-agnostic, 4 language families, 0 hardcoded SDK names).** For each W = TOUCHED_WRAPPERS:
+     1. Build 4 generic regex patterns using `${W.sdk_name}` (read from SPEC §4.6.1 col-1 DECLARED by user — NEVER hardcode "stripe", "resend" etc):
+        ```
+        P1 = import\s+.*['"]${W.sdk_name}['"]          (TS/JS ES import)
+        P2 = from\s+['"]${W.sdk_name}['"]                (TS/JS named import / Python from-import)
+        P3 = require\s*\(\s*['"]${W.sdk_name}['"]\s*\)   (TS/JS CommonJS)
+        P4 = ^\s*(using|import)\s+${W.sdk_name}[;.]      (C# / Rust using/import)
+        ```
+     2. Run ripgrep for P1..P4 against all files in PR_FILES that are **OUTSIDE** W.authoritative_path glob (i.e. path DOES NOT match wrapper glob). Standard global exclusions apply: `node_modules/`, `.git/`, `venv/`, `.venv/`, `__pycache__/`, `dist/`, `build/`, `.next/`, coverage reports, binary files, `*.lock`.
+     3. `LEAKS[PR][W] = count of unique file-path lines matched in OUTSIDE set`.
+   - **Step C: Blocking action (per PR + per Wrapper):**
+     - **If `LEAKS[PR][W] === 0` → ✅ PASS.** Wrapper Boundary (CAN #1) respected for this PR. Proceed.
+     - **If `LEAKS[PR][W] > 0` → 🔴 BLOCKED (G-REV-3). DO NOT save gh_stack_plan.md as APPROVED. Do NOT proceed to Step C approval gate.** Present user with findings table verbatim:
+       ```
+       🔴 WRAPPER LEAK DETECTED — PR#<order> Wrapper=<W.sdk_name> AuthoritativePath=<W.authoritative_path>
+       Files outside wrapper with NEW raw ${W.sdk_name} import/require/using:
+         • <path1>:<line> → <matched snippet truncated to 80 chars>
+         • <path2>:<line> → ...
+       Options (pick ONE, do NOT default to C):
+       (A) Re-group PR tasks: move the leaking files into a DIFFERENT PR whose scope EXCLUSIVELY touches files inside <W.authoritative_path> (i.e. PR = wrapper-only refactor). Best default.
+       (B) If the raw import in <path> is INTENTIONAL (rare, e.g. boot-time SDK init in main.ts that is the ONE allowed entrypoint), annotate file-level: add block comment `/* CHE-REV-OVERRIDE: <SDK name> single-entrypoint-boot <reason ≤120 chars> */` on line 1-3 of the leaking file. Then log decision:
+           che_append_decision_jsonl "WRAPPER_LEAK_OVERRIDE" "PR=<order> SDK=${W.sdk_name} files=<comma paths> reason=<from comment safe escaped>"
+       (C) Add literal EXPLICIT_OVERRIDE_REVERSIBILITY in SPEC §2 (or re-run che-spec to insert it) + log. Use ONLY if this PR explicitly is the wrapper creation/extraction PR and boundary is still being bootstrapped.
+       ```
+     - After user picks A/B/C and situation is resolved → re-run Step B scan. All LEAKS must be 0 (or overridden) before plan is saved.
+6. **Wrapper Boundaries column auto-fill rule:** If `TOUCHED_WRAPPERS.length > 0` for a given PR → `Wrapper Boundaries (CAN #1)` column = comma-separated list of `W.sdk_name → W.authoritative_path` short pairs. If none → "-". NEVER leave blank.
 
 **Step C — Mandatory user approval gate:**
 Present gh_stack_plan.md to user + ask in English:

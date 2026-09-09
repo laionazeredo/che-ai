@@ -32,7 +32,14 @@ Understand the PROBLEM before opening Figma/PenPot. "Design is problem solving. 
 - ✅ Approved Ticket / SPEC with: `user_story`, `persona_primary`, `success_metric` (1 number, not prose).
 - ✅ Raw research (if any): user-interview notes, heatmaps, GA4/Hotjar analytics (DO NOT invent data).
 
-### Stages 0.1 → 0.4 (no skipping)
+### Stages 0.0 → 0.4 (no skipping)
+**0.0 F0 Tracer Ping (UX — CANONICAL #0 VERTICAL SLICING, runs BEFORE 0.1):**
+   > "Design is not beauty without structure. A beautiful UI that never ships to a real data endpoint is a throwaway prototype, not a Tracer." — Pragmatic Programmer canon.
+   1. Create the SMALLEST POSSIBLE vertical structure (F0 UX tracer) that proves end-to-end flow. It MUST contain, at minimum, 3 artifacts together (≥2 "layers" of UX-to-implementation pipeline): (a) 1 mobile wireframe box (SM breakpoint, Phase 1 style — no colors yet), (b) 1 minmal functional component stub or dev-handoff placeholder entry, (c) 1 data flow node showing WHERE data comes FROM (e.g. "tRPC endpoint /private-events.enquire → returns JSON → renders in component"). All 3 refer to the SAME single minimum interaction (e.g. "Click Save button → POST → 201 → appears in list").
+   2. F0 UX DONE criterion (literal observable string): "On SM breakpoint 390px, user can click Save button on wireframe placeholder, dev stub file <path> exists with props matching button, and Figma/PenPot component links to matching data flow node. Zero tokens, zero visual polish."
+   3. Stamp rule: Set `F0_UX_STAMP = PENDING`. Before 0.1 JTBD is allowed to run, 3 artifacts above must exist AND be reviewed in a 1-sentence snapshot. Stamp transitions to COMPLETE only after the 3 items are linked in `docs/ux/<slug>-00-tracer-ping.md`.
+   4. Anti-patterns blocked at 0.0: ❌ 0.0 = only visual design sketch (no dev-stub / no data-flow node) = FAIL stamp = loop back before 0.1. ❌ No SPEC §4.5 mapping to F0 row = fail unless EXPLICIT_OVERRIDE_HORIZONTAL_PLAN logged.
+   5. Persistent artifact output: `docs/ux/<slug>-00-tracer-ping.md` with 3 links + F0_UX_STAMP = PENDING | COMPLETE header. Corresponding log entry `[UX-F0-TRACER-PING] slug=<slug> stamp=COMPLETE dataflow_node=X`.
 0.1 **JTBD Framework:** Write literally:
    ```
    When <SITUATION>, I want to <USER_ACTION>, so I can <EXPECTED_OUTCOME>.
@@ -40,10 +47,11 @@ Understand the PROBLEM before opening Figma/PenPot. "Design is problem solving. 
    Maximum 1 line per JTBD. Minimum 3 unique JTBDs per feature. No empty "improve UX".
 0.2 **Canonical User Persona:** Link `domains/ux/profile.md` persona + add 1 paragraph specific screen context. If no persona in level 1.5 registry → create via `/che-onboarding --edit`.
 0.3 **Canonical Mermaid User Flow:** `flowchart TD` diagram minimum 3 nodes (Entry → Action A → Success State + Error State). NO stadium shapes. `<br/>` HTML breaks.
-0.4 **Human Approved Gate:** Brief + JTBD + Mermaid flow sent to user. **EXPLICIT approval (literal "Approved" reply) is mandatory.** Without approval → DO NOT PROCEED to stage 1.
+0.4 **Human Approved Gate:** Brief + JTBD + Mermaid flow + F0 UX tracer (0.0) sent to user. **EXPLICIT approval (literal "Approved" reply) is mandatory.** Without approval → DO NOT PROCEED to stage 1.
 
 ### Generated Artifacts (persist in workspace)
-- `docs/ux/<slug>-01-brief-jtbd.md` — Consolidated stages 0.1 → 0.4.
+- `docs/ux/<slug>-00-tracer-ping.md` — F0 UX tracer ping (Stage 0.0).
+- `docs/ux/<slug>-01-brief-jtbd.md` — Consolidated stages 0.0 → 0.4.
 - `decisions.log.jsonl` entry type `[UX-BRIEF-APPROVED] <slug>` with content hash.
 
 ---

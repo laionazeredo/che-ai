@@ -63,6 +63,151 @@ Run AFTER §0.3 Scope Sources, BEFORE §1 Gather context.
 - **Control variable:** `SBE_EXTENSION_ENABLED = true`. If no method above → `false` and skips §3.5 (legacy mode).
 
 
+### 0.5 CANONICAL #0 — CHECK #0 HORIZONTAL PLAN DETECTOR (G-VS-4 gate — runs BEFORE §1 gather context)
+
+> **Authority:** CHE_RULES.md PRINCÍPIO CANÔNICO #0 — VERTICAL SLICING / TRACER BULLETS.
+> **Purpose:** Catch task-graphs or diffs that look like horizontal "layer-by-layer" work (anti-pattern). If caught without explicit override → 🔴 BLOCKED (§8.1 rule triggers).
+
+**Activation:** ALWAYS runs, regardless of Mode A or Mode B. Requires Mode B --task-graph flag OR Mode A PR body/description containing a TASK GRAPH. If no task-graph source available → skip CHECK #0 silently (output INFO line only, no 🔴).
+
+**Step 1 — Parse task list:**
+For each task (T1, T2, ... TN):
+   a. If task-graph has column `Layers Touched (≥2 required)` → split on ` · `, count distinct.
+   b. Else (legacy task-graph / Mode A PR without columns): collect `FILES[]` that the task touches (from task-graph description or from PR file list grouped by task mention), then group files by top-level folder. Compute `files_in_single_top_folder_ratio = count(arquivos da pasta mais comum) ÷ total arquivos da task`.
+
+**Step 2 — Detection algorithm:**
+Initialize:
+```
+HORIZONTAL_PLAN_DETECTED = false
+HORIZONTAL_TASKS = []
+F0_FILES_MISSING_FROM_DIFF = false
+```
+
+Run 2 independent detectors (either triggers HORIZONTAL_PLAN_DETECTED):
+   a. **Consecutive single-layer scan:** If ≥2 CONSECUTIVE tasks have `Layers Touched distinct count === 1` (case a) OR `files_in_single_top_folder_ratio ≥ 0.8` (case b) AND none of those tasks have ID suffix `-H-OVERRIDE-N` → HORIZONTAL_PLAN_DETECTED = true. Append task IDs to HORIZONTAL_TASKS.
+   b. **SPEC §4.5 F0 files in diff check:** If SBE_EXTENSION_ENABLED AND SPEC has §4.5 VERTICAL SLICES row F0 with column `Layers / Files TOUCHED` → intersect file list with Mode A PR FILES[] or Mode B git diff --name-only. If ≥30% of listed F0 files are ABSENT from diff AND not marked explicitly OOS in §2 → F0_FILES_MISSING_FROM_DIFF = true.
+
+**Step 3 — Override check (only if detector triggered):**
+Look for override in 2 places (any 1 found = `OVERRIDE_LOGGED = true`):
+   a. decisions.log.jsonl (che sessions L4 area) — last 200 lines, look for event `"type": "EXPLICIT_OVERRIDE_HORIZONTAL_PLAN"`.
+   b. SPEC §2 SCOPE — literal verbatim `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN: <text>` where `<text>` is 1–120 chars.
+
+**Step 4 — Inject check items into the audit:**
+Append items as a group **"CHECK #0 — Vertical Slicing Compliance (CANONICAL #0)"** at the VERY BEGINNING of the final report, BEFORE Check 1 legacy items.
+
+Scenarios:
+- If `HORIZONTAL_PLAN_DETECTED === true && OVERRIDE_LOGGED === false` →
+  ```
+  🔴 [CHECK0-H1] HORIZONTAL ANTI-PATTERN DETECTED — tasks [<comma-sep IDs>] appear to be single-layer / single-top-folder consecutive blocks, no -H-OVERRIDE- suffix, no EXPLICIT_OVERRIDE_HORIZONTAL_PLAN logged.
+     Action required (choose 1):
+     [ ] Reorder tasks into ≥2-layer vertical slices (F0..FN). Re-run che-plan with decomposition per SPEC §4.5.
+     [ ] Add literal verbatim line to SPEC §2 SCOPE: `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN: <1-linha justificativa ≤120 chars>` + log to decisions.log via che_append_decision_jsonl.
+  ```
+- If `F0_FILES_MISSING_FROM_DIFF === true && OVERRIDE_LOGGED === false` →
+  ```
+  🟡 [CHECK0-F0] SPEC §4.5 F0 Tracer lists <N> files/layers but <P%> are missing from this diff/worktree. If this is partial-work-in-progress F0, add OOS marker in §2; otherwise deliver F0 completely before F1 slices.
+  ```
+- If `HORIZONTAL_PLAN_DETECTED === true && OVERRIDE_LOGGED === true` →
+  ```
+  ⚪ [CHECK0-INFO] Horizontal pattern detected but EXPLICIT_OVERRIDE_HORIZONTAL_PLAN is logged. Justification: "<verbatim 1-linha from SPEC or decisions.log>". Continuing audit.
+  ```
+- If no detectors triggered → single green line:
+  ```
+  🟢 [CHECK0-OK] Vertical slicing compliance OK — ≤1 consecutive single-layer blocks, F0 Tracer files present in diff if applicable.
+  ```
+
+**BLOCK impact:** Per §8.1, any 🔴 item → overall Verdict = 🔴 BLOCKED automatically. This is the enforcement mechanism.
+
+---
+
+### 0.6 CANONICAL #2 — CHECK #1 ENTROPY_DELTA (Broken Windows, G-BW-1 gate — BEFORE §1, BEFORE legacy CHECK#1)
+
+> **Authority:** CHE_RULES.md PRINCIPLE #2 BROKEN WINDOWS / ENTROPY MONITORING.
+> **Purpose:** Compute ENTROPY_DELTA = windows added - windows fixed. Zero positive entropy default. If > +2 BLOCK without override literal.
+
+**Activation:** ALWAYS run both Mode A + Mode B. Stack auto-detection via shared references (Biome / ESLint / Ruff / Vitest coverage / Jest coverage / pytest coverage — all detected via package.json / pyproject.toml / worktree file presence). Generic regexes, no project-specific hardcodes.
+
+**Step 1 — Baseline BEFORE (default base branch / HEAD~n):**
+Inside `<WORKTREE_ROOT>`, compute 4 baseline counts using GENERIC stack-detectable commands (auto-sense; skip if runner not found):
+
+| # | Counter | Generic Stack Detection & Command (never hardcodes project) |
+|---|---|---|
+| E1 | lint_warnings_before | If `biome.json`/`biome.jsonc` → `npx @biomejs/biome lint . --reporter=json` parse `diagnostics` array length. **Else** if `.eslintrc*` → eslint warnings count. **Else** if `pyproject.toml` has `[tool.ruff]` → `ruff check --statistics | tail -1 | awk '{print $1}'` sum. **Else** if `.flake8` → flake8 total. If NONE of above → `E1 = 0, E1_available = false`. |
+| E2 | coverage_uncovered_new_lines | Mode A: PR diff file list. Mode B: `git diff $BASE_BRANCH...HEAD --name-only`. For each changed file (.ts/.tsx/.py/.rs/.go/.js/.jsx): **If coverage report exists** (auto-detect `coverage/lcov.info` / `coverage.xml` / `.nyc_output` / `htmlcov/index.html` / `target/llvm-cov`): parse line-by-line lines added in diff vs lines with hit_count=0 in coverage. Sum → E2. **If NO coverage data** (dev-local run without full suite): `E2 = 0, E2_available = false`. |
+| E3 | todos_without_ticket_before | Generic regex in worktree: `(\/\/|#|--)\s*(TODO|FIXME|HACK|XXX)\s*(\([A-Z]{2,20}-[0-9]{1,8}\))?` across ALL file extensions listed in §2 CAN TOUCH or PR changed files. **Count matches where the ticket-id capture group 3 is ABSENT** → E3_before. Pattern matches Linear (FLO-123), Jira (PROJ-9), ClickUp (CSTM-4), any vendor — generic regex. |
+| E4 | pii_secrets_new_findings | che-compliance light scan (existing per §0.3 SECURITY_PII_COMMON.md): count 🔴 findings present AFTER diff that were NOT present BEFORE (Mode A: compare PR files). E4 = count of NEW findings. If che-compliance not yet run locally → `E4 = 0, E4_available = false`. |
+
+**Step 2 — Same counters AFTER = run identical commands on the candidate diff / HEAD state:**
+`E1_after`, `E2_after = same as above but for new/lines touched in current PR/worktree`. `E3_after = count TODO-without-ticket appearing ONLY in added lines of the diff (added lines start with + in unified diff; exclude test/fixture/snapshot files)`). `E4_after = same`.
+
+**Step 3 — Compute ENTROPY_DELTA (per CHE_RULES.md §2.1 formula):**
+```
+lint_delta      = max(0, E1_after - E1_before)          # count ONLY new warnings added, not fixed
+coverage_delta  = max(0, E2_after - E2_before)          # new uncovered lines only
+todo_delta      = max(0, E3_after - E3_before)          # new TODOs without ticket only
+pii_delta       = max(0, E4_after - E4_before)          # new PII/secrets only
+
+ENTROPY_DELTA =
+    + 1.0 * lint_delta
+  + 2.0 * coverage_delta
+  + 0.5 * todo_delta
+  + 3.0 * pii_delta
+```
+If a counter E1/E2/E4 had `_available = false` → set its individual delta to 0 (skip, don't penalize absence of tools). Only explicitly available counters score.
+
+**Step 4 — Override check for BLOCK case:**
+If `ENTROPY_DELTA > 2.0`, look in 2 places for override (any 1 found = OVERRIDE_LOGGED true):
+- decisions.log.jsonl: event `"type": "EXPLICIT_OVERRIDE_ENTROPY_DELTA"`.
+- SPEC §2 SCOPE OR PR body: literal verbatim line `EXPLICIT_OVERRIDE_ENTROPY_DELTA: <1-line justification ≤120 chars>`.
+
+**Step 5 — Inject in report BEFORE legacy CHECK#1, right after CHECK#0 group:**
+Append group header **"CHECK #1 — ENTROPY DELTA / Broken Windows (CANONICAL #2)"**.
+Scenarios output:
+- `ENTROPY_DELTA ≤ 0 → 🟢 [CHECK1-OK] ENTROPY_DELTA = $X. Net windows fixed ≥ windows added. lint_delta=$L cov_delta=$C todo_delta=$T pii_delta=$P.`
+- `ENTROPY_DELTA > 0 AND ≤ 2 → 🟡 [CHECK1-WARN] ENTROPY_DELTA = $X (WARNING). Small net entropy rise. Breakdown: <2 suggestions max 1 line each for each delta>0. Not blocking.`
+- `ENTROPY_DELTA > 2 AND OVERRIDE_LOGGED = false → 🔴 [CHECK1-BLOCK] ENTROPY_DELTA = $X (BLOCKED, threshold=+2). Too many new broken windows. Choose 1: (A) Fix lint warnings / add tests for uncovered new lines / add ticket IDs to TODO comments until ENTROPY_DELTA ≤ 0. Re-run. (B) Add literal line in SPEC §2 SCOPE OR PR body: EXPLICIT_OVERRIDE_ENTROPY_DELTA: <1-line justif ≤120 chars>.`
+- `ENTROPY_DELTA > 2 AND OVERRIDE_LOGGED = true → ⚪ [CHECK1-INFO] ENTROPY_DELTA = $X but EXPLICIT_OVERRIDE_ENTROPY_DELTA logged. Justification: "<1-line verbatim>". Continuing audit.`
+
+---
+
+### 0.7 CANONICAL #1 — CHECK #2 EXTERNAL SDK WRAPPER LEAK DETECTOR (Reversibility, G-R-2 gate)
+
+> **Authority:** CHE_RULES.md PRINCIPLE #1 REVERSIBILITY / NO VENDOR LOCK-IN.
+> **Purpose:** If approved SbE SPEC declares Wrapper Boundaries in §4.6.1, verify that NO import of that dependency exists outside its Authoritative Wrapper Path. Project-agnostic: SDK names come ONLY from SPEC table, never hardcoded.
+
+**Activation:** RUN if and only if `SBE_EXTENSION_ENABLED = true` AND SPEC §4.6.1 table exists with ≥ 1 data rows. ELSE skip with INFO line only.
+
+**Step 1 — Parse wrapper rules from SPEC §4.6.1:**
+Produce array WRAPPERS[] where each = `{ sdk_name: <col 1 External Dependency Name>, wrapper_glob: <col 2 Authoritative Wrapper Path (single glob)> }`.
+- Sanitize: reject entries in WRAPPERS where `wrapper_glob` contains `,` `;` `|` multiple path separators (V19a already validated this in che-spec; double-check here for bypass).
+
+**Step 2 — Generic leak search in full BOUND WORKTREE (Mode B) / PR files (Mode A):**
+For each WRAPPER = W:
+  - Build GENERIC GREP patterns — project-agnostic, 4 patterns match ANY language import:
+    1.  `import\s+.*['"]${W.sdk_name}['"]` — TS/JS import default / named
+    2.  `from\s+['"]${W.sdk_name}['"]` — TS/JS side-effect or Python `from X import Y` (Python pattern if sdk_name in sys.modules)
+    3.  `require\s*\(\s*['"]${W.sdk_name}['"]\s*\)` — CJS require
+    4.  `^\s*(using|import)\s+${W.sdk_name}[;.]` — C# / Go / Rust use statement
+  - Search scope = Mode A → `PR_FILES[]`. Mode B → ALL files under `<WORKTREE_ROOT>`, EXCLUDING:
+    - `node_modules/**`, `.git/**`, `.venv/**`, `target/**`, `dist/**`, `build/**`, `.next/**`, `.turbo/**` (standard ignore list, project-agnostic via `--exclude` flag ripgrep/Grep tool).
+    - `**/coverage/**`, `**/*.snap`, `**/*.lock`
+  - Match found → check if the matched file's path MATCHES `W.wrapper_glob` (minimatch-style). IF MATCHES → OK, inside wrapper boundary; SKIP. IF NO MATCH → **FOUND WRAPPER LEAK**. Append to LEAKS[] tuple: `(sdk_name, file_absolute_path, line_number, matched_snippet[0:80])`.
+
+**Step 3 — Override check if leaks found:**
+If LEAKS count > 0:
+  - Search SPEC §2 SCOPE / PR body for lines where §4.6.3 col 3 literal contains `TECHNICAL COUPLING:` followed by a mitigation plan sentence that mentions this specific SDK name AND a TODO(<TICKET_ID>) identifier in same OR nearby line. 1 such annotation per leaked SDK = TECHNICAL_COUPLING_ANNOTATED true.
+  - ELSE: search for `EXPLICIT_OVERRIDE_REVERSIBILITY:` literal line → OVERRIDE_LOGGED.
+
+**Step 4 — Inject in report between CHECK#1 ENTROPY (before legacy CHECK#1):**
+Group header: **"CHECK #2 — Wrapper Boundary Leaks (Reversibility CANONICAL #1)"**.
+Scenarios:
+- `WRAPPERS.length = 0 or SBE_EXTENSION off → ⚪ [CHECK2-INFO] Skipped (no §4.6.1 reversibility declarations in SPEC).`
+- `LEAKS.length = 0 → 🟢 [CHECK2-OK] No wrapper boundary leaks detected. ${WRAPPERS.length} external dependencies verified inside their Authoritative Wrapper Path globs.`
+- `LEAKS.length > 0 AND (TECHNICAL_COUPLING_ANNOTATED all OR OVERRIDE_LOGGED true) → 🟡 [CHECK2-ANNOTATED] ${N} leaks found but §4.6.3 TECHNICAL COUPLING + TODO(ticket) annotation present OR EXPLICIT_OVERRIDE_REVERSIBILITY logged. List as INFO bullets, no block.`
+- `LEAKS.length > 0 AND NO annotation AND NO override → 🔴 [CHECK2-BLOCK] ${N} external SDK import(s) found OUTSIDE the Authoritative Wrapper Path boundary. Violation list (sdk, file, line, snippet): <table with N rows>. Fix options (1): (A) Move the import/usage inside the wrapper_glob path listed in §4.6.1; or (B) Add TECHNICAL COUPLING annotation in §4.6.3 col 3 with TODO(<ticket_id>) plan; or (C) Add literal EXPLICIT_OVERRIDE_REVERSIBILITY: <justification ≤120 chars> in SPEC §2 SCOPE + decisions.log entry.`
+
+**BLOCK impact of CHECK#0 + CHECK#1 + CHECK#2:** ANY 🔴 item from this preamble trio (§0.5/§0.6/§0.7) → Verdict = 🔴 BLOCKED per §8.1, same as legacy checks. This is enforcement for the 3 new canonicals.
+
 ---
 
 ## 1. Gather context — dependent mode
@@ -390,15 +535,26 @@ With 92% bilateral anchor coverage (SbE ON) → adjusted SCOPE = clamp(8.5 + 0.5
 
 ### 7.2 LEAN sub-score calculation (0-10)
 
-Use CHECK 5 findings severities:
+Use CHECK 5 findings severities + NEW PREAMBLE TRIO (CANONICAL #0/#1/#2) flags:
 ```
 LEAN_penalty =
     (count(🔴 HIGH_check5) × 2)
   + (count(🟡 MEDIUM_check5) × 1)
   + (count(🔵 LOW_check5) × 0.3)
+  + (5 if (HORIZONTAL_PLAN_DETECTED === true AND HORIZONTAL_OVERRIDE_LOGGED === false) else 0)
+  + (min(ENTROPY_DELTA, 5) if (ENTROPY_DELTA > 2 AND ENTROPY_OVERRIDE_LOGGED === false) else 0)
+  + (4 if (WRAPPER_LEAKS_COUNT > 0 AND WRAPPER_OVERRIDE_OR_ANNOTATED === false) else 0)
 LEAN_score = clamp(10 − LEAN_penalty ÷ 2, 0, 10)
 ```
-Example: 1 HIGH + 5 MEDIUM + 7 LOW → penalty = 2 + 5 + 2.1 = 9.1 ÷ 2 = 4.55 → LEAN = 10 − 4.55 = **5.45**
+Where:
+- `HORIZONTAL_PLAN_DETECTED` = CHECK#0 §0.5 detector boolean. Override = `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN` literal OR decisions.log event.
+- `ENTROPY_DELTA` = CHECK#1 (§0.6) computed value. Override = `EXPLICIT_OVERRIDE_ENTROPY_DELTA` OR decisions.log event. Capped at +5 penalty (to avoid 100% kill from one huge lint batch) → scaled ÷2 = max 2.5 LEAN hit.
+- `WRAPPER_LEAKS_COUNT` = CHECK#2 (§0.7) total leaks without TECHNICAL COUPLING annotation OR override literal. Penalty 4 ÷ 2 = 2.0 LEAN points (enough to drop 7.5 Acceptable → 5.7 Attention).
+- **Penalty justification trio summary:** horizontal = ~2.5 pts, entropy high = ~0.5-2.5 pts, wrapper leak ~2.0 pts. Alone each is Attention-level; combined trio ensures the only way to get Excellent ≥9.0 is: clean vertical F0 + ≤+2 entropy + zero wrapper leaks (i.e. no broken windows).
+
+Example: 1 HIGH + 5 MEDIUM + 7 LOW → penalty = 2 + 5 + 2.1 = 9.1 ÷ 2 = 4.55 → LEAN = **5.45**
+Example WITH horizontal plan + entropy 3.5 + 2 wrapper leaks (all un-overridden): 9.1 + 5 + 3.5 + 4 = 21.6 ÷ 2 = 10.8 → LEAN clamp = **0 (🔴 BLOCK via score <5.0)**
+Example CLEAN TRIO (horizontal OK, entropy 0, wrapper leaks 0): same 9.1 (check5 only) → LEAN = 5.45 (Attention because of legacy check5 findings; no new canonicals penalty added — correct behaviour).
 
 ### 7.3 FINAL Score (geometric mean — requires BOTH to be good)
 
