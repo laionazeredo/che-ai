@@ -13,16 +13,10 @@ The stack of ideas behind Che comes from four battle-tested methodologies we do 
 
 The result is a harness that:
 - **Scales a *whole team*, not just one agent.** Engineering + Product + UX share a single domain playbook layer. An agent writing a checkout screen and an agent writing a Figma screen both read the same product context and brand rules, without copy-pasting.
-- **Never puts `.trae/` or `.che/` folders inside your repositories.** All project memory lives in a canonical `~/.che-workspaces` user home hierarchy, keeping repo roots pristine (Pragmatic Programmer orthogonality — *team process state* does not live inside the *shipped artifact*).
+- **Never puts planning / state / memory folders inside your repositories.** Project memory (specs, decisions, scopes, QA reports) lives **outside** user repos, in a canonical `~/.che-workspaces` user-home hierarchy. The rule configuration package itself lives where the IDE expects it — for Claude Code that is `~/.trae`, symlinked into Claude Code's adapter folders — never inside a customer's repo. (Pragmatic Programmer orthogonality: *team process state* does not live inside the *shipped artifact*).
 - **Never deletes anything permanently.** Every `remove` is a **move to trash** with a printed one-line restore command (Design by Contract postcondition: "after `remove X`, the state of X is recoverable in one deterministic command"). Hard-delete commands do not exist, and will not be added.
 - **Runs structural/admin operations deterministically as a terminal CLI.** Project onboarding, workspace creation, session config, task listing, state indexing, export/import portability, and safe eject are exposed as a zero-dependency stdlib Python CLI (`che-ai` / `che`), installed once and callable from any shell or CI. This is a feature for predictability and cost discipline, not the product's headline.
 - **Single-Source-of-Truth (SSoT), everywhere.** Every rule, score, playbook, template lives in exactly one canonical file. If you see the same body twice anywhere in the repo — that is a bug, report it. (DRY, The Pragmatic Programmer ch. 2.)
-
-> ⚠️ **Slash commands inside the IDE CONTINUE TO EXIST. The terminal CLI does NOT replace them.**
->
-> `/che-workspace`, `/che-project`, `/che-spec`, `/che-act`, `/che-ship`, `/che-review`, `/che-prd`, `/che-tasks`, `/che-notes`, `/che-graph` are the **built-in** command surface. Your team probably also installs community skills such as `/figma-pixel-check`, `/flockr-*` (the Flockr platform custom skill pack) or `/my-company-*` (your private team skill pack). All of them **are kept, maintained, and remain the RECOMMENDED entry point for agentic / creative work** inside **Claude Code** (spec authoring, design exploration, implementation loops, CR fixes, PR gating — any flow that benefits from LLM reasoning).
->
-> The `che-ai` / `che` **terminal CLI is the administrative and structural sidecar** for team bootstrap, workspace admin, CI integration, trash-safe deletion, offline state work, and bulk listing/exporting. You use the two together: first `che workspace create` (terminal or CI), then `/che-spec` inside **Claude Code**, then `/che-act`, then `/che-ship` — not one or the other.
 
 ***
 
@@ -50,7 +44,7 @@ The result is a harness that:
 
 ### 1. Quick Install Script (recommended for end users)
 
-Installs or updates Che at `~/.trae` (Claude Code's default config repo path for Che), injects the planning-artifacts `.gitignore` snippet into every repo it touches, **and installs the `che-ai` / `che` CLI binaries globally via `pipx`** (fallback `pip install --user` if pipx is missing, with a warning):
+Installs or updates Che in **Claude Code**'s default config location (`~/.trae`), injects the planning-artifacts `.gitignore` snippet into every repo it touches, **and installs the `che-ai` / `che` CLI binaries globally via `pipx`** (fallback `pip install --user` if pipx is missing, with a warning):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.sh | bash -s -- --apply
@@ -68,7 +62,9 @@ Che ships as a **zero-dependency PEP-621 Python package**. The two canonical bin
 Use **pipx** (isolated user-venv, never breaks system Python):
 
 ```bash
-cd ~/.trae                                    # Che config repo. Symlinked by Claude Code adapters at ~/.claude-codex/ or ~/.cursor/ if needed.
+# Claude Code's default adapter reads the Che config package from ~/.trae
+# (install-che.sh already clones it here when you run the quick install above)
+cd ~/.trae
 pipx install -e . --force
 
 # ✅ Confirm install
