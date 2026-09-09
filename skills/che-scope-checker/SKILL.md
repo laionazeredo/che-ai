@@ -1,73 +1,73 @@
 ---
 name: "che-scope-checker"
-description: "6-check scope audit persona (CANONICAL 2026-09: 4 checks legacy + 2 new). From PRD/ticket/task-graph + GitHub PR OR local worktree, validates: (1) every acceptance criteria / item DELIVERED in diff with file evidence, (2) unit/e2e tests exist matching behavioral names for expected behavior, (3) required documentation is updated (AGENTS, README, runbooks, CLAUDE), (4) any NEW env var has corresponding declaration in infra/env parser (zod schema, .env.example, terraform/railway/vercel vars), (5) LEAN/KISS/YAGNI — overengineering scanner 12 categorias L1-L12 + justificador de escopo, (6) SCORE FINAL 0-10 media geometrica scope x lean. Invoked by /che-scope-check or as SHIP gate before PR draft (che-ship §0.9 GATES order 1)."
+description: "6-check scope audit persona (CANONICAL 2026-09: 4 legacy checks + 2 new). From PRD/ticket/task-graph + GitHub PR OR local worktree, validates: (1) every acceptance criteria / item DELIVERED in diff with file evidence, (2) unit/e2e tests exist matching behavioural names for expected behaviour, (3) required documentation is updated (AGENTS, README, runbooks, CLAUDE), (4) any NEW env var has corresponding declaration in infra/env parser (zod schema, .env.example, terraform/railway/vercel vars), (5) LEAN/KISS/YAGNI — overengineering scanner 12 categories L1-L12 + scope justifier, (6) FINAL SCORE 0-10 geometric mean of Scope x Lean. Invoked by /che-scope-check or as SHIP gate before PR draft (che-ship §0.9 GATES order 1)."
 ---
 
 # Che — Scope Checker (6-check audit persona)
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - GitHub CLI gh auth + PR diff fetch: `../che-code-review/references/_shared_checklists/GITHUB_CLI_COMMON.md`
 > - Stack auto-detection (test runners, doc files, env parsers): `../che-qa/references/_shared_checklists/NX_PNPM_COMMON.md`
 > - Security/PII/RLS checklist: `../che-code-review/references/_shared_checklists/SECURITY_PII_COMMON.md`
 
-Auditor persona com **2 modos mutuamente exclusivos** (escolher EXATAMENTE 1). **Sempre retorna relatório estruturado com evidence por linha e nomes REGRA7.9 comportamento observável.**
+Auditor persona with **2 mutually exclusive modes** (choose EXACTLY 1). **Always returns a structured report with per-line evidence and RULE 7.9 observable behaviour names.**
 
 ---
 
-## 0. Preconditions — 2 modos + binding check
+## 0. Preconditions — 2 modes + binding check
 
-### 0.1 WORKTREE SESSION BINDING CHECK (engineering-contracts §19, NÃO NEGOCIÁVEL)
+### 0.1 WORKTREE SESSION BINDING CHECK (engineering-contracts §19, NON-NEGOTIABLE)
 
-Run ANTES de decidir o modo.
+Run BEFORE deciding the mode.
 
-1. **Ler Level1 Global Index PRIMEIRO:** Read `che_registry_path`. Find LAST `STATUS=BOUND` entry using the effective session id from `che_current_session_id`. Use its `WORKTREE_ROOT` como sessão default.
-2. **Mode B mismatch check:** user passed `--worktree <path>` E Level1 registry WORKTREE_ROOT existe AND é DIFERENTE → BLOCK. Perguntar: "Scope check pedido em `<path>` mas binding Level1 global BOUND em `<y>`. Opções: (A) usa `<path>` e override binding temporariamente para este audit, (B) switch binding primeiro, (C) cancelar audit." **NUNCA silent override.**
-3. **Mode A PR URL conflito binding:** PR branch = worktree branch de algum binding já existente e user também passou `--worktree` apontando outro → BLOCK. Perguntar qual é o alvo.
+1. **Read Level 1 Global Index FIRST:** Read `che_registry_path`. Find LAST `STATUS=BOUND` entry using the effective session id from `che_current_session_id`. Use its `WORKTREE_ROOT` as the default session.
+2. **Mode B mismatch check:** user passed `--worktree <path>` AND Level 1 registry WORKTREE_ROOT exists AND is DIFFERENT → BLOCK. Ask: "Scope check requested in `<path>` but Level 1 global registry BOUND in `<y>`. Options: (A) use `<path>` and override binding temporarily for this audit, (B) switch binding first, (C) cancel audit." **NEVER silent override.**
+3. **Mode A PR URL binding conflict:** PR branch = worktree branch of an existing binding and user also passed `--worktree` pointing elsewhere → BLOCK. Ask which is the target.
 
-### 0.2 Como decidir qual modo
+### 0.2 How to decide which mode
 
-- Se user fornece **BOTH PR URL E --worktree** → prefer Mode A (PR URL). `--worktree` vira optional local path para salvar relatório em disco só.
-- Se user fornece **`--worktree <path>` (ou indicador worktree explícito) E NENHUMA PR URL** → **FORCE Mode B (Worktree local)**. NÃO pedir PR URL.
+- If user provides **BOTH PR URL AND --worktree** → prefer Mode A (PR URL). `--worktree` becomes an optional local path just for saving the report to disk.
+- If user provides **`--worktree <path>` (or explicit worktree indicator) AND NO PR URL** → **FORCE Mode B (Local Worktree)**. DO NOT ask for PR URL.
 
 ---
 
-### 0.3 Scope Sources obrigatórios (1+ mínimo; combinação permitida; ordem de prioridade)
+### 0.3 Mandatory Scope Sources (1+ minimum; combination allowed; priority order)
 
-NENHUM scope source = ASK user. Não procede sem escopo.
+NO scope source = ASK user. Do not proceed without scope.
 
-| Ordem | Fonte | Como extrair ACs/items |
+| Order | Source | How to extract ACs/items |
 |---|---|---|
 | 1 | `--prd=/abs/path/prd.md` | Headings `## Acceptance Criteria`, `## ACs`, `## Goal`, `## Out of Scope`, bullets `* [ ]`, numbered list. |
 | 2 | `--ticket=<Linear/Jira URL>` | Linear GraphQL `state,description,acceptanceCriteria,estimate,project,identifier,title,relationship:`; Jira REST `fields.summary,fields.description,fields.customfield_*_criteria`. |
-| 3 | `--task-graph=/abs/path/task_graph.md` | Todos os `## Task Tn` + status lines `[COMPLETED]` + subtasks bullets. |
-| 4 | `--scope="texto livre"` | Split por bullets, numbered, ou vírgulas se lista inline. |
-| 5 | `PR body` (Modo A só) | Extrai automaticamente seções de ACs, todos `- [ ]` / `- [x]`, headings. |
+| 3 | `--task-graph=/abs/path/task_graph.md` | All `## Task Tn` + status lines `[COMPLETED]` + subtasks bullets. |
+| 4 | `--scope="free text"` | Split by bullets, numbered, or commas if inline list. |
+| 5 | `PR body` (Mode A only) | Automatically extract AC sections, all `- [ ]` / `- [x]`, headings. |
 
-Extração produz array plana `AC[]` = `{id: string, text: string, area?: string, oos?: boolean}`. OOS items = marcados explicitamente como out-of-scope NÃO contam como missing no relatório.
+Extraction produces a flat `AC[]` array = `{id: string, text: string, area?: string, oos?: boolean}`. OOS items = explicitly marked as out-of-scope DO NOT count as missing in the report.
 
-### 0.4 SbE Spec AUTO-DETECTION (ONDA2 bilateral mode — se detectar, roda CHECK 2 EXTENSION §3.5 OBRIGATÓRIO)
+### 0.4 SbE Spec AUTO-DETECTION (ONDA2 bilateral mode — if detected, runs MANDATORY §3.5 CHECK 2 EXTENSION)
 
-Run DEPOIS de §0.3 Scope Sources, ANTES de §1 Gather context.
+Run AFTER §0.3 Scope Sources, BEFORE §1 Gather context.
 
-**Modos de entrada para SbE bilateral (qualquer um 1 = ativa extensão):**
-1. User fornece flag explícito: `--spec=/absolute/path/to/approved_spec.md`
-2. Scope Source (PRD file / PR body / task graph) CONTÉM o heading literal `## §4 SPECIFICATION BY EXAMPLE` ou `## §4.2 POSITIVE BEHAVIOR EXAMPLES`
-3. Auto-scan workspace_shared specs: list `$CHE_WORKSPACE_SHARED/specs/<slug-matching-ticket-id>/*spec.md` files com `status: Approved` no frontmatter → se ENCONTRAR 1 match, pergunta user: "Detectei Approved spec SbE em <path>. Usar como escopo bilateral B-ID ↔ test ↔ diagrams? (Y/n)". Default = Sim.
+**Input modes for bilateral SbE (any 1 = activates extension):**
+1. User provides explicit flag: `--spec=/absolute/path/to/approved_spec.md`
+2. Scope Source (PRD file / PR body / task graph) CONTAINS the literal heading `## §4 SPECIFICATION BY EXAMPLE` or `## §4.2 POSITIVE BEHAVIOR EXAMPLES`
+3. Auto-scan workspace_shared specs: list `$CHE_WORKSPACE_SHARED/specs/<slug-matching-ticket-id>/*spec.md` files with `status: Approved` in frontmatter → if ONE match is FOUND, ask user: "Detected Approved SbE spec in <path>. Use as bilateral B-ID ↔ test ↔ diagrams scope? (Y/n)". Default = Yes.
 
-**Se SbE spec detectado:**
+**If SbE spec detected:**
 - Set `SBE_SPEC_PATH = <absolute path>`
-- Parse frontmatter YAML: extrair `risk_level`, `b_count`, `ab_count`, `erd_required`, `mermaid_required`.
-- Parse §4.2 Behavior Table: produz `SBE_BEHAVIORS[] = { b_id: "B-1", given: "...", when: "...", then_obs: "...", playwright_layer_checked: true|false, ui_selectors: ["id1","id2"]}`
-- Parse §4.3 Anti-Behavior Table: produz `SBE_ANTI[] = { ab_id: "AB-1", ... }`
-- Parse §4.4 Mermaid (se existir): produz `SBE_MERMAID_BIDS = set()` contendo todos `B-\d+` e `AB-\d+` extraídos de nodes/edges dos 3 diagrams.
-- **Variável de controle:** `SBE_EXTENSION_ENABLED = true`. Se nenhum método acima → `false` e pula §3.5 (modo legacy).
+- Parse YAML frontmatter: extract `risk_level`, `b_count`, `ab_count`, `erd_required`, `mermaid_required`.
+- Parse §4.2 Behavior Table: produces `SBE_BEHAVIORS[] = { b_id: "B-1", given: "...", when: "...", then_obs: "...", playwright_layer_checked: true|false, ui_selectors: ["id1","id2"]}`
+- Parse §4.3 Anti-Behavior Table: produces `SBE_ANTI[] = { ab_id: "AB-1", ... }`
+- Parse §4.4 Mermaid (if exists): produces `SBE_MERMAID_BIDS = set()` containing all `B-\d+` and `AB-\d+` extracted from nodes/edges of the 3 diagrams.
+- **Control variable:** `SBE_EXTENSION_ENABLED = true`. If no method above → `false` and skips §3.5 (legacy mode).
 
 
 ---
 
-## 1. Gather context — modo dependente
+## 1. Gather context — dependent mode
 
-### Mode A (GitHub PR) → use `gh` CLI (navegador NÃO)
+### Mode A (GitHub PR) → use `gh` CLI (NO browser)
 
 ```bash
 gh pr view <PR_URL> --json \
@@ -77,206 +77,206 @@ gh pr view <PR_URL> --json \
 Record:
 - `PR_ID`, `BASE_BRANCH`, `HEAD_BRANCH`
 - `changedFiles_count`, diff stat
-- `FILES[]` = lista arquivos alterados + status (added/modified/deleted)
-- `PR body` texto → scope source #5 acima
+- `FILES[]` = changed files list + status (added/modified/deleted)
+- `PR body` text → scope source #5 above
 
 Full diff patches:
 ```bash
 gh pr diff <PR_URL> > /tmp/pr-<id>-full.diff
 ```
 
-### Mode B (Worktree local) → git commands (no gh / no network)
+### Mode B (Local Worktree) → git commands (no gh / no network)
 
-Todos os comandos rodam DENTRO de `<WORKTREE_ROOT>`. Nunca saem.
+All commands run INSIDE `<WORKTREE_ROOT>`. They never leave.
 
 ```bash
 # Base branch detection (auto)
 git remote show origin | grep 'HEAD branch' | awk '{print $NF}'  # default
-# Se ambíguo (main e dev existem e diff tem ambos) → ASK user.
+# If ambiguous (main and dev exist and diff has both) → ASK user.
 
-# Captura modified/staged/untracked files
+# Capture modified/staged/untracked files
 git status --short                              # summary
 git diff "$BASE_BRANCH"..HEAD --unified=3       # vs base (committed)
 git diff --cached --unified=3                   # staged
 git diff --unified=3                             # unstaged
-cat /tmp/wt-full.diff                            # concat todos acima em 1 patch cumulativo
+cat /tmp/wt-full.diff                            # concat all above in 1 cumulative patch
 ```
 
-Modification area empty check (WARN, não FAIL): se 0 arquivos modificados vs base, perguntar "continuar auditando todo o repo vs scope ou parar?"
+Modification area empty check (WARN, not FAIL): if 0 files modified vs base, ask "continue auditing the entire repo vs scope or stop?"
 
 ---
 
-## 2. CHECK 1 — 🔍 Entrega do ESCOPO COMPLETO (toda AC tem file evidence)
+## 2. CHECK 1 — 🔍 FULL SCOPE Delivery (every AC has file evidence)
 
-### Passo 2.1 — Parsear ACs e keywords
+### Step 2.1 — Parse ACs and keywords
 
-Para cada `AC[i]`:
-1. Nome canônico REGRA7.9: `entrega_de_escopo_completo_para_ac_<slug>`
-2. Extrair **keywords comportamentais** (substantivos + verbos de negócio) e **arquivos/Áreas esperadas** (heurísticas: "auth" → `packages/auth/**`, "dashboard" → `**/dashboard/**`, "stripe" → arquivos stripe*, "migration" → `**/migrations/**`, "README" → `README.md`, "AGENTS" → `**/AGENTS.md`).
+For each `AC[i]`:
+1. Canonical name RULE 7.9: `full_scope_delivery_for_ac_<slug>`
+2. Extract **behavioural keywords** (business nouns + verbs) and **expected files/Areas** (heuristics: "auth" → `packages/auth/**`, "dashboard" → `**/dashboard/**`, "stripe" → stripe* files, "migration" → `**/migrations/**`, "README" → `README.md`, "AGENTS" → `**/AGENTS.md`).
 
-### Passo 2.2 — Mapear AC → arquivo(s) diff
+### Step 2.2 — Map AC → diff file(s)
 
-Para cada AC[i]:
-- Fazer match `keywords comportamentais` contra `diff patch texto completo` + paths alterados.
-- **Match forte:** path `**/user-auth/**` alterado + palavras `login | session | JWT` aparecem no patch → 🟢 DELIVERED
-- **Match médio:** path parece certo mas conteúdo não tem keyword → 🟡 PARCIAL (explicar o que faltou de evidence)
-- **Match fraco / nenhum:** NADA no diff → 🔴 MISSING (apontar qual seria área + onde o código deveria estar)
-- **OOS items:** ⚪ SKIPPED (contam para informação, não para verdict)
+For each AC[i]:
+- Match `behavioural keywords` against `full diff patch text` + changed paths.
+- **Strong match:** `**/user-auth/**` path changed + words `login | session | JWT` appear in patch → 🟢 DELIVERED
+- **Medium match:** path looks correct but content lacks keyword → 🟡 PARTIAL (explain what evidence was missing)
+- **Weak match / none:** NOTHING in diff → 🔴 MISSING (point out which area + where code should be)
+- **OOS items:** ⚪ SKIPPED (count for info, not for verdict)
 
-### Passo 2.3 — Report format por AC
+### Step 2.3 — Per-AC report format
 
-Tabela 4 colunas, NOMES REGRA7.9:
+4-column table, RULE 7.9 NAMES:
 
-| AC ID | Regra comportamental | Verdict | Evidence (file path:lines) |
+| AC ID | Behavioural rule | Verdict | Evidence (file path:lines) |
 |---|---|---|---|
-| AC-1 | `entrega_de_escopo_completo_para_ac_login_google_oauth` | 🟢 DELIVERED | [auth.ts#L42-L88](file:///...) + [route.ts#L1-L40](file:///...) |
-| AC-2 | `entrega_de_escopo_completo_para_ac_refund_stripe_connect` | 🟡 PARCIAL | [refund.ts#L20-L50](file:///...) implementa api mas **faltou** chamada connect account destination |
-| AC-3 | `entrega_de_escopo_completo_para_ac_qrcode_offline_scan` | 🔴 MISSING | Nenhum arquivo em `packages/scanner/**` alterado. Esperado alteração em `scanner/lib/scan.ts` ou `scanner/app/scan/page.tsx`. |
+| AC-1 | `full_scope_delivery_for_ac_login_google_oauth` | 🟢 DELIVERED | [auth.ts#L42-L88](file:///...) + [route.ts#L1-L40](file:///...) |
+| AC-2 | `full_scope_delivery_for_ac_refund_stripe_connect` | 🟡 PARTIAL | [refund.ts#L20-L50](file:///...) implements api but **missing** connect account destination call |
+| AC-3 | `full_scope_delivery_for_ac_qrcode_offline_scan` | 🔴 MISSING | No files in `packages/scanner/**` changed. Expected change in `scanner/lib/scan.ts` or `scanner/app/scan/page.tsx`. |
 
 ---
 
-## 3. CHECK 2 — 🧪 Cobertura de TESTES (unit/e2e cobrem comportamento esperado)
+## 3. CHECK 2 — 🧪 TEST Coverage (unit/e2e cover expected behaviour)
 
-### Passo 3.1 — Auto-detect stack de teste
+### Step 3.1 — Auto-detect test stack
 
-Mesma tabela do che-qa §1.4. Detecta Vitest, Jest, Playwright, Cypress, pytest, cargo test, go test etc.
+Same table as che-qa §1.4. Detects Vitest, Jest, Playwright, Cypress, pytest, cargo test, go test etc.
 
-### Passo 3.2 — Detectar arquivos de teste existentes NO DIFF
+### Step 3.2 — Detect existing test files IN DIFF
 
-Do patch cumulativo, filtrar:
+From cumulative patch, filter:
 - Files matching: `*.test.*`, `*.spec.*`, `**/__tests__/**`, `**/e2e/**`, `**/playwright/**/*.spec.*`, `*_test.go`, `tests/**/*.py`
-- + NÃO testes, mas SUT (system under test) arquivos correspondentes.
+- + NOT tests, but corresponding SUT (system under test) files.
 
-### Passo 3.3 — Mapear AC comportamental → describe()/it() behavioral names
+### Step 3.3 — Map behavioural AC → describe()/it() behavioural names
 
-REGRA7.9: Nomes de suites/testes DEVEM ser comportamento observável. Nomes ruins (FLO-123, test(), it1, shouldWork) não contam como evidence coverage.
+RULE 7.9: Suite/test names MUST be observable behaviour. Poor names (FLO-123, test(), it1, shouldWork) do not count as evidence coverage.
 
-**🔴 HARD RULE — INVERSÃO PROIBIDA: NÃO PENALIZE títulos SEM task-id:**
-> ❌ **ERRADO:** "Título não tem FLO-714 como prefixo → evidence inválida / desconta pontos". **ISTO É UMA REGRESSÃO.**
-> ✅ **CORRETO:** Título descreve comportamento observável + NÃO tem FLO/T/AC na STRING → BOM, compliant, conta como evidence.
+**🔴 HARD RULE — PROHIBITED INVERSION: DO NOT PENALISE titles WITHOUT task-id:**
+> ❌ **WRONG:** "Title does not have FLO-714 as prefix → invalid evidence / deduct points". **THIS IS A REGRESSION.**
+> ✅ **CORRECT:** Title describes observable behaviour + DOES NOT have FLO/T/AC in the STRING → GOOD, compliant, counts as evidence.
 >
-> **O que INVALIDA evidence (ruim):** a STRING do título contém anti-padrões `FLO-\d+` / `Task? T\d+` / `AC\d+` / `§\d+` / `SPEC_XXX`.
-> **O que VALIDA evidence (bom):** título contém keywords da AC (verbs + nouns do comportamento) + não tem IDs. Traceabilidade via comentário `// @ac 2.1 | @ticket FLO-732` DENTRO do bloco = também BOM e não penaliza.
+> **What INVALIDATES evidence (bad):** title STRING contains anti-patterns `FLO-\d+` / `Task? T\d+` / `AC\d+` / `§\d+` / `SPEC_XXX`.
+> **What VALIDATES evidence (good):** title contains AC keywords (behaviour verbs + nouns) + has no IDs. Traceability via `// @ac 2.1 | @ticket FLO-732` comment INSIDE the block = also GOOD and not penalised.
 
-Raciocínio por AC:
-- Para cada AC comportamental tipo "usuário consegue aplicar refund stripe connect" → procurar nos testes strings como: `refund`, `stripe connect`, `connected account`, `refund succeeded`, `refund failed`
-- Se descreve comportamento = 🟢 TESTED (mesmo que não mencione FLO/T/AC — é o comportamento DESEJADO)
-- Se tem arquivo de teste pro módulo MAS nenhum caso acerta keyword da AC → 🟡 PARCIAL (quais testes existem vs falta qual comportamento específico)
-- Se SUT foi alterado e ZERO arquivo de teste alterado pra área → 🔴 NOT TESTED (qual behavior, qual file test criar)
+Reasoning per AC:
+- For each behavioural AC like "user can apply stripe connect refund" → search tests for strings like: `refund`, `stripe connect`, `connected account`, `refund succeeded`, `refund failed`
+- If it describes behaviour = 🟢 TESTED (even if it doesn't mention FLO/T/AC — it's the DESIRED behaviour)
+- If there's a test file for the module BUT no case hits the AC keyword → 🟡 PARTIAL (which tests exist vs what specific behaviour is missing)
+- If SUT was changed and ZERO test file changed for the area → 🔴 NOT TESTED (which behaviour, which test file to create)
 
-### Passo 3.4 — Report format
+### Step 3.4 — Report format
 
-| Área / AC | Regra comportamental | Verdict | Evidence test (path:lines) |
+| Area / AC | Behavioural rule | Verdict | Evidence test (path:lines) |
 |---|---|---|---|
-| AC-1 refund | `cobertura_de_teste_unitario_ou_e2e_para_refund_connect_account` | 🟢 TESTED | [refund.test.ts#L102-L145](file:///...) it(`refunds_connected_account_destination_correctly`) |
-| AC-2 qrcode offline | `cobertura_de_teste_unitario_ou_e2e_para_qrcode_offline_scan` | 🟡 PARCIAL | [scanner/scanner.test.ts#L5-L18](file:///…) suite existe, só happy path online. **Faltou** caso offline + cache fallback. |
-| AC-3 login google | `cobertura_de_teste_unitario_ou_e2e_para_login_google_oauth_redirect` | 🔴 NOT TESTED | `packages/auth/src/google.ts` alterado, NENHUM `*.test.*` em `packages/auth/**` tocado. Criar `google-login.spec.ts` com casos: redirect_uri, state param, token exchange. |
+| AC-1 refund | `unit_or_e2e_test_coverage_for_refund_connect_account` | 🟢 TESTED | [refund.test.ts#L102-L145](file:///...) it(`refunds_connected_account_destination_correctly`) |
+| AC-2 qrcode offline | `unit_or_e2e_test_coverage_for_qrcode_offline_scan` | 🟡 PARTIAL | [scanner/scanner.test.ts#L5-L18](file:///…) suite exists, happy path online only. **Missing** offline case + cache fallback. |
+| AC-3 login google | `unit_or_e2e_test_coverage_for_login_google_oauth_redirect` | 🔴 NOT TESTED | `packages/auth/src/google.ts` changed, NO `*.test.*` in `packages/auth/**` touched. Create `google-login.spec.ts` with cases: redirect_uri, state param, token exchange. |
 
-### Passo 3.5 — ⚡ CHECK 2 EXTENSION SbE BILATERAL ENFORCEMENT (3 sub-checks) — SÓ RODA SE `SBE_EXTENSION_ENABLED = true` (§0.4)
+### Step 3.5 — ⚡ CHECK 2 EXTENSION SbE BILATERAL ENFORCEMENT (3 sub-checks) — ONLY RUNS IF `SBE_EXTENSION_ENABLED = true` (§0.4)
 
-> **Pilar ONDA2 bilateral verification loop:** Spec §4 Behavior → Test anchor → Evidence SHA → Spec §5 atualizada. Scope-checker valida o loop reverso também (qual B-coverage vs realidade).
+> **ONDA2 bilateral verification loop pillar:** Spec §4 Behavior → Test anchor → Evidence SHA → Updated Spec §5. Scope-checker validates the reverse loop as well (which B-coverage vs reality).
 
-**3.5.1 Bilateral 1/3 — Anchor @ac B-X → it() body coverage (traça cada B-ID → arquivo de teste real)**
+**3.5.1 Bilateral 1/3 — Anchor @ac B-X → it() body coverage (traces each B-ID → real test file)**
 
-Regra de varredura:
-1. **Regex de detecção anchor (exato G7.3 Category7 che-code-review):** `^\/\/\s*@(ac|ticket|task|bug)\s+(B-\d+|FLO-\d+|[A-Z]+-\d+)` — **DEVE ser a PRIMEIRA LINHA DENTRO do bloco `it(...) { ... }` ou `test(...) { ... }`**. Fora do bloco = NÃO conta como evidence bilateral (pode ser comentário casual).
-2. **Universo scan:** TODOS arquivos de teste detectados em §3.2 (test/spec/__tests__/e2e/playwright files do diff) + SUT correspondentes se tiverem embed tests. NÃO scan o repo inteiro — só diff atual (blast radius).
-3. **Cálculo coverage anchor:**
+Scanning rule:
+1. **Anchor detection regex (exact che-code-review Category 7 G7.3):** `^\/\/\s*@(ac|ticket|task|bug)\s+(B-\d+|FLO-\d+|[A-Z]+-\d+)` — **MUST be the FIRST LINE INSIDE the `it(...) { ... }` or `test(...) { ... }` block**. Outside the block = DOES NOT count as bilateral evidence (could be a casual comment).
+2. **Scan universe:** ALL test files detected in §3.2 (test/spec/__tests__/e2e/playwright files in diff) + corresponding SUTs if they have embedded tests. DO NOT scan entire repo — only current diff (blast radius).
+3. **Anchor coverage calculation:**
    ```
-   B_COUNT_SPEC = len(SBE_BEHAVIORS[])           // §4.2 tabela real
-   B_COVERED_BY_ANCHOR = count(SBE_BEHAVIORS.b_id ∋ aparece em pelo menos 1 match regex)
+   B_COUNT_SPEC = len(SBE_BEHAVIORS[])           // real §4.2 table
+   B_COVERED_BY_ANCHOR = count(SBE_BEHAVIORS.b_id ∋ appears in at least 1 regex match)
    BILATERAL_ANCHOR_COVERAGE_PCT = B_COVERED_BY_ANCHOR ÷ max(1, B_COUNT_SPEC) × 100
    ```
-4. **Severidade / Verdict:**
-   - **🔴 BLOCK (hard stop):** BILATERAL_ANCHOR_COVERAGE_PCT = 0% → NENHUM comportamento SbE tem anchor bilateral. **Exigir EXPLICIT_OVERRIDE_BILATERAL_SKIP com justificativa + decision.log entry.**
-   - **🟡 WARN (action item):** BILATERAL_ANCHOR_COVERAGE_PCT < 70% OU ≥2 B-IDs faltando individualmente mesmo que global ≥70 → listar B-IDs faltantes + arquivo(s) teste esperado(s) por keyword mapping.
-   - **🟢 FULLY LINKED:** ≥70% E B-IDs individuais missing <2 → green. Bônus score §7.1 se ≥90%.
+4. **Severity / Verdict:**
+   - **🔴 BLOCK (hard stop):** BILATERAL_ANCHOR_COVERAGE_PCT = 0% → NO SbE behaviour has bilateral anchor. **Require EXPLICIT_OVERRIDE_BILATERAL_SKIP with justification + decision.log entry.**
+   - **🟡 WARN (action item):** BILATERAL_ANCHOR_COVERAGE_PCT < 70% OR ≥2 B-IDs missing individually even if global ≥70 → list missing B-IDs + expected test file(s) by keyword mapping.
+   - **🟢 FULLY LINKED:** ≥70% AND <2 individual missing B-IDs → green. §7.1 bonus score applied if ≥90%.
 
-**3.5.2 Bilateral 2/3 — SPEC §4.4 Mermaid B-ID refs set vs §4.2 real Behavior Table set (diagramas não mentem)**
+**3.5.2 Bilateral 2/3 — SPEC §4.4 Mermaid B-ID refs set vs §4.2 real Behavior Table set (diagrams don't lie)**
 
-> Erro comum em specs longas: diagrama ganhou B-11 mas tabela só tem até B-10 (orphan) OU tabela tem B-3/B-4 mas nenhum diagrama referencia mesmo com mermaid_required=true.
+> Common error in long specs: diagram gained B-11 but table only goes up to B-10 (orphan) OR table has B-3/B-4 but no diagram references even with mermaid_required=true.
 
-Procedimento:
-1. Construir sets:
-   - `MERMAID_REF_SET = SBE_MERMAID_BIDS ∩ B` (só B-, ignora AB- para este check)
+Procedure:
+1. Build sets:
+   - `MERMAID_REF_SET = SBE_MERMAID_BIDS ∩ B` (B- only, ignore AB- for this check)
    - `TABLE_B_SET = { SBE_BEHAVIORS[].b_id }`
-2. **Diff bidirecional:**
-   - **Orphan refs (diagrama tem, tabela NÃO tem):** `MERMAID_REF_SET \ TABLE_B_SET` → WARN se non-empty. Ex: "B-11, B-12 aparecem no sequenceDiagram mas NÃO existem na §4.2 Behavior Table — remover do diagrama ou adicionar rows na tabela."
-   - **Missing diagram refs (tabela tem ≥2, NENHUM diagrama referencia):** (TABLE_B_SET \ MERMAID_REF_SET) ≥ 2 ENTRIES E `mermaid_required === true` (frontmatter) → WARN. Ex: "mermaid_required=true mas B-2, B-5, B-7 da tabela NÃO aparecem em nenhum dos 3 diagrams §4.4 — rotular nós/edges com B-X para garantir bilateralidade."
-3. AB-IDs anti-behavior no diagrama é OPTIONAL por padrão; se frontmatter `ab_count ≥ 3` E `erd_required=true` → WARN soft se 0 AB- no ERD (sem bloqueio).
+2. **Bidirectional diff:**
+   - **Orphan refs (diagram has, table DOES NOT):** `MERMAID_REF_SET \ TABLE_B_SET` → WARN if non-empty. E.g.: "B-11, B-12 appear in sequenceDiagram but DO NOT exist in §4.2 Behavior Table — remove from diagram or add rows to table."
+   - **Missing diagram refs (table has ≥2, NO diagram references):** (TABLE_B_SET \ MERMAID_REF_SET) ≥ 2 ENTRIES AND `mermaid_required === true` (frontmatter) → WARN. E.g.: "mermaid_required=true but table B-2, B-5, B-7 DO NOT appear in any of the 3 §4.4 diagrams — label nodes/edges with B-X to ensure bilaterality."
+3. AB-IDs anti-behaviour in diagram is OPTIONAL by default; if frontmatter `ab_count ≥ 3` AND `erd_required=true` → soft WARN if 0 AB- in ERD (no block).
 
-**3.5.3 Bilateral 3/3 — SPEC §4.4.3 ERDiagram ↔ Migration SQL + TypeORM @Entity real**
+**3.5.3 Bilateral 3/3 — SPEC §4.4.3 ERDiagram ↔ Migration SQL + real TypeORM @Entity**
 
-> **Hard gate só aplica SE:** `erd_required === true` (frontmatter §0.4) E diff tem arquivos migration (`**/migrations/*.sql`, `**/migrations/*.ts`) OU entity (`*.entity.ts`, `@Entity()`) NOVOS/MODIFICADOS. Caso contrário → ⚪ N/A marcado no resumo.
+> **Hard gate only applies IF:** `erd_required === true` (frontmatter §0.4) AND diff has NEW/MODIFIED migration files (`**/migrations/*.sql`, `**/migrations/*.ts`) OR entity files (`*.entity.ts`, `@Entity()`). Otherwise → ⚪ N/A marked in summary.
 
-Procedimento de cruzamento:
-1. **Entidade declarada ERD existe no código?** cada entity name no erDiagram → grep `@Entity.*<name>` no diff. Missing → WARN "Entidade `<X>` declarada no ERD mas @Entity TypeORM NÃO encontrada no diff."
-2. **Cardinalidade FK + ON DELETE rule match?** cada FK no ERD (cardinalidade Mermaid `}|`/`o|` etc) → cruzamos com migration SQL `REFERENCES <target>(id) ON DELETE <CASCADE|SET NULL|RESTRICT|NO ACTION>` e com TypeORM `@ManyToOne({ onDelete: "CASCADE" })`. Mismatch cardinalidade ou onDelete → WARN "Cardinalidade ERD `Order }|--|{ OrderItem` difere de migration `ON DELETE RESTRICT` (esperado CASCADE pela cardinalidade 1:N forte)."
-3. **Campos constraints ≥3 declarados ERD realmente existem?** se ERD lista campos com `UK`/`CHECK`/`UNIQUE` explicitamente → grep `ADD CONSTRAINT <nome> UNIQUE` ou `UNIQUE(col, col2)` ou `@Index({ unique: true })` no diff. ≥1 constraint declarada no ERD mas ausente schema → WARN "UK `uk_order_stripe_pi_unique` existe no ERD mas migration não tem ADD CONSTRAINT nem @Index unique."
-4. **Severidade:** Todos findings ERD = **🟡 WARN NÃO bloqueante** por default (muitas vezes ERD é "target state" e migration incremental). Se ≥3 mismatches + risco alto (FK ON DELETE errado em tabela de payments/tickets) → marcar como upgrade: **🔴 BLOCK se 1 dos mismatches é FK cardinalidade de integridade referencial forte (ex: Order 1:N Ticket mas ON DELETE CASCADE em Ticket deletaria tickets ao apagar Order — violação GDPR).**
-
----
-
-#### §3.5 Report format — SbE Bilateral Extension (novo, REGRA7.9)
-
-| Anchor ID | Regra comportamental | Verdict | Evidence + Action item se 🟡/🔴 |
-|---|---|---|---|
-| SBE-B1 | `bilateral_anchor_coverage_para_spec_Behaviors_test_files` | 🟢 FULLY LINKED | 9/10 B-IDs tem `// @ac B-X` 1ª linha dentro it() block. Coverage=90%. Files: [refundFlow.api.test.ts](file:///...) + [RefundService.unit.test.ts](file:///...). **Bônus +0.5 SCOPE_score §7.1 aplicado.** |
-| SBE-B2 | `bilateral_mermaid_bid_refs_comportamento_tabela_real` | 🟡 WARN ORPHAN | Orphan refs: `B-11` existe no sequenceDiagram §4.4.1 mas NÃO tem correspondente na Behavior Table. Adicionar B-11 na tabela OU remover do diagrama. Missing refs count = 0 (ok, mermaid_required=true). |
-| SBE-B3 | `bilateral_erd_cardinalities_constraints_migration_e_typeorm` | 🟡 WARN MISMATCH | ERD `OrderItem → Order }|--|{` (ON DELETE CASCADE esperado). Migration `20260415_refund.sql#L80` usa `ON DELETE RESTRICT`. Ajustar migration para CASCADE (order sem items = deletado sem risco orphans). UK declarado ERD `uk_refund_payment_id` → encontrado no @Index unique ✅. |
-| SBE-B2-alt | `(exemplo 0% — hard block)` | 🔴 BLOCK ZERO ANCHORS | 0/7 B-IDs tem anchor bilateral. NENHUM arquivo teste modificado neste diff contém `// @ac B-X` pattern. Resolver: adicionar anchors OU EXPLICIT_OVERRIDE_BILATERAL_SKIP justificado + decision.log entry. |
+Cross-check procedure:
+1. **Does entity declared in ERD exist in code?** each entity name in erDiagram → grep `@Entity.*<name>` in diff. Missing → WARN "Entity `<X>` declared in ERD but TypeORM @Entity NOT found in diff."
+2. **Do FK cardinality + ON DELETE rule match?** each FK in ERD (Mermaid cardinality `}|`/`o|` etc.) → cross-check with migration SQL `REFERENCES <target>(id) ON DELETE <CASCADE|SET NULL|RESTRICT|NO ACTION>` and with TypeORM `@ManyToOne({ onDelete: "CASCADE" })`. Cardinality or onDelete mismatch → WARN "ERD cardinality `Order }|--|{ OrderItem` differs from migration `ON DELETE RESTRICT` (CASCADE expected due to strong 1:N cardinality)."
+3. **Do ERD declared constraints ≥3 really exist?** if ERD lists fields with `UK`/`CHECK`/`UNIQUE` explicitly → grep `ADD CONSTRAINT <name> UNIQUE` or `UNIQUE(col, col2)` or `@Index({ unique: true })` in diff. ≥1 constraint declared in ERD but missing in schema → WARN "UK `uk_order_stripe_pi_unique` exists in ERD but migration has no ADD CONSTRAINT nor unique @Index."
+4. **Severity:** All ERD findings = **🟡 non-blocking WARN** by default (ERD is often "target state" and migration incremental). If ≥3 mismatches + high risk (wrong FK ON DELETE in payments/tickets table) → mark as upgrade: **🔴 BLOCK if 1 of the mismatches is FK cardinality of strong referential integrity (e.g. Order 1:N Ticket but ON DELETE CASCADE in Ticket would delete tickets when deleting Order — GDPR violation).**
 
 ---
 
-## 4. CHECK 3 — 📘 Documentação ATUALIZADA (AGENTS / README / runbooks / CLAUDE)
+#### §3.5 Report format — SbE Bilateral Extension (new, RULE 7.9)
 
-### 4.0 Pre-check OBRIGATÓRIO (ANTES de usar heurísticas) — Relevância + Docstrings
-
-Esta etapa NÃO é opcional. Rode em TODO diff, mesmo pequeno.
-
-| Item Obrigatório | Pergunta a responder (verificação) | Verdict | Evidence |
+| Anchor ID | Behavioural rule | Verdict | Evidence + Action item if 🟡/🔴 |
 |---|---|---|---|
-| **Relevance Check 1** (engineering-contracts §22.1) | "Esta mudança altera contrato público, comandos, UX/UI, onboarding, premissas arquiteturais, fluxos deploy/runbook, ou APIs públicas?" Se SIM → docs obrigatórios. Se NÃO → justificar 1 linha se diff >5 arquivos ou >150 linhas. | 🟢 Respondido | Linha justificativa em decisions.log OU marcado SIM/NÃO em report |
-| **Relevance Check 2** (engineering-contracts §22.1) | "Um humano ou agente lendo este código daqui a 3 meses se beneficia de uma explicação?" Se TALVEZ ou SIM → docs obrigatórios. | 🟢 Respondido | Decisão registrada no report |
-| **Docstrings Públicos** (engineering-contracts §22.2) | Diff adicionou ou alterou funções/métodos/classes públicas, módulos, tipos customizados difíceis? Cada item novo tem docstring/JSDoc/TSDoc com PROPÓSITO + observações intrincadas (NÃO inputs/outputs se há tipagem)? Funções privadas intrincadas também devem ter. | 🟢 FULL / 🟡 PARCIAL / 🔴 ZERO | Lista arquivos/fns faltando docstring |
+| SBE-B1 | `bilateral_anchor_coverage_for_spec_Behaviors_test_files` | 🟢 FULLY LINKED | 9/10 B-IDs have `// @ac B-X` on 1st line inside it() block. Coverage=90%. Files: [refundFlow.api.test.ts](file:///...) + [RefundService.unit.test.ts](file:///...). **+0.5 §7.1 SCOPE_score bonus applied.** |
+| SBE-B2 | `bilateral_mermaid_bid_refs_real_table_behaviour` | 🟡 WARN ORPHAN | Orphan refs: `B-11` exists in §4.4.1 sequenceDiagram but has NO corresponding entry in Behavior Table. Add B-11 to table OR remove from diagram. Missing refs count = 0 (ok, mermaid_required=true). |
+| SBE-B3 | `bilateral_erd_cardinalities_constraints_migration_and_typeorm` | 🟡 WARN MISMATCH | ERD `OrderItem → Order }|--|{` (ON DELETE CASCADE expected). Migration `20260415_refund.sql#L80` uses `ON DELETE RESTRICT`. Adjust migration to CASCADE (order without items = deleted without orphans risk). ERD declared UK `uk_refund_payment_id` → found in unique @Index ✅. |
+| SBE-B2-alt | `(0% example — hard block)` | 🔴 BLOCK ZERO ANCHORS | 0/7 B-IDs have bilateral anchor. NO test file modified in this diff contains `// @ac B-X` pattern. Resolve: add anchors OR justified EXPLICIT_OVERRIDE_BILATERAL_SKIP + decision.log entry. |
 
-> **HARD FAIL:** Se os 3 itens acima NÃO forem verificados explicitamente, CHECK 3 não pode ser marcado 🟢 de forma alguma.
+---
 
-### 4.1 Heurísticas de trigger (QUANDO documentar — depois do pre-check 4.0)
+## 4. CHECK 3 — 📘 UPDATED Documentation (AGENTS / README / runbooks / CLAUDE)
 
-| Mudança no diff | Documento OBRIGATÓRIO atualizar |
+### 4.0 MANDATORY Pre-check (BEFORE using heuristics) — Relevance + Docstrings
+
+This stage is NOT optional. Run on EVERY diff, even small ones.
+
+| Mandatory Item | Question to answer (verification) | Verdict | Evidence |
+|---|---|---|---|
+| **Relevance Check 1** (engineering-contracts §22.1) | "Does this change alter public contract, new or changed commands, UX/UI, onboarding, architectural premises, deploy/runbook flows, or public APIs?" If YES → docs are mandatory. If NO → justify 1 line if diff >5 files or >150 lines. | 🟢 Answered | Justification line in decisions.log OR marked YES/NO in report |
+| **Relevance Check 2** (engineering-contracts §22.1) | "Does a human or agent reading this code in 3 months benefit from an explanation?" If MAYBE or YES → docs are mandatory. | 🟢 Answered | Decision recorded in report |
+| **Public Docstrings** (engineering-contracts §22.2) | Did diff add or change public functions/methods/classes, modules, difficult custom types? Does each new item have docstring/JSDoc/TSDoc with PURPOSE + intricate observations (NOT inputs/outputs if typed)? Intricate private functions should also have them. | 🟢 FULL / 🟡 PARTIAL / 🔴 ZERO | List files/fns missing docstring |
+
+> **HARD FAIL:** If the 3 items above are NOT explicitly verified, CHECK 3 cannot be marked 🟢 under any circumstances.
+
+### 4.1 Trigger heuristics (WHEN to document — after 4.0 pre-check)
+
+| Change in diff | MANDATORY document to update |
 |---|---|
-| Novo `/commands/che-*.md` ou `skills/*/SKILL.md` | **README.md §5 tabela comandos** (contagem + linha nova) + top banner contagem. Opcional: §6 cheatsheet se é comando diário. |
-| Nova premissa arquitetura, novo hook, novo contrato | **AGENTS.md** da app ou repo-level, **CHE_RULES.md** se for cross-cutting, **CLAUDE.md** |
-| Nova variável de ambiente (ver também CHECK 4) | `.env.example` + README seção "env vars required" + app-level config doc |
-| Novo endpoint público / API route pública / breaking change | **README do package**, docs/api/, **OpenAPI/Swagger** se existir |
-| Runbook alterado, comando deploy alterado, CI passo novo | **`.github/workflows/*.yml` comentários**, `docs/runbook-*.md` se existir |
-| Refatoração arquitetura importante | **AGENTS.md** app-level + decision log `docs/decisions.md` se existir |
+| New `/commands/che-*.md` or `skills/*/SKILL.md` | **README.md §5 commands table** (count + new line) + top banner count. Optional: §6 cheatsheet if daily command. |
+| New architecture premise, new hook, new contract | App or repo-level **AGENTS.md**, **CHE_RULES.md** if cross-cutting, **CLAUDE.md** |
+| New environment variable (see also CHECK 4) | `.env.example` + README "env vars required" section + app-level config doc |
+| New public endpoint / public API route / breaking change | **Package README**, docs/api/, **OpenAPI/Swagger** if any |
+| Runbook changed, deploy command changed, new CI step | **`.github/workflows/*.yml` comments**, `docs/runbook-*.md` if any |
+| Important architecture refactor | App-level **AGENTS.md** + decision log `docs/decisions.md` if any |
 
-### 4.2 Passo 4.2 — Cruzar diff .md/.yml contra triggers
+### 4.2 Step 4.2 — Cross-check .md/.yml diff against triggers
 
-Do patch cumulativo:
-1. Listar todos `.md`, `.yml`, `.yaml`, `.json schema`, `.toml config` alterados
-2. Para CADA trigger que aplicar, marcar:
-   - 🟢 DOCUMENTADO se arquivo correspondente apareceu no diff e conteúdo alterado combina com trigger keyword
-   - 🟡 PARCIAL se documentou um lugar só mas faltou outro (ex: nova skill foi README §5 mas faltou contagem banner no topo)
-   - 🔴 NÃO DOCUMENTADO se trigger aplicou e nenhum doc foi tocado
+From cumulative patch:
+1. List all changed `.md`, `.yml`, `.yaml`, `.json schema`, `.toml config`
+2. For EACH applicable trigger, mark:
+   - 🟢 DOCUMENTED if corresponding file appeared in diff and changed content matches trigger keyword
+   - 🟡 PARTIAL if documented in only one place but missing another (e.g.: new skill was README §5 but missing top banner count)
+   - 🔴 NOT DOCUMENTED if trigger applied and no doc was touched
 
-### Passo 4.3 — Report format, nomes REGRA7.9
+### Step 4.3 — Report format, RULE 7.9 names
 
-| Trigger / Item | Regra comportamental | Verdict | Evidence doc path |
+| Trigger / Item | Behavioural rule | Verdict | Evidence doc path |
 |---|---|---|---|
-| Novo comando `/che-scope-check` adicionado | `atualizacao_documental_para_comando_che_scope_check_no_readme_e_contagem` | 🟢 DOCUMENTADO | [README.md#L244-L267](file:///...) §5 tabela linha 18 + banner topo contagem 17→18 atualizada |
-| Nova env var `STRIPE_CONNECT_SECRET` (CHECK 4) | `atualizacao_documental_para_env_var_stripe_connect_secret_no_dotenv_example_e_parser` | 🟡 PARCIAL | `.env.example` tem a var mas `packages/config/src/env.ts` zod schema NÃO validou tipo (string required) |
-| Nova arquitetura offline scanner | `atualizacao_documental_para_arquitetura_offline_no_agents_md_e_claude_md` | 🔴 NÃO DOCUMENTADO | Diff altera 12 arquivos scanner offline. `packages/scanner/AGENTS.md` + `CLAUDE.md` SEM alterações. Adicionar §scanner offline architecture. |
+| New `/che-scope-check` command added | `documentation_update_for_che_scope_check_command_in_readme_and_count` | 🟢 DOCUMENTED | [README.md#L244-L267](file:///...) §5 table line 18 + top banner updated count 17→18 |
+| New `STRIPE_CONNECT_SECRET` env var (CHECK 4) | `documentation_update_for_stripe_connect_secret_env_var_in_dotenv_example_and_parser` | 🟡 PARTIAL | `.env.example` has the var but `packages/config/src/env.ts` zod schema DID NOT validate type (string required) |
+| New offline scanner architecture | `documentation_update_for_offline_architecture_in_agents_md_and_claude_md` | 🔴 NOT DOCUMENTED | Diff changes 12 offline scanner files. `packages/scanner/AGENTS.md` + `CLAUDE.md` WITHOUT changes. Add §scanner offline architecture. |
 
 ---
 
-## 5. CHECK 4 — 🔐 Novas variáveis de ambiente = DECLARADAS no INFRA/ENV parser
+## 5. CHECK 4 — 🔐 New environment variables = DECLARED in INFRA/ENV parser
 
-### 5.1 Detectar usage NOVO de env var no diff
+### 5.1 Detect NEW env var usage in diff
 
-Regex patterns (todos languages, case-insensitive match whole words):
+Regex patterns (all languages, case-insensitive match whole words):
 ```
 process\.env\.[A-Z0-9_]+
 Deno\.env\.get\(["']([A-Z0-9_]+)
@@ -287,108 +287,108 @@ env\(["']([A-Z0-9_]+)
 z\.object\(\{\s*([A-Z0-9_]+)
 ```
 
-Produz `ENV_USAGE[] = {var: string, file: path, line: n, lang: ts|py|rs|go|sh}`.
+Produces `ENV_USAGE[] = {var: string, file: path, line: n, lang: ts|py|rs|go|sh}`.
 
-### 5.2 Cruzar com DECLARATIONS
+### 5.2 Cross-check with DECLARATIONS
 
-Procurar em **TODO O REPO (não só diff)** declarations de cada ENV_USAGE[i]:
+Search in **ENTIRE REPO (not just diff)** for declarations of each ENV_USAGE[i]:
 
-| Declaration type | Onde procurar |
+| Declaration type | Where to search |
 |---|---|
 | Zod schema env parser | `packages/config/src/env.ts`, `env.ts`, `config/env.ts`, `src/env/index.ts`, `app/env.ts`, next.config env |
 | `.env.example`, `.env.local.sample`, `.env.dist` | repo root, apps/*, packages/* |
-| Vercel (se projeto usa) | `vercel.json` env keys, OR Railway/Railway.tf |
+| Vercel (if project uses) | `vercel.json` env keys, OR Railway/Railway.tf |
 | Terraform / AWS env | `*.tf` environment blocks, SSM parameter store names |
 | Docker / K8s | `Dockerfile ENV`, k8s `ConfigMap`, `helm values.yaml` |
-| CI GitHub Actions | `.github/workflows/*.yml` env blocks se for var de CI only |
+| CI GitHub Actions | `.github/workflows/*.yml` env blocks if CI only var |
 
-Cada env var NOVAS vs diff marcada:
-- 🟢 DECLARADA: aparece em ≥1 declaration **E** (se zod schema) tem tipo validado (z.string().min(1), z.number(), etc.)
-- 🟡 DECLARADA FRAQUEZA: aparece em .env.example MAS NÃO no zod schema parser (sem runtime validation). Ou zod optional sem default.
-- 🔴 NÃO DECLARADA: Nenhuma declaration encontrada no repo. Apontar: qual var, qual tipo esperado, onde adicionar (packages/config/src/env.ts + .env.example ambos)
+Each NEW env var vs diff marked:
+- 🟢 DECLARED: appears in ≥1 declaration **AND** (if zod schema) has validated type (z.string().min(1), z.number(), etc.)
+- 🟡 WEAK DECLARATION: appears in .env.example BUT NOT in zod schema parser (no runtime validation). Or zod optional without default.
+- 🔴 NOT DECLARED: No declaration found in repo. Point out: which var, what expected type, where to add (both packages/config/src/env.ts + .env.example)
 
-### Passo 5.3 — Report format REGRA7.9
+### Step 5.3 — RULE 7.9 report format
 
-| Variável | Regra comportamental | Verdict | Onde declarar (se 🔴/🟡) |
+| Variable | Behavioural rule | Verdict | Where to declare (if 🔴/🟡) |
 |---|---|---|---|
-| `ANALYTICS_S3_BUCKET` | `declaracao_env_var_no_parser_para_analytics_s3_bucket` | 🟢 DECLARADA | `packages/config/src/env.ts` z.string() + `.env.example` linha 42 |
-| `STRIPE_CONNECT_SECRET` | `declaracao_env_var_no_parser_para_stripe_connect_secret` | 🟡 FALTA VALIDAÇÃO RUNTIME | `.env.example` linha 37 OK. **Falta** `packages/config/src/env.ts` zod entry + default throw se ausente em prod |
-| `ETL_SENTRY_DSN` | `declaracao_env_var_no_parser_para_etl_sentry_dsn` | 🔴 NÃO DECLARADA | Usada em `etl/ingest.ts#L18` sem declaration. Adicionar em packages/config env schema zod.string().url() + .env.example. |
+| `ANALYTICS_S3_BUCKET` | `env_var_declaration_in_parser_for_analytics_s3_bucket` | 🟢 DECLARED | `packages/config/src/env.ts` z.string() + `.env.example` line 42 |
+| `STRIPE_CONNECT_SECRET` | `env_var_declaration_in_parser_for_stripe_connect_secret` | 🟡 MISSING RUNTIME VALIDATION | `.env.example` line 37 OK. **Missing** `packages/config/src/env.ts` zod entry + default throw if absent in prod |
+| `ETL_SENTRY_DSN` | `env_var_declaration_in_parser_for_etl_sentry_dsn` | 🔴 NOT DECLARED | Used in `etl/ingest.ts#L18` without declaration. Add in packages/config env schema zod.string().url() + .env.example. |
 
 ---
 
-## 6. CHECK 5 — 🧩 LEAN / KISS / YAGNI — Overengineering Scanner (12 categorias genéricas L1-L12 + 13 Ousterhout RED FLAGS Appendix D)
+## 6. CHECK 5 — 🧩 LEAN / KISS / YAGNI — Overengineering Scanner (12 generic categories L1-L12 + 13 Ousterhout RED FLAGS Appendix D)
 
-> **Pilar novo introduzido 2026-09.** Combate LLM overengineering by default. Cada linha de código nova tem que justificar sua existência contra o scope explícito do diff. NÃO é "clean code gosto pessoal"; é YAGNI + blast-radius reduction + reuse-before-create do engineering-contracts §1 §4.
+> **New pillar introduced 2026-09.** Combats LLM overengineering by default. Every line of new code must justify its existence against the explicit scope of the diff. NOT "clean code personal taste"; it is YAGNI + blast-radius reduction + reuse-before-create from engineering-contracts §1 §4.
 >
-> **Integração Ousterhout (APoSD Appendix D canônico):** Depois de rodar as 12 categorias L1-L12, aplique também as 13 RED FLAGS Appendix D (D.1). Mesmo formato finding com mesmo downgrade scope justificador AC. Severidade default no scope-checker: HIGH (RF01-RF04), MEDIUM (RF05-RF13). Cross-reference com findings do che-code-review no ship gate.
+> **Ousterhout integration (APoSD canonical Appendix D):** After running the 12 categories L1-L12, also apply the 13 RED FLAGS from Appendix D (D.1). Same finding format with same AC scope justifier downgrade. Default severity in scope-checker: HIGH (RF01-RF04), MEDIUM (RF05-RF13). Cross-reference with che-code-review findings in ship gate.
 
-### 6.0 Pre-step — Justificador de escopo automático (downgrade severity quando a abstração é pedida no escopo)
+### 6.0 Pre-step — Automatic scope justifier (downgrade severity when abstraction is requested in scope)
 
-Antes de aplicar as 12 categorias, construa:
-- `SET_AC_SCOPED_KEYWORDS`: todas keyword comportamentais das ACs do CHECK 1 que mencionam "extensibilidade / múltiplos backends / strategy / abstrair X / trocar Y por Z no futuro" / items que EXPLICITAMENTE pedem flexibilidade.
-- Para cada finding L1-L12:
-  - SE finding matcha QUALQUER keyword em SET_AC_SCOPED_KEYWORDS → **DOWNGRADE 1 nível de severity AUTOMATICAMENTE** (HIGH→MEDIUM, MEDIUM→LOW, LOW→INFO allowlisted no report). A abstração foi requisitada no escopo; não é overengineering.
-  - SE NÃO matchar nenhuma keyword → severity original.
+Before applying the 12 categories, build:
+- `SET_AC_SCOPED_KEYWORDS`: all behavioural keywords from CHECK 1 ACs that mention "extensibility / multiple backends / strategy / abstract X / replace Y with Z in the future" / items that EXPLICITLY request flexibility.
+- For each L1-L12 finding:
+  - IF finding matches ANY keyword in SET_AC_SCOPED_KEYWORDS → **DOWNGRADE 1 level of severity AUTOMATICALLY** (HIGH→MEDIUM, MEDIUM→LOW, LOW→INFO allowlisted in report). The abstraction was requested in the scope; it is not overengineering.
+  - IF NOT matched → original severity.
 
-### 6.1 Procedimento por categoria — 12 checks obrigatórios
+### 6.1 Procedure per category — 12 mandatory checks
 
-Para CADA categoria abaixo, aplique os passos sobre o diff cumulativo (arquivos NOVOS + MODIFICADOS, NÃO o repo inteiro).
+For EACH category below, apply steps on the cumulative diff (NEW + MODIFIED files, NOT entire repo).
 
-| ID | Trigger (regex / heurística) | Severidade default | Procedimento de detecção |
+| ID | Trigger (regex / heuristic) | Default severity | Detection procedure |
 |---|---|---|---|
-| L1 | Premature abstraction: Interface / abstract class com 1 implementação só | MEDIUM (HIGH se > 5 indireções totais no mesmo fluxo) | 1. Liste todas interfaces novas/modificadas: `interface\s+\w+` / `abstract class\s+\w+`. 2. Para cada, grep implementações: `implements\s+<NomeInterface>` / `extends\s+<NomeAbstract>`. 3. SE contagem implementações = 1 E NÃO é uma interface já existente no repo histórico → flag L1. 4. Grave: caminho indireções no call chain; se > 5 hops totais de interface/abstract → severity upgrade HIGH. |
-| L2 | Strategy / Factory / Dispatcher pattern com 1 entrada só no switch/map | MEDIUM | 1. Ache `switch/case`, `Record<Enum, Handler>`, `Map<string, () => R>` NOVOS. 2. Conte entradas efetivas (cases não-default / keys não vazias). 3. SE count = 1 E NÃO há TODO/FIXME anexando "em seguida adicionamos segunda estratégia" → flag L2. |
-| L3 | Wrapper/builder em volta de lib com 1 método e zero lógica extra | LOW (MEDIUM se > 3 arquivos de wrapper no mesmo diff) | 1. Ache classes/funcs NOVAS que só chamam lib deps direto: corpo do método = só `return lib.f(args)` sem validação/sem cache/sem retry/sem error mapping. 2. Nome contém "Factory", "Wrapper", "Client", "Provider" mas sem implementação extra. 3. SE ≥ 3 desses no mesmo diff → upgrade MEDIUM. |
-| L4 | Factory createX() com body = 1 linha return new ConcreteX() sem nenhum if/switch | LOW | 1. Grep `function\s+create\w+\s*\([^)]*\)\s*\{` / `static\s+create\w+\s*\(`. 2. Body AST/sintaxe = `return new <ClasseConcreta>(mesmos params sem alteração)`. 3. Zero condicionais, zero fallback, zero cache. → flag L4. |
-| L5 | Helper/utility com 1 ÚNICO uso no codebase inteiro | LOW (MEDIUM se > 20 linhas de helper) | 1. Para cada função/const EXPORTADA nova em `utils.*`, `helpers.*`, `*util*`: grep o nome. 2. Contagem de ocorrências = 2 (declaração + 1 uso) OU 1 se export default. 3. SE body > 20 linhas → upgrade MEDIUM. |
-| L6 | Env VAR declarada em .env.example MAS NUNCA lida no código com process.env etc | HIGH se credencial/secret; MEDIUM se feature flag/toggle | 1. Liste vars novas em .env.example no diff. 2. Para cada VAR: grep `process.env.<VAR>` / Deno.env.get / os.environ / ENV[var] em TODO O REPO (não só diff, pois pode ser usada em arquivo não-alterado). 3. ZERO matches → flag L6. Credenciais = nome contém (KEY/SECRET/TOKEN/DSN/PASSWORD/AUTH) → HIGH; resto MEDIUM. |
-| L7 | React useHook/custom component ≤ 2 linhas, chamado 1 vez | LOW | 1. React hooks NOVOS: `function use\w+` → linhas body ≤ 2. 2. Component NOVO: `export default function \w+` com JSX ≤ 2 linhas e sem children/sem props além de hardcode. 3. Grep nome encontra exatamente 1 call site (fora do declaration file). → flag L7. |
-| L8 | Genérico `<T>` / Type parameter usado 1 tipo concreto só em todos call sites | LOW | 1. Ache `function\s+\w+\s*<T[^>]*>` / `class\s+\w+\s*<T[^>]*>` NOVOS. 2. Grep todos call sites no diff + todo repo. 3. Todos passam MESMO tipo (ex: todos `invoke<Refund>` sem nenhuma outra variação). → flag L8. |
-| L9 | Chain ≥ 3 hops de indireção sem valor real (X → Y → Z → operação db/rede real) | MEDIUM (HIGH se 1 dos hops tem lock tx held over network — cross-ref Category 0.3 do che-code-review) | 1. Para cada entrypoint público (router handler / tRPC procedure / controller): trace call chain até side effect real (DB read/write / HTTP / FS). 2. ≥ 3 funções/class.methods no meio que APENAS repassam args (zero validação/zero transform/zero branching). 3. Se alguma etapa tem queryRunner START TRANSACTION FOR UPDATE ainda não dado release e hop faz await fetch/stripe → upgrade HIGH (mesmo finding C0.3 code-review; linked). → flag L9. |
-| L10 | Dead code comment-out / `// TODO` sem #ticket número / `FIXME` sem referência | MEDIUM se TODO/FIXME sem ticket; LOW dead code comentado | 1. Regex `/\/\/\s*TODO\b(?!\s*[:(]?\s*[A-Z]{2,}-?\d+)/` (TODO sem ticket). 2. Regex `\/\*[\s\S]*?\*\/` blocos comentados com código sintaticamente válido (não docstring). 3. Blocos comentados + TODO sem id → flag L10. |
-| L11 | Parâmetro de função que TODOS os call sites do diff passam o MESMO valor hardcoded | MEDIUM | 1. Para cada função nova/modificada exportada: lista params. 2. Para cada param não-trivial que não é last: grep todos call sites no diff. 3. 100% dos calls passam literal exato mesmo valor (ex: todos `fn(..., "gbp")`). 4. Nenhum call site usa outro valor. → flag L11. |
-| L12 | Lookup table / Record / Config table com 1 ENTRY só | LOW (exceto se 1 entry + >30 linhas de bloco inteiro → MEDIUM) | 1. Regex `=\s*\{\s*\w+\s*:\s*` + fecha chaves em < 5 linhas DEPOIS → só 1 key. 2. `Record<K,V>` + initialization só 1 key. 3. Nenhuma outra key adicionada em outros arquivos do diff. → flag L12. |
+| L1 | Premature abstraction: Interface / abstract class with only 1 implementation | MEDIUM (HIGH if > 5 total indirections in same flow) | 1. List all new/modified interfaces: `interface\s+\w+` / `abstract class\s+\w+`. 2. For each, grep implementations: `implements\s+<InterfaceName>` / `extends\s+<AbstractName>`. 3. IF implementation count = 1 AND NOT an existing interface in repo history → flag L1. 4. Record: indirection path in call chain; if > 5 total interface/abstract hops → upgrade severity to HIGH. |
+| L2 | Strategy / Factory / Dispatcher pattern with only 1 entry in switch/map | MEDIUM | 1. Find NEW `switch/case`, `Record<Enum, Handler>`, `Map<string, () => R>`. 2. Count effective entries (non-default cases / non-empty keys). 3. IF count = 1 AND NO TODO/FIXME attaching "next we add second strategy" → flag L2. |
+| L3 | Wrapper/builder around lib with 1 method and zero extra logic | LOW (MEDIUM if > 3 wrapper files in same diff) | 1. Find NEW classes/funcs that only call lib deps directly: method body = just `return lib.f(args)` without validation/cache/retry/error mapping. 2. Name contains "Factory", "Wrapper", "Client", "Provider" but without extra implementation. 3. IF ≥ 3 of these in same diff → upgrade to MEDIUM. |
+| L4 | createX() factory with body = 1 line return new ConcreteX() without any if/switch | LOW | 1. Grep `function\s+create\w+\s*\([^)]*\)\s*\{` / `static\s+create\w+\s*\(`. 2. Body AST/syntax = `return new <ConcreteClass>(same params without change)`. 3. Zero conditionals, zero fallback, zero cache. → flag L4. |
+| L5 | Helper/utility with 1 SINGLE use in entire codebase | LOW (MEDIUM if > 20 helper lines) | 1. For each new EXPORTED function/const in `utils.*`, `helpers.*`, `*util*`: grep name. 2. Occurrence count = 2 (declaration + 1 use) OR 1 if default export. 3. IF body > 20 lines → upgrade to MEDIUM. |
+| L6 | Env VAR declared in .env.example BUT NEVER read in code with process.env etc | HIGH if credential/secret; MEDIUM if feature flag/toggle | 1. List new vars in .env.example in diff. 2. For each VAR: grep `process.env.<VAR>` / Deno.env.get / os.environ / ENV[var] in ENTIRE REPO (not just diff, as it might be used in unchanged file). 3. ZERO matches → flag L6. Credentials = name contains (KEY/SECRET/TOKEN/DSN/PASSWORD/AUTH) → HIGH; rest MEDIUM. |
+| L7 | React useHook/custom component ≤ 2 lines, called once | LOW | 1. NEW React hooks: `function use\w+` → body lines ≤ 2. 2. NEW Component: `export default function \w+` with JSX ≤ 2 lines and no children/props beyond hardcode. 3. Grep name finds exactly 1 call site (outside declaration file). → flag L7. |
+| L8 | Generic `<T>` / Type parameter used for only 1 concrete type in all call sites | LOW | 1. Find NEW `function\s+\w+\s*<T[^>]*>` / `class\s+\w+\s*<T[^>]*>`. 2. Grep all call sites in diff + entire repo. 3. All pass EXACT SAME type (e.g.: all `invoke<Refund>` without any other variation). → flag L8. |
+| L9 | Chain ≥ 3 indirection hops without real value (X → Y → Z → real db/network op) | MEDIUM (HIGH if 1 hop has lock tx held over network — che-code-review Category 0.3 cross-ref) | 1. For each public entrypoint (router handler / tRPC procedure / controller): trace call chain to real side effect (DB read/write / HTTP / FS). 2. ≥ 3 functions/class.methods in middle that ONLY pass args (zero validation/transform/branching). 3. If any stage has queryRunner START TRANSACTION FOR UPDATE not yet released and hop does await fetch/stripe → upgrade HIGH (same C0.3 code-review finding; linked). → flag L9. |
+| L10 | Dead code comment-out / `// TODO` without #ticket number / `FIXME` without reference | MEDIUM if TODO/FIXME without ticket; LOW for commented dead code | 1. Regex `/\/\/\s*TODO(?!\s*[:(]?\s*[A-Z]{2,}-?\d+)/` (TODO without ticket). 2. Regex `\/\*[\s\S]*?\*\/` commented blocks with syntactically valid code (not docstring). 3. Commented blocks + TODO without id → flag L10. |
+| L11 | Function parameter that ALL diff call sites pass the SAME hardcoded value | MEDIUM | 1. For each new/modified exported function: list params. 2. For each non-trivial param that is not last: grep all call sites in diff. 3. 100% of calls pass exact same literal value (e.g.: all `fn(..., "gbp")`). 4. No call site uses another value. → flag L11. |
+| L12 | Lookup table / Record / Config table with only 1 ENTRY | LOW (except if 1 entry + >30 lines total block → MEDIUM) | 1. Regex `=\s*\{\s*\w+\s*:\s*` + close brace in < 5 lines AFTER → only 1 key. 2. `Record<K,V>` + initialization only 1 key. 3. No other key added in other diff files. → flag L12. |
 
-### 6.2 Report format CHECK 5 — tabela 4 colunas REGRA7.9
+### 6.2 CHECK 5 report format — 4-column RULE 7.9 table
 
-| ID | Regra comportamental (verbo_objeto_para_alvo) | Severidade (após downgrade scope) | Evidence (path:lines) + Justificador de escopo se aplicou |
+| ID | Behavioural rule (verb_object_for_target) | Severity (after scope downgrade) | Evidence (path:lines) + Scope justifier if applied |
 |---|---|---|---|
-| L1 | `overengineering_interface_com_1_implementacao_so_refund_repository` | MEDIUM | [RefundRepository.ts#L5-L30](file://...) IRefundRepository. Nenhuma AC pede múltiplos backends. |
-| L6 | `env_var_declarada_sem_uso_refund_timeout_ms` | MEDIUM | [.env.example#L41](file://...) REFUND_TIMEOUT_MS=3000. ZERO ocorrências process.env.REFUND_TIMEOUT_MS no código. |
-| L11 | `parametro_mesmo_valor_todas_calls_currency_refund` | INFO allowlisted | [refundService.ts#L18](file://...) issueRefund(currency). AC-1 do escopo disse "moeda GBP única por enquanto". Downgrade applied LOW→INFO. |
+| L1 | `overengineering_interface_with_only_1_implementation_refund_repository` | MEDIUM | [RefundRepository.ts#L5-L30](file://...) IRefundRepository. No AC requests multiple backends. |
+| L6 | `env_var_declared_without_usage_refund_timeout_ms` | MEDIUM | [.env.example#L41](file://...) REFUND_TIMEOUT_MS=3000. ZERO process.env.REFUND_TIMEOUT_MS occurrences in code. |
+| L11 | `parameter_same_value_all_calls_currency_refund` | INFO allowlisted | [refundService.ts#L18](file://...) issueRefund(currency). Scope AC-1 said "single GBP currency for now". LOW→INFO downgrade applied. |
 
 ---
 
-## 7. CHECK 6 — 🧮 SCORE FINAL 0-10 (média geométrica Scope × Lean)
+## 7. CHECK 6 — 🧮 FINAL SCORE 0-10 (geometric mean of Scope × Lean)
 
-> **Gate de bloqueio canônico usado pelo che-ship §0.9.1. Combina entrega e lean quality em um número comparável.**
+> **Canonical blocking gate used by che-ship §0.9.1. Combines delivery and lean quality into a comparable number.**
 
-### 7.1 Cálculo SCOPE sub-score (0-10)
+### 7.1 SCOPE sub-score calculation (0-10)
 
 Use CHECK 1 table verdicts:
 ```
-TOTAL_ACs          = (DELIVERED+PARCIAL+MISSING)   (NÃO conta OOS)
+TOTAL_ACs          = (DELIVERED+PARTIAL+MISSING)   (OOS NOT counted)
 DELIVERED_weighted = count(🟢 DELIVERED)
-PARCIAL_weighted   = count(🟡 PARCIAL) × 0.5
-SCOPE_score = 10 × (DELIVERED_weighted + PARCIAL_weighted) / max(1, TOTAL_ACs)
+PARTIAL_weighted   = count(🟡 PARTIAL) × 0.5
+SCOPE_score = 10 × (DELIVERED_weighted + PARTIAL_weighted) / max(1, TOTAL_ACs)
 ```
 
-**⚡ SbE Bilateral Anchor Coverage adjustment (ONDA2 — só aplica se SBE_EXTENSION_ENABLED=true):**
+**⚡ SbE Bilateral Anchor Coverage adjustment (ONDA2 — only applies if SBE_EXTENSION_ENABLED=true):**
 ```
-# §3.5.1 coverage (já calculado)
+# §3.5.1 coverage (already calculated)
 BILATERAL_ANCHOR_COVERAGE_PCT = (B_COVERED_BY_ANCHOR ÷ max(1, B_COUNT_SPEC)) × 100
 if (BILATERAL_ANCHOR_COVERAGE_PCT >= 90):
-    SCOPE_score = clamp(SCOPE_score + 0.5, 0, 10)   # BÔNUS bilateral forte
+    SCOPE_score = clamp(SCOPE_score + 0.5, 0, 10)   # Strong bilateral BONUS
 elif (BILATERAL_ANCHOR_COVERAGE_PCT < 70 AND BILATERAL_ANCHOR_COVERAGE_PCT > 0):
-    SCOPE_score = clamp(SCOPE_score - 1.0, 0, 10)   # PENALIDADE coverage fraco
-# 0% anchors = BLOCK independente do score (veredito §8.1 tem check 🔴 item)
+    SCOPE_score = clamp(SCOPE_score - 1.0, 0, 10)   # Weak coverage PENALTY
+# 0% anchors = BLOCK regardless of score (§8.1 verdict has 🔴 check item)
 ```
 
-Exemplo: 8🟢 + 1🟡 + 1🔴 → SCOPE base = 10 × (8 + 0.5)/10 = **8.5**
-Com bilateral anchor coverage 92% (SbE ON) → SCOPE ajustado = clamp(8.5 + 0.5, 0, 10) = **9.0**
+Example: 8🟢 + 1🟡 + 1🔴 → base SCOPE = 10 × (8 + 0.5)/10 = **8.5**
+With 92% bilateral anchor coverage (SbE ON) → adjusted SCOPE = clamp(8.5 + 0.5, 0, 10) = **9.0**
 
-### 7.2 Cálculo LEAN sub-score (0-10)
+### 7.2 LEAN sub-score calculation (0-10)
 
 Use CHECK 5 findings severities:
 ```
@@ -398,44 +398,44 @@ LEAN_penalty =
   + (count(🔵 LOW_check5) × 0.3)
 LEAN_score = clamp(10 − LEAN_penalty ÷ 2, 0, 10)
 ```
-Exemplo: 1 HIGH + 5 MEDIUM + 7 LOW → penalty = 2 + 5 + 2.1 = 9.1 ÷ 2 = 4.55 → LEAN = 10 − 4.55 = **5.45**
+Example: 1 HIGH + 5 MEDIUM + 7 LOW → penalty = 2 + 5 + 2.1 = 9.1 ÷ 2 = 4.55 → LEAN = 10 − 4.55 = **5.45**
 
-### 7.3 FINAL Score (média geométrica — exige AMBOS bons)
+### 7.3 FINAL Score (geometric mean — requires BOTH to be good)
 
 ```
 FINAL_score = sqrt(SCOPE_score × LEAN_score)
 ```
-Exemplo: sqrt(8.5 × 5.45) = sqrt(46.3) = **6.80**
+Example: sqrt(8.5 × 5.45) = sqrt(46.3) = **6.80**
 
-### 7.4 Regra CLASSIFICAÇÃO FINAL usada no gate
+### 7.4 FINAL CLASSIFICATION rule used in gate
 
-| Limiar FINAL_score | Nível | Ação no che-ship §0.9 |
+| FINAL_score threshold | Level | che-ship §0.9 Action |
 |---|---|---|
 | **≥ 9.0** | Excellent | Green + auto-proceed |
-| **≥ 7.0** | Acceptable | Green + auto-proceed (THRESHOLD DEFAULT) |
-| **5.0 – 6.9** | Atention | 🟡 CONDICOES → mostra action items L-M → pergunta user prossegue? |
-| **< 5.0** | Poor | 🔴 BLOCK SHIP → corrige antes |
+| **≥ 7.0** | Acceptable | Green + auto-proceed (DEFAULT THRESHOLD) |
+| **5.0 – 6.9** | Attention | 🟡 CONDITIONS → show L-M action items → ask user to proceed? |
+| **< 5.0** | Poor | 🔴 BLOCK SHIP → fix first |
 
-Além do score numérico, **SE houver QUALQUER 🔴 item em QUALQUER um dos 4 checks legados (1-4), o verdict final automaticamente cai para 🔴 BLOQUEADO**, independente do score. É a regra §6.1 antiga, preservada.
+In addition to the numerical score, **IF there is ANY 🔴 item in ANY of the 4 legacy checks (1-4), the final verdict automatically drops to 🔴 BLOCKED**, regardless of the score. This is the old §6.1 rule, preserved.
 
 ---
 
-## 8. 🎯 Verdict final + relatório agregado (ATUALIZADO 2026-09 p/ 6 checks)
+## 8. 🎯 Final Verdict + aggregated report (UPDATED 2026-09 for 6 checks)
 
-### 8.1 Regra de cálculo
+### 8.1 Calculation rule
 
 ```
 Verdict =
-  🔴 BLOCKED  se (ANY check tem ≥1 item 🔴)  OU  (FINAL_score < 5.0)
-  🟡 CONDICOES se (NO check tem 🔴)  e  (ANY item tem 🟡)  OU  (5.0 ≤ FINAL_score < 7.0)
-  🟢 APPROVED se (FINAL_score ≥ 7.0) AND (ALL items são 🟢/⚪/INFO) E (ZERO itens 🔴)
+  🔴 BLOCKED  if (ANY check has ≥1 🔴 item)  OR  (FINAL_score < 5.0)
+  🟡 CONDITIONS if (NO check has 🔴)  and  (ANY item has 🟡)  OR  (5.0 ≤ FINAL_score < 7.0)
+  🟢 APPROVED if (FINAL_score ≥ 7.0) AND (ALL items are 🟢/⚪/INFO) AND (ZERO 🔴 items)
 ```
 
-### 8.1 🔴 STORAGE PREFLIGHT OBRIGATÓRIO (ANTES DE ESCREVER O RELATÓRIO)
+### 8.1 🔴 MANDATORY STORAGE PREFLIGHT (BEFORE WRITING REPORT)
 
-> MORATÓRIA engineering-contracts §20: Nenhum asset na worktree. Tudo em che-sessions via helper único.
+> engineering-contracts §20 MORATORIUM: No assets in worktree. Everything in che-sessions via unique helper.
 
-Rode EXATAMENTE este bloco ANTES de construir qualquer path:
+Run EXACTLY this block BEFORE constructing any path:
 ```bash
 CHE_HOME="${CHE_HOME:-$HOME/.trae}"
 CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
@@ -447,69 +447,69 @@ if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
 fi
 ```
 
-### 8.2 Output header + relatório salvo em
+### 8.2 Output header + report saved at
 
-**Construir path com o helper — NUNCA manual:**
+**Build path with helper — NEVER manual:**
 ```bash
-# SCOPE = workspace-shared (durável, reusável em futuras sessões desta worktree)
-# related_id = slug da review (ex: pr-382 ou feat-FLO-714 ou task-T1)
+# SCOPE = workspace-shared (durable, reusable in future sessions of this worktree)
+# related_id = review slug (e.g.: pr-382 or feat-FLO-714 or task-T1)
 SCOPE_CHECK_PATH="$(che_output_path "scope_check" "scope-check" "<related_id>" "workspace" "md")"
 ```
-Resultado exemplo: `$CHE_WORKSPACE_SHARED/scope_check/pr-382/20260902-140000-scope-check.md`
-→ Timestamp UTC no prefix = ordenação automática; related_id agrupa todas scope-checks da mesma entidade.
+Example result: `$CHE_WORKSPACE_SHARED/scope_check/pr-382/20260902-140000-scope-check.md`
+→ UTC timestamp in prefix = automatic sorting; related_id groups all scope-checks for the same entity.
 
-Primeira página do relatório (sempre no TOPO):
+First page of report (always at the TOP):
 
 ```markdown
 # 🔍 Scope Check — <slug>
 
 ## 0. Meta
-- **Scope source:** (PRD path / ticket URL / task-graph / scope free-text / PR body) — pick all que foram usados
-- **Mode:** A=GitHub PR #<id> (url) | B=Worktree local <path> vs base <branch>
+- **Scope source:** (PRD path / ticket URL / task-graph / scope free-text / PR body) — pick all that were used
+- **Mode:** A=GitHub PR #<id> (url) | B=Local Worktree <path> vs base <branch>
 - **Diff:** N files changed / +X additions / -Y deletions
 - **Final Score 0-10:** `<FINAL>` (SCOPE: `<SCOPE>` · LEAN: `<LEAN>`)
 
-## 1. Verdict RESUMO 6+1 checks (SbE extension adicionada ONDA2)
+## 1. SUMMARY Verdict 6+1 checks (SbE extension added ONDA2)
 
 | # | Check | 🟢 | 🟡 | 🔴 | ⚪ |
 |---|---|---|---|---|---|
-| 1 | 🔍 Entrega escopo completo | 8 | 1 | 1 | 2 OOS |
-| 2 | 🧪 Cobertura testes unit/e2e | 6 | 2 | 1 | 0 |
-| 2-ext | ⚡ SbE Bilateral (anchors + diagrams + ERD) | 2 rows ok | 1 ERD mismatch | 0 | 1 N/A erd_required=false |
-| 3 | 📘 Docs atualizadas | 3 | 1 | 0 | 5 N/A |
-| 4 | 🔐 Novas env vars declaradas | 1 | 1 | 1 | 0 |
+| 1 | 🔍 Full scope delivery | 8 | 1 | 1 | 2 OOS |
+| 2 | 🧪 Unit/e2e test coverage | 6 | 2 | 1 | 0 |
+| 2-ext | ⚡ Bilateral SbE (anchors + diagrams + ERD) | 2 rows ok | 1 ERD mismatch | 0 | 1 N/A erd_required=false |
+| 3 | 📘 Updated docs | 3 | 1 | 0 | 5 N/A |
+| 4 | 🔐 Declared new env vars | 1 | 1 | 1 | 0 |
 | 5 | 🧩 Lean/YAGNI Overengineering | — | 5 L (MED) | 1 H (L6) | 7 allowlisted |
-| 6 | 🧮 Score Final 0-10 | **6.80** | 7.0 threshold | — | — |
+| 6 | 🧮 Final Score 0-10 | **6.80** | 7.0 threshold | — | — |
 
-**👉 Verdict Final:** 🔴 BLOCKED / 🟡 CONDICOES / 🟢 APPROVED
+**👉 Final Verdict:** 🔴 BLOCKED / 🟡 CONDITIONS / 🟢 APPROVED
 
-## 2. Action items (ordenados 🔴 primeiro)
-1. 🔴 [Check1, AC-3] Entregar qrcode offline scanner em scanner/lib/scan.ts (#L40-L120 expected)
-2. 🔴 [Check2, AC-3] Criar scanner.spec.ts caso offline cache fallback
-3. 🔴 [Check4] Declarar ETL_SENTRY_DSN em packages/config zod + .env.example
-4. 🔴 [Check5 L6] Remover env REFUND_TIMEOUT_MS do .env.example ou adicionar uso real no código
-5. 🟡 [Check1, AC-2] Acrescentar destination stripe connect API call em refund.ts
-6. 🟡 [Check3] Validar runtime zod STRIPE_CONNECT_SECRET em env parser
+## 2. Action items (sorted 🔴 first)
+1. 🔴 [Check 1, AC-3] Deliver offline qrcode scanner in scanner/lib/scan.ts (#L40-L120 expected)
+2. 🔴 [Check 2, AC-3] Create scanner.spec.ts for offline cache fallback case
+3. 🔴 [Check 4] Declare ETL_SENTRY_DSN in packages/config zod + .env.example
+4. 🔴 [Check 5 L6] Remove REFUND_TIMEOUT_MS env from .env.example or add real code usage
+5. 🟡 [Check 1, AC-2] Add destination stripe connect API call in refund.ts
+6. 🟡 [Check 3] Validate STRIPE_CONNECT_SECRET zod runtime in env parser
 ...
 
-↓ Detalhes cada check em §2..§7 (tabelas 4 colunas, nomes REGRA7.9)
+↓ Details of each check in §2..§7 (4-column tables, RULE 7.9 names)
 ```
 
-No final do relatório: **como corrigir rápido** para próximo audit passar (1-2 comandos ou 1-2 arquivos).
+At the end of the report: **how to fix quickly** for next audit to pass (1-2 commands or 1-2 files).
 
 ---
 
-## 7. NOMEAÇÃO REGRA7.9 (enforced em TODO o relatório)
+## 7. RULE 7.9 NAMING (enforced throughout report)
 
-NÃO é permitido em LUGAR NENHUM do relatório:
-- ❌ `qualidade_boa`, `funciona`, `implementado_bem`, `cobertura_suficiente`
-- ❌ `AC-FLO-732-entregue`, `§4.2 revisado`, `FLO-513 passing`
-- ✅ **OBRIGATÓRIO:** `<verbo_objeto>_para_<alvo_comportamental>` em TODAS as regras das tabelas dos 4 checks.
+NOT allowed ANYWHERE in the report:
+- ❌ `good_quality`, `works`, `well_implemented`, `sufficient_coverage`
+- ❌ `AC-FLO-732-delivered`, `§4.2 reviewed`, `FLO-513 passing`
+- ✅ **MANDATORY:** `<verb_object>_for_<behavioural_target>` in ALL rules of the 4 check tables.
 
-Ex:
+E.g.:
 ```
-entrega_de_escopo_completo_para_<slug_ac>
-cobertura_de_teste_unitario_ou_e2e_para_<comportamento>
-atualizacao_documental_para_<mudanca>_em_<doc>
-declaracao_env_var_no_parser_para_<VAR_NAME>
+full_scope_delivery_for_<ac_slug>
+unit_or_e2e_test_coverage_for_<behaviour>
+documentation_update_for_<change>_in_<doc>
+env_var_declaration_in_parser_for_<VAR_NAME>
 ```

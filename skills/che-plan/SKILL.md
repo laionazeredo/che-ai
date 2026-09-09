@@ -18,7 +18,7 @@ This skill acts as a bridge between technical specification and project manageme
 
 1. **Approved SPEC required**: This skill MUST fail if no Approved SPEC is found for the current feature/slug.
 2. **MCP Access**: Requires access to `mcp_flockr-linear`, `mcp_laion-clickup`, or a browser-based agent for Jira.
-3. **User Input**: Requires Project/Board name and Target Language (default: English for code-related, User's language for descriptions).
+3. **User Input**: Requires Project/Board name and Target Language (default: English).
 
 ---
 
@@ -72,7 +72,7 @@ If Epic structure is chosen:
 1. Ask user for:
    - **Target Tool**: Linear (Recommended), ClickUp, or Jira.
    - **Project/Board**: Where the tickets should live.
-   - **Language**: English (Default) or User's language.
+   - **Language**: English (Default).
 2. Call appropriate tool (e.g., `save_issue` for Linear, `clickup_create_task` for ClickUp).
 3. If creating an Epic, save the Parent first to get its ID, then set `parentId` for sub-tasks.
 

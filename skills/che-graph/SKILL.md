@@ -1,36 +1,36 @@
 ---
 name: "che-graph"
-description: "Wrapper canônico e genérico do Graphify CLI (pipx package graphifyy = tree-sitter AST knowledge graph 100% local, 33 linguagens). Subcomandos: refresh, query 'pergunta', path A B, stats. Output cache FICA FORA WORKTREE em $CHE_WORKSPACE_SHARED/graphify/<related_id>/. Suporta fallback chain de engines Node.js alternativos (CodeGraph npm, @sentropic/graphify, codebase-vis, @lubab/madar) e fallback final leve grep-based se nenhum instalado. Integração com che-xray (auto refresh durante onboarding). NÃO cria artefatos NEM edita .gitignore na worktree do usuário."
+description: "Canonical and generic wrapper for Graphify CLI (pipx package graphifyy = 100% local tree-sitter AST knowledge graph, 33 languages). Subcommands: refresh, query 'question', path A B, stats. Output cache stays OUTSIDE WORKTREE in $CHE_WORKSPACE_SHARED/graphify/<related_id>/. Supports fallback chain of alternative Node.js engines (CodeGraph npm, @sentropic/graphify, codebase-vis, @lubab/madar) and a final lightweight grep-based fallback if none installed. Integration with che-xray (auto refresh during onboarding). DOES NOT create artifacts NOR edit .gitignore in the user's worktree."
 ---
 
-# Che Graph — Knowledge Graph AST (Engine Wrapper com fallback chain)
+# Che Graph — Knowledge Graph AST (Engine Wrapper with fallback chain)
 
 > **Canonical default tool:** Graphify CLI (PyPI: `graphifyy`, double `y`)
-> **Instalar (RECOMENDADO default):** `pipx install graphifyy`
+> **Install (RECOMMENDED default):** `pipx install graphifyy`
 > **Version tested:** 0.9.x+
->11→> **Onde gera output:** `CHE_PROJECT_GRAPH_DIR` (`project/graphify/` no nível L2 do projeto).
+> **Where it generates output:** `CHE_PROJECT_GRAPH_DIR` (`project/graphify/` at the project L2 level).
 
 ---
 
-## -0.1 STORAGE BOUNDARY PREFLIGHT (OBRIGATÓRIO ANTES DE TUDO)
+## -0.1 STORAGE BOUNDARY PREFLIGHT (MANDATORY BEFORE EVERYTHING)
 
 ```bash
-# 1. Carrega contrato de sessões
+# 1. Load sessions contract
 source ~/.trae/contracts/che_sessions_contract.sh
 
 # 2. Resolve WORKTREE_ROOT + SESSION_ID
 WORKTREE_ROOT="${WORKTREE_ROOT:-$(pwd)}"
 SESSION_ID="${SESSION_ID:-graph-standalone-$(date -u +%Y%m%d-%H%M%S)}"
 
-# 3. Calcula paths canônicos + assegura dirs
+# 3. Compute canonical paths + ensure dirs
 che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
 che_ensure_session_dirs "$WORKTREE_ROOT"
 
-# 4. Double-guard: outputs NUNCA dentro worktree
+# 4. Double-guard: outputs NEVER inside worktree
 che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR"
 che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
 
-# 5. Constrói UMA VEZ paths de output do graph (todos em L2)
+# 5. Construct graph output paths ONCE (all in L2)
 GRAPHIFY_OUTPUT_ROOT="${CHE_PROJECT_GRAPH_DIR}"
 che_assert_outside_worktree "$GRAPHIFY_OUTPUT_ROOT" "$WORKTREE_ROOT" "GRAPHIFY_OUTPUT_ROOT"
 mkdir -p "$GRAPHIFY_OUTPUT_ROOT"
@@ -38,35 +38,37 @@ mkdir -p "$GRAPHIFY_OUTPUT_ROOT"
 GRAPH_REPORT_PATH="${GRAPHIFY_OUTPUT_ROOT}/GRAPH_REPORT.md"
 ```
 
-**NÃO INVENTE:** Nenhum outro caminho nesta skill. Todo cache, index, artefato do graphify fica ABAIXO de `$GRAPHIFY_OUTPUT_ROOT`. Se for necessário outros subfiles (graph.db, index.sqlite, nodes.json) → `$GRAPHIFY_OUTPUT_ROOT/<nome>`. `che_cleanup_legacy_artifacts_in_worktree` já remove `graphify-out/` se caiu por engano em worktree antiga.
+**DO NOT INVENT:** No other path in this skill. All cache, index, graphify artifacts stay UNDER `$GRAPHIFY_OUTPUT_ROOT`. If other subfiles are needed (graph.db, index.sqlite, nodes.json) → `$GRAPHIFY_OUTPUT_ROOT/<name>`. `che_cleanup_legacy_artifacts_in_worktree` already removes `graphify-out/` if it accidentally landed in an old worktree.
 
-> **Alternativas 100% Node.js (OPCIONAL · unificar ecossistema só JS):**
-> O che usa a primeira engine encontrada nesta ordem (fallback chain declarativa):
-> 1. `codegraph` CLI — `npm install -g @colbymchenry/codegraph` (21 linguagens · MCP · SQLite FTS5 · file watcher incremental · ~58% fewer tool calls benchmarks)
-> 2. `graphify` (@sentropic) CLI — `npm install -g @sentropic/graphify` (multimodal código+PDFs+CSVs+ontologia)
-> 3. `codebase-vis` CLI — `npm install -g codebase-vis` (só depgraph, 6 linguagens, 17 deps, mais leve)
+> **100% Node.js alternatives (OPTIONAL · unify JS-only ecosystem):**
+> che uses the first engine found in this order (declarative fallback chain):
+> 1. `codegraph` CLI — `npm install -g @colbymchenry/codegraph` (21 languages · MCP · SQLite FTS5 · incremental file watcher · ~58% fewer tool calls benchmarks)
+> 2. `graphify` (@sentropic) CLI — `npm install -g @sentropic/graphify` (multimodal code+PDFs+CSVs+ontology)
+> 3. `codebase-vis` CLI — `npm install -g codebase-vis` (depgraph only, 6 languages, 17 deps, lightweight)
 > 4. `madar` CLI — `npm install -g @lubab/madar` (TS/Node context-pack compiler, 5.28× fewer tokens)
-> 5. `graphify` Python default acima
-> 6. **Fallback final:** grep-based (sem ferramenta nenhuma instalada, menor precisão)
+> 5. `graphify` Python default above
+> 6. **Final fallback:** grep-based (no tool installed, lower precision)
 >
-> Comparativo completo + comandos install:
+> Full comparison + install commands:
 > → [README.md §Getting Started 3b](file:///home/laion/.trae/README.md#L38-L55)
-
-## 0. QUANDO USAR
-
-| Subcomando | Quando | Exemplo |
-|---|---|---|
-| `refresh` | (1) 1ª vez no repo · (2) depois de pull grande · (3) antes de `/che-xray` | `/che-graph refresh` |
-| `query "pergunta"` | Perguntas em linguagem natural sobre ESTRUTURA do código | `/che-graph query "onde ficam as tabelas de refund e qual service valida o valor maximo de reembolso?"` |
-| `path "A" "B"` | Busca caminho de dependência/calls entre 2 símbolos ou arquivos | `/che-graph path "RefundService.processRefund" "Stripe.refunds.create"` |
-| `stats` | Snapshot conhecimento: arquivos indexados, top linguagens, hubs de importação | `/che-graph stats` |
 
 ---
 
-## 1. PRÉ-REQUISITO CLI + FALLBACK CHAIN (6 engines)
+## 0. WHEN TO USE
+
+| Subcommand | When | Example |
+|---|---|---|
+| `refresh` | (1) 1st time in repo · (2) after large pull · (3) before `/che-xray` | `/che-graph refresh` |
+| `query "question"` | Natural language questions about code STRUCTURE | `/che-graph query "where are the refund tables and which service validates the maximum refund amount?"` |
+| `path "A" "B"` | Searches dependency/call path between 2 symbols or files | `/che-graph path "RefundService.processRefund" "Stripe.refunds.create"` |
+| `stats` | Knowledge snapshot: indexed files, top languages, import hubs | `/che-graph stats` |
+
+---
+
+## 1. CLI PREREQUISITE + FALLBACK CHAIN (6 engines)
 
 ```bash
-# Fallback chain declarativa: codegraph → @sentropic/graphify → codebase-vis → madar → graphify python → grep-fallback
+# Declarative fallback chain: codegraph → @sentropic/graphify → codebase-vis → madar → graphify python → grep-fallback
 unset GRAPH_ENGINE; unset GRAPH_ENGINE_V
 for candidate in "codegraph:codegraph" "graphify:@sentropic" "codebase-vis:codebasevis" "madar:madar" "graphify:graphifyy"; do
   bin="${candidate%%:*}"
@@ -78,96 +80,96 @@ for candidate in "codegraph:codegraph" "graphify:@sentropic" "codebase-vis:codeb
   fi
 done
 if [ -z "${GRAPH_ENGINE:-}" ]; then
-  echo "[che-graph] ⚠️  Nenhuma engine de graph knowledge instalada."
-  echo "  Escolha UMA (1 comando cada, ~30s):"
-  echo "    · (Default RECOMENDADO) pipx install graphifyy       (Python · 33+ linguagens · multimodal | gráfico canônico graph.html)"
-  echo "    · (Node 1ª escolha)  npm i -g @colbymchenry/codegraph (Node · 21 linguagens · MCP + FTS5 · auto-sync incremental)"
-  echo "    · Ver lista completa no README.md §Getting Started 3b."
-  echo "  Prosseguindo com FALLBACK FINAL baseado em Grep (menor precisão, sem graph knowledge)."
+  echo "[che-graph] ⚠️  No knowledge graph engine installed."
+  echo "  Choose ONE (1 command each, ~30s):"
+  echo "    · (RECOMMENDED default) pipx install graphifyy       (Python · 33+ languages · multimodal | canonical graph.html)"
+  echo "    · (Node 1st choice)  npm i -g @colbymchenry/codegraph (Node · 21 languages · MCP + FTS5 · incremental auto-sync)"
+  echo "    · See full list in README.md §Getting Started 3b."
+  echo "  Proceeding with Grep-based FINAL FALLBACK (lower precision, no graph knowledge)."
   GRAPH_ENGINE="grep-fallback"
 fi
-echo "[che-graph] Engine selecionada: $GRAPH_ENGINE v${GRAPH_ENGINE_V:-}"
+echo "[che-graph] Selected engine: $GRAPH_ENGINE v${GRAPH_ENGINE_V:-}"
 ```
 
-**Regra de blast radius:** NÃO instalar automaticamente NENHUMA engine dentro do skill. Promptar o usuário para rodar UM comando de instalação de sua escolha manualmente. (Segurança + não instalar pacotes de sistema sem OK.)
+**Blast radius rule:** DO NOT automatically install ANY engine inside the skill. Prompt the user to manually run ONE installation command of their choice. (Security + no system packages installation without OK.)
 
 ---
 
-## 2. SUBCOMANDOS
+## 2. SUBCOMMANDS
 
-### 2.1 `refresh` (atualiza knowledge graph cache)
+### 2.1 `refresh` (updates knowledge graph cache)
 
-Execução canônica. **TODOS outputs ficam em `$GRAPHIFY_OUTPUT_ROOT` FORA worktree. NÃO usamos `graphify-out/` padrão dentro worktree.**
+Canonical execution. **ALL outputs stay in `$GRAPHIFY_OUTPUT_ROOT` OUTSIDE worktree. We DO NOT use standard `graphify-out/` inside worktree.**
 
 ```bash
-# Garantimos diretório de output FORA worktree (já criado no PREFLIGHT)
-[ -n "${GRAPHIFY_OUTPUT_ROOT:-}" ] || { echo "[che-graph refresh] ❌ PREFLIGHT NÃO rodou. GRAPHIFY_OUTPUT_ROOT vazio." >&2; exit 99; }
+# Ensure output directory OUTSIDE worktree (already created in PREFLIGHT)
+[ -n "${GRAPHIFY_OUTPUT_ROOT:-}" ] || { echo "[che-graph refresh] ❌ PREFLIGHT NOT run. GRAPHIFY_OUTPUT_ROOT empty." >&2; exit 99; }
 che_assert_outside_worktree "$GRAPHIFY_OUTPUT_ROOT" "$WORKTREE_ROOT" "GRAPHIFY_OUTPUT_ROOT"
 
 if [ "$GRAPH_ENGINE" = "graphify" ]; then
   if [ -f "$GRAPH_REPORT_PATH" ]; then
-    # Incremental (mais rápido ~50%). --output-dir garante cache FORA worktree.
+    # Incremental (faster ~50%). --output-dir ensures cache OUTSIDE worktree.
     graphify "$WORKTREE_ROOT" --update --output-dir "$GRAPHIFY_OUTPUT_ROOT" 2>&1 | tail -n 5
   else
-    # Primeira vez. --output-dir garante cache FORA worktree, NÃO gera nada dentro $WORKTREE_ROOT.
+    # First time. --output-dir ensures cache OUTSIDE worktree, DOES NOT generate anything inside $WORKTREE_ROOT.
     graphify "$WORKTREE_ROOT" --output-dir "$GRAPHIFY_OUTPUT_ROOT" 2>&1 | tail -n 5
   fi
   RESULT=$?
 elif [ "$GRAPH_ENGINE" = "codegraph" ] || [ "$GRAPH_ENGINE" = "codebasevis" ] || [ "$GRAPH_ENGINE" = "madar" ] || [ "$GRAPH_ENGINE" = "@sentropic/graphify" ]; then
-  # Fallback engines Node.js: sempre passe output-dir fora worktree.
-  # Se engine não suportar --output-dir, CD para $GRAPHIFY_OUTPUT_ROOT e rode de lá apontando para $WORKTREE_ROOT
+  # Node.js fallback engines: always pass output-dir outside worktree.
+  # If engine does not support --output-dir, CD to $GRAPHIFY_OUTPUT_ROOT and run from there pointing to $WORKTREE_ROOT
   ( cd "$GRAPHIFY_OUTPUT_ROOT" && "${GRAPH_ENGINE%%:*}" scan "$WORKTREE_ROOT" 2>&1 | tail -n 5 )
   RESULT=$?
 else
-  # Fallback final: estrutura de pastas + extensões top-N (não gera arquivo, só imprime resumo)
+  # Final fallback: folder structure + top-N extensions (no file generation, only prints summary)
   echo "[che-graph refresh] fallback grep-based scan:"
   find "$WORKTREE_ROOT" -maxdepth 3 -type d -not -path '*/node_modules*' -not -path '*/.git*' -not -path '*/.next*' | head -40
   find "$WORKTREE_ROOT" -type f -not -path '*/node_modules*' -not -path '*/.git*' \
-    | sed -E 's/.*\.([a-z]+)$/\1/' | sort | uniq -c | sort -rn | head -10
+    | sed -E 's/.*\.([a-z]+)$//' | sort | uniq -c | sort -rn | head -10
   RESULT=0
 fi
 
-# Audit trail (sempre append decision log FORA worktree — usando helper oficial)
+# Audit trail (always append decision log OUTSIDE worktree — using official helper)
 che_append_decision_jsonl "GRAPH_REFRESH" "{\"related_id\":\"${GRAPHIFY_RELATED_ID}\",\"engine\":\"${GRAPH_ENGINE}\",\"version\":\"${GRAPHIFY_V:-n/a}\",\"ok\":${RESULT},\"output_root\":\"${GRAPHIFY_OUTPUT_ROOT}\"}"
 
-[ $RESULT -eq 0 ] || { echo "[che-graph refresh] ❌ falhou. Verifique graphify --version." >&2; exit 1; }
+[ $RESULT -eq 0 ] || { echo "[che-graph refresh] ❌ failed. Check graphify --version." >&2; exit 1; }
 
-# NÃO editamos .gitignore do usuário. Como cache está FORA worktree, nunca aparece em git status.
+# We DO NOT edit the user's .gitignore. As cache is OUTSIDE worktree, it never appears in git status.
 ```
 
-### 2.2 `query "<pergunta>"` (pergunta NL)
+### 2.2 `query "<question>"` (NL question)
 
-Resposta enxuta (máximo 20 linhas no output chat). Prioriza:
-1. Resposta do graphify CLI se disponível
-2. Fallback: smart grep com regex derivado da pergunta + file-type filter
+Lean response (maximum 20 lines in chat output). Prioritises:
+1. graphify CLI response if available
+2. Fallback: smart grep with regex derived from the question + file-type filter
 
-Exemplos consultas úteis reais:
+Useful real query examples:
 ```bash
-/che-graph query "qual é o entry point do Next.js app e onde é configurado o tRPC createCallerFactory?"
-/che-graph query "lista todos os TypeORM Entity classes e seus arquivos"
-/che-graph query "onde são definidos os middlewares de auth (proteção de rota) e como são aplicados nas routers?"
-/che-graph query "existe alguma validação de valor maximo de reembolso? onde fica?"
+/che-graph query "what is the Next.js app entry point and where is tRPC createCallerFactory configured?"
+/che-graph query "list all TypeORM Entity classes and their files"
+/che-graph query "where are auth middlewares defined (route protection) and how are they applied in routers?"
+/che-graph query "is there any maximum refund amount validation? where is it?"
 ```
 
-Regra: **SEMPRE retorna paths absolutos canônicos com ranges de linha** (ex: `packages/db/src/entities/RefundRequest.ts#L12-L34`) para que agente pule direto pro código usando Read.
+Rule: **ALWAYS return canonical absolute paths with line ranges** (e.g. `packages/db/src/entities/RefundRequest.ts#L12-L34`) so the agent can jump directly to code using Read.
 
-### 2.3 `path "simbA" "simbB"` (dependency path)
+### 2.3 `path "symbA" "symbB"` (dependency path)
 
-Retorna cadeia de chamadas / importações de A → B em **ORDEM DIRETA**.
+Returns call/import chain from A → B in **DIRECT ORDER**.
 
-Exemplo:
+Example:
 ```bash
 /che-graph path "RefundRouter.processRefund POST handler" "Stripe.Refunds API call"
-# Output esperado:
+# Expected output:
 # RefundRouter (L52) → RefundService.process() (L203) → RefundValidator.assertWithinLimits() (L81)
 #                 → StripeClient.refundCreate() (L44 packages/stripe/src/client.ts)
 ```
 
-Fallback leve (graphify sem path): analisa import chain manual via `grep -R "from .*" import { A }` acíclico BFS.
+Lightweight fallback (graphify without path): manual import chain analysis via `grep -R "from .*" import { A }` BFS acyclic.
 
-### 2.4 `stats` (10 linhas snapshot)
+### 2.4 `stats` (10-line snapshot)
 
-Sempre formato estável (scripts parseiam):
+Always stable format (parsed by scripts):
 ```
 [che-graph stats] <repo-slug> @ <ISO ts UTC>
   engine: graphify v0.9.53
@@ -178,31 +180,31 @@ Sempre formato estável (scripts parseiam):
     Shell .sh = 3.9%                (167)
     CSS .css = 2.8%                 (120)
     Markdown .md = 4.0%             (172)
-  import_hubs_top5 (mais importados):
-    1. @flockr/db/src/index.ts        (referenciado 142x)
+  import_hubs_top5 (most imported):
+    1. @flockr/db/src/index.ts        (referenced 142x)
     2. @flockr/trpc/src/client.ts     (89x)
     3. packages/platform/src/lib/stripe.ts (67x)
     4. @flockr/ui/src/button.tsx      (55x)
     5. packages/platform/src/app/api/trpc/route.ts (41x)
-  knowledge_graph_age: 1h 17m  (último refresh: 2026-09-01 18:05 UTC)
+  knowledge_graph_age: 1h 17m  (last refresh: 2026-09-01 18:05 UTC)
 ```
 
 ---
 
-## 3. INTEGRAÇÕES DO ECOSSISTEMA CHE
+## 3. CHE ECOSYSTEM INTEGRATIONS
 
-Que skills usam che-graph:
-1. **che-xray (onboarding)** — chama `/che-graph refresh` como Passo 1 do pipeline de scan; absorve `stats` + top hubs no `project_profile.md`.
-2. **che-scope-checker (CHECK 5 LEAN)** — `/che-graph query "quais módulos são usados nesta implementação? quais não precisam ser importados?"` para detectar imports sobreabundantes (acoplamento alto = Lean finding).
-3. **che-code-review (before code)** — Se diff introduz novo package ≥3 arquivos → `/che-graph path "router.handler" "new.Package.method"` para checar se há information leakage (Ousterhout Appendix D = HIGH finding).
-4. **che-fix (scientific debugging)** — Bug em ponto X? `path "entrada API" "ponto X"` = identificação do caminho completo = reduz hypotheses desnecessárias.
-5. **che-spec (antes de especificar)** — query "como já fazemos X hoje no código?" → spec não propõe reimplementar o que já existe (KISS/YAGNI).
+Skills that use che-graph:
+1. **che-xray (onboarding)** — calls `/che-graph refresh` as Step 1 of the scan pipeline; absorbs `stats` + top hubs into `project_profile.md`.
+2. **che-scope-checker (CHECK 5 LEAN)** — `/che-graph query "which modules are used in this implementation? which don't need to be imported?"` to detect overabundant imports (high coupling = Lean finding).
+3. **che-code-review (before code)** — If diff introduces new package ≥3 files → `/che-graph path "router.handler" "new.Package.method"` to check for information leakage (Ousterhout Appendix D = HIGH finding).
+4. **che-fix (scientific debugging)** — Bug at point X? `path "API entry" "point X"` = full path identification = reduces unnecessary hypotheses.
+5. **che-spec (before specifying)** — query "how do we already do X today in code?" → spec does not propose reimplementing what already exists (KISS/YAGNI).
 
 ---
 
-## 4. VERSIONAMENTO + ROLLBACK
+## 4. VERSIONING + ROLLBACK
 
-- **graphify CLI versões:** pin para >= 0.9.x se instalar via pipx. Ousterhout + Graph knowledge graph versão API pode mudar em 1.0.
-- **Rollback:** Se graphify der crash em algum projeto, é só desinstalar → che-graph cai automaticamente no fallback grep-based. Nada quebra. Reversível.
-- **Cache (TODOS FORA WORKTREE):** `$GRAPHIFY_OUTPUT_ROOT` pode ser apagado a qualquer momento (`rm -rf "$GRAPHIFY_OUTPUT_ROOT"`). Próximo `refresh` recria do zero sem side effects.
-- **Legacy cleanup:** `che_cleanup_legacy_artifacts_in_worktree` já move `graphify-out/` antigo (caiu dentro worktree por bug) para backup seguro em `$CHE_WORKSPACE_SHARED/legacy_cleanup/`.
+- **graphify CLI versions:** pin to >= 0.9.x if installing via pipx. Ousterhout + Graph knowledge graph API version may change in 1.0.
+- **Rollback:** If graphify crashes on some project, just uninstall → che-graph automatically falls back to grep-based. Nothing breaks. Reversible.
+- **Cache (ALL OUTSIDE WORKTREE):** `$GRAPHIFY_OUTPUT_ROOT` can be deleted at any time (`rm -rf "$GRAPHIFY_OUTPUT_ROOT"`). Next `refresh` recreates from scratch without side effects.
+- **Legacy cleanup:** `che_cleanup_legacy_artifacts_in_worktree` already moves old `graphify-out/` (landed inside worktree due to bug) to safe backup in `$CHE_WORKSPACE_SHARED/legacy_cleanup/`.

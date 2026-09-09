@@ -1,11 +1,11 @@
 ---
 name: "che-debugger-bugfix"
-description: "Scientific debugging che for bug fixes: user provides expected behavior + reproduction steps; the Debugger expert loops through hypothesize→instrument→reproduce→analyze→fix→verify until expected behavior is met. Demonstrates the fix or provides clear manual reproduction guide. Invoke when user describes a bug/incorrect runtime behavior and wants it fixed, or when /che-fix is called."
+description: "Scientific debugging che for bug fixes: user provides expected behaviour + reproduction steps; the Debugger expert loops through hypothesize→instrument→reproduce→analyse→fix→verify until expected behaviour is met. Demonstrates the fix or provides clear manual reproduction guide. Invoke when user describes a bug/incorrect runtime behaviour and wants it fixed, or when /che-fix is called."
 ---
 
 # Che — Debugger / Bugfix Expert (Scientific Debug Loop)
 
-This is the **specialized che for bug fixes**, NOT for features.
+This is the **specialised che for bug fixes**, NOT for features.
 The developer mindset here is **hypothesis-driven + evidence-collecting**, not feature-building.
 
 > **Why a different loop for bugs?** Feature che is plan-first, deterministic. Bug che is observation-first: you must REPRODUCE before you understand, then iterate hypotheses until the root cause is found. Evidence beats plan.
@@ -21,8 +21,8 @@ Same as the global rules: if worktree path is NOT provided by the user → **ASK
 ### 0.2 Required inputs from user (block until provided)
 
 User MUST provide:
-1. **Expected behavior**: What SHOULD happen? (English in files, PT from user is OK we translate)
-2. **Actual behavior / Bug description**: What IS happening? Include stack traces, error messages, screenshots if available.
+1. **Expected behaviour**: What SHOULD happen?
+2. **Actual behaviour / Bug description**: What IS happening? Include stack traces, error messages, screenshots if available.
 3. **Reproduction steps**: Minimum, clear numbered steps (1, 2, 3, ...) to trigger the bug reliably. Include:
    - Which route / endpoint / URL?
    - Credentials / role required (admin? regular user? logged out?)
@@ -30,11 +30,11 @@ User MUST provide:
    - Sample payload / form input / seed data if any
 4. **Ticket reference** (if any): Linear/Jira URL/ID — optional
 
-If user fails to provide ANY of 1, 2, or 3 → **ASK with specific questions** before starting debug loop. Do NOT guess reproduction steps.
+If user fails to provide ANY of 1, 2, or 3 → **ASK with specific questions** before starting debug loop. DO NOT guess reproduction steps.
 
-### 0.3 Session artifacts dir + 🔴 STORAGE PREFLIGHT (MORATÓRIA §20)
+### 0.3 Session artifacts dir + 🔴 STORAGE PREFLIGHT (MORATORIUM §20)
 
-Rode **exatamente este bloco ANTES** de escrever qualquer arquivo (logs, traces, screenshots, session md, decisions append):
+Run **exactly this block BEFORE** writing any file (logs, traces, screenshots, session md, decisions append):
 
 ```bash
 CHE_HOME="${CHE_HOME:-$HOME/.trae}"
@@ -43,7 +43,7 @@ if [ -f "$CONTRACT" ]; then
   # shellcheck disable=SC1090
   source "$CONTRACT"
 else
-  echo "❌ FATAL: $CONTRACT não encontrado. HARD STOP — zero arquivos escritos sem storage boundary. exit 98"
+  echo "❌ FATAL: $CONTRACT not found. HARD STOP — zero files written without storage boundary. exit 98"
   exit 98
 fi
 
@@ -51,29 +51,29 @@ SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-debugger-session}"
 che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
 che_ensure_session_dirs "$WORKTREE_ROOT"
 
-# Double-guard: asserts fail-fast se qualquer diretório de output cai DENTRO worktree (exit 99)
-che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR (efêmero debug)"
-che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED (durável decisions)"
+# Double-guard: asserts fail-fast if any output directory lands INSIDE worktree (exit 99)
+che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR (ephemeral debug)"
+che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED (durable decisions)"
 
-# Construir TODOS os paths UMA VEZ aqui via helper ÚNICO. Depois reuse só estas variáveis:
+# Construct ALL paths ONCE here via UNIQUE helper. Then reuse only these variables:
 BUGFIX_SESSION_MD="$(che_output_path "debugger" "bugfix-session" "${BUG_SLUG:-generic-bug}" "session" "md")"
 # Hypothesis log (jsonl append via atomic helper):
 HYPOTHESIS_LOG="$(che_output_path "debugger" "hypotheses" "${BUG_SLUG:-generic-bug}" "session" "jsonl")"
-# Evidence dir = CHE_SESSION_DIR/qa/evidence/<related_id>/ (já criado pelo helper quando necessário)
+# Evidence dir = CHE_SESSION_DIR/qa/evidence/<related_id>/ (already created by helper when needed)
 ```
 
-**Arquitetura de storage (TODOS estritamente FORA worktree do usuário):**
+**Storage architecture (ALL strictly OUTSIDE user worktree):**
 ```
 $CHE_SESSION_DIR/                       ← ephemeral per-session
-  └── debugger/<BUG_SLUG>/                  ← related_id agrupa tudo deste bug
-        ├── 20260902-133000-bugfix-session.md   (append por loop iteration)
-        └── 20260902-133000-hypotheses.jsonl    (cada hipótese uma linha)
-$CHE_WORKSPACE_SHARED/                  ← durable: decisions.log.jsonl (único por worktree)
+  └── debugger/<BUG_SLUG>/                  ← related_id groups everything for this bug
+        ├── 20260902-133000-bugfix-session.md   (append per loop iteration)
+        └── 20260902-133000-hypotheses.jsonl    (each hypothesis one line)
+$CHE_WORKSPACE_SHARED/                  ← durable: decisions.log.jsonl (single per worktree)
 ```
 
-**NUNCA escreva em `<WORKTREE_ROOT>/.trae/` nem `<WORKTREE_ROOT>/reports/` nem qualquer path relativo dentro worktree.** MORATÓRIA §20. Se por qualquer motivo você precisar salvar algo dentro worktree (exceção rara), pare e peça confirmação VERBATIM EXPLÍCITA do usuário em texto.
+**NEVER write to `<WORKTREE_ROOT>/.trae/` or `<WORKTREE_ROOT>/reports/` or any relative path inside worktree.** §20 MORATORIUM. If for any reason you need to save something inside the worktree (rare exception), stop and ask for EXPLICIT VERBATIM user confirmation in text.
 
-Append to `$BUGFIX_SESSION_MD` on every loop iteration using `che_write_file_atomic` (pipe append) ou `>>` redirection (seguro pois o path já passou por assert outside).
+Append to `$BUGFIX_SESSION_MD` on every loop iteration using `che_write_file_atomic` (pipe append) or `>>` redirection (safe as the path has already passed outside assert).
 
 ---
 
@@ -92,10 +92,10 @@ Append to `$BUGFIX_SESSION_MD` on every loop iteration using `che_write_file_ato
 4. Record to session file: `✅ REPRODUCED` or `❌ FAILED TO REPRODUCE`.
 
 **If FAILED TO REPRODUCE (blocker):**
-- Do NOT start fixing.
-- Go back to user with: "Não consegui reproduzir. Checklist do que diverge: (1) versão X vs Y? (2) usuário/role? (3) dados de seed? (4) branch errada?". Ask user clarifying questions + suggest pair steps until we get a clean repro.
+- DO NOT start fixing.
+- Go back to user: "I could not reproduce. Checklist of what diverges: (1) version X vs Y? (2) user/role? (3) seed data? (4) wrong branch?". Ask user clarifying questions + suggest pair steps until we get a clean repro.
 
-### Step 1.2 Minimize the reproduction
+### Step 1.2 Minimise the reproduction
 
 Once reproduced: try to make reproduction steps even shorter.
 - Remove unnecessary steps.
@@ -104,24 +104,24 @@ Once reproduced: try to make reproduction steps even shorter.
 
 ### Step 1.2.5 🔴 REPRO AUTOMATION LOCK — FAIL-FAST HARD STOP (Red-Green Before Any Hypothesis or Code Edit)
 
-> **NON-NEGOTIABLE HARD GATE — engineering-contracts §10 TDD + Rule 7.9. You CANNOT advance to Step 1.3 (hypothesize) or touch ANY source code until this step is PASSED or EXPLICIT_OVERRIDE is logged.**
+> **NON-NEGOTIABLE HARD GATE — engineering-contracts §10 TDD + Rule 7.9. You CANNOT advance to Step 1.3 (hypothesise) or touch ANY source code until this step is PASSED or EXPLICIT_OVERRIDE is logged.**
 
 **What this gate enforces (the "Fix Every Bug Twice" Stripe playbook):**
 1. Bug is first reproduced AUTOMATICALLY inside a test runner (Vitest unit / integration / Playwright / pytest / etc — whatever matches the repo's stack).
 2. We confirm the test FAILS with exit_code != 0 (red phase). This becomes the deterministic regression lock — when we fix the code, the SAME test must PASS without changing the test body.
-3. Evidence (test path + sha256 of the failing run output) is saved to `bugfix_session.md` so next session can resume the lock deterministically.
+3. Evidence (test path + sha256 of the failing run output) is saved to `bugfix_session.md` so the next session can resume the lock deterministically.
 
 **Mandatory execution order:**
 
 **Step 1.2.5.1 — Write the repro automation test file**
 - Pick the test layer matching the bug:
-  - Pure algorithm bug / service-level deterministic → **unit test** (`*.test.ts`, `*.spec.ts`, colocated near the source OR `__tests__/unit/...`)
+  - Pure algorithm bug / service-level deterministic → **unit test** (`*.test.ts`, `*.spec.ts`, co-located near source OR `__tests__/unit/...`)
   - Bug crosses 2+ modules (service→DB→stripe) → **integration test** (`__tests__/integration/...` or `__tests__/e2e/*.api.test.ts` for route-level)
   - UI-only visual / event-handler bug → **Playwright E2E** or **React Testing Library** component spec (NEVER manual-only repro for UI bugs unless literally impossible)
-- If repo has NO test framework installed → install the minimum matching the AGENTS/docs (ex: Vitest for TS Node.js + React). If repo cannot have tests → EXPLICIT_OVERRIDE path below.
+- If repo has NO test framework installed → install the minimum matching the AGENTS/docs (e.g. Vitest for TS Node.js + React). If repo cannot have tests → EXPLICIT_OVERRIDE path below.
 - The test body MUST contain this EXACT structure as the FIRST lines INSIDE `it(...)` / `test(...)`:
   ```typescript
-  it("describes the bug symptom behaviorally — NO ticket id in title", async () => {
+  it("describes the bug symptom behaviourally — NO ticket id in title", async () => {
     // @ticket FLO-123 | @bug reproduces: <1-line symptom plain English> | @ac B-7
     // arrange: ...
     // act: ...
@@ -131,11 +131,11 @@ Once reproduced: try to make reproduction steps even shorter.
   Exception for Playwright / non-JS runners: place `@ticket | @bug | @ac` as a comment line on the FIRST executable line after the `test(...)` declaration, or as the `test.describe` JSDoc. Never put FLO-id in the display title string.
 
 **Step 1.2.5.2 — Run the test, confirm FAIL (red)**
-- Execute ONLY the single test file with the repo's documented runner (ex: `corepack pnpm vitest run packages/platform/server/__tests__/unit/refund-repro.test.ts`).
+- Execute ONLY the single test file with the repo's documented runner (e.g. `corepack pnpm vitest run packages/platform/server/__tests__/unit/refund-repro.test.ts`).
 - CAPTURE the exit code AND tail-40 lines of output.
-- **Confirm assertion: exit_code !== 0 AND the failure message matches the user-reported bug symptom.**
+- **Confirm assertion: exit_code !== 0 AND failure message matches the user-reported bug symptom.**
   - If exit_code === 0 (passes): the test does NOT reproduce the bug. Rewrite the test — wrong input data, wrong assertion, or fixture setup diverges from user repro steps. Do NOT advance.
-  - If test FAILS but with a DIFFERENT error than the bug symptom (wrong assertion): fix the assertion to match the ACTUAL bug symptom you confirmed in Step 1.1. Do NOT advance.
+  - If test FAILS but with a DIFFERENT error than the bug symptom (wrong assertion): fix the assertion to match the ACTUAL bug symptom confirmed in Step 1.1. Do NOT advance.
 
 **Step 1.2.5.3 — Persist the repro lock evidence**
 Append to `$BUGFIX_SESSION_MD`:
@@ -145,45 +145,45 @@ Append to `$BUGFIX_SESSION_MD`:
 - **repro_test_abs_path:** `/absolute/path/to/repro.test.ts`
 - **repro_test_run_command:** `corepack pnpm vitest run ...`
 - **repro_fail_exit_code:** `1`
-- **repro_fail_sha256_output:** `<sha256sum of the combined stdout+stderr of the failing run — for integrity verification later>`
-- **repro_fail_message_excerpt:** `<3 lines from the test runner output showing the exact failure — enough to match symptom>`
+- **repro_fail_sha256_output:** `<sha256sum of combined stdout+stderr of the failing run>`
+- **repro_fail_message_excerpt:** `<3 lines from test runner output showing exact failure — enough to match symptom>`
 - **repro_bug_ticket_ref:** `<FLO-123 or N/A>`
 - **repro_ac_trace:** `<B-7 or N/A — SbE behavior-id this test locks>`
 
-> Assertion verified: test FAILS deterministically. Fix must make the SAME test PASS without changing its body (only `@ticket/@bug/@ac` comment line can be adjusted if needed).
+> Assertion verified: test FAILS deterministically. Fix must make SAME test PASS without changing its body (only @ticket/@bug/@ac comment line can be adjusted).
 ```
 
 **Step 1.2.5.4 — Decision path to Phase 1 hypotheses**
 | Outcome of 1.2.5.1 → 1.2.5.3 | What happens next |
 |---|---|
 | ✅ Test written, FAIL confirmed, evidence saved | **ADVANCE to Step 1.3 → build hypotheses.** Gate unlocked. |
-| ⚠️ Cannot write automated repro (e.g. visual-only bug that requires GPU rendering / prod-specific race / third-party-UI-outside-our-code) | **HARD STOP — DO NOT ADVANCE.** Ask user verbatim: *"Não consegui escrever um teste automatizado que reproduza o bug. Motivo: <1-linha explicação técnica, sem jargão>. Para eu avançar, preciso de um EXPLICIT_OVERRIDE seu confirmando que esta exceção é aceitável. Por favor confirme digitando EXPLICIT_OVERRIDE_DEBUGGER_REPRO=YES + justificativa 1-linha por que não pode ser automatizado."* Log the override VERBATIM into decisions.log.jsonl via `che_append_decision_jsonl` BEFORE advancing. |
+| ⚠️ Cannot write automated repro (e.g. visual-only bug that requires GPU rendering / prod-specific race / third-party-UI-outside-our-code) | **HARD STOP — DO NOT ADVANCE.** Ask user verbatim: *"I could not write an automated test that reproduces the bug. Reason: <1-line technical explanation>. To proceed, I need an EXPLICIT_OVERRIDE from you confirming this exception is acceptable. Please confirm by typing EXPLICIT_OVERRIDE_DEBUGGER_REPRO=YES + 1-line justification why it cannot be automated."* Log override VERBATIM into decisions.log.jsonl via `che_append_decision_jsonl` BEFORE advancing. |
 
-**POST-FIX MIRROR CHECK — performed at Phase 2 Step 3.3 (verify the lock flipped):
-After root cause fix is applied, run the EXACT SAME `repro_test_run_command`. Assert:
+**POST-FIX MIRROR CHECK — performed at Phase 2 Step 3.3 (verify lock flipped):**
+After root cause fix applied, run EXACT SAME `repro_test_run_command`. Assert:
 1. exit_code === 0 (green now — lock flipped)
-2. Any NEW tests added for expected-behavior (happy paths / edge cases) also PASS
-3. NO previously-passing test in the same module NOW FAILS (regression)
-Append "✅ REPRO LOCK FLIPPED — same test now PASSES + exit_code=0 + sha256=<new>" line to the Phase 2 verification section of bugfix_session.md.
+2. Any NEW tests added for expected-behaviour (happy paths / edge cases) also PASS
+3. NO previously-passing test in same module NOW FAILS (regression)
+Append "✅ REPRO LOCK FLIPPED — same test now PASSES + exit_code=0 + sha256=<new>" line to Phase 2 verification section of bugfix_session.md.
 
-**[NOTA G5 — REGRESSION LOCK LOCATION POLICY (OBLIGATÓRIA NO FINAL DO STEP 3.3:**
-- **DEFAULT 95% CASOS (Fix Every Bug Twice — Stripe Playbook):** o teste de regressão (repro lock + behavior tests) DEVE ficar **NA PASTA DA FEATURE/DOMÍNIO ONDE O BUG OCORREU** junto com os demais testes daquela área. **NÃO colocar ticket ID no nome do arquivo.**
-- **Exemplo:** Bug FLO-513 Refund: `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts` (pasta padrão refund / server tests) com **PRIMEIRA LINHA DENTRO DO BLOCO `it()`** (NÃO no título):
+**[G5 NOTE — REGRESSION LOCK LOCATION POLICY (MANDATORY AT THE END OF STEP 3.3):**
+- **DEFAULT 95% OF CASES (Fix Every Bug Twice — Stripe Playbook):** regression test (repro lock + behaviour tests) MUST be **IN THE FEATURE/DOMAIN FOLDER WHERE THE BUG OCCURRED** along with other tests for that area. **DO NOT put ticket ID in filename.**
+- **Example:** Bug FLO-513 Refund: `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts` (standard refund / server tests folder) with **FIRST LINE INSIDE `it()` BLOCK** (NOT in title):
   ```typescript
   it('confirms a full refund succeeds with reason and shows correct status row', async () => {
     // @ticket FLO-513 @bug reproduces refund amount not reversed on row status @ac B-3
-    // ... resto do teste
+    // ... rest of test
   });
   ```
-- **CASO ESPECIAL EXCEÇÃO (< 5% CROSS-CUTTING ≥4 DOMÍNIOS):** Teste regression atravessa **≥4 domínios independentes** (ex: auth + billing + notification + db migration) **OU** é infra-estrutura pura sem domínio específico (ex: worker queue, CI script deploy)) → **PERMITIDO** criar `tests/regression/<TICKET_ID>--<slug>.test.ts` com ID no nome do arquivo. **MAS OBRIGATÓRIO:**
-  1. Ter `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER` logado VERBATIM em `decisions.log.jsonl` com 1-linha justificando ≥4 domínios / infra pura.
-  2. Incluir entrada na coluna Notes da Verification Matrix da SbE spec com o caminho absoluto.
-  3. Se NÃO houver override logado, code-review G7.3 sobe automaticamente para **HIGH severity** (blocking se ≤2 HIGH auto-fix).
+- **SPECIAL EXCEPTION CASE (< 5% CROSS-CUTTING ≥4 DOMAINS):** Regression test crosses **≥4 independent domains** (e.g. auth + billing + notification + db migration) **OR** is pure infrastructure without specific domain (e.g. worker queue, CI deploy script) → **PERMITTED** to create `tests/regression/<TICKET_ID>--<slug>.test.ts` with ID in filename. **BUT MANDATORY:**
+  1. Have `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER` logged VERBATIM in `decisions.log.jsonl` with 1-line justification.
+  2. Include entry in Notes column of SbE spec Verification Matrix with absolute path.
+  3. If no logged override, G7.3 code-review automatically rises to **HIGH severity** (blocking if ≤2 HIGH auto-fix).
 
 ### Step 1.3 Build the initial hypothesis list
 
-From the evidence:
-- State the **symptoms clearly** (what breaks, at what line, on which data shape).
+From evidence:
+- State **symptoms clearly** (what breaks, line, data shape).
 - Write **3 candidate root causes** as numbered hypotheses, ranked by likelihood:
   ```
   Hypothesis H1 (Likelihood: HIGH): <explanation>
@@ -198,7 +198,7 @@ From the evidence:
 
 ```
     ┌─────────────────────────────────────┐
-    │  HYPOTHESIZE (pick next ranked Hn) │
+    │  HYPOTHESISE (pick next ranked Hn) │
     └────────────────────┬────────────────┘
                          │
                          ▼
@@ -215,7 +215,7 @@ From the evidence:
                          │
                          ▼
     ┌─────────────────────────────────────┐
-    │  ANALYZE evidence                   │
+    │  ANALYSE evidence                   │
     │  Hypothesis CONFIRMED / REFUTED?    │
     └──────┬───────────────────┬──────────┘
            ▼                   ▼
@@ -226,13 +226,14 @@ From the evidence:
            │                   │
            │                   ▼
            │             VERIFY fix:
-           │             repro steps now show EXPECTED behavior
+           │             repro steps now show EXPECTED behaviour
            │                   │
-           ▼                   ▼
-  > 5 total iterations? ──▶ YES → FIX DONE
+           │                   ▼
+           ▼             FIX DONE
+  > 5 total iterations? ──▶ YES
            │
            ▼ NO
-  Loop user: "estamos em N iterações. Parece que a causa raiz é X. Próximos passos? (Y/N)"
+  Loop user: "we are at N iterations. Root cause seems to be X. Next steps? (Y/N)"
 ```
 
 ### Mandatory per-iteration evidence in bugfix_session.md
@@ -243,7 +244,7 @@ Every loop iteration appends a section:
 
 ### Instrumentation
 - Added: <file:line> debug_log
-- Changed: <none — this iteration was observability only>
+- Changed: <none — observability only iteration>
 
 ### Reproduction output (captured)
 <stack trace / assertion / log lines>
@@ -254,7 +255,7 @@ Every loop iteration appends a section:
 
 ### If CONFIRMED:
 - Root cause (1 sentence): ...
-- Proposed minimal fix (what EXACTLY will change, and why this fix, not alternatives):
+- Proposed minimal fix (what EXACTLY will change, why this fix, not alternatives):
   - Option 1: <what files change>
   - Option 2: <alternative>
   - DECISION: Option X — <rationale>
@@ -262,97 +263,97 @@ Every loop iteration appends a section:
 
 ### Forbidden patterns during debugging
 
-- **No shotgun edits:** Changing 5 files "hoping it helps" is FORBIDDEN. One hypothesis → targeted instrumentation or one single minimal fix.
+- **No shotgun edits:** Changing 5 files "hoping it helps" is FORBIDDEN. One hypothesis → targeted instrumentation or single minimal fix.
 - **No `console.log` left in production code at end.** Remove ALL debug logging after verification. Clean up.
-- **No refactoring alongside the bugfix.** The bugfix = the minimal code change. If a refactor is needed → separate commit, separate PR, after the fix is verified and merged.
+- **No refactoring alongside bugfix.** Bugfix = minimal code change. If refactor needed → separate commit, separate PR, after fix verified and merged.
 
 ---
 
-## 3. Phase 2 — Engineering of the fix (after root cause CONFIRMED)
+## 3. Phase 2 — Fix Engineering (after root cause CONFIRMED)
 
-### Step 3.1 TDD for the bug
+### Step 3.1 TDD for bug
 
 Write a test (unit preferred, integration if needed) that:
-1. Fails before the fix (confirms bug reproduction via test)
-2. Passes after the fix (confirms fix)
+1. Fails before fix (confirms bug reproduction via test)
+2. Passes after fix (confirms fix)
 
-The test SHOULD test behavior (input/output, state transition), not implementation details.
+The test SHOULD test behaviour (input/output, state transition), not implementation details.
 
 ### Step 3.2 Apply MINIMAL fix
 
-- Apply only the lines that actually fix the root cause.
+- Apply only lines that actually fix root cause.
 - If adjacent code "also looks wrong" → note in decision.log for follow-up PR, do NOT fold into this bugfix.
 
 ### Step 3.3 Run: fix + regression test
 
-1. Confirm the new test now PASSES.
-2. Run **related tests** (files in the same module, affected) to confirm no regressions.
-3. Optional: full test suite if task size is small or repo supports it quickly.
+1. Confirm new test now PASSES.
+2. Run **related tests** (same module files, affected) to confirm no regressions.
+3. Optional: full test suite if task size small or repo supports it quickly.
 
 ### Step 3.4 Manual verification
 
-Demonstrate to yourself via the REPRODUCTION steps that:
-- Before fix: actual behavior (BAD) — confirm you can trigger it
-- After fix: expected behavior (GOOD) — confirm you now see it
+Demonstrate via REPRODUCTION steps that:
+- Before fix: actual behaviour (BAD) — confirm you can trigger it
+- After fix: expected behaviour (GOOD) — confirm you now see it
 
-Record before/after evidence to the session file.
+Record before/after evidence to session file.
 
 ---
 
-## 4. Phase 3 — Handoff to user
+## 4. Phase 3 — User Handoff
 
 Two possible outcomes:
 
 ### Outcome A — ✅ FIX CONFIRMED
 
-Report to user (in Portuguese):
+Report to user in English:
 ```
-✅ Bug identificado e corrigido.
+✅ Bug identified and fixed.
 
-📋 Resumo técnico:
-  • Sintoma: <1 frase em PT>
-  • Causa raiz: <1 frase em PT>
-  • Arquivos alterados:
-      - <path> (EDIT — linhas XX-YY)
-  • Teste de regressão adicionado: <path/to/spec>
+📋 Technical Summary:
+  • Symptom: <1 sentence description>
+  • Root Cause: <1 sentence description>
+  • Modified Files:
+      - <path> (EDIT — lines XX-YY)
+  • Regression test added: <path/to/spec>
 
-🔬 Como eu demonstrei que funciona:
-  1. Antes do fix: <steps> → <mensagem de erro / comportamento ruim>
-  2. Depois do fix: <mesmos steps> → <comportamento esperado>
-  3. Teste unitário `describe(...)` falha sem o fix, passa com.
+🔬 Proof of Work:
+  1. Before fix: <steps> → <error message / bad behavior>
+  2. After fix: <same steps> → <expected behavior>
+  3. Unit test `describe(...)` fails without fix, passes with.
 
-🧪 Como VOCÊ pode verificar:
-  <passo a passo em PT, exatamente igual à sessão de reprodução inicial do usuário>
+🧪 How YOU can verify:
+  <step-by-step in English, matching initial reproduction session>
   1. git checkout <branch>
   2. corepack pnpm install
   3. ...
   4. Expected: ...
 
-📎 Artefatos (todos FORA worktree, resolvidos via `che_compute_paths`):
-  - bugfix_session.md completo: `$CHE_SESSION_DIR/bugfix_session.md`
+📎 Artifacts (all OUTSIDE worktree, resolved via `che_compute_paths`):
+  - bugfix_session.md: `$CHE_SESSION_DIR/bugfix_session.md`
   - Decisions: `$CHE_WORKSPACE_SHARED/decisions.log.jsonl`
-  - Se houver ticket: recomendo colar link lá.
+  - Ticket link recommended if applicable.
 ```
 
 ### Outcome B — ⚠️ NOT FIXED YET (after 5 iterations or blocked)
 
 Report:
 ```
-⚠️ Não consegui chegar no fix nesta sessão.
+⚠️ Could not reach a fix in this session.
 
-Progresso feito:
-  • 5 iterações executadas. Cada hipótese H1-H5 REFUTADA.
-  • O que eu já DESCARTAMOS como causa raiz:
+Progress made:
+  • 5 iterations executed. Hypotheses H1-H5 REFUTED.
+  • Discarded root causes:
       - H1: ... (evidence: ...)
       - H2: ...
       ...
-  • Minha hipótese mais forte atual para a próxima sessão:
+  • Strongest current hypothesis for next session:
       - H6: ...
 
-Próximos passos recomendados:
-  Opção 1) Eu continuo a investigação por mais 3 iterações (vai gastar +tokens)
-  Opção 2) Você me dá mais contexto: (1) histórico do bug (2) prints extras (3) exact data seed
-  Opção 3) Pair programming / passo a passo guiado por você
+Recommended next steps:
+  Option 1) Continue investigation for 3 more iterations.
+  Option 2) Provide more context: (1) bug history (2) extra screenshots (3) exact data seed.
+  Option 3) Guided pair programming session.
 ```
 
 ---
@@ -361,7 +362,7 @@ Próximos passos recomendados:
 
 | Tool | Use when | Command hints (if repo-agnostic) |
 |---|---|---|
-| Repo logger (preferred) | Add debug-level line during instrument phase | Use the project logger; remove after |
+| Repo logger (preferred) | Add debug-level line during instrument phase | Use project logger; remove after |
 | Structured logs (OTel, pino, winston) | Trace request path | Look for traceId in headers |
 | HTTP curl/HTTPie | API bug repro | Reproduce request offline in .http scratch file |
 | Node inspect | Node.js runtime bug | `NODE_OPTIONS="--inspect" ...` then chrome://inspect |
@@ -370,7 +371,7 @@ Próximos passos recomendados:
 | Delve | Go bug | `dlv debug` |
 | Rust dbg! macro + lldb/gdb | Rust bug | Wrap suspected: `dbg!(&var);` |
 | Browser devtools | UI bug | Network tab + break on XHR; Console log filter for errors |
-| Postgres `EXPLAIN ANALYZE` | DB perf bug | Run query with analyze |
+| Postgres `EXPLAIN ANALYZE` | DB perf bug | Run query with analyse |
 | tRPC query trace | tRPC specific | enable `tRPC logger link` with level=debug for this request |
 
 Always prefer repo-native tooling first. Never add a new observability package just to debug — use what's installed.
