@@ -1,82 +1,82 @@
-# CONTRATO DE CANONICIDADE DE PATHS — CHE
+# PATH CANONICITY CONTRACT — CHE
 
-> Single source of truth para a estrutura hierárquica L1→L2→L3→L4 do `CHE_WORKSPACES_ROOT`.
-> Helper bash correspondente: `che_compute_paths` + `che_ensure_session_dirs` em `che_sessions_contract.sh`.
-> Invariantes: NUNCA quebre estes contratos. Se precisar evoluir, atualize PRIMEIRO este arquivo, DEPOIS os helpers bash, POR ÚLTIMO as skills.
-
----
-
-## 0. VARIÁVEIS DE AMBIENTE CANÔNICAS
-
-| Env | Default | Valores válidos | Propósito |
-|-----|---------|-----------------|-----------|
-| `CHE_WORKSPACES_ROOT` | `$HOME/.che-workspaces` | Qualquer path absoluto existente com permissão write | **Raiz de TUDO** do Che (workspaces L1). Fallback compat 1-release: se novo path NÃO existir E antigo `$HOME/code/harness-sessions` existir → reutiliza o antigo. |
-| `CHE_HOST_IDE` | `trae` | `trae`, `codex`, `cursor`, `claude-code`, `opencode` | Identificador do host IDE agnóstico. Adapters futuros em `adapters/<host_ide>/`. |
-| `CHE_SESSION_ID` | (fallback 3 níveis: `CHE_SESSION_ID` → `HARNESS_SESSION_ID` → `SESSION_ID` → `slug-safe-date`) | UUID / slug-safe session id | Identificador ÚNICO da sessão do agente. Mesmo valor usado no Level 1 registry JSONL. |
-| `CHE_HOME` | `$HOME/.trae` | Qualquer path absoluto com `skills/` + `contracts/` + `commands/` + `domains/` | Raiz do **config repo** (skills, regras, comandos). Não confundir com CHE_WORKSPACES_ROOT (dados usuário). |
+> Single source of truth for the L1→L2→L3→L4 hierarchical structure of `CHE_WORKSPACES_ROOT`.
+> Corresponding python helpers: `compute_paths` + `ensure_session_dirs` in `che_core/paths.py`.
+> Invariants: NEVER break these contracts. If you need to evolve, update this file FIRST, THEN the python helpers, FINALLY the skills.
 
 ---
 
-## 1. HIERARQUIA L1→L2→L3→L4 (DIAGRAMA)
+## 0. CANONICAL ENVIRONMENT VARIABLES
+
+| Env | Default | Valid Values | Purpose |
+|-----|---------|--------------|---------|
+| `CHE_WORKSPACES_ROOT` | `$HOME/.che-workspaces` | Any existing absolute path with write permission | **Root of EVERYTHING** in Che (L1 workspaces). 1-release fallback: if new path DOES NOT exist AND old `$HOME/code/harness-sessions` exists → reuse the old one. |
+| `CHE_HOST_IDE` | `trae` | `trae`, `codex`, `cursor`, `claude-code`, `opencode` | Agnostic IDE host identifier. Future adapters in `adapters/<host_ide>/`. |
+| `CHE_SESSION_ID` | (3-level fallback: `CHE_SESSION_ID` → `HARNESS_SESSION_ID` → `SESSION_ID` → `slug-safe-date`) | UUID / slug-safe session id |agent session UNIQUE identifier. Same value used in Level 1 registry JSONL. |
+| `CHE_HOME` | `$HOME/.trae` | Any absolute path with `skills/` + `contracts/` + `commands/` + `domains/` | **Config repo** root (skills, rules, commands). Not to be confused with CHE_WORKSPACES_ROOT (user data). |
+
+---
+
+## 1. L1→L2→L3→L4 HIERARCHY (DIAGRAM)
 
 ```
-CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)  ← L1 — WORKSPACE (IDE workspace = conjunto de repos)
+CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)  ← L1 — WORKSPACE (IDE workspace = set of repos)
 │
-├─ manifesto48/                                 ← L1 EXEMPLO: nome do workspace (1 conjunto de projetos/repos)
+├─ manifesto48/                                 ← L1 EXAMPLE: workspace name (a set of projects/repos)
 │  │
-│  ├─ vc-educar-corp-website/                  ← L2 — PROJECT (1 repo git, slug-safe nome)
+│  ├─ vc-educar-corp-website/                  ← L2 — PROJECT (1 git repo, slug-safe name)
 │  │  │
-│  │  ├─ project/                              ← L2-PERENE: TUDO que dura ENTRE worktrees e ENTRE sessões
-│  │  │  ├─ xray.md                             ←   raio-X do projeto (stack, entrypoints, idiomas, testes, CI, DB)
-│  │  │  ├─ architecture.md                     ←   diagrama arquitetural + decisões perenes (Fora RADAR)
-│  │  │  ├─ roles.md                            ←   papéis, stakeholders, PM, design, dev, owner GitHub/Linear
-│  │  │  ├─ decisions/                          ←   ADRs arquiteturais (registro Fora RADAR)
-│  │  │  ├─ onboarding.md                       ←   passo-a-passo onboarding dev novo (setup, seeds, login)
-│  │  │  ├─ product/                            ←   docs produto, PRDs, roadmap (Fora RADAR)
-│  │  │  └─ _legacy_uncategorized/              ←   ⛑️ ITENS NÃO CLASSIFICADOS (origem antiga harness-sessions
-│  │  │                                            NÃO DELETAR. Manter 1 release, depois revisão humana.)
+│  │  ├─ project/                              ← L2-DURABLE: EVERYTHING that lasts BETWEEN worktrees and BETWEEN sessions
+│  │  │  ├─ xray.md                             ←   project X-ray (stack, entrypoints, languages, tests, CI, DB)
+│  │  │  ├─ architecture.md                     ←   architectural diagram + durable decisions (Out of RADAR)
+│  │  │  ├─ roles.md                            ←   roles, stakeholders, PM, design, dev, GitHub/Linear owner
+│  │  │  ├─ decisions/                          ←   architectural ADRs (Out of RADAR registry)
+│  │  │  ├─ onboarding.md                       ←   new dev onboarding step-by-step (setup, seeds, login)
+│  │  │  ├─ product/                            ←   product docs, PRDs, roadmap (Out of RADAR)
+│  │  │  └─ _legacy_uncategorized/              ←   ⛑️ UNCATEGORIZED ITEMS (old harness-sessions origin
+│  │  │                                            DO NOT DELETE. Keep for 1 release, then human review.)
 │  │  │
-│  │  ├─ __main/                                ← L3 — WORKTREE (branch default = main). Sempre prefixo __ para branches.
+│  │  ├─ __main/                                ← L3 — WORKTREE (default branch = main). Always __ prefix for branches.
 │  │  │  │
-│  │  │  ├─ .wt/                                ← L3-SHARED: TUDO compartilhado ENTRE sessões NA MESMA worktree
-│  │  │  │  ├─ decisions.log.jsonl              ←   log de decisões desta worktree (append único, via helper)
-│  │  │  │  ├─ envelopes/                       ←   TASK ENVELOPES (gabaritos SM→Dev) desta worktree
-│  │  │  │  ├─ gh_stack/                        ←   gh-stack plan + PRs (#1,#2,#3 stack hierárquico)
-│  │  │  │  ├─ reports/                         ←   reports compartilhados (QA, scope-check, code-review audit,
-│  │  │  │  │                                     compliance scan, merge audit) com data YYYY-MM-DD prefix
-│  │  │  │  ├─ specs/                           ←   SPEC files aprovados (.md + YAML frontmatter machine-parsable)
-│  │  │  │  ├─ state.jsonl                      ←   pointer "qual session está ativa nesta worktree"
-│  │  │  │  ├─ qa/                              ←   fixtures QA compartilhadas, seed data, evidence duráveis
-│  │  │  │  └─ designs/                         ←   artefatos design compartilhados (export OpenPencil, tokens)
+│  │  │  ├─ .wt/                                ← L3-SHARED: EVERYTHING shared BETWEEN sessions IN THE SAME worktree
+│  │  │  │  ├─ decisions.log.jsonl              ←   this worktree's decision log (single append, via helper)
+│  │  │  │  ├─ envelopes/                       ←   TASK ENVELOPES (SM→Dev templates) for this worktree
+│  │  │  │  ├─ gh_stack/                        ←   gh-stack plan + PRs (#1,#2,#3 hierarchical stack)
+│  │  │  │  ├─ reports/                         ←   shared reports (QA, scope-check, code-review audit,
+│  │  │  │  │                                     compliance scan, merge audit) with YYYY-MM-DD prefix
+│  │  │  │  ├─ specs/                           ←   Approved SPEC files (.md + machine-parsable YAML frontmatter)
+│  │  │  │  ├─ state.jsonl                      ←   pointer "which session is active in this worktree"
+│  │  │  │  ├─ qa/                              ←   shared QA fixtures, seed data, durable evidence
+│  │  │  │  └─ designs/                         ←   shared design artifacts (OpenPencil export, tokens)
 │  │  │  │
-│  │  │  └─ sessions/                           ← L4 — SESSIONS (cada pasta = 1 sessão do agente)
+│  │  │  └─ sessions/                           ← L4 — SESSIONS (each folder = 1 agent session)
 │  │  │     │
-│  │  │     ├─ 6a981dc48684a64a52ebd487/       ← L4 EXEMPLO: 1 session id (slug-safe UUID/date)
-│  │  │     │  ├─ manifest.json                  ←   METADADOS: session_id, worktree_path, user_prompt,
-│  │  │     │  │                                   started_at, status, CHE_HOST_IDE, commit hash início fim
-│  │  │     │  ├─ debugger/                      ←   debugger: stack traces, reproduções, hipóteses
-│  │  │     │  ├─ diffs_context/                 ←   diffs conversation brief, PR context extraído
-│  │  │     │  ├─ execution/                     ←   comandos shell executados + outputs + exit codes
-│  │  │     │  ├─ gh_stack/                      ←   gh_stack artefatos desta sessão (se houver)
-│  │  │     │  ├─ qa/                            ←   QA desta sessão: evidências efêmeras, screenshots
-│  │  │     │  │                                    (política TTL 30d: policies do harness/qa skill)
-│  │  │     │  ├─ reports/                       ←   reports desta sessão (efêmeros, cópia em .wt se durável)
-│  │  │     │  └─ decisions.log.jsonl            ←   decisions desta sessão (append; também duplicados
-│  │  │                                             em .wt/decisions.log.jsonl via helper = single writer)
+│  │  │     ├─ 6a981dc48684a64a52ebd487/       ← L4 EXAMPLE: 1 session id (slug-safe UUID/date)
+│  │  │     │  ├─ manifest.json                  ←   METADATA: session_id, worktree_path, user_prompt,
+│  │  │     │  │                                   started_at, status, CHE_HOST_IDE, start/end commit hash
+│  │  │     │  ├─ debugger/                      ←   debugger: stack traces, reproductions, hypotheses
+│  │  │     │  ├─ diffs_context/                 ←   diffs conversation brief, extracted PR context
+│  │  │     │  ├─ execution/                     ←   executed shell commands + outputs + exit codes
+│  │  │     │  ├─ gh_stack/                      ←   this session's gh_stack artifacts (if any)
+│  │  │     │  ├─ qa/                            ←   this session's QA: ephemeral evidence, screenshots
+│  │  │     │  │                                    (TTL 30d policy: harness/qa skill policies)
+│  │  │     │  ├─ reports/                       ←   this session's reports (ephemeral, copied to .wt if durable)
+│  │  │     │  └─ decisions.log.jsonl            ←   this session's decisions (append; also duplicated
+│  │  │                                             in .wt/decisions.log.jsonl via helper = single writer)
 │  │  │
-│  │  └─ feat-FLO-513--Process-a-refund/        ← L3 EXEMPLO: worktree feature branch (mesma estrutura __main acima)
-│  │     ├─ .wt/                                 ← L3-SHARED desta worktree específica (decisions, envelopes, reports)
-│  │     └─ sessions/                           ← L4 sessions APENAS desta worktree
+│  │  └─ feat-FLO-513--Process-a-refund/        ← L3 EXAMPLE: feature branch worktree (same __main structure above)
+│  │     ├─ .wt/                                 ← L3-SHARED for this specific worktree (decisions, envelopes, reports)
+│  │     └─ sessions/                           ← L4 sessions ONLY for this worktree
 │  │
-│  ├─ outro-projeto-xyz/                        ← L2 OUTRO PROJECT dentro do mesmo workspace manifesto48
-│  │  ├─ project/                               ← L2-PERENE
+│  ├─ other-project-xyz/                        ← L2 ANOTHER PROJECT within the same manifesto48 workspace
+│  │  ├─ project/                               ← L2-DURABLE
 │  │  └─ __main/                                 ← L3 + L4
 │  │
-│  └─ .migration_reports/                       ← L1-OPCIONAL: migration reports de quando este workspace foi movido
+│  └─ .migration_reports/                       ← L1-OPTIONAL: migration reports from when this workspace was moved
 │     └─ 2026-09-03_migration_manifesto48.md
 │
-└─ flockr/                                       ← L1 OUTRO workspace: conjunto de repos Flockr (Lumos etc.)
-   └─ Lumos/                                     ← L2 PROJECT Flockr Lumos repo git
+└─ flockr/                                       ← L1 ANOTHER workspace: set of Flockr repos (Lumos etc.)
+   └─ Lumos/                                     ← L2 PROJECT Flockr Lumos git repo
       ├─ project/
       ├─ __main/
       └─ feat-FLO-732--Create-dedicated-S3/
@@ -84,103 +84,100 @@ CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)  ← L1 — WORKSPACE (IDE workspac
 
 ---
 
-## 2. INVARIANTES (NÃO NEGOCIA — HARD FAIL)
+## 2. INVARIANTS (NON-NEGOTIABLE — HARD FAIL)
 
-### 2.1. Invariantes de camada
-| # | Invariante | Exemplo de VIOLAÇÃO (proibido) |
+### 2.1. Layer Invariants
+| # | Invariant | VIOLATION Example (prohibited) |
 |---|-----------|--------------------------------|
-| I1 | **Sessões SEMPRE ficam dentro de uma L3 worktree.** | Criar `sessions/` diretamente dentro do L2 project ou L1 workspace = FAIL. |
-| I2 | **Info perene (xray, arquitetura, papeis) fica em L2 `project/` FORA de qualquer worktree.** | Colocar `architecture.md` dentro de `__main/.wt/` = FAIL (vai sumir se apagar a worktree). |
-| I3 | **Info compartilhada NA MESMA worktree fica em L3 `.wt/`.** | Colocar `decisions.log.jsonl` dentro de 1 sessão específica = FAIL (outras sessões não veem). |
-| I4 | **Nome de worktree branch = `__<branch-slug-safe>` (DOIS underscores prefixo).** Branch `main` → `__main`. Branch `feat/FLO-513/refund` → `feat-FLO-513--refund` (com DOIS traços substitui `/`, DOIS underscores prefixo). | Criar pasta `main/` sem prefixo `__` = FAIL. |
-| I5 | **NÃO existe pasta chamada `workspace/` (colisão semântica IDE L1 workspace).** Duráveis worktree usam `.wt/`. | Qualquer path com nome literal `workspace/` no nível L2/L3 = FAIL. |
-| I6 | **NUNCA delete `project/_legacy_uncategorized/` (1 release retenção mínima).** | `rm -rf` items uncategorized automaticamente = FAIL. Requer revisão humana. |
-| I7 | **Migration SEMPRE NÃO DESTRUTIVA (apenas `mv -n`, nunca `cp -r` depois `rm -rf`).** | Copiar tudo, depois deletar a pasta antiga de uma vez = FAIL. Princípio 0 perda. |
-| I8 | **Paths nunca tem espaços ou caracteres unicode.** Slug-safe sempre: `[a-z0-9._-]`, espaço → `-`, maiúsculo → minúsculo. | Nome pasta `Minha Proposta/` com espaço = FAIL. |
+| I1 | **Sessions ALWAYS stay within an L3 worktree.** | Creating `sessions/` directly inside L2 project or L1 workspace = FAIL. |
+| I2 | **Durable info (xray, architecture, roles) stays in L2 `project/` OUTSIDE any worktree.** | Placing `architecture.md` inside `__main/.wt/` = FAIL (it will disappear if worktree is deleted). |
+| I3 | **Shared info IN THE SAME worktree stays in L3 `.wt/`.** | Placing `decisions.log.jsonl` inside a specific session = FAIL (other sessions won't see it). |
+| I4 | **Worktree branch name = `__<branch-slug-safe>` (TWO underscores prefix).** Branch `main` → `__main`. Branch `feat/FLO-513/refund` → `feat-FLO-513--refund` (with TWO dashes replacing `/`, TWO underscores prefix). | Creating `main/` folder without `__` prefix = FAIL. |
+| I5 | **NO folder named `workspace/` (IDE L1 workspace semantic collision).** Durable worktree assets use `.wt/`. | Any path with literal name `workspace/` at L2/L3 level = FAIL. |
+| I6 | **NEVER delete `project/_legacy_uncategorized/` (1 release minimum retention).** | `rm -rf` uncategorized items automatically = FAIL. Requires human review. |
+| I7 | **Migration ALWAYS NON-DESTRUCTIVE (only `mv -n`, never `cp -r` then `rm -rf`).** | Copying everything, then deleting the old folder all at once = FAIL. Zero loss principle. |
+| I8 | **Paths never have spaces or unicode characters.** Always slug-safe: `[a-z0-9._-]`, space → `-`, uppercase → lowercase. | Folder name `My Proposal/` with space = FAIL. |
 
-### 2.2. Invariantes de helpers bash
-| Função | Precondição | Pós-condição |
-|--------|-------------|--------------|
-| `che_compute_paths WORKTREE_ROOT SESSION_ID CWD` | Os 3 args são absolutos/slug-safe. | Retorna 12 variáveis `CHE_L1_*`, `CHE_L2_*`, `CHE_L3_*`, `CHE_L4_*` canônicas. |
-| `che_ensure_session_dirs` | $WORKTREE_ROOT existe. | Cria `.wt/` com 7 subdirs + `sessions/<ID>/` com 6 subdirs. NUNCA sobrescreve nada existente (`mkdir -p`). |
-| `che_append_decision_jsonl` | $SESSION_ID válido. | **Append em DUAL LOCATION**: (a) `.wt/decisions.log.jsonl` (single writer shared worktree); (b) `sessions/<ID>/decisions.log.jsonl` (cópia session-specific). Schema v1 fixo. |
+### 2.2. Python Helper Invariants
+| Function | Precondition | Post-condition |
+|----------|--------------|----------------|
+| `compute_paths WORKTREE_ROOT SESSION_ID CWD` | All 3 args are absolute/slug-safe. | Returns 12 canonical `CHE_L1_*`, `CHE_L2_*`, `CHE_L3_*`, `CHE_L4_*` variables. |
+| `ensure_session_dirs` | $WORKTREE_ROOT exists. | Creates `.wt/` with 7 subdirs + `sessions/<ID>/` with 6 subdirs. NEVER overwrites anything existing (`mkdir -p`). |
+| `append_decision_jsonl` | Valid $SESSION_ID. | **Append in DUAL LOCATION**: (a) `.wt/decisions.log.jsonl` (shared worktree single writer); (b) `sessions/<ID>/decisions.log.jsonl` (session-specific copy). Fixed v1 schema. |
 
 ---
 
-## 3. CONVERSÃO SLUG-SAFE PARA NOMES (HELPER BASH: `che_slug_safe`)
+## 3. SLUG-SAFE CONVERSION FOR NAMES (PYTHON HELPER: `_slugify`)
 
-Algoritmo (12 regras, idempotente):
-1. Unicode → ASCII translit (se `iconv` disponível, senão remove)
-2. Minúsculas tudo
-3. Espaço ` ` → `-`
-4. Barra `/` → `--` (DOIS traços = indica branch hierarquia)
-5. `_` → mantém (exceto underscore inicial reservado sistema)
-6. Qualquer caractere fora `[a-z0-9._-]` → remove
-7. `--+` múltiplos → reduz para 1 `--`
-8. `-+` múltiplos → reduz para 1 `-`
-9. Remove `-` `.` no início e no final
-10. Branch default `main` SEMPRE converte para `__main` (DOIS underscores prefixo, I4)
-11. Workspace nome: se vier de IDE (TRAE workspace name), aplica slug safe
-12. Project nome: se vier de repo git `owner/repo` → extrai `repo` + aplica slug safe
+Algorithm (12 rules, idempotent):
+1. Unicode → ASCII translit (if available, otherwise remove)
+2. All lowercase
+3. Space ` ` → `-`
+4. Slash `/` → `--` (TWO dashes = indicates branch hierarchy)
+5. `_` → maintain (except system reserved initial underscore)
+6. Any character outside `[a-z0-9._-]` → remove
+7. `--+` multiple → reduce to 1 `--`
+8. `-+` multiple → reduce to 1 `-`
+9. Remove `-` `.` at the beginning and end
+10. Default `main` branch ALWAYS converts to `__main` (TWO underscores prefix, I4)
+11. Workspace name: if from IDE (TRAE workspace name), applies slug safe
+12. Project name: if from git repo `owner/repo` → extracts `repo` + applies slug safe
 
-Exemplos:
-| Entrada | Saída slug-safe |
-|---------|-----------------|
+Examples:
+| Input | Slug-safe Output |
+|-------|------------------|
 | Workspace "Manifesto 48 Projetos" | `manifesto-48-projetos` |
-| Repo `vc-educar/corp-website` | `vc-educar-corp-website` |
+| Repo `vc-educar/corp-website` | `vc-educar--corp-website` |
 | Branch `main` | `__main` |
 | Branch `feat/FLO-513/process refund` | `feat-FLO-513--process-refund` |
 
 ---
 
-## 4. BACKWARD COMPATIBILIDADE (1 RELEASE MÍNIMA)
+## 4. BACKWARD COMPATIBILITY (MINIMUM 1 RELEASE)
 
-### 4.1. Fallback CHE_WORKSPACES_ROOT raiz
-Lógica no helper (che_sessions_contract.sh L49-73):
-```bash
-if [ -z "$CHE_WORKSPACES_ROOT" ]; then
-  if [ -d "$HOME/.che-workspaces" ]; then
-    CHE_WORKSPACES_ROOT="$HOME/.che-workspaces"
-  elif [ -d "$HOME/code/harness-sessions" ]; then
-    CHE_WORKSPACES_ROOT="$HOME/code/harness-sessions"   # FALLBACK GRADUAL MIGRATION
-  else
-    CHE_WORKSPACES_ROOT="$HOME/.che-workspaces"          # DEFAULT NOVO, vai ser criado primeiro uso
-  fi
-fi
+### 4.1. Root CHE_WORKSPACES_ROOT Fallback
+Logic in helper (`che_core/paths.py`):
+```python
+if not os.environ.get("CHE_WORKSPACES_ROOT"):
+    old_default = Path.home() / "code" / "harness-sessions"
+    new_default = Path.home() / ".che-workspaces"
+    if old_default.is_dir() and not new_default.is_dir():
+        return old_default
+    return new_default
 ```
 
-### 4.2. Estrutura antiga (harness-sessions) "espúria" — como é lida
-Se o usuário ainda não migrou um workspace (ex: `manifesto48/` está no fallback `$HOME/code/harness-sessions` com a estrutura BAGUNÇADA antiga):
-- Skills primeiramente **TENTAM** ler da estrutura NOVA L1-L4 (`project/`, `.wt/`, `sessions/<ID>/`).
-- Se falhar (estrutura nova não existe), **CAI PARA LEITURA DA ESTRUTURA ANTIGA** (compat mode).
-- **NUNCA escreve na estrutura antiga** em compat mode — primeiro executa a migration G3 item-a-item (pedir confirmação user se estrutura antiga for detectada).
+### 4.2. "Spurious" Old Structure (harness-sessions) — How it's read
+If the user hasn't migrated a workspace yet (e.g.: `manifesto48/` is in the `$HOME/code/harness-sessions` fallback with the old MESSY structure):
+- Skills first **TRY** to read from the NEW L1-L4 structure (`project/`, `.wt/`, `sessions/<ID>/`).
+- If it fails (new structure doesn't exist), **IT FALLS BACK TO READING THE OLD STRUCTURE** (compat mode).
+- **NEVER write to the old structure** in compat mode — first execute the G3 item-by-item migration (ask for user confirmation if old structure is detected).
 
-### 4.3. Keys registry JSONL legado (dual-read)
-No Level 1 registry (`che_registry_append_jsonl`), **as duas keys são escritas e lidas**:
+### 4.3. Legacy JSONL Registry Keys (dual-read)
+In Level 1 registry (`registry_append_jsonl`), **both keys are written and read**:
 ```json
 {
   "che_session_dir": "/home/laion/.che-workspaces/manifesto48/proj/__main/sessions/123",
-  "harness_session_dir": "/home/laion/code/harness-sessions/manifesto48/proj/sessions/123"   // compat legado
+  "harness_session_dir": "/home/laion/code/harness-sessions/manifesto48/proj/sessions/123"   // legacy compat
 }
 ```
-Leitura: tenta `che_*` primeiro, se não existir tenta `harness_*` (1 release).
+Reading: tries `che_*` first, if it doesn't exist tries `harness_*` (1 release).
 
 ---
 
-## 5. MIGRAÇÃO (G3 manifesto48 — PROCESSO OFICIAL)
+## 5. MIGRATION (G3 manifesto48 — OFFICIAL PROCESS)
 
-Ordem NÃO NEGOCIÁVEL (0 perda, rollback simples):
+NON-NEGOTIABLE order (0 loss, simple rollback):
 
-| Passo | Ação | Comando / Log |
-|-------|------|---------------|
-| M1 | LS profundo antigo workspace → arquivo texto. | `find /harness-sessions/manifesto48 -maxdepth 6 \| sort > /tmp/pre-migration-filelist.txt` |
-| M2 | Classificação CSV A/B/C cada item: | 3 colunas: `path_original \| CATEGORIA \| path_novo_destino` |
-| | **A = project (L2 perene)** | xray.md, architecture.md, roles/, product/, decisions/ perenes, onboarding.md |
-| | **B = .wt (L3 shared worktree)** | decisions.log.jsonl, envelopes/, gh_stack/, reports/ COMPARTILHADOS, specs/, designs/, qa durável |
-| | **C = session-specific (L4)** | tudo dentro sessions/<ID>/, debugger, diffs_context, execution, reports efêmeros |
-| | **UNCATEGORIZED** | item que não cai em nenhum A/B/C → `project/_legacy_uncategorized/<caminho-original-mantido>` |
-| M3 | mkdir estrutura NOVA VAZIA. | `mkdir -p` L1→L2→L3→L4 (project + __main/.wt + __main/sessions — NÃO move nenhum arquivo ainda) |
-| M4 | Loop CSV cada linha → `mv -n ORIGEM DESTINO`. | Log em `.migration_reports/2026-09-03_migration_manifesto48.csv` a cada item (status: OK/JÁ_EXISTIA/SKIP). |
-| M5 | `rmdir` (apenas diretórios VAZIOS) nas pastas antigas (`workspace/`, `sessions/` do projeto antigo). | Se `rmdir` FALHAR (tem arquivos que ninguém classificou em M2) → **TUDO que sobra** move para `project/_legacy_uncategorized/` com estrutura de subdiretórios ORIGINAL intacta. |
-| M6 | Escreve relatório final md com counts A/B/C/UNCAT + comando rollback. | Arquivo: `.migration_reports/YYYY-MM-DD_migration_<workspace-name>_report.md` |
-| M7 | Comando ROLLBACK documentado (se deu ruim): | `rsync -a --remove-source-files $NOVO $ANTIGO` (1 comando, desfaz tudo — item-a-item volta original). |
+| Step | Action | Command / Log |
+|------|--------|---------------|
+| M1 | Deep LS of old workspace → text file. | `find /harness-sessions/manifesto48 -maxdepth 6 \| sort > /tmp/pre-migration-filelist.txt` |
+| M2 | CSV Classification A/B/C for each item: | 3 columns: `original_path \| CATEGORY \| new_destination_path` |
+| | **A = project (L2 durable)** | xray.md, architecture.md, roles/, product/, durable decisions/, onboarding.md |
+| | **B = .wt (L3 shared worktree)** | decisions.log.jsonl, envelopes/, gh_stack/, SHARED reports, specs/, designs/, durable qa |
+| | **C = session-specific (L4)** | everything inside sessions/<ID>/, debugger, diffs_context, execution, ephemeral reports |
+| | **UNCATEGORIZED** | item that doesn't fall into any A/B/C → `project/_legacy_uncategorized/<original-path-maintained>` |
+| M3 | mkdir NEW EMPTY structure. | `mkdir -p` L1→L2→L3→L4 (project + __main/.wt + __main/sessions — NO file moving yet) |
+| M4 | CSV loop for each line → `mv -n SOURCE DESTINATION`. | Log in `.migration_reports/2026-09-03_migration_manifesto48.csv` for each item (status: OK/ALREADY_EXISTED/SKIP). |
+| M5 | `rmdir` (EMPTY directories only) in old folders (`workspace/`, `sessions/` of the old project). | If `rmdir` FAILS (there are files no one classified in M2) → **EVERYTHING that remains** moves to `project/_legacy_uncategorized/` with ORIGINAL subdirectory structure intact. |
+| M6 | Write final md report with A/B/C/UNCAT counts + rollback command. | File: `.migration_reports/YYYY-MM-DD_migration_<workspace-name>_report.md` |
+| M7 | Documented ROLLBACK command (if things go wrong): | `rsync -a --remove-source-files $NEW $OLD` (1 command, undoes everything — item-by-item back to original). |

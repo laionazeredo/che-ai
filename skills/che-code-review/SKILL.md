@@ -5,7 +5,7 @@ description: "High-impact code review with TWO MODES: (A) GitHub PR URL as befor
 
 # Che — Code Review (High Impact Focused)
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - Security + PII + RLS review checklist: `_shared_checklists/SECURITY_PII_COMMON.md`
 > - GitHub CLI gh auth + PR operations: `_shared_checklists/GITHUB_CLI_COMMON.md`
 
@@ -25,13 +25,13 @@ We ONLY flag things that actually break production or waste $$$ or risk users.
 
 Run THIS BEFORE deciding mode or starting any review context gathering.
 
-1. **Read Level1 Global Index FIRST:** Read `che_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `che_current_session_id`. Use its WORKTREE_ROOT for the session.
+1. **Read Level 1 Global Index FIRST:** Read `che_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `che_current_session_id`. Use its WORKTREE_ROOT for the session.
 2. **Mode B mismatch check (CRITICAL):**
-   - If user passed --worktree <path>: confirm Level1 registry WORKTREE_ROOT EXISTS and is DIFFERENT than <path> → BLOCK.
-   - Ask: "You asked review on worktree X but Level1 GLOBAL session is BOUND to Y. Options: (A = X, override binding; B = Switch binding switch first; C = Cancel review). NEVER silent override. If no Level1 entry → binding not made; proceed to decision flow to create binding (§19.2 only if user continues."
+   - If user passed --worktree <path>: confirm Level 1 registry WORKTREE_ROOT EXISTS and is DIFFERENT than <path> → BLOCK.
+   - Ask: "You asked review on worktree X but Level 1 GLOBAL session is BOUND to Y. Options: (A = X, override binding; B = Switch binding first (§19.3 re-bind chain); C = Cancel review). NEVER silent override. If no Level 1 entry → binding not made; proceed to decision flow to create binding (§19.2) only if user continues."
 3. **Mode A PR URL + local worktree:** PR for branch that resides Level 1 registry says BOUND on some worktree:
-   - If PR is for branch worktree B user says --worktree pointing to A → BLOCK. Ask which is correct.
-4. **Pre-send trimmer refs (global:** Output final report refs file links MUST NOT span ≥2 worktrees unless user explicitly asked cross-worktree comparison. Mixed trim single scope before send.
+   - If PR is for branch worktree B and user says --worktree pointing to A → BLOCK. Ask which is correct.
+4. **Pre-send ref trimmer (global):** Output final report refs file links MUST NOT span ≥2 worktrees unless user explicitly asked cross-worktree comparison. Trim to single scope before sending.
 
 ---
 
@@ -75,47 +75,47 @@ Preconditions (MANDATORY checks BEFORE starting review):
 
 ### Mode A (GitHub PR) → use gh CLI (no browser)
 
-#### 0.5 GH PREFLIGHT OBRIGATÓRIO (regra engineering-contracts §18 gh-cli-only + carregar comments do PR NO CONTEXTO)
+#### 0.5 MANDATORY GH PREFLIGHT (engineering-contracts §18 gh-cli-only rule + load PR comments INTO CONTEXT)
 
-Antes de QUALQUER outra operação no Modo A (PR URL), rode este bloco para: (a) garantir gh CLI disponível e logado, (b) CARREGAR NO CONTEXTO DA REVIEW **TODOS os comentários do PR (inline review comments + general PR body discussion comments + review-level comments)** pois eles influenciam fortemente nossa análise: se um colega já levantou um ponto, não queremos reportar a mesma coisa duplicada (ou se reportarmos, cross-linkar explicitamente e explicar se concordamos/discordamos).
+Before ANY other operation in Mode A (PR URL), run this block to: (a) ensure gh CLI available and logged in, (b) LOAD INTO REVIEW CONTEXT **ALL PR comments (inline review comments + general PR body discussion comments + review-level comments)** as they heavily influence our analysis: if a colleague has already raised a point, we do not want to report the same thing duplicated (or if we do, cross-link explicitly and explain if we agree/disagree).
 
 ```bash
-# (a) Preflight gh
-command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI não instalado. Rode: install via https://cli.github.com/ + gh auth login --scopes repo,read:org,workflow"; exit 6; }
-gh auth status >/dev/null 2>&1 || { echo "❌ gh CLI não autenticado. Rode: gh auth login --scopes repo,read:org,workflow"; exit 7; }
+# (a) gh Preflight
+command -v gh >/dev/null 2>&1 || { echo "❌ gh CLI not installed. Install via https://cli.github.com/ + gh auth login --scopes repo,read:org,workflow"; exit 6; }
+gh auth status >/dev/null 2>&1 || { echo "❌ gh CLI not authenticated. Run: gh auth login --scopes repo,read:org,workflow"; exit 7; }
 
-# (b) CARREGAR COMMENTS 3 fontes distintas (todas são importantes):
-#     Source 1 = comments[]           → PR-LEVEL discussion comments (aba Conversation, genéricos, não atrelados a código)
-#     Source 2 = reviewComments[]     → INLINE review comments (atrelados a hunks de código específicos, com reply threads)
-#     Source 3 = reviews[]            → REVIEWS completas (APPROVED / CHANGES_REQUESTED / COMMENTED) + body do review + state
+# (b) LOAD COMMENTS from 3 distinct sources:
+#     Source 1 = comments[]           → PR-LEVEL discussion comments (Conversation tab, generic, not tied to code)
+#     Source 2 = reviewComments[]     → INLINE review comments (tied to specific code hunks, with reply threads)
+#     Source 3 = reviews[]            → Complete REVIEWS (APPROVED / CHANGES_REQUESTED / COMMENTED) + review body + state
 gh pr view <PR_URL> --json comments,reviewComments,reviews > /tmp/pr-<PR_ID>-all-comments.json
 ```
 
-**Regra obrigatória sobre os comentários carregados (NÃO SKIP):**
+**Mandatory rule regarding loaded comments (DO NOT SKIP):**
 
-1. **Ingestão e flatten:** Normalize os 3 arrays em uma única lista `PR_COMMENTS[]` onde cada item tem: `{source: "pr-comment" | "inline-review" | "review", id, path|null, line|null, author, state|null, createdAt, body, replyToId|null, resolvedStatus|null, isDraft, url}`. Ordenar por `createdAt` ASC para entender a linha do tempo de discussões.
-2. **NÃO duplique findings.** Antes de classificar uma finding nova (Category 0/1/2/3/4/5), compare contra `PR_COMMENTS[]`:
-   - **Match forte:** Se houver comentário inline (mesmo `path` + `line` ±10 linhas no mesmo diff hunk) com mesmo tema (ex: ambos falam de "missing null guard on `x.user`"), então:
-     - Se o comentário do humano é mais completo e nós não temos mais nada a adicionar: **OMITA a finding, NÃO emita duplicado**; no lugar, adicione uma seção especial no relatório: **`🎯 Existing Human Review Threads (Not Repeated)`** listando (id, path, autor, 1-line resumo do ponto, status resolvido? resolvido por quem?).
-     - Se temos informação adicional / discordamos / temos um exemplo reproduzível que o humano não colocou: **EMITA a finding normalmente mas comece com um prefixo OBRIGATÓRIO:**
+1. **Ingestion and flatten:** Normalize the 3 arrays into a single `PR_COMMENTS[]` list where each item has: `{source: "pr-comment" | "inline-review" | "review", id, path|null, line|null, author, state|null, createdAt, body, replyToId|null, resolvedStatus|null, isDraft, url}`. Sort by `createdAt` ASC to understand discussion timeline.
+2. **DO NOT duplicate findings.** Before classifying a new finding (Category 0/1/2/3/4/5), compare against `PR_COMMENTS[]`:
+   - **Strong match:** If there is an inline comment (same `path` + `line` ±10 lines in same diff hunk) with same theme (e.g. both speak of "missing null guard on `x.user`"), then:
+     - If the human comment is more complete and we have nothing more to add: **OMIT the finding, DO NOT emit duplicate**; instead, add a special section to report: **`🎯 Existing Human Review Threads (Not Repeated)`** listing (id, path, author, 1-line point summary, resolved status? resolved by whom?).
+     - If we have additional info / disagree / have a reproducible example the human did not include: **EMIT the finding normally but start with a MANDATORY prefix:**
        > `[Cross-ref PR inline comment #<id> by @<author> — extends / partially agrees / respectfully disagrees because <1 line rationale>]`
-       e no final da finding adicione `→ Thread: <url>` apontando pro comentário original.
-   - **Match fraco:** comentário em conversation-level geral ("this PR needs better error handling" genérico, sem path/line específico): não é duplicação, processe normalmente mas se nosso finding cobre exatamente aquele ponto → no final do relatório em `Existing Discussions Addressed In This Review` liste os pares.
-3. **Review state aware.** Se `reviews[]` tem um `CHANGES_REQUESTED` recente de um OWNER/CODEOWNER, NÃO recomendamos `APPROVE` no final a menos que explicitamente o usuário peça override + temos 0C/0H + todos CR points foram abordados. Sempre inclua no resumo executivo uma linha: **`Current PR review state: <N> APPROVED, <M> CHANGES_REQUESTED (authors: @a, @b), <K> COMMENTED`**.
-4. **Resolved threads não countam para findings a serem repetidas**, mas countam como histórico de discussão útil para entender trade-offs do autor → leia o body.
-5. **Draft comments (`isDraft: true`)** são privados do autor e devem ser ignorados no processamento.
+       and at the end of the finding add `→ Thread: <url>` pointing to the original comment.
+   - **Weak match:** conversation-level generic comment ("this PR needs better error handling", no specific path/line): not a duplication, process normally but if our finding covers exactly that point → list the pairs in `Existing Discussions Addressed In This Review` at the end of the report.
+3. **Review state aware.** If `reviews[]` has a recent `CHANGES_REQUESTED` from an OWNER/CODEOWNER, DO NOT recommend `APPROVE` at the end unless user explicitly asks for override + we have 0C/0H + all CR points addressed. Always include a line in executive summary: **`Current PR review state: <N> APPROVED, <M> CHANGES_REQUESTED (authors: @a, @b), <K> COMMENTED`**.
+4. **Resolved threads do not count for findings to be repeated**, but count as discussion history useful for understanding author trade-offs → read the body.
+5. **Draft comments (`isDraft: true`)** are private to the author and must be ignored.
 
-**Resultado esperado do Step 0.5:** Você tem em memória `ALL_COMMENTS[]` e `REVIEW_STATE_STATS`, e nas seções de output do relatório SEMPRE inclui as duas seções adicionais abaixo (entre `Executive Summary` e `Category 0`):
-- `🎯 Existing Review Context (from PR comments)` — stats básicas + threads importantes ainda não resolvidas
-- `🤝 Findings Alignment with Human Comments` — uma linha por finding ≥MEDIUM indicando se: (novo / duplicação omitida / estende humano / discorda humano)
+**Expected result of Step 0.5:** You have `ALL_COMMENTS[]` and `REVIEW_STATE_STATS` in memory, and ALWAYS include the two additional sections below in report output (between `Executive Summary` and `Category 0`):
+- `🎯 Existing Review Context (from PR comments)` — basic stats + important unresolved threads
+- `🤝 Findings Alignment with Human Comments` — one line per ≥MEDIUM finding indicating if: (new / omitted duplicate / extends human / disagrees with human)
 
 #### 1.1 PR metadata + diffs
 
-> Observação: o `comments,reviews,reviewComments` já foi buscado na etapa 0.5 acima (preflight gh + comments load). Abaixo buscamos apenas os demais fields (files, commits, etc) e o diff unificado.
+> Note: `comments,reviews,reviewComments` already fetched in step 0.5 above. Below we fetch only remaining fields (files, commits, etc.) and unified diff.
 
 ```bash
 gh pr view <PR_URL> --json \
-  number,title,body,state,isDraft,baseRefName,headRefName,additions,deletions,changedFiles,commits,labels,reviewDecision,mergeable,files,author,assignees,maintainerCanModify
+  number,title,body,author,state,isDraft,baseRefName,headRefName,additions,deletions,changedFiles,commits,labels,reviewDecision,mergeable,files,author,assignees,maintainerCanModify
 ```
 
 Record:
@@ -130,11 +130,11 @@ Record:
 #### 1.2 Ticket context
 
 Parse the ticket (Linear/Jira) if provided — via appropriate API (user rules: Linear via GraphQL API, Jira via env vars API). Extract:
-- **Goal** da tarefa / acceptance criteria list
-- **Out-of-scope** / explicit não-faz
-- Arquivos esperados / áreas de risco
+- Task **Goal** / acceptance criteria list
+- **Out-of-scope** / explicit non-goals
+- Expected files / risk areas
 
-If no ticket was given, the user's plain text description becomes the scope of reference.
+If no ticket given, the user's plain text description becomes the reference scope.
 
 ---
 
@@ -150,7 +150,7 @@ Run ALL of these inside `<WORKTREE_ROOT>` directory. Never leave the worktree.
 # Summary list (short format — for display + counting):
 git status --short
 
-# Individual diffs we need for review (combine BOTH staged + unstaged changes):
+# Individual diffs needed for review (combine BOTH staged + unstaged changes):
 #   B-1.1.1: staged diff (files already "git add"ed)
 git diff --cached --unified=3
 
@@ -158,20 +158,20 @@ git diff --cached --unified=3
 git diff --unified=3
 ```
 
-**Step 2: build the canonical file list `changedFiles[]` we review.**
+**Step 2: build canonical file list `changedFiles[]` we review.**
 Rules:
 1. Parse `git status --short` output (short format flags: `M` = modified, `A` = added, `D` = deleted, `R` = renamed, `??` = untracked).
 2. **Include in review list:**
-   - Files with status: `M`, `A`, `R`, `C` (copied), `T` (type changed), `U` (unmerged) — both staged and unstaged variants: ` M` (unstaged only), `M ` (staged only), `MM` (both) → all include.
-   - `??` (untracked files): **INCLUDE ONLY if they look like code/config (exts: .ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.kt,.sql,.json,.yaml,.yml,.toml,.md where.md is a PRD/spec doc NOT generic README fluff; if user clarifies include extra, honor that).**
+   - Files with status: `M`, `A`, `R`, `C` (copied), `T` (type changed), `U` (unmerged) — both staged and unstaged variants: ` M` (unstaged only), `M ` (staged only), `MM` (both) → all included.
+   - `??` (untracked files): **INCLUDE ONLY if they look like code/config (exts: .ts,.tsx,.js,.jsx,.py,.rs,.go,.java,.kt,.sql,.json,.yaml,.yml,.toml,.md where .md is a PRD/spec doc NOT generic README fluff; if user clarifies to include extra, honor that).**
    - Skip binary auto-generated build artifacts (node_modules/, dist/, .next/, build/, coverage/, *.png, *.jpg, *.pdf, *.lock diffs auto-generated by package managers — treat as out-of-scope unless scope says otherwise).
 3. **For each file in canonical changedFiles[]:**
-   - Record relative path, change type (M/A/D/R/??), count lines added/deleted from its diff block.
+   - Record relative path, change type (M/A/D/R/??), count added/deleted lines from its diff block.
    - If file is untracked (`??`) AND new → its "patch" = FULL file content (treat as 100% additions diff block): read it whole via `cat`.
 4. Aggregate:
    - `changedFiles_count` = N files in canonical list
    - `diff_stat` = total additions / total deletions (sum from B-1.1.1 + B-1.1.2, excluding skipped binaries/locks)
-   - `BASE_BRANCH_HEURISTIC`: run `git rev-parse --abbrev-ref HEAD` → current branch name (for info only — no base/head concept locally; base is assumed to be what's committed on this branch before modifications)
+   - `BASE_BRANCH_HEURISTIC`: run `git rev-parse --abbrev-ref HEAD` → current branch name (for info only — no base/head concept locally; base is assumed what is committed on this branch before modifications)
 
 #### B-1.2 Ticket context
 
@@ -180,78 +180,78 @@ Same as Mode A 1.2 — parse ticket (if provided) or use user's plain text scope
 
 ---
 
-## 1.5 PROJECT CONTEXT BOOTSTRAP — GENÉRICO (OBRIGATÓRIO NEVER-SKIP; roda para BOTH Mode A e Mode B)
+## 1.5 GENERIC PROJECT CONTEXT BOOTSTRAP — (MANDATORY NEVER-SKIP; runs for BOTH Mode A and Mode B)
 
-> **OBJETIVO:** Antes de OLHAR qualquer finding de diff, absorver as regras, arquitetura e convenções DO PROJETO REAL em que o diff vive. Sem isso, o review só conhece "bom senso genérico" e NÃO PEGA violações de arquitetura do projeto, allowlists route-level, charge-model conventions, regras de RLS locais, etc. Este step é a RAIZ DA DIFERENÇA entre um review superficial 0C/0H e um review que pega 3C/8H bugs de produção. É **NÃO ESPECÍFICO** a nenhum repo — descubra tudo automaticamente por heurísticas de arquivos existentes.
+> **GOAL:** Before looking at ANY diff finding, absorb rules, architecture, and conventions of the ACTUAL PROJECT where the diff lives. Without this, review only knows "generic common sense" and MISSES project architecture violations, route-level allowlists, charge-model conventions, local RLS rules, etc. This step is the ROOT CAUSE of the difference between a superficial 0C/0H review and one that catches 3C/8H production bugs. It is **NOT SPECIFIC** to any repo — discover everything automatically via existing file heuristics.
 
-Execute **TODOS** os substeps abaixo. Para cada item: "se o arquivo existir, LEIA-O obrigatoriamente; não pule porque 'já sei' ou 'parece longo'". Nenhum destes arquivos gasta mais que 2–5s de leitura e cada um pode contabilizar por múltiplos findings.
+Execute **ALL** substeps below. For each item: "if file exists, MUST READ entirely; do not skip because 'I already know' or 'seems long'". None of these files takes more than 2–5s to read and each can account for multiple findings.
 
-### 1.5.1 Contexto raiz do repositório (TOP-DOWN obrigatórios)
+### 1.5.1 Repository root context (MANDATORY TOP-DOWN)
 
-Para cada ARQUIVO ABAIXO no `<WORKTREE_ROOT>` (ou no diretório do repo onde o diff mora):
+For each FILE BELOW in `<WORKTREE_ROOT>` (or the repo directory where diff lives):
 
-| # | Arquivo(s) a tentar (se existir, ler INTEIRO) | Por que |
+| # | File(s) to try (if exist, read ENTIREly) | Why |
 |---|---|---|
-| R1 | `AGENTS.md` na raiz do repo | Router de contexto do projeto (pontos a onde estão as regras por área). 99% dos monorepos tem isso. |
-| R2 | `CLAUDE.md` na raiz do repo | Contexto para agentes: estrutura de packages, convenções de deploy, comandos por pacote, RLS/DB migration rules. |
-| R3 | `README.md` na raiz do repo | Stack usado, como rodar testes, arquitetura high-level (1 passada rápida). |
-| R4 | `docs/plan.md` se existir | Fixed constraints do projeto (escopo fechado vs. em aberto). |
-| R5 | `docs/decisions.md` ou `docs/adr/` (qualquer `*.md` ADR em ordem alfabética de 5 mais recentes) | Decisões arquiteturais com RATIONALE — saber por que Router→Service→Repository, por que charge-model destination, por que `exports` field strategy. |
-| R6 | `graphify-out/GRAPH_REPORT.md` **(se existir)** | Community hubs, file paths para a área do diff — indica a ONDE ler regras específicas (ex: "QR validation está em packages/db + packages/scanner"). |
+| R1 | `AGENTS.md` at repo root | Project context router (points to where rules are by area). 99% of monorepos have this. |
+| R2 | `CLAUDE.md` at repo root | Agent context: package structure, deploy conventions, commands per package, RLS/DB migration rules. |
+| R3 | `README.md` at repo root | Stack used, how to run tests, high-level architecture (1 quick pass). |
+| R4 | `docs/plan.md` if any | Project fixed constraints (closed vs open scope). |
+| R5 | `docs/decisions.md` or `docs/adr/` (any `*.md` ADR in alphabetical order of 5 most recent) | Architectural decisions with RATIONALE — know why Router→Service→Repository, why destination charge-model, why `exports` field strategy. |
+| R6 | `graphify-out/GRAPH_REPORT.md` **(if exists)** | Community hubs, file paths for diff area — indicates WHERE to read specific rules (e.g.: "QR validation is in packages/db + packages/scanner"). |
 
-**Todos R1-R6:** use `Glob(pattern, path=<WORKTREE_ROOT>)` primeiro; para cada que existir → use `Read(file_path)`. Não pule R6 se existir — é um atalho gigante.
+**All R1-R6:** use `Glob(pattern, path=<WORKTREE_ROOT>)` first; for each that exists → use `Read(file_path)`. Do not skip R6 if it exists — it is a huge shortcut.
 
-### 1.5.2 Rules do projeto (tudo em `.claude/rules/` ou `.agents/rules/`)
+### 1.5.2 Project rules (all in `.claude/rules/` or `.agents/rules/`)
 
-1. **Glob todos os arquivos `.md` em:**
-   - `<WORKTREE_ROOT>/.claude/rules/*.md` (Caminho Flockr/Lumos e maioria)
-   - `<WORKTREE_ROOT>/.agents/rules/*.md` (Caminho alternativo em outros stacks)
-2. **Para cada um que existir, LEIA INTEIRO.** Classifique mentalmente em buckets:
-   - **Security (ex: `security.md`)** — authz inside each action, cookie vs. membership validation, RLS defaults.
-   - **Architecture (ex: `architecture.md`, `data-layer.md`)** — Router→Service→Repository layering, "Nenhuma business logic em routers/procedures", Repositories own all TypeORM querying.
-   - **Database (ex: `db.md`, `migrations-*.md`)** — Never hand-create migration files, timestamps fabricados, consolidation pre-merge, RLS policies com explicit TO role.
-   - **Market/TZ (ex: `uk-market.md`)** — Store UTC / display Europe/London, currency GBP integer minor units.
-   - **Frontend/React (ex: `react.md`)** — useTransition rules, error.code vs substring match.
-   - **Other (workflow.md, commits.md, tooling.md, testing.md, db-caching.md)** — Pool ceilings PgBouncer, authzCache 4th arg threading rules, idempotency patterns.
-3. **Resumo mental OBRIGATÓRIO de 1 frase por bucket após a leitura**: ex "Security = org check não pode ser só cookie raw, Architecture = routers só authz+validate+call svc, DB = migration timestamps fabricados viola rule".
+1. **Glob all `.md` files in:**
+   - `<WORKTREE_ROOT>/.claude/rules/*.md` (Flockr/Lumos and most common path)
+   - `<WORKTREE_ROOT>/.agents/rules/*.md` (Alternative path in other stacks)
+2. **For each that exists, READ ENTIREly.** Classify mentally into buckets:
+   - **Security (e.g. `security.md`)** — authz inside each action, cookie vs membership validation, RLS defaults.
+   - **Architecture (e.g. `architecture.md`, `data-layer.md`)** — Router→Service→Repository layering, "No business logic in routers/procedures", Repositories own all TypeORM querying.
+   - **Database (e.g. `db.md`, `migrations-*.md`)** — Never hand-create migration files, fabricated timestamps, consolidation pre-merge, RLS policies with explicit TO role.
+   - **Market/TZ (e.g. `uk-market.md`)** — Store UTC / display Europe/London, GBP integer minor units currency.
+   - **Frontend/React (e.g. `react.md`)** — useTransition rules, error.code vs substring match.
+   - **Other (workflow.md, commits.md, tooling.md, testing.md, db-caching.md)** — PgBouncer pool ceilings, authzCache 4th arg threading rules, idempotency patterns.
+3. **MANDATORY 1-sentence mental summary per bucket after reading**: e.g. "Security = org check cannot be just raw cookie, Architecture = routers only authz+validate+call svc, DB = fabricated migration timestamps violate rule".
 
-### 1.5.3 Pacotes / Módulos AFETADOS pelo diff (contexto BOTTOM-UP)
+### 1.5.3 Packages / Modules AFFECTED by diff (BOTTOM-UP context)
 
-1. **Compute `affected_areas`** — do `changedFiles[]` (B-1.1), extraia os paths de topo-level package/app:
-   - Ex: `packages/platform/server/api/routers/bookingRouter.ts` → afeta `packages/platform` + `packages/db` (se tabela nova) + `packages/notification` (se email)
-   - Ex: `apps/backend/src/webhooks/stripe/route.ts` → afeta `apps/backend`
-2. **Para CADA package/app em `affected_areas`, LEIA (se existir):**
+1. **Compute `affected_areas`** — from `changedFiles[]` (B-1.1), extract top-level package/app paths:
+   - E.g.: `packages/platform/server/api/routers/bookingRouter.ts` → affects `packages/platform` + `packages/db` (if new table) + `packages/notification` (if email)
+   - E.g.: `apps/backend/src/webhooks/stripe/route.ts` → affects `apps/backend`
+2. **For EACH package/app in `affected_areas`, READ (if exists):**
    - `<package_path>/AGENTS.md` (package-level rules — critical!)
-   - `<package_path>/CLAUDE.md` (diretório map, comandos do package)
-   - `<package_path>/README.md` (se existir)
-   - **Docs area relacionados:** se `affected_areas` includes `packages/platform` → ler `docs/platform.md` (payment flow, routers structure); se `packages/scanner` → `docs/scanner.md`; se db/entities → `docs/packages.md`. Use Glob `docs/*.md` e leia os matches.
-3. **Regra OBRIGATÓRIA para cross-file pipeline integrity (MESMORAM se não tiver doc):**
-   - Se diff tocar QUALQUER handler/service de webhook (`webhook`, `Webhook*`, `api/webhooks/*/route.ts`, `supportedTypes`): **LEIA AGORA O(S) ARQUIVO(S) ROUTE-LEVEL dispatcher** e compare com service supported types — mesmo que nenhuma doc diga para fazer.
-   - Se diff tocar PSP/Connect charges/refunds/transfers: **LEIA AGORA os arquivos de createPaymentIntent/createRefund/todas as chamadas que tocam o cliente PSP no mesmo package** — mesmo que não tenha doc.
+   - `<package_path>/CLAUDE.md` (directory map, package commands)
+   - `<package_path>/README.md` (if any)
+   - **Related area docs:** if `affected_areas` includes `packages/platform` → read `docs/platform.md` (payment flow, routers structure); if `packages/scanner` → `docs/scanner.md`; if db/entities → `docs/packages.md`. Use `Glob("docs/*.md")` and read matches.
+3. **MANDATORY rule for cross-file pipeline integrity (READ EVEN IF NO DOC):**
+   - If diff touches ANY webhook handler/service (`webhook`, `Webhook*`, `api/webhooks/*/route.ts`, `supportedTypes`): **READ NOW the ROUTE-LEVEL dispatcher file(s)** and compare with service supported types — even if no doc says to.
+   - If diff touches PSP/Connect charges/refunds/transfers: **READ NOW createPaymentIntent/createRefund/all calls touching the PSP client in the same package** — even if no doc exists.
 
-### 1.5.4 Se existir skill de review LOCAL DO PROJETO, absorva seus checks
+### 1.5.4 If PROJECT LOCAL review skill exists, absorb its checks
 
-1. **Glob para skills locais no projeto:**
+1. **Glob for local skills in project:**
    - `<WORKTREE_ROOT>/.claude/skills/*/SKILL.md`
    - `<WORKTREE_ROOT>/.agents/skills/*/SKILL.md`
-2. **Para cada skill cujo nome case com review/code-review/audit (ex: `flockr-review/SKILL.md`, `project-review/SKILL.md`):**
-   - LEIA INTEIRO.
-   - **Extraia sua checklist de "o que checar em Step 3 / Step Review".** INCORPORE esses checks NO SEU framework de Category 0/1/2/3/4 (adicione checks como sub-itens OBRIGATÓRIOS durante a avaliação — não ignore-os por ser "skill diferente").
-   - Se a skill local listar caminhos de arquivos ESPECÍFICOS para ler (ex: "ler route.ts no webhook stripe"), **LEIA-OS AGORA MESMO** — antes de começar o review framework. Não finja que já leu.
+2. **For each skill matching review/code-review/audit (e.g. `flockr-review/SKILL.md`, `project-review/SKILL.md`):**
+   - READ ENTIREly.
+   - **Extract its "what to check in Step 3 / Step Review" checklist.** INCORPORATE these checks INTO YOUR Category 0/1/2/3/4 framework (add checks as MANDATORY sub-items during evaluation — do not ignore for being "different skill").
+   - If local skill lists SPECIFIC file paths to read (e.g. "read route.ts in stripe webhook"), **READ THEM RIGHT NOW** — before starting review framework. Do not pretend you read them.
 
-### 1.5.5 Checklist de confirmação de bootstrap (NÃO passe adiante sem marcar TODOS)
+### 1.5.5 Bootstrap confirmation checklist (DO NOT proceed without marking ALL)
 
-Antes de entrar no §2 Review Framework — responda estas perguntas SILENCIOSAMENTE para você mesmo. Se QUALQUER UMA for NÃO, volte e leia.
+Before entering §2 Review Framework — answer these questions SILENTLY. If ANY is NO, go back and read.
 
 ```
-[ ] R1-R6 raiz lidos (todos que existiam)
-[ ] .claude/rules/*.md ou .agents/rules/*.md TODOS lidos (todos que existiam)
-[ ] affected_areas packages: AGENTS.md e CLAUDE.md lidos
-[ ] docs/*.md relevantes (platform/scanner/packages/decisions) lidos se existiam
-[ ] graphify-out/GRAPH_REPORT.md lido se existia
-[ ] skill local <projeto>-review/SKILL.md lida e checks absorvidos (se existia)
-[ ] diff toca webhooks? SIM → route-level allowlist file JÁ LIDO, não só service
-[ ] diff toca PSP/Connect charges/refunds/transfers? SIM → TODAS as chamadas psp no mesmo package JÁ LIDAS, não só o diff hunk
+[ ] Root R1-R6 read (all that existed)
+[ ] ALL .claude/rules/*.md or .agents/rules/*.md read (all that existed)
+[ ] affected_areas packages: AGENTS.md and CLAUDE.md read
+[ ] Relevant docs/*.md (platform/scanner/packages/decisions) read if existed
+[ ] graphify-out/GRAPH_REPORT.md read if existed
+[ ] Local <project>-review/SKILL.md read and checks absorbed (if existed)
+[ ] diff touches webhooks? YES → route-level allowlist file ALREADY READ, not just service
+[ ] diff touches PSP/Connect charges/refunds/transfers? YES → ALL psp calls in same package ALREADY READ, not just diff hunk
 ```
 
 ---
@@ -264,118 +264,118 @@ We only look at these 5. Anything else is out-of-scope for this reviewer role.
 
 ### Category 0: 🔴 Cross-File Pipeline Integrity Checks (CRITICAL or HIGH; never skip)
 
-These are "diff looks fine, but entry point upstream dropped it" bugs that unit/E2E tests miss because tests call services directly. Run EVERY subheading below — if the diff touches ANY of the keywords mentioned, you MUST do the cross-file read.
+These are "diff looks fine, but upstream entry point dropped it" bugs that unit/E2E tests miss because tests call services directly. Run EVERY subheading below — if diff touches ANY mentioned keywords, you MUST do the cross-file read.
 
 #### 0.1 Webhook pipeline entrypoint allowlist vs service handlers (CRITICAL if mismatch)
 If diff touches files with `webhook`, `Webhook*Service`, `supportedTypes`, `handleStripe*`, `charge.`, `customer.`, `route.ts` under `api/webhooks/`:
 
-1. Read the **ROUTE-level allowlist** (early arrays like `stripeSnapshotEventTypes`, `acceptedEvents` at the TOP of `/api/webhooks/*/route.ts` or dispatcher functions).
-2. Read the **service handler's supported events** (e.g. `WebhookService.supportedTypes`, switch-cases inside `handleEvent`).
+1. Read **ROUTE-level allowlist** (early arrays like `stripeSnapshotEventTypes`, `acceptedEvents` at TOP of `/api/webhooks/*/route.ts` or dispatcher functions).
+2. Read **service handler's supported events** (e.g. `WebhookService.supportedTypes`, switch-cases inside `handleEvent`).
 3. **CRITICAL if:**
-   - Service handles an event type that is NOT in the route-level allowlist.
-   - Route returns `202 / ignored: true` / drops events that the service actually needs.
-   - Note: tests calling `svc.handleEvent()` directly BYPASS this check — inspect the real route file, not the test.
-4. Fix: add missing type to allowlist + require a signed-payload route-level POST test.
+   - Service handles an event type NOT in route-level allowlist.
+   - Route returns `202 / ignored: true` / drops events service actually needs.
+   - Note: tests calling `svc.handleEvent()` directly BYPASS this check — inspect real route file, not test.
+4. Fix: add missing type to allowlist + require signed-payload route-level POST test.
 
 #### 0.2 Connect / PSP charge-model consistency (CRITICAL if contradiction)
 If diff touches `createPaymentIntent`, `createRefund`, `transfer`, `reverse_transfer`, `stripeAccount`, `transfer_data.destination`, `on_behalf_of`, `application_fee_amount` or equivalent PSP params:
 
-> **PROCEDIMENTO OBRIGATÓRIO 3-PASS — NÃO PULE nenhum:**
+> **MANDATORY 3-PASS PROCEDURE — DO NOT SKIP any:**
 > 
-> **Passo 1 (extrair params de createPaymentIntent):**
-> Ache a linha onde `paymentIntents.create(...)` / `createPaymentIntent(...)` é chamada.
-> - (a) 2º argumento (headers): existe `{ stripeAccount: X }` (ou similar `stripeAccount` header)? Anote `X` = valor exato (ex: `payload.stripeConnectedAccountId`, uma variável).
-> - (b) 1º argumento (body params): existe objeto `transfer_data: { destination: Y }` (ou `transfer_data.destination = Y`)? Anote `Y` = valor exato.
+> **Step 1 (extract createPaymentIntent params):**
+> Find line where `paymentIntents.create(...)` / `createPaymentIntent(...)` called.
+> - (a) 2nd arg (headers): exists `{ stripeAccount: X }`? Note `X` value (e.g. `payload.stripeConnectedAccountId` variable).
+> - (b) 1st arg (body params): exists `transfer_data: { destination: Y }`? Note `Y` value.
 > 
-> **Passo 2 (detectar contradição createPaymentIntent):**
-> SE (a) E (b) são AMBOS verdadeiros → compare `X` e `Y`.
-> - **CRITICAL se `X === Y`** (destino = mesma conta que está emitindo o request). Motivo: Stripe rejeita com HTTP 400 `transfer_data[destination]` cannot equal the account making the request → TODO Connect checkout falha.
+> **Step 2 (detect createPaymentIntent contradiction):**
+> IF (a) AND (b) BOTH true → compare `X` and `Y`.
+> - **CRITICAL if `X === Y`** (destination = same account emitting request). Reason: Stripe rejects with HTTP 400 `transfer_data[destination]` cannot equal account making request → ALL Connect checkout fails.
 > 
-> **Passo 3 (cross-check createPaymentIntent model vs createRefund model):**
-> Após classificar createPaymentIntent como DESTINATION CHARGE (apenas (b), sem (a)) ou DIRECT CHARGE (apenas (a), sem (b)), agora ache `createRefund(...)` ou `refunds.create(...)`:
-> - (r1) existe `stripeAccount` header?
-> - (r2) existe `reverse_transfer: true`?
-> - **CRITICAL se createPaymentIntent = DESTINATION CHARGE (platform cria) E createRefund usa stripeAccount connected + reverse_transfer: true**. Motivo: `reverse_transfer` só funciona em refunds emitidos DO PLATFORM (stripeAccount não setado). createRefund com stripeAccount connectedAccountId vai procurar o charge/pi dentro da connected account — mas destination-charge PIs vivem na PLATFORM account → wrong namespace. Stripe não acha → 404.
-> - **CRITICAL se createPaymentIntent = DIRECT CHARGE (stripeAccount=X) E createRefund NÃO TEM stripeAccount=X E TEM reverse_transfer=true**. Motivo: direct charge não teve nenhum transfer_data para reverter; refund vem da connected account, mas o request sem stripeAccount cai na platform account → 404 charge not found.
+> **Step 3 (cross-check createPaymentIntent model vs createRefund model):**
+> After classifying createPaymentIntent as DESTINATION CHARGE (only (b), no (a)) or DIRECT CHARGE (only (a), no (b)), now find `createRefund(...)` or `refunds.create(...)`:
+> - (r1) exists `stripeAccount` header?
+> - (r2) exists `reverse_transfer: true`?
+> - **CRITICAL if createPaymentIntent = DESTINATION CHARGE (platform creates) AND createRefund uses connected stripeAccount + reverse_transfer: true**. Reason: `reverse_transfer` only works in refunds issued FROM platform (stripeAccount not set). createRefund with connectedAccountId stripeAccount searches for charge/pi inside connected account — but destination-charge PIs live on PLATFORM account → wrong namespace. Stripe won't find it → 404.
+> - **CRITICAL if createPaymentIntent = DIRECT CHARGE (stripeAccount=X) AND createRefund NO stripeAccount=X AND HAS reverse_transfer=true**. Reason: direct charge had no transfer_data to reverse; refund comes from connected account, but request without stripeAccount hits platform account → 404 charge not found.
 
-1. Classify formally (after running the 3-pass above):
-   - **Destination charge model:** payment intent created ON platform account (no `stripeAccount` param on create); `transfer_data.destination=connected`, `application_fee_amount`, `on_behalf_of` present. Refunds issued from platform with `reverse_transfer: true`.
-   - **Direct charge model:** payment intent created WITH `{ stripeAccount: connectedAccountId }` header; NO `transfer_data.destination` (PSP rejects if equal to requester); refund issued with same `stripeAccount` header.
+1. Classify formally (after 3-pass above):
+   - **Destination charge model:** PI created ON platform account (no `stripeAccount` on create); `transfer_data.destination=connected`, `application_fee_amount`, `on_behalf_of` present. Refunds from platform with `reverse_transfer: true`.
+   - **Direct charge model:** PI created WITH `{ stripeAccount: connectedAccountId }` header; NO `transfer_data.destination` (PSP rejects if equal to requester); refund issued with same `stripeAccount` header.
 2. **CRITICAL if (after 3-pass):** any method mixes models. Examples:
    - `createPaymentIntent` issued with `stripeAccount` (direct) but still carries `transfer_data.destination = same account` → request fails.
-   - `createRefund` issued with `stripeAccount:` header AND `reverse_transfer: true` → reverse_transfer only applies to destination-charge model; wrong ID namespace if PI lives on platform account.
-3. Fix: pick one model end-to-end; keep refunds/PIs consistent. Mock clients mask this — READ the real client parameterization.
+   - `createRefund` issued with `stripeAccount:` header AND `reverse_transfer: true` → reverse_transfer only for destination-charge model; wrong ID namespace if PI on platform account.
+3. Fix: pick one model end-to-end; keep refunds/PIs consistent. Mock clients mask this — READ real client parameterisation.
 
 #### 0.3 Transaction + row lock duration vs network calls (HIGH if overlap)
-If the diff contains BOTH (a) transaction/lock primitives AND (b) external network awaitables:
+If diff contains BOTH (a) transaction/lock primitives AND (b) external network awaitables:
 - (a) signals: `queryRunner.startTransaction()`, `manager.transaction()`, `setLock("pessimistic_write")`, `lockForUpdate`, `FOR UPDATE`, `BEGIN`;
 - (b) signals: `await stripe.*`, `await fetch`, `await mailer.send`, `await new Promise(...setTimeout...)`, retry/backoff sleeps.
 
-1. Trace the span: `tx start → [await network call(s) with backoff?] → tx commit/rollback`.
-2. **HIGH if:** any external network await with backoff falls inside that span. Reason: pool ceilings (e.g. ≤10 PgBouncer sessions) → under modest concurrency this risks DB-connection-exhaustion 500s across the whole app.
-3. Fix: 2-phase — short tx #1 writes PROCESSING/idempotency claim + commits; network call outside any tx; short tx #2 applies side effects / marks failed.
+1. Trace span: `tx start → [await network call(s) with backoff?] → tx commit/rollback`.
+2. **HIGH if:** any external network await with backoff falls inside span. Reason: pool ceilings (e.g. ≤10 PgBouncer sessions) → risks DB-connection-exhaustion 500s across app.
+3. Fix: 2-phase — short tx #1 writes PROCESSING/idempotency claim + commits; network call outside tx; short tx #2 side effects / marks failed.
 
-#### 0.4 Serverless fire-and-forget post-response work (HIGH if non-waited)
+#### 0.4 Serverless fire-and-forget post-response work (HIGH if non-awaited)
 If diff contains `void (async () => ...)();` or `setImmediate(async ...)` or `setTimeout(async ...)` wrapping:
 - outbound emails (mailer.send / notification adapter),
 - analytics/ETL upserts (sales_by_date, aggregator ON CONFLICT writes),
 - event publishes / logger flushes.
 
-1. Does the HTTP/tRPC return BEFORE those tasks are awaited?
-2. **HIGH if yes.** Reasoning: Vercel/Next serverless may freeze at response; work silently lost. In-process E2E tests pass because they wait 30ms after return — that does not reflect prod.
-3. Fix: `waitUntil` (`@vercel/functions` / `Next after()`) or await before return; add route-level test that post-response work happened.
+1. Does HTTP/tRPC return BEFORE tasks are awaited?
+2. **HIGH if yes.** Reason: Vercel/Next serverless may freeze at response; work silently lost. In-process E2E tests pass as they wait 30ms — doesn't reflect prod.
+3. Fix: `waitUntil` (`@vercel/functions` / `Next after()`) or await before return; add route-level test.
 
 ---
 
-### Category 1: 🔴 Runtime breakage / silent incorrect behavior (CRITICAL if found)
+### Category 1: 🔴 Runtime breakage / silent incorrect behaviour (CRITICAL if found)
 
 What counts (Category 0 + 1 together = CRITICAL or HIGH runtime):
-- **Possible NullPointer / undefined field dereference** at runtime (access `obj.field.subfield` where `obj.field` can be null/undefined based on the types / DB schema and there's no guard).
-- **Race conditions**: async operations with TOCTOU, unhandled Promise rejections, missing `await` on async functions, `Promise.all()` where one fails silently, race on shared mutable state.
-- **Wrong algorithm / calculation**: obvious logic errors (if/else swapped, `<=` should be `<`, `+` should be `-`, currency divided by 100 twice so $1.00 becomes $0.01).
-- **Schema backwards-incompatible change**: API returns a type that old clients can't handle.
-- **Deprecation wrong API usage**: calling a deprecated endpoint / method that the upstream docs say will fail (e.g. Stripe v1 endpoint in a v2-only integration).
-- **Missing null/empty handling**: DB returns `[]` for an "empty list" vs `null` for "not queried" and code treats both the same way when they shouldn't be.
-- **Boundary conditions**: off-by-one, array index `-1`, pagination last page truncated, decimal precision loss in currency fields (float `0.1 + 0.2` for money — MUST use integer cents or Decimal types).
-- **Unverified type cast**: `as T` in TS without runtime validation guard; data from API/DB/JSON assumed typed but never checked.
-- **PSP charge/version assumptions**: handler reads nested fields (e.g. `charge.refunds.data[0]`) whose presence depends on API version / expansion; no undefined-check → silently drops event. (Also cross-check with 0.2.)
-- **Timezone incorrectness**: stored-local times treated as UTC in comparisons (e.g. BST vs UTC makes "event started" gates ±1h wrong). MEDIUM if gated; HIGH if gates are user-visible eligibility for refund/cancel.
-- **Row multiplication + LIMIT 1 queries**: LEFT JOIN 1:N relations (items/inventories/events/org accounts) + LIMIT 1 returns arbitrary row → wrong org/event/time used in gates. HIGH if money or security gate; else MEDIUM.
-- **null-cast quirks in ORM find-options**: `null as unknown as undefined` where explicit IsNull() should be used. MEDIUM default; promote HIGH if the field is part of idempotency/composite PK matching.
-- **Crash-safety "PROCESSING first" writes inside same transaction as external await (MEDIUM/HIGH — ligado a Category 0.3)**. Se uma DB transaction escreve a row PROCESSING (claim/idempotency) e faz `startTransaction()` → escreve PROCESSING → depois `await stripe_network_call` → depois `commit`. Qualquer crash ou rollback no meio vai APAGAR a PROCESSING row junto (transaction never committed). Resultado: "estado intermediário PROCESSING nunca sobrevive a falha" e catch block que dá `markFailed` na row vira dead code (row não existe mais). **MEDIUM se também tem o pattern Category 0.3 HIGH.** Fix: Category 0.3 2-phase pattern resolve automaticamente — Tx1 escreve e COMMITA a PROCESSING row ANTES de qualquer network call.
-- **Error message substring match brittle vs error.code enum match (LOW/MEDIUM)**. Handler/caller lida com erros checando `e.message.includes("already been used/scanned")` em vez de `(e as RefundValidationError).code === "TICKET_ALREADY_SCANNED"`. MEDIUM se o error kind vem de service boundary. LOW se só logging.
-- **Circular imports via cross-import error classes/services (LOW/MEDIUM)**. Service A importa `SomeError` de Service B file, Service B importa symbols de Service A file → resultado: circular import chain. MEDIUM se isso causa runtime undefined (TypeScript strict mode levantará warning). Fix: mover error classes/enums compartilhados para módulo dedicado `domain/errors.ts` / `server/domain/refundErrors.ts`.
-- **Entity decorator index names vs migration index names DRIFT (LOW/MEDIUM)**. TypeORM entity `@Index("idx_refunds_stripe_refund_id", { unique: true })` decorator mas migration CREATE TABLE cria `uq_refunds_stripe_refund_id` (nome diferente), ou entity @Index() sem nome mas migration nomeia `idx_refunds_org_id`. Resultado: próximo `migration:generate` emitirá spurious DROP/CREATE churn sem mudança real. MEDIUM se >2 name mismatches.
-- **Idempotency find-options match de NULL via double cast `null as unknown as undefined` → HIGH if idempotency/composite PK (ja listado acima)**.
+- **Possible NullPointer / undefined field dereference** (access `obj.field.subfield` where `obj.field` can be null/undefined based on types/schema and no guard).
+- **Race conditions**: async ops with TOCTOU, unhandled Promise rejections, missing `await` on async functions, `Promise.all()` silent fail, shared mutable state race.
+- **Wrong algorithm / calculation**: obvious logic errors (if/else swapped, `<=` vs `<`, `+` vs `-`, currency divided by 100 twice so $1.00 → $0.01).
+- **Schema backwards-incompatible change**: API returns type old clients can't handle.
+- **Wrong API usage**: calling deprecated endpoint/method upstream docs say will fail (e.g. Stripe v1 endpoint in v2-only integration).
+- **Missing null/empty handling**: DB returns `[]` for "empty" vs `null` for "not queried" and code treats same.
+- **Boundary conditions**: off-by-one, index `-1`, pagination truncation, decimal precision loss in currency (float `0.1 + 0.2` for money — MUST use integer cents or Decimal).
+- **Unverified type cast**: `as T` in TS without runtime guard; data from API/DB/JSON assumed typed but never checked.
+- **PSP charge/version assumptions**: handler reads nested fields (e.g. `charge.refunds.data[0]`) depending on version/expansion; no undefined-check → silent drop. (Also cross-check with 0.2.)
+- **Timezone incorrectness**: stored-local times treated as UTC in comparisons (e.g. BST vs UTC makes "event started" gates ±1h wrong). MEDIUM if gated; HIGH if user-visible eligibility.
+- **Row multiplication + LIMIT 1 queries**: LEFT JOIN 1:N relations (items/inventories/events/org accounts) + LIMIT 1 returns arbitrary row → wrong org/event/time. HIGH if money or security; else MEDIUM.
+- **null-cast quirks in ORM find-options**: `null as unknown as undefined` where IsNull() needed. MEDIUM default; HIGH if field is part of idempotency/composite PK.
+- **Crash-safety "PROCESSING first" writes in same transaction as external await (MEDIUM/HIGH — Category 0.3 linked)**. If DB tx writes PROCESSING row (claim/idempotency) and does `startTransaction()` → write PROCESSING → `await stripe_network_call` → `commit`. Any crash/rollback will DELETE PROCESSING row too (tx never committed). Result: "intermediate PROCESSING state never survives failure" and catch block `markFailed` becomes dead code. **MEDIUM if also Category 0.3 HIGH.** Fix: Category 0.3 2-phase pattern — Tx1 writes and COMMITS PROCESSING row BEFORE network call.
+- **Error message substring match brittle vs error.code enum match (LOW/MEDIUM)**. Handler/caller checks `e.message.includes("already been used/scanned")` vs `(e as RefundValidationError).code === "TICKET_ALREADY_SCANNED"`. MEDIUM if from service boundary. LOW if only logging.
+- **Circular imports via cross-import error classes/services (LOW/MEDIUM)**. Service A imports `SomeError` from Service B, Service B imports symbols from Service A → circular chain. MEDIUM if causes runtime undefined (TS strict mode warns). Fix: move shared errors/enums to dedicated `domain/errors.ts`.
+- **Entity decorator index names vs migration index names DRIFT (LOW/MEDIUM)**. TypeORM entity `@Index("idx_refunds_stripe_refund_id", { unique: true })` vs migration `uq_refunds_stripe_refund_id` (different name), or entity @Index() unnamed vs named migration. Result: next `migration:generate` emits spurious DROP/CREATE churn. MEDIUM if >2 mismatches.
+- **Idempotency find-options NULL match via `null as unknown as undefined` → HIGH if idempotency/composite PK (already listed)**.
 
-Each entry: CRITICAL severity unless provably unreachable path.
+Each entry: CRITICAL severity unless provably unreachable.
 
 ---
 
 ### Category 2: 🔴 Security / PII / Compliance (CRITICAL or HIGH)
 
-Reuse **che-compliance** skill categories — but applied to the PR DIFF only (light scan equivalent). PLUS the new cross-file authz audits below (2.8–2.10) which are MANDATORY if any diff file touches org-scoped handlers, authz calls, or Stripe Connect.
+Reuse **che-compliance** skill categories — applied to PR DIFF only (light scan). PLUS mandatory cross-file authz audits (2.8–2.10) if diff touches org-scoped handlers, authz calls, or Stripe Connect.
 
 Checks:
-1. **Secrets/credentials** hardcoded: Stripe `sk_*`, GitHub PAT, AWS AKIA, private keys, API keys in env vars printed. CRITICAL.
-2. **Raw PII logging**: `console.log(email)`, logger with unhashed `phone`. CRITICAL or HIGH depending on context (dev log vs prod persistent log).
-3. **SQL injection**: string-concatenated SQL, `.raw()` / `.whereRaw` with no parameterized array. HIGH usually, CRITICAL if user input flows unfiltered.
-4. **XSS / SSRF**: `dangerouslySetInnerHTML` without sanitization; user-controlled `fetch(url)` without hostname whitelist. HIGH.
-5. **Auth/RLS bypass**: endpoint missing auth guard; server action checking role AFTER the DB write; service_role key used on client. CRITICAL.
-6. **Destructive operations + missing guardrails**: DROP TABLE / TRUNCATE without `NODE_ENV !== 'production'` check; `fs.rm(force:true recursive:true)` with user-supplied path.
-7. **Dangerous URLs**: new DB URLs pointing to production-looking hosts (`*.rds.amazonaws.com`, `*.supabase.co`, `*.neon.tech`) — flag HIGH, require confirmation.
-8. **MANDATORY cross-file — raw cookie org check vs membership-validated context (CRITICAL/HIGH depending on procedure path)**. NÃO AGREGUE RESULTADOS DE UM PROCEDURE NOS OUTROS — analise cada procedure SEPARADAMENTE.
-   - **Primeiro**: Liste TODOS os procedures/handlers NOVOS ou MODIFICADOS no router (ex: bookingRouter.ts tem `refundOrder` mutation + `getEligibleForRefund` query + `getBookingRefundStatus` query → 3 procedures = 3 auditorias INDEPENDENTES).
-   - **Para CADA procedure (tanto READ quanto WRITE)**: se o corpo do handler usa `ctx.activeOrgId` / `ctxOrgId` / `active_org` cookie value para fazer gating com uma `row.org_id` (ex: `if (ctxOrgId && refundContext.orgId !== ctxOrgId) throw Forbidden`):
-     1. Trace a origem de `ctx.activeOrgId`. Muitas vezes é `active_org` cookie raw — procure em `server/trpc.ts`, `server/context.ts` ~ linhas 30–60.
-     2. Procure por re-validação de membership: existe chamada a `authzService.assertCan(ctx.userId, "org:read"|"org:manage", {type:"org", orgId: rowOrgId}, ctx.authzCache)` OU `OrgContextService.getWhoAmI(userId, activeOrgSignal)` OU query de membership no banco que confirme `user ∈ org` ANTES do gating?
-     3. O buyer fallback path (ex: `if (row.userId === ctx.userId) permitido`) é aceitável e mitiga reads de buyer-owned data.
-   - **Severity por procedure**:
-     - **CRITICAL se** é um procedure **READ** (query `getEligibility`, `getStatus`, detail view) e o gating é SOMENTE cookie↔row comparison SEM membership validada (sem assertCan/whoami). Motivo: qualquer usuário autenticado seta o cookie → lê dados cross-org de pagamentos/stripe_refund_id/valores/compradores.
-     - **HIGH se** é um procedure **WRITE** (mutation `refundOrder`, `cancelBooking`) e o gating é cookie↔row SEM membership validada, MAS há downstream guards (DB order locked + authz.assertCan com orderCtx.orgId da row) como mitigação.
-     - **LOW/NÃO FLAG** apenas se (a) assertCan é chamado ANTES do gating COM a orgId da row (não do cookie), OU (b) whoami revalidou membership, OU (c) todo acesso passa por buyer fallback path (row.userId === ctx.userId) sem possibilidade de cross-org read.
-9. **MANDATORY — authzService.assertCan 4th arg authzCache threading (HIGH if missing in router-callable service paths)**. If the diff contains `.assertCan(userId, permission, resource)`: read its signature — does it accept `cache?: AuthzCache` as a 4th optional param? Does a router ctx expose `ctx.authzCache`? Trace service-layer params from router → service. Flag HIGH if services reachable from routers call assertCan WITHOUT passing a cache, because otherwise each call issues a fresh isPlatformAdmin DB query (N+1 per router call under default db-caching rule).
-10. **Server action / route handler auth ordering (CRITICAL if after writes)**. Authz checks run INSIDE the endpoint (per security rule); they must run BEFORE any DB write or side effect. CRITICAL if order is reversed.
+1. **Secrets/credentials** hardcoded: Stripe `sk_*`, GitHub PAT, AWS AKIA, private keys, API keys in env. CRITICAL.
+2. **Raw PII logging**: `console.log(email)`, logger with unhashed `phone`. CRITICAL or HIGH (dev log vs prod persistent).
+3. **SQL injection**: string-concatenated SQL, `.raw()` / `.whereRaw` without parameterised array. HIGH usually, CRITICAL if user input flows unfiltered.
+4. **XSS / SSRF**: `dangerouslySetInnerHTML` without sanitisation; user-controlled `fetch(url)` without hostname whitelist. HIGH.
+5. **Auth/RLS bypass**: missing auth guard; server action checking role AFTER DB write; service_role key on client. CRITICAL.
+6. **Destructive operations + missing guardrails**: DROP TABLE / TRUNCATE without `NODE_ENV !== 'production'` check; `fs.rm(force:true recursive:true)` with user path.
+7. **Dangerous URLs**: new DB URLs pointing to prod-looking hosts (`*.rds.amazonaws.com`, `*.supabase.co`, `*.neon.tech`) — HIGH, require confirmation.
+8. **MANDATORY cross-file — raw cookie org check vs membership-validated context (CRITICAL/HIGH)**. DO NOT AGGREGATE procedure results — analyse each procedure SEPARATELY.
+   - **First**: List ALL NEW/MODIFIED procedures in router (e.g. bookingRouter.ts has `refundOrder` mutation + `getEligibleForRefund` query + `getBookingRefundStatus` query → 3 procedures = 3 independent audits).
+   - **For EACH procedure (READ and WRITE)**: if handler uses `ctx.activeOrgId` / `ctxOrgId` / `active_org` cookie to gate with `row.org_id` (e.g. `if (ctxOrgId && refundContext.orgId !== ctxOrgId) throw Forbidden`):
+     1. Trace `ctx.activeOrgId` origin. Often `active_org` raw cookie — check `server/trpc.ts`, `server/context.ts` ~ lines 30–60.
+     2. Search for membership re-validation: `authzService.assertCan(ctx.userId, "org:read"|"org:manage", {type:"org", orgId: rowOrgId}, ctx.authzCache)` OR `OrgContextService.getWhoAmI(userId, activeOrgSignal)` OR membership query confirming `user ∈ org` BEFORE gating?
+     3. Buyer fallback path (e.g. `if (row.userId === ctx.userId) allowed`) is acceptable mitigation for buyer-owned data.
+   - **Severity per procedure**:
+     - **CRITICAL if** it is a **READ** procedure (query `getEligibility`, `getStatus`, detail view) and gating is ONLY cookie↔row comparison WITHOUT validated membership (no assertCan/whoami). Reason: any authenticated user sets cookie → reads cross-org data.
+     - **HIGH if** it is a **WRITE** procedure (mutation `refundOrder`, `cancelBooking`) and gating is cookie↔row WITHOUT validated membership, BUT there are downstream guards (DB order locked + authz.assertCan with rowOrgId) as mitigation.
+     - **LOW/NO FLAG** only if (a) assertCan called BEFORE gating with row orgId (not cookie), OR (b) whoami revalidated membership, OR (c) all access through buyer fallback path.
+9. **MANDATORY — authzService.assertCan 4th arg authzCache threading (HIGH if missing in router-callable service paths)**. If diff contains `.assertCan(userId, permission, resource)`: check signature — accepts `cache?: AuthzCache` 4th optional param? Does router ctx expose `ctx.authzCache`? Trace params router → service. HIGH if router-reachable services call assertCan WITHOUT passing cache (issues fresh isPlatformAdmin DB query per call under default db-caching rule).
+10. **Server action / route handler auth ordering (CRITICAL if after writes)**. Authz checks MUST run BEFORE any DB write or side effect. CRITICAL if reversed.
 
 ---
 
@@ -383,25 +383,25 @@ Checks:
 
 Checks:
 1. **Router layering — NO business logic + NO direct repository instantiation inside procedures (HIGH/MEDIUM)**.
-   - **Primeiro (obrigatório)**: Liste TODOS os procedures/handlers NOVOS/MODIFICADOS no router file (ex: bookingRouter → 3 procedures).
-   - **Para CADA procedure (HIGH se violar)**:
-     - (a) Conta linhas do corpo interno do handler (não conta a linha de declaração do procedure). Se `> 50 linhas` → suspeito de violação Router→Service→Repository.
-     - (b) Procura por instantiation de repositórios DENTRO do router file: `new OrderRepository(...)`, `new RefundRepository(...)`, ou imports de arquivos repository e chamadas diretas `.findById(...)` / `.getRefundContext(...)` / `.findByPaymentId(...)` SEM passar por um Service. Qualquer uso direto de repository methods no router → **HIGH severity violation** (architecture.md: "Routers must not own data access").
-     - (c) Procura por arithmetic/window/refund-gate inline: `15_552_000_000` (ms constants), partial-refund detection, `scannedCount > 0` gates, `if (eventStartAt <= Date.now())` event-past gates, `180*24*60*60*1000` constants hardcoded. E existe um Service correspondente com os mesmos gates (mesmo que usando outra constante com mesmo valor) → **HIGH drift risk**.
-     - (d) Se só tem inline calculations (sem direct repo instantiation) e não tem service equivalente → **MEDIUM**.
-   - Fix: router procedure = 3 linhas máximo: `validate input` → `authorize assertCan(...)` → `call service.someMethod(...)`. Methods de service retornam structs que o router só repassa como response.
-2. **Repository-layer bypass writes inside services (HIGH for writes; MEDIUM for reads)**. If diff contains `queryRunner.manager.getRepository(X).update/.insert/.delete`, or raw `.createQueryBuilder(...).execute()` writes inside a service file (not a repository file). Architecture rule: "Repositories own all TypeORM querying". HIGH if writes (breaks the atomic DB schema surface); MEDIUM if read-only queries.
-3. **Entity/enum definitions inside apps** (shared DB package pattern). Flag HIGH if apps define TypeORM entities / duplicate enums / own migration runners. All entities should live in the shared DB package detected by che-xray (look for `@<scope>/db` / `packages/db` / project profile). Only bypass if project profile explicitly says "no monorepo DB package".
-4. **Migration Hygiene — hand-created fabricated timestamps + intra-branch consolidation + RLS policy defaults (HIGH/MEDIUM)**. Se `changedFiles[]` contiver quaisquer arquivos em paths `**/migrations/*.ts` / `**/migrations/*.sql` / `**/db/migrations/*`:
-   - **(a) Fabricated timestamps (HIGH)**: Extraia o prefixo numérico (geralmente 13 dígitos ms UNIX) de CADA migration filename (ex: `1788150000000-CreateRefundsTable.ts`, `1788150001000-AddPaymentsRefundId.ts`). SE múltiplas migrations no mesmo branch tem timestamps REDONDOS / IGUAIS NO ÚLTIMO 3-4 DÍGITOS / espaçamento EXATO entre si (ex: 1000ms, 10_000ms) → **HIGH**. Motivo: `migration:create` CLI gera timestamps de tempo real (aleatórios nos últimos dígitos). Timestamps redondos/arredondados = arquivo criado à mão → viola packages/db rule "Never hand-create migration files".
-   - **(b) Intra-branch patching (HIGH)**: Uma migration M-1 cria um enum tipo X (ex: `CREATE TYPE refund_status_enum AS ENUM (PENDING,COMPLETED,FAILED)`), e OUTRA migration M-2/M-3/... DENTRO DO MESMO BRANCH (mesmo diff) ALTERA esse mesmo enum com `ALTER TYPE ... ADD VALUE` ou DROP + RECREATE → **HIGH**. Motivo: pré-merge, branch migrations DEVEM ser consolidadas em 1 migration end-state (não 5 patches seguidos).
-   - **(c) RLS policy TO PUBLIC default + grants inconsistentes (MEDIUM)**: Nas migrations SQL olhe políticas de RLS: `CREATE POLICY name ON table ...` SEM cláusula `TO authenticated`/`TO service_role` (implica `TO PUBLIC`). Olhe também `GRANT ...`: e política é INSERT mas só `GRANT SELECT` foi dado (policy fica inerte para client roles). **MEDIUM severity**.
-5. **New npm/cargo/pip dependency added to package.json/Cargo.toml/requirements.txt/go.mod** AND:
-   - It wasn't mentioned in the ticket/scope
-   - There's NO justification comment in the PR body
-   - A cursory repo search shows a similar helper/function/module already exists
-6. **PR with >30 files changed** WITHOUT a clear justification in the PR description why this can't be split into 2+ smaller PRs. (Flag as MEDIUM risk — harder to review, higher chance of hidden bugs.)
-7. **File added outside the module area** that the scope was supposed to touch — scope creep indicator.
+   - **First (mandatory)**: List ALL NEW/MODIFIED procedures in router file.
+   - **For EACH procedure (HIGH if violating)**:
+     - (a) Body line count (excluding declaration) `> 50 lines` → suspect Router→Service→Repository violation.
+     - (b) Repository instantiation INSIDE router file: `new OrderRepository(...)`, or repository imports and direct `.findById(...)` calls WITHOUT passing through Service. **HIGH severity violation** (architecture.md: "Routers must not own data access").
+     - (c) Inline arithmetic/window/refund-gate: `15_552_000_000` (ms constants), `if (eventStartAt <= Date.now())`. AND corresponding Service exists with same gates → **HIGH drift risk**.
+     - (d) If only inline calculations (no direct repo instantiation) and no equivalent service → **MEDIUM**.
+   - Fix: router procedure = 3 lines max: `validate input` → `authorize assertCan(...)` → `call service.someMethod(...)`. Service methods return structs router just passes as response.
+2. **Repository-layer bypass writes inside services (HIGH for writes; MEDIUM for reads)**. If diff contains `queryRunner.manager.getRepository(X).update/.insert/.delete`, or raw `.createQueryBuilder(...).execute()` writes inside service (not repository). Architecture rule: "Repositories own all TypeORM querying". HIGH if writes; MEDIUM if read-only.
+3. **Entity/enum definitions inside apps** (shared DB package pattern). HIGH if apps define TypeORM entities / duplicate enums / own migrations. All entities should live in shared DB package detected by che-xray. Bypass ONLY if project profile says "no monorepo DB package".
+4. **Migration Hygiene — fabricated timestamps + intra-branch consolidation + RLS defaults (HIGH/MEDIUM)**. If `changedFiles[]` has `**/migrations/*.ts` / `**/migrations/*.sql` / `**/db/migrations/*`:
+   - **(a) Fabricated timestamps (HIGH)**: Extract 13-digit ms UNIX prefix from EACH migration filename. IF multiple migrations in same branch have ROUND / IDENTICAL LAST 3-4 DIGITS / EXACT spacing (e.g. 1000ms, 10_000ms) → **HIGH**. Reason: `migration:create` CLI generates real-time timestamps (random last digits). Round timestamps = hand-created → violates "Never hand-create migration files" rule.
+   - **(b) Intra-branch patching (HIGH)**: M-1 creates enum X, M-2/M-3/... IN SAME BRANCH (same diff) ALTERS same enum with `ALTER TYPE ... ADD VALUE` or DROP + RECREATE → **HIGH**. Reason: branch migrations MUST be consolidated into 1 end-state migration pre-merge.
+   - **(c) RLS policy TO PUBLIC default + inconsistent grants (MEDIUM)**: Check SQL RLS policies: `CREATE POLICY name ON table ...` WITHOUT `TO authenticated`/`TO service_role` clause (implies `TO PUBLIC`). Check `GRANT ...`: if policy is INSERT but only `GRANT SELECT` given → policy inert for client roles. **MEDIUM severity**.
+5. **New dependency added to package.json/Cargo.toml/requirements.txt/go.mod** AND:
+   - Not mentioned in ticket/scope
+   - NO justification in PR body
+   - Repo search shows similar existing helper/function/module
+6. **PR with >30 files changed** WITHOUT clear justification in PR description why it cannot be split. (MEDIUM risk — harder to review, higher hidden bug chance.)
+7. **File added outside module area** scope was supposed to touch — scope creep indicator.
 
 ---
 
@@ -409,265 +409,262 @@ Checks:
 
 How:
 1. Take scope description / ticket ACs.
-2. For each file changed: classify what that file implements.
+2. For each changed file: classify implementation.
 3. Compare:
-   - **Missing from PR** = ACs not implemented → CRITICAL/HIGH depending on severity
-   - **Added to PR but never mentioned** = scope creep → MEDIUM severity, must justify; user explicitly asked us to flag this.
+   - **Missing from PR** = ACs not implemented → CRITICAL/HIGH
+   - **Added to PR but never mentioned** = scope creep → MEDIUM, must justify.
    - Examples:
-     - Ticket = "fix login 500" → PR also adds "new forgot password feature" → SCOPE CREEP, flag MEDIUM.
-     - Ticket = "add event search" → PR skips the pagination AC mentioned → MISSING, flag HIGH.
+     - Ticket = "fix login 500" → PR adds "forgot password feature" → SCOPE CREEP, MEDIUM.
+     - Ticket = "add event search" → PR skips pagination AC → MISSING, HIGH.
 4. **UI demo simulation vs misleading commit/AC claim (HIGH if mismatch)**.
-   - **Primeiro (obrigatório)**: Liste TODOS arquivos `.tsx` NOVOS no diff, especialmente aqueles com nome matchando a feature do ticket (ex: ticket "Process a refund" → arquivos `*Refund*Action.tsx`, `*Refund*Dialog.tsx`, `*BookingRefund*.tsx`). Para CADA um, rode o **PROCEDIMENTO 5-PASS NÃO-PULE** abaixo:
-   - **Passo A — Fake latency scan**: regex match `/setTimeout\s*\(\s*r\s*=>\s*\{?\s*\}|await\s+new\s+Promise\s*\(\s*(?:r|resolve)\s*=>\s*.*setTimeout|sleep\s*\(\s*1\d{3}\s*\)/` no body do componente. Se match → A = YES.
-   - **Passo B — Simulated failure scan**: regex match `/Math\.random\s*\(\s*\)\s*<\s*0\.\d+/` (ex: `Math.random() < 0.1`). Se match → B = YES.
-   - **Passo C — Discarded generated key scan**: regex match `/void\s+(?:idempotencyKey|uuid|key|nonce|generatedKey)\s*[;,]/` ou variável gerada com `crypto.randomUUID()` / `ulid()` / `nanoid()` e nunca usada em parâmetro de chamada API. Se match → C = YES.
-   - **Passo D — Toast success/fail SEM backend call**: Procure por `toast.success(` ou `toast.error(` ou `toast.info(`. ACIMA dessa linha (dentro de 10 linhas) existe chamada a `api.xxx.useMutation` / `mutate(` / `mutateAsync(` / `fetch(` / `axios.post(` / `trpcClient.xxx(` com endpoint real? SE toasts aparecem SEM que NENHUMA chamada a backend exista no handler → D = YES.
-   - **Passo E — Demo data source scan**: Procure por imports `/demoBookings|demo-data|mock-data|seed-demo/` no topo do componente, ou variáveis nomeadas `demoXXX`, `mockXXX` usadas como data source (não como test fixtures). Se match → E = YES.
-   - **Severity check**: SE (A OU B OU C OU D) for YES **E** (commit message / PR title / ticket ACs dizem que a feature é "wired to backend" / "complete UI integration" / não diz "demo" ou "scaffold") → **HIGH severity finding**. Motivo: commit misleading faz reviewer/PM achar que feature está integrada, mas é fake.
-   - Fix: OU (1) wire o handler corretamente: chamar o tRPC mutation com o idempotencyKey gerado, gate visibility com getEligibility/service call, ou (2) prominentemente label o componente como DEMO e separar de shipping code path (ex: mover para `components/demo/*` + comentário `// TODO REMOVE BEFORE SHIP` no topo).
-5. **4.7 Test-suite naming behavioral check (REGRA 7.9 do che, MEDIUM / WARN).**
+   - **First (mandatory)**: List ALL NEW `.tsx` files, especially matching feature ticket (e.g. ticket "Process a refund" → `*Refund*Action.tsx`, `*Refund*Dialog.tsx`). For EACH, run **MANDATORY 5-PASS PROCEDURE**:
+   - **Pass A — Fake latency scan**: regex match `/setTimeout\s*\(\s*r\s*=>\s*\{?\s*\}|await\s+new\s+Promise\s*\(\s*(?:r|resolve)\s*=>\s*.*setTimeout|sleep\s*\(\s*1\d{3}\s*\)/` in body. If match → A = YES.
+   - **Pass B — Simulated failure scan**: regex match `/Math\.random\s*\(\s*\)\s*<\s*0\.\d+/` (e.g. `Math.random() < 0.1`). If match → B = YES.
+   - **Pass C — Discarded generated key scan**: regex match `/void\s+(?:idempotencyKey|uuid|key|nonce|generatedKey)\s*[;,]/` or variable generated with `crypto.randomUUID()` / `ulid()` / `nanoid()` and never used in API call param. If match → C = YES.
+   - **Pass D — Toast success/fail WITHOUT backend call**: Search for `toast.success(` / `toast.error(` / `toast.info(`. WITHIN 10 lines ABOVE, is there `api.xxx.useMutation` / `mutate(` / `fetch(` / `trpcClient.xxx(` real endpoint call? IF toasts appear WITHOUT ANY backend call in handler → D = YES.
+   - **Pass E — Demo data source scan**: Search for `/demoBookings|demo-data|mock-data|seed-demo/` imports in component, or variables named `demoXXX`, `mockXXX` used as data source (not test fixtures). If match → E = YES.
+   - **Severity check**: IF (A OR B OR C OR D) YES **AND** (commit/PR/ticket ACs) claim feature is "wired to backend" / "complete UI integration" / not "demo/scaffold" → **HIGH severity finding**. Reason: misleading commit makes reviewer/PM think feature integrated when it's fake.
+   - Fix: (1) wire handler correctly (call tRPC mutation with generated idempotencyKey, gate visibility with service call), or (2) prominent DEMO label and separate from shipping code (move to `components/demo/*` + `// TODO REMOVE BEFORE SHIP`).
+5. **4.7 Test-suite naming behavioural check (RULE 7.9, MEDIUM / WARN).**
 
-   **🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça isso):**
-   > ❌ **ERRADO:** Reclamar que um teste NÃO tem `FLO-xxx` / `T<N>` / `AC<N>` no título.
-   > ✅ **CORRETO:** Ter essas referências NO TÍTULO é ANTI-PADRÃO (ruim). Não tê-los e descrever APENAS comportamento observável é BOM / COMPLIANT.
+   **🔴 HARD RULE — PROHIBITED INVERSION (NEVER do this):**
+   > ❌ **WRONG:** Complain that a test DOES NOT have `FLO-xxx` / `T<N>` / `AC<N>` in title.
+   > ✅ **CORRECT:** Having these references IN TITLE is ANTI-PATTERN (bad). NOT having them and describing ONLY observable behaviour is GOOD / COMPLIANT.
    >
-   > **Regra de decisão 1-sentence:** `Título contém FLO-ID? → BAD = FINDING. Título NÃO contém FLO-ID? → GOOD = NUNCA reporte finding por isso.`
-   > **Traceabilty correta (NÃO viola REGRA 7.9):** comentário JSDoc `/** @ticket FLO-714 */` ACIMA do bloco, OU linha `// @ticket FLO-714 | @ac 3.2 | @task T1.4` COMO 1ª LINHA DENTRO do bloco. JAMAIS na string de título.
+   > **1-sentence decision:** `Title contains FLO-ID? → BAD = FINDING. Title DOES NOT contain FLO-ID? → GOOD = NEVER report finding for this.`
+   > **Correct traceability (NOT violating RULE 7.9):** JSDoc comment `/** @ticket FLO-714 */` ABOVE block, OR `// @ticket FLO-714 | @ac 3.2 | @task T1.4` line AS 1st LINE INSIDE block. NEVER in title string.
 
-   Scan test files added/modified in the diff (`*.test.*`, `*.spec.*`, files inside `__tests__/`). Detect anti-patterns **EXCLUSIVAMENTE in the TITLE STRING** of `describe("...")` / `it("...")` / `test("...")`:
-   - Ticket IDs: `FLO-\d+`, ticket-codes like `ABC-123` (qualquer prefixo 2+ letras + hífen + número no TÍTULO = BAD)
+   Scan added/modified test files (`*.test.*`, `*.spec.*`, `__tests__/`). Detect anti-patterns **EXCLUSIVELY in TITLE STRING** of `describe("...")` / `it("...")` / `test("...")`:
+   - Ticket IDs: `FLO-\d+`, codes like `ABC-123` (ANY 2+ letters prefix + hyphen + number in TITLE = BAD)
    - Task/item IDs: `Task? T\d+(\.\d+)?`, `Item \d+`
    - AC/section IDs: `AC\d+`, `§\d+(\.\d+)?`, `REGRA \d+`, `SPEC_XXX`, `PRD §`
    - Phase/story IDs: `Fase \d+`, `Story #?\d+`
 
-   Severity (FINDING = BAD title = contém os patterns ACIMA):
-   - 1–4 bad titles → **LOW WARN** (non-blocking, show in "Nice-to-have" list)
-   - 5–9 bad titles → **MEDIUM** (appear in main findings; require rename before merge or explicit override comment)
-   - ≥10 bad titles → **HIGH** (blocking: relatório de CI vai ser inútil, alguém quebra essa regra em escala)
+   Severity (FINDING = BAD title = contains patterns ABOVE):
+   - 1–4 bad titles → **LOW WARN** (non-blocking, "Nice-to-have" list)
+   - 5–9 bad titles → **MEDIUM** (main findings; rename required or explicit override)
+   - ≥10 bad titles → **HIGH** (blocking: CI report useless, breaking rule at scale)
 
-   **❌ NUNCA gere finding por "ausência de FLO-xxx no título"** → Isso é o comportamento DESEJADO, compliant. Qualquer relatório que flagge ausência de task-id no título é uma REGRESSÃO na review skill, invalida essa seção do report.
+   **❌ NEVER generate finding for "missing FLO-xxx in title"** → Desired behavior, compliant. Any report flagging missing task-id in title is a REGRESSION, invalidates section.
 
-   Never flag the JSDoc traceability comment ABOVE a block or a `// @ac X | @task Y | @ticket Z` line INSIDE the block as bad. Those are the RECOMMENDED way to keep traceability without polluting the display title.
-6. **4.8 Route-level / failure-path test gap check (MEDIUM if missing)**. If Category 0 found a new webhook route event type → require 1 route-level signed-payload POST test (not just svc.handleEvent direct). If Category 0.3 flagged a tx pattern → require 1 failure path test: Stripe 5xx → tx rolls back + retry with same idempotency key → no double-effect. MEDIUM severity (waivable only with PR body sign-off override).
+   Never flag JSDoc traceability comment ABOVE block or `// @ac X | @task Y | @ticket Z` INSIDE block as bad. They are RECOMMENDED for traceability without title pollution.
+6. **4.8 Route-level / failure-path test gap check (MEDIUM if missing)**. If Category 0 found new webhook route event type → require 1 route-level signed-payload POST test. If Category 0.3 flagged tx pattern → require 1 failure path test: Stripe 5xx → tx rollback + retry with same idempotency key → no double-effect. MEDIUM (waivable ONLY with PR body sign-off override).
 
 ---
 
 ### Category 5: 🟡 Design Quality / Ousterhout RED FLAGS (engineering-contracts Appendix D D.1) — HIGH if RF01-RF04, MEDIUM if RF05-RF13
 
-Appendix D canonical source → `skills/engineering-contracts/SKILL.md` "Appendix D — A Philosophy of Software Design (John Ousterhout)". This category never flags patterns explicitly requested in the ticket scope (downgrade to NIT waivable only if scope explicitly asked for the abstraction shape).
+Appendix D canonical source → `skills/engineering-contracts/SKILL.md`. Never flag patterns explicitly requested in ticket scope (downgrade to NIT waivable ONLY if scope explicitly asked for abstraction shape).
 
-**How to apply this category (never guess — always diff-based):**
+**How to apply (never guess — diff-based):**
 
-1. **RF01 — Shallow Module / Class / Abstraction (HIGH if NEW abstraction, 3+ files depend on it, API surface > implementation lines)**.
-   - Trigger: Diff adds a NEW exported `class X`, `interface X`, `abstract class X`, `function createXService()` factory, or `useX()` hook, AND: (a) the abstraction has `> 8 public exports/methods` OR (b) 3+ OTHER files in the diff import from it, AND (c) total implementation LOC inside the abstraction is `≤ 1.2× the public API surface LOC` (lines of signatures/exports/types = ~same as implementation). This is Ousterhout #1 signature red flag: "new abstraction adds complexity without hiding any."
-   - Downgrade to NIT if: scope file / task envelope explicitly says "create this interface / this generic hook for reuse across future features."
+1. **RF01 — Shallow Module / Class / Abstraction (HIGH if NEW abstraction, 3+ files depend, API surface > implementation lines)**.
+   - Trigger: Diff adds NEW exported `class X`, `interface X`, `abstract class X`, `createXService()` factory, or `useX()` hook, AND: (a) abstraction has `> 8 public methods` OR (b) 3+ OTHER files in diff import from it, AND (c) total implementation LOC ≤ 1.2× public API surface LOC. Ousterhout #1 red flag: "new abstraction adds complexity without hiding any."
+   - Downgrade to NIT if: scope file / task envelope explicitly says "create this interface / generic hook for future reuse."
 
-2. **RF02 — Information Leakage across module boundaries (HIGH if cross-package / cross-layer)**.
-   - Trigger (scan imports + function args):
-     - Service file in `packages/foo/src/services/x.ts` imports a DATABASE-SPECIFIC type (ex: `QueryRunner`, `EntityManager`, `SupabaseClient`) from a DB-only package and exposes it in any public function parameter or return type → caller must now know the DB engine = info leakage HIGH.
-     - Backend route handler returns an internal DB entity CLASS directly (not a pick/omit/response DTO type) including internal fields (ex: `stripeIdRaw`, `authzCache`, internal enums) → frontend now knows backend schema details = HIGH.
-     - Config parsing details (zod schema field names, `process.env.KEY` lookups) leak into component/service files (not just a typed config object) = MEDIUM.
+2. **RF02 — Information Leakage across boundaries (HIGH if cross-package / cross-layer)**.
+   - Trigger (scan imports + args):
+     - Service in `packages/foo/src/services/x.ts` imports DATABASE-SPECIFIC type (e.g. `QueryRunner`, `EntityManager`, `SupabaseClient`) and exposes in public param or return type → caller must know DB engine = HIGH leakage.
+     - Backend handler returns internal DB entity CLASS directly (not pick/omit/DTO) including internal fields (e.g. `stripeIdRaw`, `authzCache`) → frontend knows backend schema = HIGH.
+     - Config parsing details (zod schema field names, `process.env.KEY`) leak into component/service (not just typed config object) = MEDIUM.
 
 3. **RF03 — Pass-Through Method / Handler Chain (HIGH if ≥3 layers deep with NO logic)**.
-   - Trigger: Find a call chain `router.foo → service.foo(...args) → repository.foo(...args) → queryRunner.manager.getRepository(X).foo(...args)` where 2+ consecutive layers do NOTHING except pass the exact same args forward (no validation, no authz, no mapping, no idempotency key injection, no error wrapping, no metric emit). Flag HIGH per chain of depth ≥3 with ZERO added value per intermediate layer. If one layer adds authz or input validation only → flag MEDIUM (still suspicious but not pure passthrough).
+   - Trigger: Find call chain `router.foo → service.foo(...args) → repository.foo(...args) → ...` where 2+ consecutive layers do NOTHING except pass same args (no validation, authz, mapping, idempotency key, error wrapping). HIGH per chain depth ≥3 with ZERO added value. If one layer adds authz or input validation only → MEDIUM (suspicious but not pure passthrough).
 
-4. **RF04 — Temporal Decomposition (HIGH if a business concept is split into classes/modules by PHASE instead of by DOMAIN ENTITY)**.
-   - Trigger (file structure scan): If scope was "process a refund" → diff creates files like `RefundStep1Validate.ts`, `RefundStep2StripeCall.ts`, `RefundStep3UpdateDB.ts`, `RefundStep4EmitEvent.ts` with NO `RefundService.ts` / `Refund aggregate` file that OWNS the concept + invariant checks. Files grouped by WHEN they run (sequential phases) instead of WHAT domain concept they implement → HIGH. Correct shape = one module owns the concept and its invariants, exposes one method orchestrating the steps internally.
+4. **RF04 — Temporal Decomposition (HIGH if business concept split by PHASE instead of ENTITY)**.
+   - Trigger (file structure): If scope "process refund" → diff creates `RefundStep1Validate.ts`, `RefundStep2StripeCall.ts`, `RefundStep3UpdateDB.ts`, `RefundStep4EmitEvent.ts` with NO `RefundService.ts` / `Refund aggregate` owning concept + invariants. Grouped by WHEN they run instead of WHAT concept → HIGH. Correct: one module owns concept and invariants, exposes method orchestrating steps internally.
 
 5. **RF05 — Repetition / Near-Duplicate Logic (MEDIUM if 2+ blocks, NIT if just formatting)**.
-   - Scan for two+ blocks in the diff with `≥ 12 identical token sequences` in different files (not test fixtures). Flag MEDIUM unless scope explicitly says "ship fast with duplication now, DRY in follow-up PR" (documented in PR body).
+   - Scan for 2+ blocks with `≥ 12 identical token sequences` in different files (not test fixtures). MEDIUM unless scope explicitly says "ship fast with duplication, DRY in follow-up" (documented in PR body).
 
 6. **RF06 — Over-generic `<T>` with exactly 1 concrete caller (MEDIUM)**.
-   - Trigger: Diff adds `class Foo<T>` or `function bar<T>()` or `interface X<T, U, V>` with 3+ generic params, AND there is EXACTLY 1 concrete instantiation/caller in the whole repo. If scope explicitly mentions "will be reused in epic Y" → downgrade to LOW waivable.
+   - Trigger: Diff adds `class Foo<T>` / `function bar<T>()` / `interface X<T, U, V>` with 3+ generic params, AND EXACTLY 1 concrete instantiation in repo. If scope mentions "reused in epic Y" → downgrade to LOW waivable.
 
 7. **RF07 — Comment / Over-comment Explaining WHAT, not WHY (MEDIUM if masking complexity)**.
-   - Trigger: A `/* 5+ line comment block */` that literally restates the next 5 lines in English (ex: "Now we get the order and then we check if it's paid" followed by `const order = await repo.findById(); if (order.status === PAID) {...}`). If the code needs that much WHAT-comment → the abstraction is wrong; rename functions/extract helpers instead of prose. MEDIUM only if total comment-LOC ≥ implementation-LOC for that block.
+   - Trigger: `/* 5+ line comment block */` literally restating next 5 lines in English. If code needs that much WHAT-comment → abstraction wrong; rename functions/extract helpers. MEDIUM only if total comment-LOC ≥ implementation-LOC.
 
 8. **RF08-RF13 — Secondary flags (all MEDIUM, grouped):**
-   - RF08: Boolean-flag hell = function with `≥ 4 boolean params` controlling internal behavior (prefer 2 separate functions / strategy 2-max).
-   - RF09: Conjoined methods = one public function whose body does two conceptually unrelated things with a single shared error path (split).
-   - RF10: Configuration/config flags explosion = `≥ 5 new YAML/env vars added` for ONE feature with no justification in scope (default-first, expose only what users must override).
-   - RF11: Unused generality / unused extension point = NEW exported parameter, optional overload, or interface method that has ZERO callers in the diff and zero mention in the scope document.
-   - RF12: Wrong naming = class/module name is a VERB (ex: `ProcessRefund.ts`) not a NOUN that owns responsibility (ex: `RefundProcessor` or better `RefundService`).
-   - RF13: Hidden side effect in a getter/helper = function named `getX`, `loadX`, `findX`, `formatX` that actually WRITES / MUTATES / EMITS events internally.
+   - RF08: Boolean-flag hell = `≥ 4 boolean params` (prefer 2 separate functions / 2-max strategy).
+   - RF09: Conjoined methods = one public function doing two unrelated things with single shared error path (split).
+   - RF10: Config explosion = `≥ 5 new YAML/env vars` for ONE feature without justification (default-first).
+   - RF11: Unused generality = NEW exported param, optional overload, or interface method with ZERO callers and no mention in scope.
+   - RF12: Wrong naming = class/module name is a VERB (e.g. `ProcessRefund.ts`) not a NOUN owning responsibility (e.g. `RefundService`).
+   - RF13: Hidden side effect in getter/helper = `getX`, `loadX`, `findX`, `formatX` actually WRITES / MUTATES / EMITS internally.
 
-**HARD RULE for ship integration §0.9.2 (≤2 HIGH findings auto-fix contract):** ANY Category 5 HIGH finding (RF01-RF04) counts TOWARD the same "≤ 2 HIGH total" ship-gate threshold alongside Categories 0–4 HIGHs. This means: 2 Category 5 HIGHs alone also triggers the Ask User / Request Changes path, just like Architecture HIGHs.
-
----
-
-### Category 6: 🟡 Logging & Observability Anti-Patterns (engineering-contracts §12 + NEW §20) — HIGH for PII/raw-secret leaks, MEDIUM for verbosity/signal/levels
-
-> **Canonical source for rules:** `engineering-contracts/SKILL.md` §12 (existing Observability & Logging) + §20 (new expanded Logging & Observability Standard, written 2026-09-01). Apply this category to any diff that: (a) adds new logger calls / console calls / echo statements, (b) adds new IO flow (HTTP / DB / file / CLI script / pipeline), (c) touches shell scripts / CI workflows / scripts, or (d) changes existing logger config (formatter / level / sinks). Flag severity follows the table below; never guess — always cite the EXACT anti-pattern ID.
-
-**How to detect each anti-pattern:**
-
-1. **L6.1 🔴 CRITICAL / HIGH — Raw PII / secrets in log output.** Diff contains literal `console.log(email)` / `logger.info({ phone })` / `echo "$user_input` or any logger.* call carrying raw `email`, `phone`, `address`, `stripe_id` (without hash), credit card digits, SSN, government ID, `sk_*`, `AWS_SECRET_ACCESS_KEY`, raw JWT token string, API keys in env dump full. Rule reference §20.6. Use hash / mask / omit.
-2. **L6.2 🟠 HIGH — Wrong level: error as info or debug floods.** Examples: `logger.info(">>> ENTERING function foo` on EVERY internal call (noise); `console.error` used for expected handled branch that's NOT unrecoverable); logger.debug with full request payloads on prod default INFO level (leak volume).
-3. **L6.3 🟡 MEDIUM — Missing structured correlation fields.** Diff writes logs as free-form string `"User did X"` sem contexto. Faltam: `traceId`, `spanId`, `correlationId`, `orgId`, `userId`, idempotency key (where applicable), structured fields discriminante `operation` ou `event`.
-4. **L6.4 🟡 MEDIUM — Script / bash / CI workflow sem logging expressivo.** Shell script novo (>30 linhas) que NÃO tem echo em steps de IO ou usa um `set -x` flood SOZINHO sem mensagens semânticas. Ou tem echo sem níveis `[INFO]` / `[WARN]` / `[ERROR]` prefixados. Aplicar especialmente a scripts que escreve em bash, Makefile, GitHub Actions YAML `run:` blocos.
-5. **L6.5 🟡 MEDIUM — Flood / log em loop / hot path verbose.** Dentro de um loop for N iterações, cada iteração dá um logger.info; ou hot path (<1ms por operação normal) tem 3+ logger calls; ou faz stringify JSON FULL de listas/arrays grandes sem truncamento. Regra 20.7 "No Flood Volume".
-6. **L6.6 🟡 MEDIUM — Didn't follow repo existing logger wiring.** Repo tem um `@flockr/logger`, `@/server/logger.ts`, `OTEL provider`, `pino` configured singleton, `winston` transport, etc. — mas diff escreve `console.log` cru. Repo convention existente não foi seguida. Mesmo que o chamador não sabe, devemos detectar e usar o padrão (§20.4 "Use existing wiring first").
-7. **L6.7 🔵 LOW — Empty catch block logging sem contexto.** `catch(e) { console.log("deu ruim") sem structured error; sem error message; sem stack trace estruturado; sem ID da requisição. BOM 1-liners. Melhor: logger.error({ err, op: "refund.create" }.
-
-**Severity default:**
-- L6.1 = HIGH ou secrets raw → CRITICAL se for ambiente prod persistente log; HIGH se só dev console; HIGH anyway;
-- L6.2 / L6.5 = HIGH se a falha de nivel ruim;
-- Demais itens → MEDIUM default;
-
-**Coverage table row obrigatória (Coverage of Review /report deve incluir Category 6 checks:** Coverage of Review" com "✓ Yes — 8 categorias.
+**HARD RULE for ship integration §0.9.2 (≤ 2 HIGH auto-fix contract):** ANY Category 5 HIGH finding (RF01-RF04) counts TOWARD the "≤ 2 HIGH total" threshold.
 
 ---
 
-### Category 7: 🟢 Testing Gaps & Regression Lock (NEW QA-Centric ONDA1) — HIGH for missing tests on behavior change, MEDIUM for traceability comments, LOW for skip without ticket
+### Category 6: 🟡 Logging & Observability Anti-Patterns (engineering-contracts §12 + §20) — HIGH for PII/raw-secret leaks, MEDIUM for verbosity/signal/levels
 
-> **Canonical enforcement companion rule:** che-debugger-bugfix Step 1.2.5 REPRO AUTOMATION LOCK enforces the SAME rules for the bug-fix mode. This Category 7 applies for feature-mode diffs and code that touches runtime behavior / routes / UI components.
+> **Canonical source:** `engineering-contracts/SKILL.md` §12 + §20. Apply to any diff adding/changing logger/console/echo calls, IO flows, shell scripts, CI workflows, or logger config. Cite EXACT anti-pattern ID.
 
-**How to detect each finding (diff-based, never guess — always cross-check the changed file list against `*test*`, `*spec*`, `__tests__/` additions):**
+**How to detect:**
 
-1. **G7.1 🟠 HIGH — ≥20 added lines of runtime behavior code WITHOUT any test file added/modified in the same diff.**
-   - Compute: from `changedFiles[]`, count ONLY lines ADDED (`+` prefix in unified diff) in files under `src/` / `server/` / `app/` / `packages/*/src` / `components/` (exclude pure type-only `.d.ts`, pure interface files, enums-only files, index re-exports, config files, migrations-only `.ts`/`.sql`).
-   - Also count ONLY files matching patterns `*.test.*`, `*.spec.*` inside `__tests__/`, `test/`, `spec/` directories in changedFiles.
-   - If behavior additions ≥20 lines AND test file count added/modified = 0 → **HIGH G7.1 = MISSING TESTS FOR NEW BEHAVIOR.**
-   - **EXEMPTIONS (waive G7.1 only if body match):**
-     - Conventional commit TYPE is `refactor:` AND commit body includes the phrase `"renames only"` or `"no behavior change"` — AND you can visually confirm the diff is only variable/class/file renames.
-     - Conventional commit TYPE is `style:` (Biome formatting, whitespace, CSS-only cosmetic with no semantic change).
-     - Conventional commit TYPE is `docs:` / `chore(ci):` / `chore(deps):` bump-only — AND zero runtime src/ files changed.
-     - Conventional commit body contains an EXPLICIT override declaration `QA_OVERRIDE: "no test possible here: <1-line justification>"` signed-off by a codeowner in the PR body.
-   - **Fix suggestion (when flagged):** Add a behavioral spec (unit preferred, integration if ≥2 modules cross; route-level for REST/tRPC; Playwright for UI) matching the behavior. At minimum, write 1 happy-path + 1 sad-path per new exported function / route mutation.
+1. **L6.1 🔴 CRITICAL / HIGH — Raw PII / secrets in log output.** Diff contains literal `console.log(email)` / `logger.info({ phone })` / `echo "$user_input` or logger call with raw `email`, `phone`, `address`, `stripe_id` (unhashed), credit card, SSN, `sk_*`, `AWS_SECRET_ACCESS_KEY`, raw JWT, API keys in full env dump. Rule §20.6. Use hash/mask/omit.
+2. **L6.2 🟠 HIGH — Wrong level: error as info or debug floods.** E.g.: `logger.info(">>> ENTERING function foo")` on EVERY internal call (noise); `console.error` for expected handled branch; logger.debug with full request payloads on prod (leak volume).
+3. **L6.3 🟡 MEDIUM — Missing structured correlation fields.** Logs as free-form string `"User did X"` without context. Missing: `traceId`, `spanId`, `correlationId`, `orgId`, `userId`, idempotency key, structured `operation` or `event` fields.
+4. **L6.4 🟡 MEDIUM — Script / bash / CI workflow without expressive logging.** New shell script (>30 lines) without echo in IO steps or `set -x` flood ALONE without semantic messages. Or echo without prefixed `[INFO]` / `[WARN]` / `[ERROR]` levels.
+5. **L6.5 🟡 MEDIUM — Flood / loop log / verbose hot path.** Inside loop N > 100, each iteration logs info; or hot path (<1ms) has 3+ logger calls; or full JSON stringify of large arrays without truncation. Rule 20.7 "No Flood Volume".
+6. **L6.6 🟡 MEDIUM — Did not follow repo existing logger wiring.** Repo has `@flockr/logger`, `@/server/logger.ts`, `OTEL provider`, `pino`, etc. — but diff writes raw `console.log`. Repo convention not followed (§20.4).
+7. **L6.7 🔵 LOW — Empty catch block logging without context.** `catch(e) { console.log("it failed") }` without structured error, message, stack, or request ID. Better: `logger.error({ err, op: "refund.create" })`.
+
+**Default severity:**
+- L6.1 or raw secrets → CRITICAL if prod log; HIGH if only dev console; HIGH anyway;
+- L6.2 / L6.5 = HIGH if failure of bad level;
+- Others → MEDIUM default;
+
+**MANDATORY Coverage table row:** "Coverage of Review" must include "✓ Yes — 8 categories" for Category 6.
+
+---
+
+### Category 7: 🟢 Testing Gaps & Regression Lock (QA-Centric ONDA1) — HIGH for missing tests, MEDIUM for traceability, LOW for skip without ticket
+
+> **Enforcement companion:** che-debugger-bugfix Step 1.2.5 REPRO AUTOMATION LOCK enforces SAME rules for bug-fix. Category 7 applies for feature diffs touching runtime behaviour / routes / UI.
+
+**How to detect (diff-based, cross-check changed files against `*test*`, `*spec*`, `__tests__/` additions):**
+
+1. **G7.1 🟠 HIGH — ≥20 added lines of runtime behaviour code WITHOUT test file added/modified.**
+   - Compute: from `changedFiles[]`, count ONLY lines ADDED (`+` prefix) in files under `src/`, `server/`, `app/`, `packages/*/src`, `components/` (exclude types, interfaces, enums, re-exports, configs, migrations).
+   - Also count ONLY files matching `*.test.*`, `*.spec.*` inside `__tests__/`, `test/`, `spec/`.
+   - If behaviour additions ≥20 lines AND test file count added/modified = 0 → **HIGH G7.1 = MISSING TESTS FOR NEW BEHAVIOUR.**
+   - **EXEMPTIONS (waive only if body match):**
+     - `refactor:` commit AND body includes `"renames only"` or `"no behavior change"` — and diff is only renames.
+     - `style:` commit (formatting, whitespace, CSS-only).
+     - `docs:` / `chore(ci):` / `chore(deps):` bump-only — and ZERO runtime src/ files changed.
+     - Commit body has EXPLICIT `QA_OVERRIDE: "no test possible here: <1-line justification>"` signed-off in PR body.
+   - **Fix:** Add behavioural spec (unit preferred, integration if ≥2 modules; route-level for REST/tRPC; Playwright for UI). Min 1 happy + 1 sad path per new exported function / route mutation.
 
 2. **G7.2 🟠 HIGH — Public API change OR interactive UI component added without integration/Playwright test.**
-   - **Branch A (Public API):** Diff touches ANY file that is a tRPC router (ex: `server/api/routers/xRouter.ts` mutates) or REST handler (`route.ts`, `app/api/*/route.ts`, `server/webhooks/*`) OR exposes a new exported function from a package's public `exports` field in `package.json`. AND same diff does NOT contain an addition/modification of a route-level test file (ex: `*.api.test.ts`, `__tests__/e2e/*`, `test/integration/router-*.spec.ts`). → **HIGH G7.2a.**
-   - **Branch B (Interactive UI component NEW):** Diff adds a NEW `.tsx` file that exports a user-visible interactive component (Button/Dialog/Form/Modal/Combobox/DatePicker/Tabs/Table/AutoComplete — keywords in filename or JSX elements containing handlers `onClick`, `onSubmit`, `onChange`, `useState`, `useReducer`, `useForm`, `useMutation`). AND no corresponding RTL/Playwright spec file for that component exists in the diff. → **HIGH G7.2b.**
-   - **Exemptions (waive only with explicit confirmation):** Component is explicitly marked DEMO/SCAFFOLD in filename (ex: `*Demo*.tsx`, `*Scaffold*.tsx`) + PR body has the warning. OR route is strictly internal / health-check (`/healthz` route).
-   - **Fix:** Add 1 route-level test (for API branch A) calling `trpcClient.xxx(...)` or `POST /api/xxx` with signed payload + valid auth; for UI add 1 RTL spec calling `fireEvent.click` + assertions.
+   - **Branch A (Public API):** Diff touches tRPC router (e.g. `server/api/routers/xRouter.ts` mutates) or REST handler (`route.ts`, `app/api/*/route.ts`, `server/webhooks/*`) OR new exported function from public `exports` field. AND no addition/modification of route-level test (`*.api.test.ts`, `__tests__/e2e/*`). → **HIGH G7.2a.**
+   - **Branch B (Interactive UI component NEW):** Diff adds NEW `.tsx` exporting user-visible interactive component (Button/Dialog/Form/Modal/Tabs/Table/AutoComplete — keywords or JSX handlers `onClick`, `onSubmit`, `onChange`, `useState`, `useMutation`). AND no RTL/Playwright spec exists. → **HIGH G7.2b.**
+   - **Exemptions:** explicitly marked DEMO/SCAFFOLD (`*Demo*.tsx`, `*Scaffold*.tsx`) + PR body warning. OR strictly internal / health-check (`/healthz`).
+   - **Fix:** Add 1 route-level test (API branch A) calling `trpcClient.xxx(...)` / `POST /api/xxx` with signed payload + valid auth; for UI add 1 RTL spec calling `fireEvent.click` + assertions.
 
-3. **G7.3 🟡 MEDIUM → 🟠 HIGH UPGRADE SEVERIDADE CROSS-CUTTING REGRESSION FOLDER (G5 policy):**
-   - **Nome atual MEDIUM default:** New/modified test WITHOUT traceability comment linking to SbE behavior or ticket.
-   - Scope: scan EVERY test file (`*.test.*`, `*.spec.*`) NEW or MODIFIED in the diff. For each `it(...)` / `test(...)` block body, check the FIRST 3 non-empty lines inside the curly braces (or the JSDoc comment `/** ... */` IMMEDIATELY above the nearest enclosing `describe()`).
-   - Look for a comment line MATCHING the regex: `^\s*//\s*@(ac|ticket|task|bug)\s+(B-\d+|FLO-\d+|AC\d+(\.\d+)?|T\d+(\.\d+)?|AB-\d+)` or equivalent JSDoc tag `@ticket`, `@ac`, `@task`.
-   - If the test block has ZERO such comment inside (or JSDoc above nearest describe missing it) → **MEDIUM G7.3 default = NO TRACEABILITY from behavior table to test body.**
-   - **Exception (waive G7.3):** It's a pure test infrastructure refactor (rename, package.json updates, moving files across folders, jest/vitest config only). OR it's a well-known canonical test (ex: `it("sums 2+2")` = unrelated to SbE scope).
-   - **Fix:** Add 1 line as FIRST executable line inside the `it()/test()` block: `// @ac B-3 | @ticket FLO-123` (or JSDoc block for describe). This is the canonical SbE traceability anchor used by scope-checker CHECK2 bilateral verification.
-   - **🔴 UPGRADE AUTOMÁTICO SEVERIDADE PARA HIGH (G5 cross-cutting exceção):** SE (o teste está localizado em **`tests/regression/<TICKET_ID>--<slug>.test.ts` (com ticket ID no nome do arquivo) E NÃO EXISTIR `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER logada em decisions.log.jsonl justificando ≥4 domínios independentes OU infra-estrutura pura**) → **G7.3 automaticamente vira 🟠 HIGH severity** (contabiliza no contador ≤2 HIGH do ship gate §0.9.2 auto-fix rule). Se o teste está na pasta da feature com comment anchor correto → sem upgrade.
+3. **G7.3 🟡 MEDIUM → 🟠 HIGH SEVERITY UPGRADE CROSS-CUTTING REGRESSION FOLDER (G5 policy):**
+   - **Current MEDIUM default:** New/modified test WITHOUT traceability comment linking to SbE behaviour or ticket.
+   - Scope: scan EVERY new/modified test file (`*.test.*`, `*.spec.*`). Check FIRST 3 non-empty lines inside `it()` / `test()` body (or JSDoc `/** ... */` ABOVE nearest `describe()`).
+   - Look for comment MATCHING regex: `^\s*//\s*@(ac|ticket|task|bug)\s+(B-\d+|FLO-\d+|AC\d+(\.\d+)?|T\d+(\.\d+)?|AB-\d+)` or JSDoc tag `@ticket`, `@ac`, `@task`.
+   - If ZERO such comment → **MEDIUM G7.3 default = NO TRACEABILITY.**
+   - **Exception:** pure test infra refactor (rename, package.json, jest/vitest config). OR well-known canonical test (e.g. `it("sums 2+2")`).
+   - **Fix:** Add 1 line as FIRST executable line inside `it()/test()`: `// @ac B-3 | @ticket FLO-123` (or JSDoc for describe). Canonical SbE traceability anchor for scope-checker CHECK2 bilateral verification.
+   - **🔴 AUTOMATIC SEVERITY UPGRADE TO HIGH (G5 cross-cutting exception):** IF (test located in **`tests/regression/<TICKET_ID>--<slug>.test.ts` (with ticket ID in filename) AND NO `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER` logged in decisions.log.jsonl justifying ≥4 independent domains OR pure infra**) → **G7.3 automatically becomes 🟠 HIGH severity** (counts toward §0.9.2 ≤ 2 HIGH auto-fix rule). If test in feature folder with correct anchor → no upgrade.
 
-4. **G7.4 🔵 LOW — `.skip()` / `xit()` / `it.todo()` used WITHOUT a follow-up ticket reference.**
-   - Scan test blocks for `.skip(` or `xit(` or `it.todo(` or `test.skip(` or `test.todo(`.
-   - Check 10 lines around the declaration for a comment MATCHING regex: `TODO\((FLO-\d+|PROJ-\d+|#\d+|issue #[^\s)]+)\)` or `Blocked on PR #\d+` or `Requires: <dependency>`.
-   - If `.skip` exists AND no follow-up ticket reference → **LOW G7.4 = SKIPPED TEST WITH NO FOLLOWUP.**
-   - **Exception:** `it.skip` inside a Scratch `.test.ts` file clearly named `scratch.*` or `_WIP_*` (developers use these locally — only flag if the file is staged to be committed).
-   - **Fix:** Add 1 line comment above the skip: `// TODO(FLO-123): reason = blocked on PR #456`. OR remove the skip entirely and make the test pass.
+4. **G7.4 🔵 LOW — `.skip()` / `xit()` / `it.todo()` used WITHOUT follow-up ticket reference.**
+   - Scan for `.skip(`, `xit(`, `it.todo(`, `test.skip(`, `test.todo(`.
+   - Check 10 lines around for comment MATCHING: `TODO\((FLO-\d+|PROJ-\d+|#\d+|issue #[^\s)]+)\)` or `Blocked on PR #\d+` or `Requires: <dependency>`.
+   - If `.skip` exists WITHOUT follow-up ticket → **LOW G7.4 = SKIPPED TEST WITH NO FOLLOWUP.**
+   - **Exception:** `it.skip` inside Scratch `.test.ts` named `scratch.*` or `_WIP_*` (flag only if staged for commit).
+   - **Fix:** Add 1 line comment above skip: `// TODO(FLO-123): reason = blocked on PR #456`. OR remove skip and make test pass.
 
-**Severity defaults enforced on the ship-gate threshold (§0.9.2 auto-fix rule ≤2 HIGH count):**
-- G7.1 + G7.2 = HIGH severity (BLOCKING if total HIGH ≥3 in the same review alongside other Category 0-8 HIGHs; if ≤2, auto-fix rule triggers on code-review ship gate).
+**Severity defaults for ship-gate threshold (§0.9.2 auto-fix rule ≤ 2 HIGH):**
+- G7.1 + G7.2 = HIGH (BLOCKING if total HIGH ≥ 3 with other Category 0-8 HIGHs; if ≤ 2, auto-fix triggers).
 - G7.3 = MEDIUM.
 - G7.4 = LOW.
 
-**Coverage of Review /report MUST include Category 7 in the table (see Coverage section §N-1 below).**
+**Coverage of Review /report MUST include Category 7 in table.**
 
 ---
 
-### Category 8: 🟣 UI Selector Contract Hygiene & data-testid 3-part Convention (NEW QA-Centric ONDA1) — HIGH for fragile selectors or NEW interactive components w/o ids, MEDIUM for naming convention, LOW for duplicate ids on list rows
+### Category 8: 🟣 UI Selector Contract Hygiene & data-testid 3-part Convention (QA-Centric ONDA1) — HIGH for fragile selectors or NEW interactive components w/o ids, MEDIUM for naming, LOW for duplicate list row ids
 
-> **Canonical source for the UI selector contract rule:** che-spec SbE §4.2 Behavior Example Tables — new column "UI Selector Contract" binds Playwright/RTL tests to stable ids. Testing Library Priority Order (canonical Kent C. Dodds, 2023): **ByRole > ByLabelText > ByPlaceholderText > ByText > ByDisplayValue > ByAltText > ByTitle > ByTestId (last escape hatch for dynamic content)**. When ByRole (with accessible name) is STABLE and UNIQUE for the element across renders → data-testid is NOT required. The purpose of data-testid is to cover UI that has unstable/translated/no accessible text: toast messages, icon-only buttons, spinners, loading states, table row action buttons.
+> **UI selector contract rule source:** che-spec SbE §4.2 Behavior Tables — "UI Selector Contract" column binds Playwright/RTL tests to stable ids. Testing Library Priority Order: **ByRole > ByLabelText > ByPlaceholderText > ByText > ByDisplayValue > ByAltText > ByTitle > ByTestId (last escape hatch)**. When ByRole stable AND unique → data-testid NOT required. Purpose of data-testid: cover UI with unstable/translated/no accessible text: toasts, icon-only buttons, spinners, loading, table row actions.
 
-**Convention MANDATORY for ANY `data-testid` the diff introduces / modifies (3-part kebab-case with double-underscore separator):**
+**MANDATORY `data-testid` convention (3-part kebab-case with double-underscore):**
 ```
 <domain>__<component-or-screen>__<action-or-element>
 ```
-Examples (correct):
+Examples:
 - `creator-bookings__refund-dialog__confirm-button`
 - `public-events__event-card__buy-now-button`
 - `scanner__scan-screen__qr-input`
 - `auth__login-form__submit-btn`
-- (for repeated list rows: append `--<unique-id>` suffix) `creator-bookings__row__refund-button--order-abc123`
+- (repeated list rows: append `--<unique-id>`) `creator-bookings__row__refund-button--order-abc123`
 
-Anti-patterns (flag G8.3 if used):
+Anti-patterns (flag G8.3):
 - ❌ `refundButton` (no separator; camelCase not kebab)
-- ❌ `creator_bookings_refund` (single underscore instead of double `__`)
+- ❌ `creator_bookings_refund` (single underscore)
 - ❌ `bookings--refund--button` (triple hyphen not part separator)
-- ❌ `cancel` (too generic, 0 parts, no domain context — becomes ambiguous when you have 12 cancel buttons in app)
+- ❌ `cancel` (too generic, 0 parts, no domain context)
 
-**How to detect each finding (8.1 → 8.4):**
+**How to detect (8.1 → 8.4):**
 
-1. **G8.1 🟠 HIGH — NEW interactive/visible user-facing component (or NEW screen) created WITHOUT data-testid on elements that NEED it (per priority-order rule).**
-   - Compute: from changedFiles, list `.tsx` / `.jsx` / `.vue` files with status `A` (added) OR `.tsx/.jsx` that export new components (filename includes `Button`, `Dialog`, `Modal`, `Form`, `Tabs`, `Select`, `Combobox`, `DatePicker`, `AutoComplete`, `Dropdown`, `Drawer`, `Snackbar`, `Toast`, `Card`, `Input`, `Table`, `Alert`).
+1. **G8.1 🟠 HIGH — NEW interactive/visible component (or NEW screen) WITHOUT data-testid on elements that NEED it.**
+   - Compute: from changedFiles, list status `A` (added) `.tsx` / `.jsx` / `.vue` OR `.tsx/.jsx` exporting new components (filename includes `Button`, `Dialog`, `Modal`, `Form`, `Tabs`, `Select`, `Combobox`, `DatePicker`, `AutoComplete`, `Dropdown`, `Drawer`, `Snackbar`, `Toast`, `Card`, `Input`, `Table`, `Alert`).
    - For EACH NEW interactive element in JSX:
-     - Is `ByRole + accessible name (label/text)` provably stable AND unique? → EXEMPT (Button with static text `<button>Confirm Refund</button>` → no id needed, `getByRole('button', {name: 'Confirm Refund'})` is stable).
-     - Is element icon-only button? `<Button><TrashIcon/></Button>`? Loading spinner? Toast message? Progress bar? Empty-state illustration? Table row action icon (duplicate across N rows)? → DATA-TESTID REQUIRED.
-     - Does text change based on translations (i18n) / feature flags / dynamic org/user state? → `ByText` fragile → DATA-TESTID REQUIRED.
-   - If ≥1 such element in the NEW component lacks a `data-testid=""` attribute → **HIGH G8.1 = NO SELECTOR CONTRACT FOR FRAGILE ELEMENTS.**
-   - **Exemption:** Component is explicitly a PURE presentational `<div>` wrapper with ZERO handlers, ZERO user interaction (cannot click/type/hover/focus it). Or PR body has explicit QA_OVERRIDE: `G8.1 WAIVED: all content has stable ByRole + accessible names`.
-   - **Fix:** Add `data-testid="<domain>__<component>__<element>"` for every element that fails stability check. For icon buttons, prefer aria-label FIRST (so screen readers work too), THEN add data-testid as a secondary selector contract.
+     - Is `ByRole + accessible name (label/text)` provably stable AND unique? → EXEMPT (Button with static text `<button>Confirm Refund</button>` → no id, `getByRole('button', {name: 'Confirm Refund'})` stable).
+     - Is element icon-only button? `<Button><TrashIcon/></Button>`? Loading spinner? Toast? Progress bar? Empty-state? Table row action icon? → DATA-TESTID REQUIRED.
+     - Does text change based on i18n / feature flags / dynamic state? → `ByText` fragile → DATA-TESTID REQUIRED.
+   - If ≥1 such element in NEW component lacks `data-testid=""` → **HIGH G8.1 = NO SELECTOR CONTRACT FOR FRAGILE ELEMENTS.**
+   - **Exemption:** pure presentational `<div>` wrapper with ZERO handlers/interaction. Or PR body explicit QA_OVERRIDE: `G8.1 WAIVED: all content has stable ByRole + accessible names`.
+   - **Fix:** Add `data-testid="<domain>__<component>__<element>"` for every element failing stability check. For icon buttons, prefer aria-label FIRST (for screen readers), THEN data-testid as secondary.
 
-2. **G8.2 🟠 HIGH — NEW/MODIFIED TEST FILE uses a PRIMARY selector that is FRAGILE: CSS class, XPath, nth-child(N), regex text, or getAllByRole indexed.**
-   - Scope: scan EVERY test file (`*.spec.ts`, `*.test.tsx`, inside `playwright/`, `e2e/`, `__tests__/`) that is NEW or MODIFIED in the diff.
-   - Flag HIGH if the PRIMARY selector (first element-fetch call in the 1st/2nd line of a test block, or the selector used for an action like `click()`/`fill()`) uses ANY of these anti-patterns:
-     - CSS class selector: `.css-class-name` → ❌ `page.locator('.btn-primary')` or `container.querySelector('.save-btn')`
-     - XPath: `//div[2]/button[3]` or any `//` prefix → ❌ (structure changes = test breaks)
-     - `nth-child(N)` pseudo / `.getAllByRole('button')[3]` / `.first()` / `.nth(N)` when N≥1 on a list — ❌ (order changes = breaks)
-     - `getByText(/partial.*regex/)` with vague regex that can match another 2+ DOM elements (false-positive risk).
+2. **G8.2 🟠 HIGH — NEW/MODIFIED TEST FILE uses FRAGILE PRIMARY selector: CSS class, XPath, nth-child(N), regex text, or indexed getAllByRole.**
+   - Scope: scan EVERY NEW or MODIFIED test file (`*.spec.ts`, `*.test.tsx`, inside `playwright/`, `e2e/`, `__tests__/`).
+   - Flag HIGH if PRIMARY selector (1st element-fetch in 1st/2nd line of test block, or action selector e.g. `click()`/`fill()`) uses anti-patterns:
+     - CSS class: `.css-class-name` → ❌ `page.locator('.btn-primary')`
+     - XPath: `//div[2]/button[3]` or any `//` prefix → ❌ (structure change = break)
+     - `nth-child(N)` / `.getAllByRole('button')[3]` / `.first()` / `.nth(N)` when N≥1 on a list — ❌ (order change = break)
+     - `getByText(/partial.*regex/)` with vague regex matching 2+ elements (false-positive risk).
    - **ALLOWED EXEMPTIONS for G8.2 (waive if verified):**
-     - Playwright `getByRole('button', { name: 'Save changes' })` — stable accessible role + name → ALWAYS ALLOWED (preferred over data-testid).
-     - RTL Testing Library `screen.getByLabelText('Email address')` on labeled inputs → stable → ALLOWED.
-     - `getByTestId('creator-bookings__refund-dialog__confirm-button')` using the valid 3-part convention → ALLOWED.
-   - **Fix:** Rewrite the primary selector to `getByRole(...)` (preferred, if stable unique accessible name exists) ELSE `getByTestId('<valid 3-part id>')`. For list rows, use `--<unique-id>` suffix + `getByTestId('x-row__action--' + rowId)`.
+     - Playwright `getByRole('button', { name: 'Save changes' })` — stable unique accessible role + name → ALWAYS ALLOWED (preferred over data-testid).
+     - RTL `screen.getByLabelText('Email address')` on labeled inputs → stable → ALLOWED.
+     - `getByTestId('creator-bookings__refund-dialog__confirm-button')` valid 3-part convention → ALLOWED.
+   - **Fix:** Rewrite to `getByRole(...)` (preferred if stable unique accessible name) ELSE `getByTestId('<valid 3-part id>')`. For lists, use `--<unique-id>` suffix + `getByTestId('x-row__action--' + rowId)`.
 
-3. **G8.3 🟡 MEDIUM — data-testid attribute exists but DOES NOT follow the 3-part convention.**
-   - In NEW files: any `data-testid="..."` string that FAILS the regex match:
-     ```
-     ^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*(--[a-z0-9][a-z0-9-]*)?$
-     ```
-   - For MODIFIED files: only flag `data-testid` values that were WRITTEN/CHANGED in this diff (don't flag existing dirty ids from legacy commits — blast radius only).
-   - If a non-conforming id exists AND file is not LEGACY (modified from pre-existing commit) → **MEDIUM G8.3 = NON STANDARD TEST ID FORMAT.**
-   - **Exception:** Explicit override `G8.3 CONVERTED LATER: <ticket>` in PR body with a ticket reference for a follow-up refactor batch (low-risk incremental cleanup).
-   - **Fix:** Rename the data-testid to canonical `domain__component__element[--unique-row]` form. Search for all references in spec files and rename there too.
+3. **G8.3 🟡 MEDIUM — data-testid attribute exists but DOES NOT follow 3-part convention.**
+   - In NEW files: any `data-testid="..."` failing regex: `^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*(--[a-z0-9][a-z0-9-]*)?$`.
+   - In MODIFIED files: only flag `data-testid` WRITTEN/CHANGED in this diff (not legacy dirty ids).
+   - If non-conforming id exists AND file not LEGACY → **MEDIUM G8.3 = NON STANDARD TEST ID FORMAT.**
+   - **Exception:** Explicit `G8.3 CONVERTED LATER: <ticket>` in PR body for follow-up refactor batch.
+   - **Fix:** Rename to canonical `domain__component__element[--unique-row]`. Update all spec file references.
 
 4. **G8.4 🔵 LOW — Duplicate identical data-testid in list/tabular renders without per-row unique suffix.**
-   - Pattern: Inside a `.map()` / loop over an array (JSX lists, tables, grid rows, tab panels), the SAME data-testid string is emitted for EACH row of the iteration with no suffix that distinguishes row `<unique-id>`.
-   - Example flagged: `<Button data-testid="orders__table__cancel-button">` inside `orders.map(order => ...)` (rendered N times, 10 rows = 10 identical ids → Playwright/RTL `getByTestId` throws `Found multiple elements` error and forces fragile `.first()`).
-   - Example correct (waive): `<Button data-testid={'orders__table__cancel-button--' + order.id}>`
-   - If duplicate pattern exists → **LOW G8.4 = AMBIGUOUS DUPLICATE TESTID IN LIST.**
-   - **Fix:** Append `--` + the unique entity primary key (order.id, booking.uuid, event.slug) to the 3-part canonical id.
+   - Pattern: Inside `.map()` / loop (JSX lists, tables, grid rows, tab panels), SAME data-testid emitted for EACH row without row-distinguishing suffix.
+   - Example flagged: `<Button data-testid="orders__table__cancel-button">` inside `orders.map(...)` (10 rows = 10 identical ids → `getByTestId` throws `Found multiple elements`).
+   - Correct (waive): `<Button data-testid={'orders__table__cancel-button--' + order.id}>`
+   - If duplicate exists → **LOW G8.4 = AMBIGUOUS DUPLICATE TESTID IN LIST.**
+   - **Fix:** Append `--` + unique entity primary key to 3-part canonical id.
 
 **Ship threshold enforcement for G8 findings:**
-- G8.1 + G8.2 = HIGH (both count toward the §0.9.2 ≤ 2 HIGH total ship rule).
+- G8.1 + G8.2 = HIGH (both count toward §0.9.2 ≤ 2 HIGH ship rule).
 - G8.3 = MEDIUM.
 - G8.4 = LOW.
 
 ---
 
-## 3. NON-goals (we explicitly skip these — do NOT waste tokens / time)
+## 3. NON-goals (we explicitly skip these — DO NOT waste tokens / time)
 
-- ❌ Biome / formatting / indentation issues. (That's lint CI.)
-- ❌ Naming nitpicks: `myVar` vs `my_variable`, component naming casing. **EXCEÇÃO:** naming of test-suite `describe()` / `it()` / `test()` titles, which falls under Category 4.7 (REGRA 7.9 behavioral check), reviewed above.
-- ❌ Test coverage% alone (we check if tests MISS for CRITICAL code but won't demand lines).
-- ❌ Documentation README unless it's actively misleading about security/usage.
+- ❌ Biome / formatting / indentation issues. (Lint CI job.)
+- ❌ Naming nitpicks: `myVar` vs `my_variable`. **EXCEPTION:** naming of test-suite `describe()` / `it()` / `test()` titles (Category 4.7 behavioral check).
+- ❌ Test coverage% alone (check if tests MISS for CRITICAL code, but don't demand lines).
+- ❌ Documentation README unless actively misleading about security/usage.
 - ❌ TODO/FIXME comments (unless for auth/security debt).
-- ❌ General refactors that don't risk correctness.
+- ❌ General refactors not risking correctness.
 
 ---
 
-## 4. Output — Structured Review Report (English for files/code refs, PT for user narrative)
+## 4. Output — Structured Review Report (English for files/code refs, Portuguese for user narrative)
 
 Follow template: `references/REVIEW_REPORT_TEMPLATE.md`
 
-**MANDATORY SECTIONS ORDER (do NOT skip any):**
+**MANDATORY SECTIONS ORDER (DO NOT skip any):**
 
 **1. Header (mode-dependent):**
-- Mode A (PR URL): Write a first line `# Review Report — PR #<PR_ID>: <title>`
-- Mode B (Worktree Local): Write `# Review Report — LOCAL WORKTREE MODE` then `## Context` with subfields:
+- Mode A (PR URL): `# Review Report — PR #<PR_ID>: <title>`
+- Mode B (Worktree Local): `# Review Report — LOCAL WORKTREE MODE` then `## Context` with subfields:
   - Worktree path: `<WORKTREE_ROOT>`
   - Current branch: `<BASE_BRANCH_HEURISTIC>`
   - Changed files count: `<changedFiles_count>`
   - Diff stat: `<+additions / -deletions>`
   - Changed files list (table: Status | Path | +/- lines)
 
-**2. Executive Verdict** (template section — não saltar):
+**2. Executive Verdict** (template section — do not skip):
 - 🔴 Request changes (≥1 CRITICAL or ≥2 HIGH) / 🟡 Approve with comments / 🟢 Approve
 - Blocker tally table: CRITICAL / HIGH / MEDIUM / LOW — counts
 
-**3. Context Bootstrap Evidence TABLE** (OBRIGATÓRIO — nunca empty):
-- Preencha a tabela do template. Cada item §1.5 (R1-R6, rules, packages afetados, skill local absorbed, cross-file pipeline reads). Se não existir arquivo = escrever "(N/A — arquivo inexistente no repositório)". NÃO deixe linha em branco.
+**3. Context Bootstrap Evidence TABLE** (MANDATORY — never empty):
+- Fill template table. Each §1.5 item (R1-R6, rules, affected packages, local skill absorbed, cross-file pipeline reads). If file does not exist = "(N/A — file non-existent in repository)". DO NOT leave blank lines.
 
 **4. Findings section:**
 
@@ -677,108 +674,95 @@ For each finding (both modes identical from here):
 - File:line
 - Snippet (3 lines before + 3 lines after, from patch)
 - Why this is a problem (evidence-based — never "I don't like it")
-- **Explicit rule citation (MANDATORY when possible)**: quote the EXACT project rule file:line from .claude/rules/*.md / AGENTS.md / decision docs you read during bootstrap. Example: "viola [architecture.md](file:///.../.claude/rules/architecture.md#L12) 'Router → Service → Repository: Routers must not contain business logic >30 lines'". For Category 5: ALWAYS cite `engineering-contracts/SKILL.md` Appendix D D.1 with the RF number (ex: "viola Appendix D RF03 — Pass-Through Method ≥3 layers").
+- **Explicit rule citation (MANDATORY when possible)**: quote EXACT project rule file:line from .claude/rules/*.md / AGENTS.md / decision docs read during bootstrap. E.g.: "violates [architecture.md](file:///.../.claude/rules/architecture.md#L12) 'Router → Service → Repository: Routers must not contain business logic >30 lines'". Category 5: ALWAYS cite `engineering-contracts/SKILL.md` Appendix D D.1 with RF number.
 - Actionable fix — specific lines/what should replace
 - Optional: suggest code change snippet ONLY if obvious. NEVER rewrite whole file.
 
-**N-1. Coverage of Review TABLE** (OBRIGATÓRIO — usuário confia audit):
-- 7 rows obrigatórias: §1.5 Bootstrap → Category 0 Pipeline Integrity → Category 1 Runtime → Category 2 Security+PII+Authz audit → Category 3 Architecture/Repo boundary → Category 4 Scope deviation / Demo UI / Test naming → Category 5 Design Quality / Ousterhout RF01-RF13
+**N-1. Coverage of Review TABLE** (MANDATORY — user trusts audit):
+- 7 mandatory rows: §1.5 Bootstrap → Category 0 Pipeline Integrity → Category 1 Runtime → Category 2 Security+PII+Authz audit → Category 3 Architecture/Repo boundary → Category 4 Scope deviation / Demo UI / Test naming → Category 5 Design Quality / Ousterhout RF01-RF13
 - Non-goals (style/format/coverage%) → Skipped intentionally note.
 
 **N. Final verdict section (template):**
 
-Then at the end (both modes, except verdict notes):
+At the end (both modes, except verdict notes):
 - **Verdict**: 🔴 Request changes (≥1 CRITICAL or ≥2 HIGH) / 🟡 Approve with comments (only MEDIUMs/LOWs) / 🟢 Approve
-  - **Mode B NOTE**: Verdict labels above refer to "if this were submitted as a PR". Since it's local work-in-progress, interpret as: 🔴 = Fix these before committing/pushing; 🟡 = Fix before merging; 🟢 = Clean.
-- **Blocker summary**: numbered list — each CRITICAL/HIGH must be fixed before merge (or before commit+push in Mode B)
+  - **Mode B NOTE**: Verdict labels refer to "if this were submitted as a PR". Since local work-in-progress, interpret as: 🔴 = Fix before committing/pushing; 🟡 = Fix before merging; 🟢 = Clean.
+- **Blocker summary**: numbered list — each CRITICAL/HIGH fixed before merge (or before commit+push in Mode B)
 - **Non-blocker nice-to-have**: numbered list — MEDIUM/LOW, fix or ignore, user decides
 
 ---
 
-## 4.9 🔴 STORAGE PREFLIGHT OBRIGATÓRIO (NUNCA SKIP — engineering-contracts §20 + CHE_RULES.md STORAGE BOUNDARY)
+## 4.9 🔴 MANDATORY STORAGE PREFLIGHT (NEVER SKIP — engineering-contracts §20 + CHE_RULES.md STORAGE BOUNDARY)
 
-> **HARD STOP RULE VERBATIM DO USUÁRIO:** Nenhum asset do trabalho do che deve ser criado na worktree. Apenas quando solicitado explicitamente. Tudo deve ser organizado no che-sessions.
+> **USER VERBATIM HARD STOP RULE:** No che work asset should be created in the worktree. Only when explicitly requested. Everything should be organised in che-sessions.
 
-**Antes do PRIMEIRO write em disco (qualquer arquivo: report, screenshots, decisions, QA evidence, etc), RODAR EXATAMENTE ESTE BLOCO:**
+**BEFORE FIRST disk write (report, screenshots, decisions, QA evidence, etc.), RUN EXACTLY THIS BLOCK:**
 
 ```bash
-# (1) Source o contrato canônico de sessões (fornece che_output_path, che_assert_outside_worktree, etc)
+# (1) Source canonical session contract (provides che_output_path, che_assert_outside_worktree, etc.)
 CHE_HOME="${CHE_HOME:-$HOME/.trae}"
 CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
 if [ -f "$CONTRACT" ]; then
   # shellcheck disable=SC1090
   source "$CONTRACT"
 else
-  echo "❌ FATAL: che_sessions_contract.sh não encontrado em $CONTRACT. Não posso escrever outputs sem o storage boundary. Abortando write."
+  echo "❌ FATAL: che_sessions_contract.sh not found in $CONTRACT. Cannot write outputs without storage boundary. Aborting write."
   exit 98
 fi
 
-# (2) Definir variáveis mínimas para binding (se já houver binding, reuse; senão usar defaults seguros)
-# WORKTREE_ROOT: obrigatório se Mode B; se Mode A sem worktree local, set para string vazia mas NÃO CAI NA WORKTREE POR ACIDENTE
-# SESSION_ID: che_current_session_id do registry ou fallback slug-safe
+# (2) Define minimum variables for binding
 SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-review-session}"
-# WORKTREE_ROOT: se Mode B, já temos; se Mode A e user passou --worktree, use aquele valor; senão vazia (sem assert contra worktree nesse caso)
-# WORKTREE_ROOT é conhecido no fluxo desde §0.1 e §Mode B; aqui apenas reafirmar
 
-# (3) Computar paths canônicos + criar diretórios base (SESSION_DIR, WORKSPACE_SHARED, etc)
-# Se WORKTREE_ROOT existe e é válido:
+# (3) Compute canonical paths + ensure base dirs (SESSION_DIR, WORKSPACE_SHARED, etc.)
 if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
   che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
   che_ensure_session_dirs "$WORKTREE_ROOT"
-  # Double-guard: o helper che_output_path já roda assert automaticamente; mas reafirmar aqui para clareza
-  che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR (root de efêmeros)"
-  che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED (root duráveis)"
+  # Double-guard: che_output_path helper already runs assert automatically; reaffirm here for clarity
+  che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR (ephemeral root)"
+  che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED (durable root)"
 fi
 
-# ⚠️ APÓS este bloco, NÃO construa paths manualmente.
-# Use SEMPRE: OUTPUT_PATH="$(che_output_path "<type>" "<slug>" "<related_id>" "<scope=session|workspace>" "<ext>" "<suffix>")"
-# Garantias automáticas do helper: timestamp prefix UTC ordenável, subpasta por type/related_id, mkdir -p, assert outside worktree, fallback seguro.
+# ⚠️ AFTER this block, DO NOT construct paths manually.
+# ALWAYS USE: OUTPUT_PATH="$(che_output_path "<type>" "<slug>" "<related_id>" "<scope=session|workspace>" "<ext>" "<suffix>")"
 ```
 
 ---
 
 ## 5. Post-report actions
 
-> **IMPORTANTE: STORAGE BOUNDARY — NUNCA escreva dentro da worktree. Todo output via `che_output_path` only (ver §4.9).**
+> **IMPORTANT: STORAGE BOUNDARY — NEVER write inside worktree. ALL output via `che_output_path` only (see §4.9).**
 
 ### Mode A (GitHub PR):
-- **Construir o path do report USANDO O HELPER (nunca manual):**
+- **Construct report path USING HELPER (never manual):**
   ```bash
-  # Report principal (full) — related_id = pr-<ID>; ficará agrupado em reviews/pr-<ID>/
+  # Principal (full) report — related_id = pr-<ID>; grouped in reviews/pr-<ID>/
   REPORT_FULL_PATH="$(che_output_path "review" "che-code-review" "pr-${PR_ID}" "session" "md" "full")"
-
-  # Se houver um segundo report da MESMA PR (ex: postfix, post-review, auto-fix summary) — usar outro suffix:
-  # REPORT_POSTFIX_PATH="$(che_output_path "review" "che-code-review" "pr-${PR_ID}" "session" "md" "postfix")"
   ```
-  - **Resultado esperado no filesystem:**
+  - **Expected result:**
     ```
     $CHE_SESSION_DIR/reviews/pr-<ID>/
-      ├── 20260902-092400-che-code-review_full.md   (1ª rodada, prefix timestamp ordena primeiro)
-      └── 20260902-093000-che-code-review_postfix.md (2ª rodada, prefix timestamp ordena depois)
+      ├── 20260902-092400-che-code-review_full.md   (1st round)
+      └── 20260902-093000-che-code-review_postfix.md (2nd round)
     ```
-    Busca futura trivial: `ls -1 reviews/pr-382/*.md` → todos reports da PR juntos, ordem alfabética = ordem cronológica.
-  - **Fallback seguro SEM binding (raro):** o helper `che_output_path` já cai em `$CHE_HOME/outputs/fallback-session/reviews/pr-<ID>/...` automaticamente; NUNCA cai na worktree nem em `./reports/`.
-  - **NUNCA use path relativo `./reports/` ou `$WORKTREE_ROOT/.trae/`. MORATÓRIA engineering-contracts §20.**
+  - **Safe fallback WITHOUT binding (rare):** `che_output_path` automatically falls back to `$CHE_HOME/outputs/fallback-session/reviews/pr-<ID>/...`; NEVER worktree or `./reports/`.
+  - **NEVER use relative path `./reports/` or `$WORKTREE_ROOT/.trae/`. §20 MORATORIUM.**
 
-- **DO NOT approve or request changes DIRECTLY on GitHub via `gh pr review`** unless user explicitly asks after seeing the report and saying "suba isso como review oficial". Our first deliverable = the report for the user to review in chat.
-- If there are ZERO findings → still write a report saying "No CRITICAL/HIGH issues found; scope matches; dependencies justified." + list what you checked so user trusts the review was actually done.
-- **Escrever usando atomic write:** pipe o conteúdo markdown no stdin de `che_write_file_atomic "$REPORT_FULL_PATH"` (tmp → mv atômico, evita meio-escrito em crash).
+- **DO NOT approve or request changes DIRECTLY on GitHub via `gh pr review`** unless user explicitly asks after seeing report. First deliverable = report for user to review in chat.
+- If ZERO findings → still write report: "No CRITICAL/HIGH issues found; scope matches; dependencies justified." + list checked items.
+- **Write using atomic write:** pipe markdown to `che_write_file_atomic "$REPORT_FULL_PATH"` stdin.
 
 ### Mode B (Local Worktree):
-- **Construir o path do report USANDO O HELPER:**
+- **Construct report path USING HELPER:**
   ```bash
-  # Worktree slug: extrair basename de WORKTREE_ROOT (ex: feat-FLO-714--Design-a-non-blocking-and-scalable-deployment-in-prod-governance)
+  # Worktree slug: extract basename from WORKTREE_ROOT
   WT_SLUG="$(basename "${WORKTREE_ROOT%/}")"
   REPORT_LOCAL_PATH="$(che_output_path "review" "che-code-review" "worktree-${WT_SLUG}" "session" "md" "full")"
-  # Segunda passagem da mesma worktree: trocar suffix para "pass2" ou "postfix" etc
   ```
-  - **Resultado esperado:** `$CHE_SESSION_DIR/reviews/worktree-<WT_SLUG>/20260902-101500-che-code-review_full.md`
-  - Timestamp UTC no prefix garante ORDENAÇÃO de múltiplas passes locais sem depender de mtime do SO.
-- **DO NOT interact with GitHub at all** in Mode B (no gh commands, no PR creation). Pure local output only inside che-sessions.
-- Zero findings → still write report with: "No CRITICAL/HIGH issues found in modified files. Scope matches stated goals; dependencies justified." Include the full changed files list + what you checked per category.
-- Optional user convenience at end of chat message:
+  - **Expected result:** `$CHE_SESSION_DIR/reviews/worktree-<WT_SLUG>/20260902-101500-che-code-review_full.md`
+- **DO NOT interact with GitHub at all** in Mode B. Pure local output inside che-sessions.
+- Zero findings → still write report: "No CRITICAL/HIGH issues found in modified files. Scope matches stated goals; dependencies justified." Include full changed files list + checked categories.
+- Optional user convenience at end of chat:
   - If Mode B, after presenting findings, offer ONE follow-up action:
-    - `[Apply fixes locally]` — if user says yes, proceed using che-developer mindset to fix the CRITICAL/HIGH blockers inside the same worktree (still under scope; don't add features). **Nota: QA evidence / screenshots dessa etapa também via che_output_path type=qa scope=session.**
-    - `[Show just the blocked items condensed]` — for brevity.
-    - `[Nothing, thanks]` — stop.
-  Don't be pushy. If user just says "ok thanks" → stop.
+    - `[Apply fixes locally]` — if user says yes, fix CRITICAL/HIGH blockers using che-developer mindset.
+    - `[Show just the blocked items condensed]`
+    - `[Nothing, thanks]`

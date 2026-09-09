@@ -13,7 +13,7 @@ CHE_REPO_BLACKLIST_FILES = ("bindings/registry.jsonl",)
 DEFAULT_TRASH_ROOT = Path.home() / ".che-workspaces" / ".trash" / "che-eject"
 CHE_HOME_CANDIDATES = (Path.home() / ".trae",)
 
-GITIGNORE_MARKER_BEGIN = "# >>> CHE PLANNING ARTIFACTS BLACKLIST BEGIN (NÃO EDITAR MANUALMENTE)"
+GITIGNORE_MARKER_BEGIN = "# >>> CHE PLANNING ARTIFACTS BLACKLIST BEGIN (DO NOT EDIT MANUALLY)"
 GITIGNORE_MARKER_END = "# <<< CHE PLANNING ARTIFACTS BLACKLIST END"
 
 
@@ -29,15 +29,13 @@ def _resolve_che_home(che_home: Optional[Path] = None) -> Path:
     if che_home is not None:
         che_home = Path(che_home).expanduser().resolve()
         if not _is_che_home(che_home):
-            raise ValueError(f"che_home fornecido não é um diretório Che válido: {che_home}")
+            raise ValueError(f"Provided che_home is not a valid Che directory: {che_home}")
         return che_home
     for cand in CHE_HOME_CANDIDATES:
         cand = cand.expanduser().resolve()
         if _is_che_home(cand):
             return cand
-    raise FileNotFoundError(
-        "Nenhum diretório Che (~/.trae) encontrado. Use --che-home /caminho/para/.trae para fornecer explicitamente."
-    )
+    raise FileNotFoundError("No Che directory (~/.trae) found. Use --che-home /path/to/.trae to provide it explicitly.")
 
 
 def _detect_install_kind(che_home: Path) -> str:
@@ -47,8 +45,8 @@ def _detect_install_kind(che_home: Path) -> str:
 
 
 def _detect_adapters(che_home: Path) -> dict[str, dict]:
-    """Detecta quais adapters multi-agentes (Codex/Claude/Cursor) parecem instalados.
-    Verificação leve (symlinks existem, não quebra se não). Retorna status por adapter."""
+    """Detects which multi-agent adapters (Codex/Claude/Cursor) appear to be installed.
+    Lightweight check (symlinks exist, doesn't break if not). Returns status per adapter."""
     out: dict[str, dict] = {}
     # Codex
     codex_home = Path.home() / ".codex"
@@ -111,12 +109,12 @@ def _detect_adapters(che_home: Path) -> dict[str, dict]:
         "details": claude_state,
         "uninstall_script": che_home / "adapters" / "claude" / "uninstall.sh",
     }
-    # Cursor (project-based — global não tem, só informativo)
+    # Cursor (project-based — global doesn't have, only informational)
     out["cursor"] = {
         "installed_heuristic": False,
         "details": {
-            "note": "Cursor adapter é project-based. Ejetar globalmente requer "
-            "remoção manual de AGENTS.md e .cursor/rules/ em cada projeto cliente."
+            "note": "Cursor adapter is project-based. Ejecting globally requires "
+            "manual removal of AGENTS.md and .cursor/rules/ in each client project."
         },
         "uninstall_script": che_home / "adapters" / "cursor" / "uninstall.sh",
     }
@@ -144,9 +142,9 @@ def _manifest_path(trash_dir: Path) -> Path:
 
 def _run_uninstall_script(script: Path, dry_run: bool) -> tuple[int, str]:
     if not script.exists():
-        return (0, f"skip: script não existe {script}")
+        return (0, f"skip: script does not exist {script}")
     if dry_run:
-        return (0, f"[dry-run] iria rodar: bash {script}")
+        return (0, f"[dry-run] would run: bash {script}")
     try:
         res = subprocess.run(
             ["bash", str(script)],
@@ -156,15 +154,15 @@ def _run_uninstall_script(script: Path, dry_run: bool) -> tuple[int, str]:
         )
         return (res.returncode, (res.stdout or "") + (res.stderr or ""))
     except Exception as e:
-        return (2, f"erro ao rodar {script}: {e!r}")
+        return (2, f"error running {script}: {e!r}")
 
 
 def _remove_client_gitignore_snippets(
     repo_roots_to_check: Optional[list[Path]] = None, dry_run: bool = True
 ) -> list[dict]:
-    """Remove (ou simula) o snippet da blacklist injetado por install-che.sh
-    nos .gitignore de projetos clientes. Só toca arquivos que contêm os markers.
-    Se repo_roots_to_check for None, faz uma busca leve em pastas comuns do usuário."""
+    """Removes (or simulates removal of) the blacklist snippet injected by install-che.sh
+    into client project .gitignore files. Only touches files containing the markers.
+    If repo_roots_to_check is None, performs a shallow search in common user directories."""
     affected: list[dict] = []
     candidates: list[Path] = []
     if repo_roots_to_check:
@@ -172,7 +170,7 @@ def _remove_client_gitignore_snippets(
     else:
         code_home = Path.home() / "code"
         if code_home.is_dir():
-            # Busca rasa: primeiro nível de ~/code procurando .gitignore com marker
+            # Shallow search: first level of ~/code looking for .gitignore with marker
             try:
                 for entry in code_home.iterdir():
                     gi = entry / ".gitignore"
@@ -220,7 +218,7 @@ def _remove_client_gitignore_snippets(
                 {
                     "repo_root": str(root),
                     "gitignore": str(gi),
-                    "action": "[dry-run] removeria snippet (linhas a remover: " + str(removed_lines) + ")",
+                    "action": "[dry-run] would remove snippet (lines to remove: " + str(removed_lines) + ")",
                     "removed_lines": removed_lines,
                 }
             )
@@ -234,7 +232,7 @@ def _remove_client_gitignore_snippets(
             {
                 "repo_root": str(root),
                 "gitignore": str(gi),
-                "action": "removido snippet",
+                "action": "snippet removed",
                 "removed_lines": removed_lines,
             }
         )
@@ -247,8 +245,8 @@ def eject_plan(
     keep_git_repo: bool = True,
     scan_client_repos: Optional[list[Path]] = None,
 ) -> dict:
-    """Retorna um plano do que o eject vai fazer, SEM escrever nada.
-    Usado pelo dry-run e como pre-check do apply."""
+    """Returns a plan of what eject will do, WITHOUT writing anything.
+    Used by dry-run and as a pre-check for apply."""
     che_home = _resolve_che_home(che_home)
     trash_root = _trash_ensure(che_home, trash_root)
     install_kind = _detect_install_kind(che_home)
@@ -296,9 +294,9 @@ def eject_plan(
                     "step": "eject-che-home",
                     "kind": "keep-as-regular-repo",
                     "note": (
-                        "Mantendo ~/.trae como diretório comum (continua sendo um repo git "
-                        "seu). Para remover o hook global do Trae: Settings → Rules → remover "
-                        "as referências ao AGENTS.md e user_rules."
+                        "Keeping ~/.trae as a regular directory (remains your own git repo). "
+                        "To remove the global Trae hook: Settings → Rules → remove "
+                        "references to AGENTS.md and user_rules."
                     ),
                 }
             )
@@ -308,9 +306,9 @@ def eject_plan(
                     "step": "eject-che-home",
                     "kind": "move-to-trash-keep-blacklist",
                     "note": (
-                        f"Move TODO CONTEÚDO NÃO-BLACKLIST de {che_home} → {trash_dir}. "
+                        f"Moves ALL NON-BLACKLIST CONTENT from {che_home} → {trash_dir}. "
                         "Blacklist (user_rules/, memory/, bindings/registry.jsonl, .git/) "
-                        "PERMANECE no lugar. NENHUM rm. Tudo mv para .trash/che-eject/ com manifesto."
+                        "REMAINS in place. NO rm. All mv to .trash/che-eject/ with manifest."
                     ),
                 }
             )
@@ -320,9 +318,9 @@ def eject_plan(
                 "step": "eject-che-home",
                 "kind": "move-to-trash-keep-blacklist",
                 "note": (
-                    f"Move TODO CONTEÚDO NÃO-BLACKLIST de {che_home} → {trash_dir}. "
-                    "Blacklist (user_rules/, memory/, bindings/registry.jsonl) PERMANECE. "
-                    "NENHUM rm."
+                    f"Moves ALL NON-BLACKLIST CONTENT from {che_home} → {trash_dir}. "
+                    "Blacklist (user_rules/, memory/, bindings/registry.jsonl) REMAINS. "
+                    "NO rm."
                 ),
             }
         )
@@ -340,17 +338,17 @@ def eject_plan(
 
 
 def eject_apply(plan: dict, dry_run: bool = True, confirmed: bool = False, i_know_what_im_doing: bool = False) -> dict:
-    """Aplica o plano de eject.
-    SAFETY GATES: (1) dry_run=True por default; (2) confirmed=True requerido;
-    (3) i_know_what_im_doing=True requerido. Falta qualquer um = só retorna plano."""
+    """Applies the eject plan.
+    SAFETY GATES: (1) dry_run=True by default; (2) confirmed=True required;
+    (3) i_know_what_im_doing=True required. Missing any = only returns plan."""
     if not confirmed or not i_know_what_im_doing:
         return {
             "status": "blocked-safety-gates",
             "required_flags": ["--confirmed", "--i-know-what-im-doing", "(--apply or dry_run=False)"],
             "note": (
-                "Eject é uma operação destrutiva controlada. Para rodar de verdade, "
-                "forneça --confirmed --i-know-what-im-doing --apply. "
-                "NENHUM arquivo é apagado; tudo vai para .trash/che-eject/ com restore disponível."
+                "Eject is a controlled destructive operation. To run for real, "
+                "provide --confirmed --i-know-what-im-doing --apply. "
+                "NO files are deleted; everything goes to .trash/che-eject/ with restore available."
             ),
             "plan": plan,
         }
@@ -375,7 +373,7 @@ def eject_apply(plan: dict, dry_run: bool = True, confirmed: bool = False, i_kno
                 "output_tail": (out[-800:] if out else ""),
             }
         )
-    # Step 2: move che-home non-blacklist para trash (se não for keep)
+    # Step 2: move che-home non-blacklist to trash (if not keep)
     should_move = not (install_kind == "git-clone" and keep_git)
     if should_move:
         trash_dir.mkdir(parents=True, exist_ok=True)
@@ -391,7 +389,7 @@ def eject_apply(plan: dict, dry_run: bool = True, confirmed: bool = False, i_kno
                 continue
             dest = trash_dir / name
             if dest.exists():
-                # não deve ocorrer pois trash_dir tem timestamp único; segurança extra
+                # should not happen as trash_dir has unique timestamp; extra safety
                 dest = trash_dir / f"{name}--{_utc_ts_slug()}"
             shutil.move(str(entry), str(dest))
             moved_count += 1
@@ -417,8 +415,8 @@ def eject_apply(plan: dict, dry_run: bool = True, confirmed: bool = False, i_kno
             }
         )
     else:
-        kept_note = "mantido como repo/diretório comum (user_rules/memory/bindings intocados)."
-        # também cria manifesto mínimo em trash_dir vazio, para que restore seja possível caso mude de ideia
+        kept_note = "kept as a regular repo/directory (user_rules/memory/bindings untouched)."
+        # also creates minimal manifest in empty trash_dir, so restore is possible if user changes mind
         trash_dir.mkdir(parents=True, exist_ok=True)
         manifest = {
             "ejected_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -436,7 +434,7 @@ def eject_apply(plan: dict, dry_run: bool = True, confirmed: bool = False, i_kno
                 "manifest": str(_manifest_path(trash_dir)),
             }
         )
-    # Step 3: .gitignore snippets clientes
+    # Step 3: client .gitignore snippets
     snippets_info = next((w for w in plan["what_will_happen"] if w["step"] == "eject-client-gitignore"), None)
     affected_repos = None
     if snippets_info and snippets_info["affected_count"] > 0:
@@ -451,10 +449,10 @@ def eject_apply(plan: dict, dry_run: bool = True, confirmed: bool = False, i_kno
     )
     # Final hint
     result["hints"] = [
-        "Nenhum arquivo foi apagado. Itens movidos estão em: " + str(trash_dir),
-        f"Para desfazer: python3 -m che_core.cli eject restore --trash-slug {plan['trash_slug']}",
-        "Se quiser também remover ~/.che-workspaces/.registry/ (L2 projects), faça manualmente "
-        "(é blacklist do eject por conter metadados de projetos atrelados a worktrees ainda em uso).",
+        "No files were deleted. Moved items are in: " + str(trash_dir),
+        f"To undo: python3 -m che_core.cli eject restore --trash-slug {plan['trash_slug']}",
+        "If you also want to remove ~/.che-workspaces/.registry/ (L2 projects), do it manually "
+        "(it is blacklisted from eject as it contains project metadata tied to worktrees still in use).",
     ]
     return result
 
@@ -489,18 +487,18 @@ def eject_trash_list(trash_root: Optional[Path] = None) -> list[dict]:
 def eject_restore(
     trash_slug: str, trash_root: Optional[Path] = None, dry_run: bool = True, confirmed: bool = False
 ) -> dict:
-    """Reverte um eject. Valor padrão dry_run=True (mesma safety gate dos outros).
-    confirmed=True necessário para aplicar."""
+    """Reverts an eject. Default dry_run=True (same safety gate as others).
+    confirmed=True required to apply."""
     if trash_root is not None:
         trash_root = _trash_ensure(Path.home(), trash_root)
     else:
         trash_root = _trash_ensure(_resolve_che_home(), None)
     trash_dir = trash_root / trash_slug
     if not trash_dir.is_dir():
-        raise FileNotFoundError(f"Trash slug não encontrado: {trash_slug} em {trash_root}")
+        raise FileNotFoundError(f"Trash slug not found: {trash_slug} in {trash_root}")
     manifest = _manifest_path(trash_dir)
     if not manifest.is_file():
-        raise FileNotFoundError(f"Manifesto ausente em {manifest}. Restore abortado.")
+        raise FileNotFoundError(f"Manifest missing at {manifest}. Restore aborted.")
     manifest_data = json.loads(manifest.read_text())
     che_home = Path(manifest_data["che_home"])
     result = {
@@ -516,8 +514,8 @@ def eject_restore(
         if not confirmed:
             result["status"] = "blocked-missing-confirmed"
             result["note"] = (
-                "Para restaurar de verdade, forneça --confirmed --apply. "
-                "Itens em che_home conflitantes NÃO são sobrescritos (fica em skipped)."
+                "To restore for real, provide --confirmed --apply. "
+                "Conflicting items in che_home are NOT overwritten (remain as skipped)."
             )
         preview = []
         for entry in trash_dir.iterdir():
@@ -537,7 +535,7 @@ def eject_restore(
         shutil.move(str(entry), str(dest))
         result["items"].append({"name": entry.name, "status": "restored"})
         result["moved_back_count"] += 1
-    # Reinstala adapters após restore (best-effort)
+    # Reinstalls adapters after restore (best-effort)
     setup_script = che_home / "scripts" / "setup-adapters.sh"
     if setup_script.is_file():
         rc, out = _run_uninstall_script(setup_script, dry_run=False)

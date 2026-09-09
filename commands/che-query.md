@@ -30,7 +30,7 @@ Executes **read-only, parameterized SQL queries** against the project-level stat
      [--json]
    ```
 
-**Tabelas / colunas disponíveis (para montar a query):**
+**Available tables / columns (to build the query):**
 ```
 tasks(id, title, status, domain, depends_on JSON, envelope_path, envelope_body, expert_skills JSON, handoff_output JSON, done_criteria, updated_at)
 task_dependencies(child_id, parent_id)
@@ -39,17 +39,17 @@ specs(spec_id, status, domain, frontmatter_json, body, path, updated_at)
 bindings(session_id, ts, status, worktree_root, flags_json, data_json, session_dir)
 ```
 
-**Exemplos de uso comum:**
-- Listar tasks do domínio ux que ainda não estão DONE:
+**Common usage examples:**
+- List tasks from the ux domain that are not yet DONE:
   ```sql
   SELECT id, status, title FROM tasks WHERE domain='ux' AND status!='DONE' ORDER BY id
   ```
-- Agrupar decisions por evento nos últimos 7 dias:
+- Group decisions by event in the last 7 days:
   ```sql
   SELECT event, COUNT(*) AS c FROM decisions
   WHERE ts > date('now','-7 day') GROUP BY event ORDER BY c DESC
   ```
-- Join tasks → dependências → parent statuses:
+- Join tasks → dependencies → parent statuses:
   ```sql
   SELECT c.id AS child, c.status AS c_status, p.id AS parent, p.status AS p_status
   FROM task_dependencies d

@@ -45,7 +45,7 @@ Use Given / When / Then where possible:
 ## DONE Criteria (checklist — checked by SM)
 
 - [ ] All ACs above are demonstrably met
-- [ ] engineering-contracts skill invoked FIRST (check Dev pre-reporte)
+- [ ] engineering-contracts skill invoked FIRST (check Dev pre-report)
 - [ ] Repo onboarding Q1/Q2/Q3 answered in writing
 - [ ] Public contracts defined (preconditions / postconditions / invariants)
 - [ ] Unit/integration tests written FIRST (TDD)
@@ -117,7 +117,7 @@ A:
 - **Invariants:**
   - ...
 
-### Dev Pre-Relatório
+### Dev Pre-Report
 
 **Summary:**
 

@@ -89,7 +89,7 @@ def pretooluse_worktree_binding(input_json: Dict[str, Any]) -> Dict[str, Any]:
         if str(p).startswith(workspaces_root):
             return {
                 "decision": "allow",
-                "reason": "§19 EXCEÇÃO CHE_SESSIONS_ROOT: path alvo é pasta de dados gerados/efêmeros che.",
+                "reason": "§19 CHE_SESSIONS_ROOT EXCEPTION: target path is che generated/ephemeral data folder.",
             }
 
     bound_root = ""
@@ -99,11 +99,11 @@ def pretooluse_worktree_binding(input_json: Dict[str, Any]) -> Dict[str, Any]:
             bound_root = entry.get("worktree_root", "")
 
     if not bound_root:
-        return {"decision": "allow", "reason": "§19: Nenhuma entrada BOUND para SESSION_ID no Level 1 registry.jsonl"}
+        return {"decision": "allow", "reason": "§19: No BOUND entry for SESSION_ID in Level 1 registry.jsonl"}
 
-    bound_normalized = _git_worktree_root(bound_root)
-    if not bound_normalized:
-        bound_normalized = str(Path(bound_root).resolve())
+    bound_normalised = _git_worktree_root(bound_root)
+    if not bound_normalised:
+        bound_normalised = str(Path(bound_root).resolve())
 
     violations = set()
     project_paths = 0
@@ -119,18 +119,18 @@ def pretooluse_worktree_binding(input_json: Dict[str, Any]) -> Dict[str, Any]:
             continue
 
         project_paths += 1
-        if proj_root != bound_normalized:
+        if proj_root != bound_normalised:
             violations.add(proj_root)
 
     if violations:
         uniq = ",".join(sorted(violations))
         registry_file = get_registry_path()
-        reason = f"§19 WORKTREE SESSION BINDING VIOLATION (Level 1 Registry). sessionId={session_id} is BOUND in Level 1 registry ({registry_file}) to WORKTREE_ROOT={bound_normalized}. Tool={tool_name} tentou acessar paths FORA worktree vinculada: {uniq}. Action: (1) cancelar; (2) AskUserQuestion re-bind explícito."
+        reason = f"§19 WORKTREE SESSION BINDING VIOLATION (Level 1 Registry). sessionId={session_id} is BOUND in Level 1 registry ({registry_file}) to WORKTREE_ROOT={bound_normalised}. Tool={tool_name} attempted to access paths OUTSIDE bound worktree: {uniq}. Action: (1) cancel; (2) explicit AskUserQuestion re-bind."
         return {"decision": "block", "reason": reason}
 
     return {
         "decision": "allow",
-        "reason": f"§19 OK Level 1 Registry: all detected project paths match BOUND_WORKTREE_ROOT={bound_normalized}",
+        "reason": f"§19 OK Level 1 Registry: all detected project paths match BOUND_WORKTREE_ROOT={bound_normalised}",
     }
 
 
@@ -284,11 +284,11 @@ def posttooluse_lang_pt_check(input_json: Dict[str, Any]) -> Dict[str, Any]:
                     break
 
         reason = f"PT-BR text detected in written file (stopword_hits={pt_hits}, diacritic_lines={diacritic_lines}). Signal only — NO auto-correction performed."
-        addl = f"""ACTION REQUIRED by AGENT: AskUserQuestion to user BEFORE PROCEEDING further: Texto em português detectado no arquivo {file_path}.
-Current project LANG_DOCS=en (padrão). O que deseja fazer?
-(A) Traduzir conteúdo detectado para inglês (recomendado p/ manter LANG_DOCS=en)
-(B) Manter em português — NESTE ARQUIVO ESPECÍFICO (justificar, e se for padrão novo aplicar em (C))
-(C) CONFIGURAR ESTE PROJETO/SESSÃO com LANG_DOCS=pt-BR. Adiciona via helper `che_registry_append_jsonl` com {{"flags":{{"LANG_DOCS":"pt-BR"}}}} Level 1 registry.jsonl.
+        addl = f"""ACTION REQUIRED by AGENT: AskUserQuestion to user BEFORE PROCEEDING further: Portuguese text detected in file {file_path}.
+Current project LANG_DOCS=en (default). What do you want to do?
+(A) Translate detected content to English (recommended to maintain LANG_DOCS=en)
+(B) Keep in Portuguese — IN THIS SPECIFIC FILE (justify, and if it is a new pattern apply in (C))
+(C) CONFIGURE THIS PROJECT/SESSION with LANG_DOCS=pt-BR. Add via `che_registry_append_jsonl` helper with {{"flags":{{"LANG_DOCS":"pt-BR"}}}} to Level 1 registry.jsonl.
 Sample lines: {"; ".join(sample_lines)}
 File analyzed: {file_path}"""
         return {"decision": "warn", "reason": reason, "additionalContext": addl}
@@ -366,26 +366,26 @@ def posttooluse_3layer_dedup(input_json: Dict[str, Any]) -> Dict[str, Any]:
         return {"decision": "allow"}
 
     top_hits = dup_hits[:6]
-    camada = f"Layer 1 (user_rules/{filename})" if is_layer1 else f"Layer 2 ({filename})"
+    layer = f"Layer 1 (user_rules/{filename})" if is_layer1 else f"Layer 2 ({filename})"
 
-    layer_desc = f"{camada} contém conteúdo que já existe em Layer 3 skills/*/SKILL.md."
-    action_needed = f"Arquitetura 3 camadas HARD STOP: Layer 3 é DONO do corpo de regra. Mova o corpo duplicado para a skill; deixe em {camada} APENAS título + link para SKILL.md. Duplicates >=4 linhas detectadas: {len(dup_hits)} linhas idênticas já presentes em skills/"
+    layer_desc = f"{layer} contains content that already exists in Layer 3 skills/*/SKILL.md."
+    action_needed = f"3-Layer Architecture HARD STOP: Layer 3 OWNS the rule body. Move the duplicate body to the skill; leave ONLY title + link to SKILL.md in {layer}. Duplicates of ≥4 lines detected: {len(dup_hits)} identical lines already present in skills/"
     warning_msg = f"{layer_desc} | {action_needed} | Top hits: {top_hits}"
 
     return {"decision": "allow", "additionalContext": warning_msg}
 
 
 def posttooluse_git_worktree(input_json: Dict[str, Any]) -> Dict[str, Any]:
-    """Hook PONTO-3: detecta `git worktree add/remove/prune` via RunCommand e auto-manage L3 .wt/__branch/
+    """Hook POINT-3: detects `git worktree add/remove/prune` via RunCommand and auto-manages L3 .wt/__branch/
 
-    NÃO é um wrapper de `git worktree` — NÃO criamos comando novo.
-    Só detectamos quando o usuário usa a ferramenta canônica (git) e enriquecemos o Che.
+    NOT a `git worktree` wrapper — we DO NOT create a new command.
+    We only detect when the user uses the canonical tool (git) and enrich Che.
     """
     tool_name = input_json.get("toolName") or input_json.get("tool_name", "")
     tool_args = input_json.get("toolArgs") or input_json.get("tool_input", {})
 
     if tool_name not in {"RunCommand", "Bash", "exec_command"}:
-        return {"decision": "allow", "reason": "Hook worktree: não é um comando shell."}
+        return {"decision": "allow", "reason": "Worktree hook: not a shell command."}
 
     command = ""
     for key in ("command", "cmd", "script"):
@@ -394,7 +394,7 @@ def posttooluse_git_worktree(input_json: Dict[str, Any]) -> Dict[str, Any]:
             break
 
     if not command:
-        return {"decision": "allow", "reason": "Hook worktree: sem texto de comando shell."}
+        return {"decision": "allow", "reason": "Worktree hook: no shell command text."}
 
     cmd_clean = re.sub(r"\s+", " ", command.strip())
 
@@ -402,7 +402,7 @@ def posttooluse_git_worktree(input_json: Dict[str, Any]) -> Dict[str, Any]:
     worktree_remove_match = re.search(r"git(?:\.exe)?\s+worktree\s+(?:remove|prune)\b", cmd_clean)
 
     if not worktree_add_match and not worktree_remove_match:
-        return {"decision": "allow", "reason": "Hook worktree: nenhum `git worktree add/remove/prune` detectado."}
+        return {"decision": "allow", "reason": "Worktree hook: no `git worktree add/remove/prune` detected."}
 
     from che_core.workspaces import cleanup_worktree_l3, ensure_worktree_l3_dirs
 
@@ -420,11 +420,11 @@ def posttooluse_git_worktree(input_json: Dict[str, Any]) -> Dict[str, Any]:
                 res = ensure_worktree_l3_dirs(str(resolved), session_id="git-worktree-add-hook")
                 acted = True
                 notes.append(
-                    f"AUTO: criado L3 .wt/__branch/ para nova worktree detectada em {resolved}. "
+                    f"AUTO: created L3 .wt/__branch/ for new worktree detected at {resolved}. "
                     f"CHE_WORKSPACE_SHARED={res.get('CHE_WORKSPACE_SHARED')}."
                 )
             except Exception as e:
-                notes.append(f"WARN: falhou bootstrap L3 para {worktree_path}: {e}")
+                notes.append(f"WARN: L3 bootstrap failed for {worktree_path}: {e}")
 
     if worktree_remove_match:
         cwd = tool_args.get("cwd") or str(Path.cwd())
@@ -432,13 +432,13 @@ def posttooluse_git_worktree(input_json: Dict[str, Any]) -> Dict[str, Any]:
             res = cleanup_worktree_l3(str(cwd))
             acted = True
             notes.append(
-                f"AUTO: L3 movido para lixeira após git worktree remove/prune detectado. Result={json.dumps(res, default=str)}."
+                f"AUTO: L3 moved to trash after git worktree remove/prune detected. Result={json.dumps(res, default=str)}."
             )
         except Exception as e:
-            notes.append(f"WARN: falhou cleanup L3 em cwd={cwd}: {e}")
+            notes.append(f"WARN: L3 cleanup failed at cwd={cwd}: {e}")
 
     ctx = " | ".join(notes) if notes else ""
-    out: Dict[str, Any] = {"decision": "allow", "reason": f"Hook worktree: acted={acted}."}
+    out: Dict[str, Any] = {"decision": "allow", "reason": f"Worktree hook: acted={acted}."}
     if ctx:
         out["additionalContext"] = f"[git worktree hook] {ctx}"
     return out

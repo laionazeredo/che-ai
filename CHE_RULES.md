@@ -1,6 +1,6 @@
 ---
 name: "CHE GLOBAL RULES"
-description: "Global rules (process + flow) for the universal agent che. Loaded as user_rules on every session. Defines worktree-first enforcement, .trae/<task-id>/ output directory, agile BDD process, GitHub/ship + gh-stack, parallelism and SPEC GATE RULES (4 input sources + 7 canonical sections + YAML frontmatter validation + Approved gate before scope capture). Pure engineering rules (precedence 1-14, DbC, TDD, SOLID, strong typing, security, conventional commits, RLS, code review optimization) now live in the engineering-contracts SKILL and must NOT be duplicated here."
+description: "Global rules (process + flow) for the universal agent che. Loaded as user_rules on every session. Defines worktree-first enforcement, che-sessions output directory, agile BDD process, GitHub/ship + gh-stack, parallelism and SPEC GATE RULES (4 input sources + 7 canonical sections + YAML frontmatter validation + Approved gate before scope capture). Pure engineering rules (precedence 1-14, DbC, TDD, SOLID, strong typing, security, conventional commits, RLS, code review optimisation) now live in the engineering-contracts SKILL and must NOT be duplicated here."
 ---
 
 # 🌍 Che — Global Process & Flow Rules (Always-On)
@@ -8,53 +8,53 @@ description: "Global rules (process + flow) for the universal agent che. Loaded 
 These rules apply to **every session, every repo, every worktree.**
 They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when a conflict occurs.
 
-> **Conteúdo deste arquivo (PROCESSO + FLUXO apenas — NÃO duplica regras de engenharia pura):**
-> - Regras de operação do che: worktree-first, .trae output, ordem do time ágil, gates, timeouts
-> - Paralelismo (Kahn + conflict graph + locks)
-> - SPEC GATE RULES: 4 fontes input + 7 seções canônicas + validação frontmatter YAML obrigatório + gate Approved ANTES scope capture. Compatibilidade: PRD legado de qualquer projeto (estilo headings padrão) aceito como FONTE C via che-spec (parse headings automático).
-> - GitHub integration + ship + **gh-stack multi-PR hierárquico**
-> - Ferramentas preferenciais por integração
+> **Content of this file (PROCESS + FLOW only — DOES NOT duplicate pure engineering rules):**
+> - Che operation rules: worktree-first, che-sessions output, agile team order, gates, timeouts
+> - Parallelism (Kahn + conflict graph + locks)
+> - SPEC GATE RULES: 4 input sources + 7 canonical sections + mandatory YAML frontmatter validation + Approved gate BEFORE scope capture. Compatibility: Legacy PRD from any project (standard headings style) accepted as SOURCE C via che-spec (automatic headings parsing).
+> - GitHub integration + ship + **gh-stack multi-PR hierarchy**
+> - Preferred tools by integration
 >
-> **REGRAS PURAS DE ENGENHARIA (14 precedência, KISS/YAGNI, strong typing, DbC, TDD, SOLID, agile BDD, security, PII, conventional commits, Supabase RLS default, code review optimization, max 2 lines comments) → CANÔNICO = `engineering-contracts` SKILL. NÃO DUPLICAR AQUI.**
+> **PURE ENGINEERING RULES (14 precedence, KISS/YAGNI, strong typing, DbC, TDD, SOLID, agile BDD, security, PII, conventional commits, Database Security by Default Provider-Agnostic Pointer (see engineering-contracts SKILL §17 → postgres-supabase-expert SKILL §R-01 for PostgreSQL/Supabase specifics), code review optimisation, max 2 lines comments) → CANONICAL = `engineering-contracts` SKILL. DO NOT DUPLICATE HERE.**
 
 ---
 
-## 🔴 WORKTREE-FIRST ENFORCEMENT (não negocia)
+## 🔴 WORKTREE-FIRST ENFORCEMENT (Non-negotiable)
 
-> O agente SEMPRE prefere trabalhar em Git worktree. NUNCA atue em código sem saber exatamente EM QUAL worktree.
+> The agent ALWAYS prefers working in a Git worktree. NEVER act on code without knowing exactly WHICH worktree.
 
-1. Se o usuário forneceu explicitamente um caminho de worktree na requisição →
-   - Confirme que existe e contém `.git` dentro.
-   - Use exclusivamente esse caminho como `WORKTREE_ROOT` para toda a sessão.
-2. Se o usuário NÃO forneceu um caminho de worktree →
-   - **PARE IMEDIATAMENTE.** Não escreva código, não crie arquivos, não rode comandos.
-   - **PERGUNTE ao usuário via ferramenta apropriada:**
-     - "Em qual Git worktree devo executar esta tarefa? Forneça o caminho absoluto."
-   - Aguarde a resposta. Não prossiga até tê-la.
-   - Somente se o usuário disser explicitamente "não usar worktree, usar raiz do repo" é que você pode proceder, e somente após confirmação explícita.
+1. If the user explicitly provided a worktree path in the request →
+   - Confirm it exists and contains `.git` inside.
+   - Use this path exclusively as `WORKTREE_ROOT` for the entire session.
+2. If the user did NOT provide a worktree path →
+   - **STOP IMMEDIATELY.** Do not write code, do not create files, do not run commands.
+   - **ASK the user via the appropriate tool:**
+     - "In which Git worktree should I execute this task? Please provide the absolute path."
+   - Wait for the response. Do not proceed until you have it.
+   - Only if the user explicitly says "do not use worktree, use repo root" can you proceed, and only after explicit confirmation.
 
 ---
 
-## 🔴 DIRETÓRIO DE SAÍDA DO CHE
+## 🔴 CHE OUTPUT DIRECTORY
 
-> **🔴 STORAGE BOUNDARY HARD STOP — REGRA VERBATIM USUÁRIO:**
-> **"Nenhum asset do trabalho do che deve ser criado na worktree. Apenas quando solicitado. tudo deve ser organizado no che-sessions."**
+> **🔴 STORAGE BOUNDARY HARD STOP — USER VERBATIM RULE:**
+> **"No assets from che's work should be created in the worktree. Only when requested. Everything should be organised in che-sessions."**
 >
-> Separação estrita CÓDIGO vs DADOS. **NADA** gerado pelo che é escrito em **QUALQUER LUGAR** dentro de `<WORKTREE_ROOT>/*` por padrão (NÃO só `.trae/*` — relatórios `reports/`, arquivos na raiz tipo `summary.md`, `seo_report.md`, `REVIEW-*.md`, `HCR-*.md`, `diff-context_*.md`, pastas `qa_evidence/`, `screenshots/`, `pr_comments/`, e QUALQUER outro asset mutável gerado pelo che são PROIBIDOS dentro do código do usuário). MORATÓRIA HARD STOP, ver engineering-contracts §20.
+> Strict separation of CODE vs DATA. **NOTHING** generated by che is written **ANYWHERE** inside `<WORKTREE_ROOT>/*` by default (NOT just `.trae/*` — reports `reports/`, root files like `summary.md`, `seo_report.md`, `REVIEW-*.md`, `HCR-*.md`, `diff-context_*.md`, folders `qa_evidence/`, `screenshots/`, `pr_comments/`, and ANY other mutable asset generated by che are PROHIBITED inside the user's code). HARD STOP MORATORIUM, see engineering-contracts §20.
 >
-> ÚNICA EXCEÇÃO POSSÍVEL: usuário pede VERBATIM, explicitamente e de forma clara, que um arquivo ESPECÍFICO seja salvo dentro da worktree. Sem esse pedido verbal, default = **FORA WORKTREE**.
+> ONLY POSSIBLE EXCEPTION: User explicitly and clearly asks VERBATIM for a SPECIFIC file to be saved inside the worktree. Without this verbal request, default = **OUTSIDE WORKTREE**.
 >
-> - **CÓDIGO IMUTÁVEL che (skills/commands/hooks/user_rules/contracts):** permanece `$HOME/.trae/`.
-> - **DADOS/GERADOS/MUTÁVEIS (specs, plans, decisions, reports, evidências QA, bindings, diff contexts, PR comments):** vão obrigatoriamente para `$CHE_SESSIONS_ROOT` (default `$HOME/code/che-sessions`), **FORA DAS WORKTREES DO USUÁRIO**, sob `<WORKSPACE_NAME>/<WORKTREE_SLUG>/`.
+> - **IMMUTABLE che CODE (skills/commands/hooks/user_rules/contracts):** remains in `$HOME/.trae/`.
+> - **DATA/GENERATED/MUTABLE (specs, plans, decisions, reports, QA evidence, bindings, diff contexts, PR comments):** must go to `$CHE_SESSIONS_ROOT` (default `$HOME/code/che-sessions`), **OUTSIDE USER WORKTREES**, under `<WORKSPACE_NAME>/<WORKTREE_SLUG>/`.
 >
-> Contrato canônico de paths SINGLE SOURCE OF TRUTH: `source ~/.trae/contracts/che_sessions_contract.sh` + `che_compute_paths WORKTREE_ROOT SESSION_ID CWD`. **Proibido construir paths hardcoded.**
+> Canonical paths SINGLE SOURCE OF TRUTH contract: `source ~/.trae/contracts/che_sessions_contract.sh` + `che_compute_paths WORKTREE_ROOT SESSION_ID CWD`. **Hardcoded path construction is prohibited.**
 >
-> **🔧 HELPER OBRIGATÓRIO PARA TODO WRITE DE OUTPUT:**
-> NÃO invente paths manualmente. Sempre chame:
+> **🔧 MANDATORY HELPER FOR ALL OUTPUT WRITES:**
+> DO NOT invent paths manually. Always call:
 >
 > ```bash
 > che_output_path <type> <slug> <related_id> <scope> <ext> [suffix]
-> # Exemplos:
+> # Examples:
 > che_output_path "review" "che-code-review" "pr-382" "session" "md" "full"
 >   # → $CHE_SESSION_DIR/reviews/pr-382/20260902-092405-che-code-review_full.md
 > che_output_path "report" "che-scope-check" "pr-382" "workspace" "md"
@@ -63,303 +63,434 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 >   # → $CHE_SESSION_DIR/diff_contexts/pr-382/20260902-093500-diff-summary.md
 > ```
 >
-> O helper GARANTE automaticamente: (1) Prefixo timestamp UTC **NO INÍCIO** do filename → ordem alfabética = ordem cronológica de criação (não depende de mtime do SO); (2) Subpastas `<type>/<related_id>/` → todos arquivos da mesma PR/task ficam colocalizados, fácil de buscar com um glob; (3) `che_assert_outside_worktree` em baixo nível → HARD STOP se por algum motivo o path resolveria para dentro da worktree; (4) cria diretórios pai automaticamente.
+> The helper automatically GUARANTEES: (1) UTC timestamp prefix **AT THE START** of the filename → alphabetical order = chronological creation order (does not depend on OS mtime); (2) Subfolders `<type>/<related_id>/` → all files from the same PR/task are co-located, easy to search with a glob; (3) low-level `che_assert_outside_worktree` → HARD STOP if for any reason the path would resolve inside the worktree; (4) automatically creates parent directories.
 >
-> Para escrita: prefira `che_write_file_atomic <path>` (stdin → tmp → mv atômico, evita arquivos meio-escritos).
+> For writing: prefer `che_write_file_atomic <path>` (stdin → tmp → atomic mv, avoids half-written files).
 
-1. Determinado o `WORKTREE_ROOT` e o `SESSION_ID`:
-   - Execute `che_compute_paths` → resolve `CHE_WORKSPACE_NAME` (via `.code-workspace` match cwd, fallback `default`) e `CHE_WORKTREE_SLUG` (padrão `RepoName__branch-slug`, separador canônico `__`).
-   - Execute `che_ensure_session_dirs` → cria estrutura 2 diretórios por worktree **fora do código do usuário**:
-     - `$CHE_WORKSPACE_SHARED/` — **DURÁVEL** (várias sessões compartilham):
-       - `reports/<related_id>/` — scope-check final, ship-gate reports (duráveis, procuráveis por PR/task)
-       - `specs/` — (1+ por worktree) **Che Execution Specification (SPEC).** 7 seções canônicas + YAML frontmatter campos obrigatórios. Gate Approved no SM §0.5. Substitui PRD legado.
-       - `architecture/` — ADRs / design docs che locais (SALVAR AQUI POR DEFAULT, NÃO no workspace do usuário). Cópia manual para `docs/adr/` ou `architecture/decisions/` no repo de produto é OPCIONAL e só acontece se usuário pedir explicitamente — por padrão ADR neste momento é REFERÊNCIA do pipeline para validar trade-offs e escopo.
-       - `tasks/<TASK_ID>/` — envelope/scope/ac, UM subdiretório por tarefa
-       - `decisions.log.jsonl` — append a cada decisão não óbvia / trade-off (1 por worktree, não 1 por task)
-       - `manual_test_plan.md` — no final, quando todas tasks forem DONE
-       - `gh_stack_plan.md` — (OPCIONAL, se múltiplos PRs) plano hierárquico gh-stack
-       - `legacy_binding_cleanup/<ISO-ts>/` — backup automático de artifacts bugados antigos movidos da worktree durante binding
-     - `$CHE_SESSION_DIR/` — **EFÊMERO** (esta sessão só):
-       - `binding.md` — Level2 detail (fora da worktree user, nunca commitado)
-       - `session.md` — metadata da sessão
-       - `reviews/<related_id>/` — code-review reports, postfix reviews, PR comments triage (sessão atual)
-       - `reports/<related_id>/` — relatórios efêmeros, diff-contexts, merge-audit intermed, batch execution
-       - `diff_contexts/<related_id>/` — contexto 5-seção pré-conversação de diffs
-       - `pr_comments/<related_id>/` — triagem e drafts de respostas a comments de PR
-       - `qa/screenshots/`, `qa/evidence/<related_id>/` — evidências Playwright/manual test
-       - `execution/` — batch logs, execution trace, envelopes runtime
-       - `debugger/` — screenshots, logs e traces do che-debugger-bugfix
-       - `final_summary.md` — resumo final e estatísticas desta execução
-2. **NUNCA** crie esses arquivos em outros locais (docs/, raiz do repo, pastas de packages, `<WORKTREE_ROOT>/.trae/*`, `<WORKTREE_ROOT>/reports/`) a menos que usuário pede explicitamente.
-3. **NUNCA** toque `AGENTS.md` ou `CLAUDE.md` de worktree do usuário (che altera só ~/.trae + che-sessions).
+1. Once `WORKTREE_ROOT` and `SESSION_ID` are determined:
+   - Execute `che_compute_paths` → resolve `CHE_WORKSPACE_NAME` (via `.code-workspace` cwd match, fallback `default`) and `CHE_WORKTREE_SLUG` (standard `RepoName__branch-slug`, canonical separator `__`).
+   - Execute `che_ensure_session_dirs` → create 2-directory structure per worktree **outside user code**:
+     - `$CHE_WORKSPACE_SHARED/` — **DURABLE** (shared across multiple sessions):
+       - `reports/<related_id>/` — final scope-check, ship-gate reports (durable, searchable by PR/task)
+       - `specs/` — (1+ per worktree) **Che Execution Specification (SPEC).** 7 canonical sections + mandatory YAML frontmatter fields. Approved gate in SM §0.5. Replaces legacy PRD.
+       - `architecture/` — local che ADRs / design docs (SAVE HERE BY DEFAULT, NOT in user workspace). Manual copy to `docs/adr/` or `architecture/decisions/` in the product repo is OPTIONAL and only happens if the user explicitly asks — by default, ADR at this point is a pipeline REFERENCE to validate trade-offs and scope.
+       - `tasks/<TASK_ID>/` — envelope/scope/ac, ONE subdirectory per task.
+       - `decisions.log.jsonl` — append on every non-obvious decision / trade-off (1 per worktree, not 1 per task).
+       - `manual_test_plan.md` — at the end, when all tasks are DONE.
+       - `gh_stack_plan.md` — (OPTIONAL, if multiple PRs) gh-stack hierarchical plan.
+       - `legacy_binding_cleanup/<ISO-ts>/` — automatic backup of old buggy artifacts moved from worktree during binding.
+     - `$CHE_SESSION_DIR/` — **EPHEMERAL** (this session only):
+       - `binding.md` — Level 2 detail (outside user worktree, never committed).
+       - `session.md` — session metadata.
+       - `reviews/<related_id>/` — code-review reports, postfix reviews, PR comments triage (current session).
+       - `reports/<related_id>/` — ephemeral reports, diff-contexts, intermediate merge-audit, batch execution.
+       - `diff_contexts/<related_id>/` — 5-section context pre-diff conversation.
+       - `pr_comments/<related_id>/` — triage and response drafts for PR comments.
+       - `qa/screenshots/`, `qa/evidence/<related_id>/` — Playwright/manual test evidence.
+       - `execution/` — batch logs, execution trace, runtime envelopes.
+       - `debugger/` — screenshots, logs, and traces from che-debugger-bugfix.
+       - `final_summary.md` — final summary and statistics of this execution.
+2. **NEVER** create these files in other locations (docs/, repo root, package folders, `<WORKTREE_ROOT>/.trae/*`, `<WORKTREE_ROOT>/reports/`) unless the user explicitly asks.
+3. **NEVER** touch `AGENTS.md` or `CLAUDE.md` in the user's worktree (che only modifies ~/.trae + che-sessions).
 
 ---
 
-## 🟠 TIME ÁGIL SIMULADO — ORDEM OBRIGATÓRIA DE AGENTES
+## 🟠 SIMULATED AGILE TEAM — MANDATORY AGENT ORDER
 
-> **FILOSOFIA ÁGIL BDD NO CORE (HARD RULE):**
-> - SEMPRE desenvolva pequenos incrementos, guiados por testes (TDD + BDD).
-> - NUNCA antecipe edge cases ou futuro não explicitamente no escopo atual.
-> - Concentre-se EXATAMENTE no comportamento solicitado (BDD scenarios).
-> - Entregue a menor unidade de valor que valida o comportamento pedido.
-> - Se escopo for grande: QUEBRE em entregas parciais (múltiplos PRs auto-contidos) e use **gh-stack CLI** para manter hierarquia/ordem entre PRs.
-> - Estrutura do código: fácil de entender, simples de evoluir, respeita SOLID, **sem quebrar comportamento existente.**
-> - Code-review optimization: código limpo, não verborrágico, max 2 linhas de comentário bloco por arquivo (exceto docstrings públicas de contratos).
-> - **Corpo completo destas regras + thresholds:** `engineering-contracts` SKILL §15 (Agile BDD Incremental) + §16 (Code Review Optimization)
+> **AGILE BDD PHILOSOPHY AT THE CORE (HARD RULE):**
+> - ALWAYS develop small increments, guided by tests (TDD + BDD).
+> - NEVER anticipate edge cases or a future not explicitly in the current scope.
+> - Focus EXACTLY on the requested behaviour (BDD scenarios).
+> - Deliver the smallest unit of value that validates the requested behaviour.
+> - If scope is large: BREAK into partial deliveries (multiple self-contained PRs) and use **gh-stack CLI** to maintain hierarchy/order between PRs.
+> - Code structure: easy to understand, simple to evolve, respects SOLID, **without breaking existing behaviour.**
+> - Code-review optimisation: clean code, not verbose, max 2 lines of block comment per file (except public contract docstrings).
+> - **Full body of these rules + thresholds:** `engineering-contracts` SKILL §15 (Agile BDD Incremental) + §16 (Code Review Optimisation)
 
-Para QUALQUER implementação de feature / bugfix com mais de um passo:
+For ANY feature implementation / bugfix with more than one step:
 1. **SCRUM MASTER (`che-act`):**
-   - **Preflight 0.5 (SPEC GATE — substitui PRD legado)** — Valida se já existe **SPEC Approved** em `$CHE_WORKSPACE_SHARED/` (glob `spec_*.md` → parse YAML `status: Approved`). Se 0 → **invoca skill `che-spec` interativo automaticamente** (4 fontes input: existente / ticket URL / legacy-project PRD .md path / descrição breve). Captura 2 linhas retorno: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → libera §1 scope capture; `Draft` → oferece (A) Override sem Approved append `[SPEC-OVERRIDE] <razão>` em `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` ou (B) Parar, terminar SPEC depois via `/che-spec` standalone.
-   - **Entende escopo → valida ACs →** (se grande) **planeja gh-stack multi-PR** → monta TASK GRAPH (ou aprova lista existente) → cria TASK ENVELOPE por task.
-2. **DEVELOPER (`che-developer`):** SOMENTE chamado por SM, com ENVELOPE formal.
-   - Primeiro invoca `engineering-contracts`.
-   - Repo Onboarding obrigatório (Q1-Q5: lang/framework/test-stack/graphify-docs-read/Stack Match IDE skills).
-   - Contract → Test → Implement (ATDD + TDD, incremento pequeno).
-3. **SCOPE VALIDATION (SM + Dev):** SM compara saída do Dev com ENVELOPE.
-4. **QA (`che-qa`):** Detecta stack → Build → Lint → Typecheck → Test (affectados). Relatório estruturado. Não corrige código diretamente.
-5. **COMPLIANCE LIGHT (`che-compliance` stage=per-task):** Diff da task. Secrets/PII/SQLInjection.
-6. Repete T1, T2, T3... por task.
-7. **FINAL:** Compliance HEAVY (`stage=final` varre diff completo) → `manual_test_plan.md` → (se gh-stack) aplica hierarquia → `final_summary.md` → avisa o usuário.
+   - **Preflight 0.5 (SPEC GATE — replaces legacy PRD)** — Validates if **SPEC Approved** already exists in `$CHE_WORKSPACE_SHARED/` (glob `spec_*.md` → parse YAML `status: Approved`). If 0 → **automatically invokes interactive `che-spec` skill** (4 input sources: existing / ticket URL / legacy-project PRD .md path / brief description). Captures 2 return lines: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → releases §1 scope capture; `Draft` → offers (A) Override without Approved, append `[SPEC-OVERRIDE] <reason>` in `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` or (B) Stop, finish SPEC later via standalone `/che-spec`.
+   - **Understand scope → validate ACs →** (if large) **plan gh-stack multi-PR** → build TASK GRAPH (or approve existing list) → create TASK ENVELOPE per task.
+2. **DEVELOPER (`che-developer`):** ONLY called by SM, with formal ENVELOPE.
+   - First invokes `engineering-contracts`.
+   - Mandatory Repo Onboarding (Q1-Q5: lang/framework/test-stack/graphify-docs-read/Stack Match IDE skills).
+   - Contract → Test → Implement (ATDD + TDD, small increment).
+3. **SCOPE VALIDATION (SM + Dev):** SM compares Dev's output with ENVELOPE.
+4. **QA (`che-qa`):** Detects stack → Build → Lint → Typecheck → Test (affected). Structured report. Does not fix code directly.
+5. **COMPLIANCE LIGHT (`che-compliance` stage=per-task):** Task diff. Secrets/PII/SQLInjection.
+6. Repeat T1, T2, T3... per task.
+7. **FINAL:** Compliance HEAVY (`stage=final` scans full diff) → `manual_test_plan.md` → (if gh-stack) applies hierarchy → `final_summary.md` → notifies the user.
 
-**NUNCA pule etapas. NUNCA invoque Developer sem ENVELOPE. NUNCA invoque QA antes de SM aprovar escopo. NUNCA encerre sem Compliance final.**
-
----
-
-## 🟡 BLAST RADIUS — HEURÍSTICA DE 10 ARQUIVOS
-
-- Se uma task for modificar MAIS de 10 arquivos (novos ou editados):
-  1. PARE.
-  2. Adicione entrada em `decisions.log.jsonl` justificando CADA arquivo.
-  3. Volte para SM que avalia se é necessário mesmo ou se deve requebrar (via gh-stack múltiplos PRs parciais).
-- Adicionalmente: se uma task tocar arquivo FORA da lista "blast radius" do ENVELOPE → entrada obrigatória em `decisions.log.jsonl` + aprovação SM ANTES de seguir.
+**NEVER skip stages. NEVER invoke Developer without ENVELOPE. NEVER invoke QA before SM approves scope. NEVER finish without final Compliance.**
 
 ---
 
-## 🟡 DECISIONS LOG SEMPRE
+## 🟡 BLAST RADIUS — 10-FILE HEURISTIC
 
-Sempre que você tomar uma decisão não trivial (trade-off, exceção a regra, arquivos não previstos, mutabilidade em hot path, RLS policy em nova tabela, escolha de criar multi-PR stack vs single PR, etc.):
-1. **USE HELPER OFICIAL:** `source ~/.trae/contracts/che_sessions_contract.sh && che_append_decision_jsonl "$WORKTREE_ROOT" "EVENT_TYPE" '{"key":"value"}'`.
-   - Único ponto de append (dedup, JSON safe, schema v1). Single source: `$CHE_WORKSPACE_SHARED/decisions.log.jsonl`.
-   - NÃO use Edit/Write manual do JSONL (risco quoting quebrado / semicol / sem dedup).
-2. Para consultar human-readable → `/che-decisions` ou Skill `che-decisions-query` (summary PT-BR / filtros / export CSV).
-
-> **Regra:** 1 arquivo `decisions.log.jsonl` por worktree-slug, compartilhado entre sessões. NÃO há versão .md companion (risco drift/ambiguidade). Parseia via skill se precisar.
+- If a task is to modify MORE than 10 files (new or edited):
+  1. STOP.
+  2. Add an entry in `decisions.log.jsonl` justifying EACH file.
+  3. Return to SM who evaluates if it is really necessary or if it should be broken down again (via gh-stack multiple partial PRs).
+- Additionally: if a task touches a file OUTSIDE the "blast radius" list of the ENVELOPE → mandatory entry in `decisions.log.jsonl` + SM approval BEFORE proceeding.
 
 ---
 
-## 🟢 LOOP TIME-OUTS (UNIFICADO — TUDO AQUI)
+## 🟡 ALWAYS LOG DECISIONS
 
-> Esta é a seção ÚNICA sobre timeouts de loop. Antes estava duplicada em 2 lugares → agora unificada.
+Whenever you make a non-trivial decision (trade-off, rule exception, unforeseen files, mutability in hot path, RLS policy on new table, choice of creating multi-PR stack vs single PR, etc.):
+1. **USE OFFICIAL HELPER:** `source ~/.trae/contracts/che_sessions_contract.sh && che_append_decision_jsonl "$WORKTREE_ROOT" "EVENT_TYPE" '{"key":"value"}'`.
+   - Single point of append (dedup, JSON safe, schema v1). Single source: `$CHE_WORKSPACE_SHARED/decisions.log.jsonl`.
+   - DO NOT use manual JSONL Edit/Write (risk of broken quoting / semicolons / no dedup).
+2. To consult human-readable → `/che-decisions` or `che-decisions-query` Skill (English summary / filters / CSV export).
 
-Em QUALQUER loop/iterações entre agentes, a regra é:
+> **Rule:** 1 `decisions.log.jsonl` file per worktree-slug, shared between sessions. There is NO companion .md version (risk of drift/ambiguity). Parse via skill if needed.
 
-| Loop / Cenário | Limite de iterações SEM PROGRESSO CLARO | Quando parar? | O que fazer quando parar? |
+---
+
+## 🟢 LOOP TIME-OUTS (UNIFIED — EVERYTHING HERE)
+
+> This is the SINGLE section on loop timeouts. Previously duplicated in 2 places → now unified.
+
+In ANY loop/iterations between agents, the rule is:
+
+| Loop / Scenario | Iteration limit WITHOUT CLEAR PROGRESS | When to stop? | What to do when stopping? |
 |---|---|---|---|
-| **Geral (Dev ↔ SM, Dev ↔ QA, Dev ↔ Compliance Light)** | **2 retornos consecutivos** sem progresso | Qualquer lado repetir mesma correção/same-error 2x | **PAUSE e PERGUNTE ao usuário** direção/novo contexto. Não loopar indefinido gastando tokens. |
-| **Debug che bugfix (`/che-fix`)** | **5 iterações** do loop Hipótese→Instrumentar→Reproduzir→Corrigir | 5 hipóteses refutadas ou nenhuma reprodução após 5 | **Pausar + relatar hipóteses já refutadas + próximos passos sugeridos** ao usuário. |
-| **CI Fix che (`/che-ci-fix`)** | **3 planos de fix aplicados** com CI ainda falhando | 3 fixes aplicados (mesma categoria) = não resolveu | **Pause e PERGUNTE** se usuário quer nova abordagem ou mais contexto. |
+| **General (Dev ↔ SM, Dev ↔ QA, Dev ↔ Compliance Light)** | **2 consecutive returns** without progress | Either side repeating the same fix/same-error 2x | **PAUSE and ASK the user** for direction/new context. Do not loop indefinitely wasting tokens. |
+| **Debug che bugfix (`/che-fix`)** | **5 iterations** of the Hypothesis→Instrument→Reproduce→Fix loop | 5 refuted hypotheses or no reproduction after 5 | **Pause + report already refuted hypotheses + suggested next steps** to the user. |
+| **CI Fix che (`/che-ci-fix`)** | **3 applied fix plans** with CI still failing | 3 applied fixes (same category) = did not resolve | **Pause and ASK** if the user wants a new approach or more context. |
 
 ---
 
-## 🟢 IDIOMA (SÓ AQUI — NÃO DUPLICAR)
+## 🟢 LANGUAGE (ONLY HERE — DO NOT DUPLICATE)
 
-- Todo código-fonte (identificadores, comentários, strings de mensagem): **inglês**.
-- Toda mensagem de commit / descrição de PR / corpo do gh-stack PR hierarchy: **inglês**, conventional commits.
-- Toda resposta ao usuário, perguntas, resumos em conversa: **português do Brasil**.
-- Todo documento interno do che (task_graph, envelopes, decisions, summaries, gh_stack_plan): **inglês**.
-
----
-
-## 🔴 WORKTREE SCOPED SESSION (Não negocia — 1 sessão = 1 worktree)
-
-> **Contrato corpo completo**: `engineering-contracts` SKILL §19. Aqui só o gate de processo/enforcement do che.
-
-### Preflight obrigatório (ANTES de qualquer comando, leitura de arquivo, git operation, Glob/Grep):
-
-1. **Ler Level 1 GLOBAL INDEX (resolver chicken-and-egg):** Ler `$HOME/.trae/bindings/registry.jsonl`. Procurar ÚLTIMA entrada STATUS=BOUND com SESSION_ID=<atual>. Extrair WORKTREE_ROOT dessa entrada.
-   - Se encontrar → usar WORKTREE_ROOT dele como SCOPE ABSOLUTO sessão.
-   - Se NÃO encontrar → seguir regra §19.2 (ordem precedência: menção explícita user → arquivos abertos → env workdirs → AskUserQuestion com ≤2 opções. Perguntar sempre ambíguo; NUNCA chute.
-
-2. **Escrever binding em BOTH LEVELS após primeira aprovação (atomically):**
-   - **Level 1:** Append via helper OFICIAL `source che_sessions_contract.sh && che_registry_append_jsonl <sid> BOUND <wt> <payload>` p/ `registry.jsonl` (NÃO use Edit/Write manual). Append-only, NUNCA sobrescreve BOUND entries (mantém histórico). Payload fields opcionais: `"friendly_name":"slug-curto"` (perguntar 1x antes de criar CHE_SESSION_DIR; se dado SESSION_DIR ganha sufixo `--<friendly>`), `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}`, `"workspace_name"`, `"worktree_slug"`, `"branch"`, `"che_session_dir"`, `"che_workspace_shared"`, `"workspace_file"`, `"reason"`.
-   - **Level 2:** **FORA DA WORKTREE DO USUÁRIO** → `$CHE_SESSION_DIR/binding.md` (resolvido via contract). Histórico/auditoria re-binding chain + mirror FLAGS + FRIENDLY_NAME p/ leitura humana. Fields NOVOS obrigatórios Level2: `WORKSPACE_NAME`, `WORKTREE_SLUG`, `CHE_SESSION_DIR`, `CHE_WORKSPACE_SHARED`.
-   - 2 arquivos criados. 1 por SESSION_ID.
-   - Mais detalhes contract re-binding corpo está em contracts §19. Aqui só gates processo/enforcement.
-
-3. **Scissor check A CADA OPERAÇÃO de arquivo / git (agente + hook 1 global (automático)):**
-   - Dupla verificação. 2 camadas. Alvo path começa com `WORKTREE_ROOT` OU `CHE_SESSIONS_ROOT`? Se **nenhum** dos dois → BLOQUEAR.
-   - Arquivos em `$CHE_SESSIONS_ROOT/**` SEMPRE são permitidos após binding criado; não precisa de pergunta por operação.
-   - Saídas: (a) user confirma "sim, escrever fora scope logged decision.log, ou (b) perguntar Switch worktree? A = Switch / B = Cancel operação".
-   - **Nunca operar cross-worktree silenciosamente (ler ou escrever).**
-
-4. **Trocar worktree re-bind:**
-   - Confirmação EXPLÍCITA do user: Sim, trocar X agora".
-   - OLD Level1 BOUND entry → STATUS=RELEASED + RELEASED_AT + NEXT_WORKTREE_ROOT + append new BOUND entry NEW Level2 OLD file STATUS=RELEASED + NEXT_BINDING; NEW Level2 NEW BOUND + PREV_BINDING.
-   - Anunciar troca próximo 📍 Status output.
-
-5. **Pre-send trimmer de refs:**
-   - Se draft output tem refs clickable ≥2 worktrees DIFERENTES E user NÃO pediu comparação → PARAR. Apagar refs worktree incorreto. Manter apenas refs do BOUND WORKTREE_ROOT.
-
-> **Enforcement AUTOMÁTICO GLOBAL (§19 2-LEVEL LAYOUT):**
->   - **Level 1 (GLOBAL INDEX resolver chicken-and-egg + FLAGS + FRIENDLY_NAME por sessão):** `$HOME/.trae/bindings/registry.jsonl` — entry por SESSION_ID, append-only, NÃO por worktree. `SESSION_ID → WORKTREE_ROOT` lookup sem precisar conhecer worktree. ÚNICO writer = helper `che_registry_append_jsonl` (nunca Edit/Write manual). Payload opcional: `"friendly_name":""`, `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}` (omitido=ENABLED p/ Hook3 por sessão).
->   - **Level 2 (PER-SESSION DETAIL — FORA DA WORKTREE USER):** `$CHE_SESSION_DIR/binding.md` (não mais dentro de `<WORKTREE_ROOT>/.trae/bindings/`) — resolve via contract `che_compute_paths` → `che_level2_binding_path`. Histórico/auditoria re-binding chain + mirror FLAGS + FRIENDLY_NAME p/ leitura humana. Nunca commitado por construção.
->   - **Hook 1 (PreToolUse):** [pretooluse-worktree-binding.sh](file:///home/laion/.trae/hooks/pretooluse-worktree-binding.sh) em [hooks.json](file:///home/laion/.trae/hooks.json#L5) — usa SÓ Level 1 para scissor check. **EXCEÇÃO:** paths em `$CHE_SESSIONS_ROOT/**` são permitidos (não código do usuário). Zero lock contention, resolve catch22, multi-sessão paralela works.
->   - **Hook 3 (PostToolUse WARN-only):** [posttooluse-lang-pt-check.sh](file:///home/laion/.trae/hooks/posttooluse-lang-pt-check.sh) em [hooks.json](file:///home/laion/.trae/hooks.json#L22) — detecta texto PT-BR em arquivos escritos via Edit/Write (4+ stopwords PT OU 2+ linhas c/ acentos + 2 stopwords). NUNCA corrige automaticamente, NUNCA bloqueia (exit0 sempre). Decision=warn + adicionalContext instrui agente a **AskUserQuestion obrigatório**: (A) Traduzir p/ inglês, (B) Manter PT confirmado, (C) Desabilitar Hook3 nesta sessão (append `"flags":{"LANG_PT_CHECK":"DISABLED"}` via helper oficial no Level 1 registry.jsonl + Level 2 mirror).
+- All source code (identifiers, comments, message strings): **English**.
+- All commit messages / PR descriptions / gh-stack PR hierarchy body: **English**, conventional commits.
+- All responses to the user, questions, conversation summaries: **Portuguese (Brazil)** (as per user preference).
+- All internal che documents (task_graph, envelopes, decisions, summaries, gh_stack_plan): **English**.
 
 ---
 
-## 🔴 RESPOSTAS ENXUTAS + DEEP-DIVE GATE (Não negocia)
+## 🔴 WORKTREE SCOPED SESSION (Non-negotiable — 1 session = 1 worktree)
 
-> Corpo completo desta regra (orçamento de palavras, seções permitidas, regra de ≤2 opções) vive SÓ em `engineering-contracts` SKILL §18. Aqui só o processo/gate do che.
+> **Full body contract**: `engineering-contracts` SKILL §19. Only the process/enforcement gate here.
 
-**Gates obrigatórios antes de enviar QUALQUER resposta ao usuário:**
+### Mandatory Preflight (BEFORE any command, file reading, git operation, Glob/Grep):
 
-1. **Trimmer obrigatório**: depois que o agente escrever sua resposta → rodar mentalmente "cortar TUDO que não responde diretamente o que o usuário perguntou nesta mensagem?" Cortar.
-   - NÃO listar 5 opções → no máximo 2 (ou escolher a melhor e pedir OK).
-   - NÃO explicar background / "porquê escolhi a lib" a menos que perguntado.
-   - NÃO listar 8 edge cases → no máximo 2 (P0/CRITICAL). Todo resto: "Se surgir intermediários, voltamos aqui."
-   - NÃO planos gigantes → mostrar **3 passos visíveis** + 1 oferta de aprofundar se quiser os restantes.
+1. **Read Level 1 GLOBAL INDEX (resolve chicken-and-egg):** Read `$HOME/.trae/bindings/registry.jsonl`. Search for the LAST entry with STATUS=BOUND and SESSION_ID=<current>. Extract WORKTREE_ROOT from this entry.
+   - If found → use its WORKTREE_ROOT as the ABSOLUTE SCOPE of the session.
+   - If NOT found → follow rule §19.2 (precedence order: explicit user mention → open files → env workdirs → AskUserQuestion with ≤2 options. Always ask when ambiguous; NEVER guess).
 
-2. **Shape canônico (4 seções OPCIONAIS, FORMATO PARA LEITURA DIAGONAL)**:
+2. **Write binding at BOTH LEVELS after first approval (atomically):**
+   - **Level 1:** Append via OFFICIAL helper `source che_sessions_contract.sh && che_registry_append_jsonl <sid> BOUND <wt> <payload>` to `registry.jsonl` (DO NOT use manual Edit/Write). Append-only, NEVER overwrite BOUND entries (maintains history). Optional payload fields: `"friendly_name":"short-slug"` (ask 1x before creating CHE_SESSION_DIR; if given, SESSION_DIR gets `--<friendly>` suffix), `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}`, `"workspace_name"`, `"worktree_slug"`, `"branch"`, `"che_session_dir"`, `"che_workspace_shared"`, `"workspace_file"`, `"reason"`.
+   - **Level 2:** **OUTSIDE USER WORKTREE** → `$CHE_SESSION_DIR/binding.md` (resolved via contract). History/audit re-binding chain + mirror FLAGS + FRIENDLY_NAME for human reading. Mandatory NEW Level 2 fields: `WORKSPACE_NAME`, `WORKTREE_SLUG`, `CHE_SESSION_DIR`, `CHE_WORKSPACE_SHARED`.
+   - 2 files created. 1 per SESSION_ID.
+   - More details on re-binding contract body are in contracts §19. Only process/enforcement gates here.
+
+3. **Scissor check ON EVERY file / git OPERATION (agent + hook 1 global (automatic)):**
+   - Double verification. 2 layers. Target path starts with `WORKTREE_ROOT` OR `CHE_SESSIONS_ROOT`? If **neither** → BLOCK.
+   - Files in `$CHE_SESSIONS_ROOT/**` are ALWAYS permitted after binding created; no per-operation question needed.
+   - Outputs: (a) user confirms "yes, write outside scope logged in decision.log", or (b) ask "Switch worktree? A = Switch / B = Cancel operation".
+   - **Never operate cross-worktree silently (read or write).**
+
+4. **Switch worktree re-bind:**
+   - EXPLICIT user confirmation: "Yes, switch X now".
+   - OLD Level 1 BOUND entry → STATUS=RELEASED + RELEASED_AT + NEXT_WORKTREE_ROOT + append new BOUND entry; NEW Level 2 OLD file STATUS=RELEASED + NEXT_BINDING; NEW Level 2 NEW BOUND + PREV_BINDING.
+   - Announce switch in the next 📍 Status output.
+
+5. **Pre-send ref trimmer:**
+   - If draft output has clickable refs from ≥2 DIFFERENT worktrees AND the user did NOT ask for comparison → STOP. Delete incorrect worktree refs. Keep only refs from the BOUND WORKTREE_ROOT.
+
+> **AUTOMATIC GLOBAL ENFORCEMENT (§19 2-LEVEL LAYOUT):**
+>   - **Level 1 (GLOBAL INDEX resolve chicken-and-egg + FLAGS + FRIENDLY_NAME per session):** `$HOME/.trae/bindings/registry.jsonl` — entry per SESSION_ID, append-only, NOT per worktree. `SESSION_ID → WORKTREE_ROOT` lookup without needing to know worktree. SINGLE writer = `che_registry_append_jsonl` helper (never manual Edit/Write). Optional payload: `"friendly_name":""`, `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}` (omitted=ENABLED for Hook 3 per session).
+>   - **Level 2 (PER-SESSION DETAIL — OUTSIDE USER WORKTREE):** `$CHE_SESSION_DIR/binding.md` (no longer inside `<WORKTREE_ROOT>/.trae/bindings/`) — resolve via `che_compute_paths` contract → `che_level2_binding_path`. History/audit re-binding chain + mirror FLAGS + FRIENDLY_NAME for human reading. Never committed by design.
+>   - **Hook 1 (PreToolUse):** [pretooluse-worktree-binding.sh](file:///home/laion/.trae/hooks/pretooluse-worktree-binding.sh) in [hooks.json](file:///home/laion/.trae/hooks.json#L5) — uses ONLY Level 1 for scissor check. **EXCEPTION:** paths in `$CHE_SESSIONS_ROOT/**` are permitted (not user code). Zero lock contention, resolves catch-22, parallel multi-session works.
+>   - **Hook 3 (PostToolUse WARN-only):** [posttooluse-lang-pt-check.sh](file:///home/laion/.trae/hooks/posttooluse-lang-pt-check.sh) in [hooks.json](file:///home/laion/.trae/hooks.json#L22) — detects PT-BR text in files written via Edit/Write (4+ PT stopwords OR 2+ lines with accents + 2 stopwords). NEVER fixes automatically, NEVER blocks (always exit 0). Decision=warn + additionalContext instructs agent to **mandatory AskUserQuestion**: (A) Translate to English, (B) Keep confirmed PT, (C) Disable Hook 3 in this session (append `"flags":{"LANG_PT_CHECK":"DISABLED"}` via official helper in Level 1 registry.jsonl + Level 2 mirror).
+
+---
+
+## 🔴 PRINCIPLE #0 — VERTICAL SLICING / TRACER BULLETS (Non-negotiable, unless EXPLICIT_OVERRIDE logged)
+
+> Full DbC body (PRE / POST / INV) lives ONLY in `engineering-contracts` SKILL §0 VERTICAL_SLICING. Canonical enforcement below applies to ALL skills, domains, and plans, no exceptions.
+> Source: Hunt & Thomas, *The Pragmatic Programmer* (20th Anniversary Ed.), "Tracer Bullets and Prototypes" chapter, plus `pragmatic-programmer` SKILL canonical reference.
+
+### 0.1 Core Definition (What it is)
+A **Vertical Slice (Fatian Vertical) / Tracer Bullet** is a MINIMAL, COMPLETE, END-TO-END implementation of ONE behaviour that traverses **at least TWO distinct architectural layers** (UI ↔ API ↔ DB ↔ External Service) and delivers a PUBLICLY OBSERVABLE outcome. It is NOT throwaway prototype code — it stays in the repository forever.
+
+Default slicing strategy for ANY scope, plan, task graph, or specification: **VERTICAL**. Horizontal slicing ("build ALL models first, then ALL routes, then ALL pages") is PROHIBITED by default.
+
+### 0.2 F0 Mandatory First Slice (Tracer Bullet)
+For ANY project, feature, epic, bugfix, or refactor with scope ≥ 2 files OR ≥ 2 layers:
+1. The **FIRST slice (F0)** MUST be a Tracer Bullet.
+2. **F0 definition**: The SMALLEST POSSIBLE end-to-end path that proves the plumbing works. Example: "Click button → API route → write to DB → redirect → item visible on list". F0 MUST cover EXACTLY 1 B-ID (SbE Behaviour ID), minimum.
+3. F0 MUST be marked COMPLETE (all tests green, observable in UI/API) BEFORE any F1, F2, ... FN slices begin.
+4. F0 is NEVER deleted, mocked, or rewritten later — it remains the live regression guard for the vertical path.
+
+### 0.3 Override Mechanism (Horizontal Exception)
+Horizontal planning (layer-by-layer) is permitted ONLY if ALL of the following are simultaneously true:
+1. User writes the **VERBATIM literal** `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN` in a single chat message, immediately followed by a 1-line justification (≤ 120 chars).
+2. The Scrum Master / execution skill appends an entry to `decisions.log.jsonl` with:
+   ```json
+   {"type":"EXPLICIT_OVERRIDE_HORIZONTAL_PLAN","spec_slug":"...","justification":"...","author_override":"user","logged_at":"ISO-8601"}
+   ```
+3. The override applies **to one spec / one task graph only**. A new scope requires a NEW override.
+
+If ANY of the 3 items above are missing → horizontal plan / task graph / spec is AUTOMATICALLY REJECTED by the enforcement gates below.
+
+### 0.4 Cross-Skill Enforcement Gates (ALL MUST run, order below)
+| Gate Order | Skill / Executor | What it Validates | FAIL Action |
+|---|---|---|---|
+| G-VS-1 | `che-spec` §4.5 VALIDATION PASS V16 + V17 | Approved SPEC contains §4.5 VERTICAL SLICES table with AT LEAST F0 defined (≥2 layers, ≥1 B-ID, DONE criterion testable) and NO pure-horizontal Can-Touch groupings without override literal in SPEC source §2 | Reject spec with structured error; offer: (A) Insert F0 template (B) Ask user for EXPLICIT_OVERRIDE_HORIZONTAL_PLAN |
+| G-VS-2 | `che-plan` Step 3 + Quality Gate #3 | Ticket decomposition (Linear/ClickUp/Jira) groups B-IDs into F0/F1/...FN slices — NEVER groups by "Data Layer / API Layer / UI Layer". Sub-task file scope MUST always touch ≥2 layers | Reject ticket plan, log attempt to decisions.log as [HORIZONTAL_TICKET_BLOCKED], require user confirmation or override |
+| G-VS-3 | `che-act` §0.5 SPEC GATE + §1.3 TASK GRAPH build | (a) SPEC frontmatter `tracer_f0_defined === true`; (b) EVERY row in TASK TABLE has column `Layers Touched` with count ≥ 2 (different top-level folders) | (a) Block SPEC gate; (b) Reject individual task row → prompt: "Task Tn only touches {X} layer — add the missing layer(s) OR declare EXPLICIT_OVERRIDE_HORIZONTAL_PLAN" |
+| G-VS-4 | `che-scope-checker` §0 CHECK #0 (runs BEFORE 6-check standard) | **Horizontal Pattern Detector**: Parse task graph files. If ≥2 consecutive tasks each have ≥80% of files inside ONE single top-level folder (e.g. only `packages/db/**`, only `pages/**`, only `routes/**`) — pattern is HORIZONTAL. Without override → LEAN score PENALTY = -5, Scope audit auto-fails. Also validates that F0 files are present in the actual diff (git status). | If no override logged → 🔴 BLOCK ship flow; insert check item: "[ ] Add EXPLICIT_OVERRIDE_HORIZONTAL_PLAN justification" to ship checklist |
+| G-VS-5 | Domain Playbooks (engineering + ux) Stage/Phase 0.0 | Execution pipeline starts with a TRACER F0 definition step before ANY other work proceeds. F0 completion is stamped COMPLETE in decisions.log BEFORE moving to Stage/Phase 1. | No F0 stamped → return to stage 0.0 and block later steps |
+
+### 0.5 Anti-patterns (Auto-reject by any gate)
+- Task descriptions / plan items that read: "Create all models", "Build all CRUD endpoints", "Design all pages first", "Refactor entire DB schema" without a corresponding F0 end-to-end path.
+- Can-Touch / File Lock lists that list only 1 top-level domain folder for 3+ consecutive tasks.
+- SPEC sections titled "Database Layer / API Layer / UI Layer" as sub-sections instead of "F0 / F1 / F2 Vertical Slices".
+- Task graphs where the "B-IDs Covered" column is empty or lists B-IDs from ≥3 unrelated behaviours in a single task (signals grouping by layer instead of by slice).
+
+---
+
+## 🔴 PRINCIPLE #1 — REVERSIBILITY / NO VENDOR LOCK-IN (Non-negotiable, declared per SPEC)
+
+> Full DbC body: `pragmatic-programmer` SKILL §6 "Reversibility and Flexibility" chapter. No final decisions. Cost of change proportional to scope.
+> Source: Hunt & Thomas, 20th Anniversary Ed. "There are no final decisions."
+
+### 1.1 Core Definition
+Every external dependency (SDK, cloud vendor, DB driver, payment provider, email service, storage backend, deploy target, ORM, UI component framework) used in the project MUST be declared with its **Authoritative Wrapper Boundary** — a single, explicitly listed folder/package in the codebase that is the ONLY place permitted to import that dependency. Business logic, UI, and pipeline code outside the wrapper boundary MUST NOT reference the dependency directly.
+
+Default: **Reversibility declared per SPEC**. No exception. Declarations are project-agnostic (does not know "Stripe" or "Resend" — only "External Dependency Name X, Wrapper Package Path Y").
+
+### 1.2 Three Mandatory Declarations Per SPEC (che-spec V19)
+For every SPEC with `estimated_files_max ≥ 5` OR with ≥ 1 external dependency listed in §2:
+1. **V19a Wrapper Boundary Table**: For EACH external dependency used, list 3 columns: `External Dependency Name` (import alias / SDK name), `Authoritative Wrapper Path` (single folder/package glob), `Touch-Count if Swapped` (estimated files touched to replace this dependency with a competitor).
+2. **V19b Critical Rollback Flags**: Every critical-path B-ID (checkout, payment, refund, auth, publish, deploy) MUST sit behind a runtime feature flag with rollback ≤ 5 minutes. Declare: `B-ID(s) Affected · Flag Name · Where Evaluated (absolute path)`.
+3. **V19c Forking Road Test**: For EACH unique wrapper boundary declared in V19a, output 1 sentence answer to: "If we swapped this dependency for its top competitor, how many files outside the wrapper boundary would we touch?"
+   - If answer > 10 files OR > 2 packages → annotate as **TECHNICAL COUPLING** in §2 SCOPE with 1-line mitigation plan before SPEC approval.
+
+### 1.3 Enforcement (Generic, Project-Agnostic)
+| Gate Order | Skill | What it Validates (Project-Agnostic) | Fail Action |
+|---|---|---|---|
+| G-R-1 | che-spec V19a,b,c | Approved SPEC contains §4.6 REVERSIBILITY DECLARATIONS tables (3 sub-tables above). ALL entries in V19a have Wrapper Path = 1 single glob (no semicolons, no comma multiple paths). | Reject SPEC; offer: (A) Auto-insert empty Wrapper Boundary template (B) Confirm N/A with literal `EXPLICIT_OVERRIDE_REVERSIBILITY: <1-line justification>` in §2 SCOPE. |
+| G-R-2 | che-scope-checker §0.7 CHECK #2 | Parse SPEC V19a table. For EACH row, run generic grep search in BOUND WORKTREE for `import <SDK_NAME>` or `from '<SDK_NAME>'` in ANY file NOT matching the `Authoritative Wrapper Path` glob. If ANY hit found outside wrapper → **WRAPPER LEAK**. | Block ship with list of offending files. Offer: (A) Move SDK usage inside wrapper path (B) Annotate as TECHNICAL COUPLING in §2 and add TODO + ticket id. |
+| G-R-3 | che-act §1.3 TASK GRAPH build | Any task tagged "Swap vendor / Replace DB / Migrate dependency" must include row `Wrapper Boundary Touched` column with path from V19a; blast radius of the task must not exceed wrapper glob + ≤ 5 adapter files outside. | Reject task scope if files outside wrapper boundary + 5 adapter count > Touch-Count declared in V19a. |
+
+### 1.4 Override (Same Literal Pattern as #0)
+If the scope is 100% internal tooling with zero external network dependencies, project author may write VERBATIM literal:
+`EXPLICIT_OVERRIDE_REVERSIBILITY: <1-line justification (≤120 chars)>` in §2 SCOPE → logged to decisions.log by che-act §0.5. Without this literal, G-R-1 REJECTs any SPEC ≥ 5 files.
+
+---
+
+## 🔴 PRINCIPLE #2 — BROKEN WINDOWS / ENTROPY MONITORING (Non-negotiable, per-SHIP metric)
+
+> Full body: `pragmatic-programmer` SKILL §5 "Broken Window Theory". First broken window = most expensive. Dead programs tell no lies. Board up windows you can't fix now (TODO + ticket id).
+
+### 2.1 Core Definition
+EVERY ship / PR / scope-checked batch MUST compute and output an **ENTROPY_DELTA** metric (integer, units of "broken windows added") comparing BEFORE (base branch / default HEAD) vs AFTER (current diff / candidate files).
+
+Definition (Project-Agnostic, Stack-Detectable):
+```
+ENTROPY_DELTA =
+  + 1 * (lint_warnings_diff_after_vs_before)    # new warnings count (not fixed)
+  + 2 * (uncovered_new_code_lines_count)        # new lines not covered by tests (if coverage available)
+  + 0.5 * (new_todos_without_valid_ticket_id)   # TODO comments that don't follow pattern TODO(<LINEAR-42> / <FLO-123> / <JIRA-987>)
+  + 3 * (pii_secrets_new_findings)              # new PII/secrets from compliance scan
+```
+
+### 2.2 Gate — Zero Positive Entropy Default
+- **ENTROPY_DELTA ≤ 0 → PASS**: Windows fixed ≥ windows added.
+- **ENTROPY_DELTA > 0 AND ≤ 2 → WARNING (non-blocking)**: Output structured warning with exact counts, 1 suggestion per line.
+- **ENTROPY_DELTA > 2 → BLOCK** (§8.1 scope-checker triggers block). Only permittible with VERBATIM literal override: `EXPLICIT_OVERRIDE_ENTROPY_DELTA: <1-line justification (≤120 chars)>` logged to decisions.log.
+
+### 2.3 Broken Window Boarding-Up Contract (DbC Assertive)
+Every TODO / FIXME / XXX comment in the diff MUST follow syntax: `TODO(<TICKET_ID>): <body>` where `<TICKET_ID>` matches regex `^[A-Z]{2,20}-[0-9]{1,8}$` (Linear FLO-123, JIRA PROJ-4, ClickUp CSTM-9 all match).
+- TODO without ticket id pattern → counts as +0.5 to ENTROPY_DELTA.
+- No raw `TODO:` / `FIXME:` allowed without ticket id.
+
+---
+
+## 🔴 PRINCIPLE #3 — ASSERTIVE PROGRAMMING / DESIGN BY CONTRACT (DbC, per-SPEC)
+
+> Full body: `pragmatic-programmer` SKILL §4. Crash Early = Dead Programs Tell No Lies. Assertions for things that should NEVER happen; error-returns for things that MIGHT happen.
+> Source complement: `engineering-contracts` SKILL §DbC / §SbE contracts for B-IDs. Already exists; this principle formalises runtime assertions.
+
+### 3.1 Assertions vs Errors Distinction (MANDATORY)
+| Category | For things that... | Implementation Pattern |
+|---|---|---|
+| **ASSERTION (INVARIANT / IMPOSSIBLE)** | **Should NEVER happen in correct code.** If it happens = programming error, not runtime condition. E.g. "user_id is empty on authenticated route", "non-negative enum was cast to -1", "ordered list returned from function has length 0 when contract says ≥1". | `ASSERT(<condition>, <msg>)` / `assert!` / `invariant()` helpers. CRASH process / request immediately. **NEVER swallow, never retry, never log-and-continue.** |
+| **ERROR (RUNTIME CONTINGENCY)** | **Might happen in production** (network down, bad user input, DB constraint violation, timeout, quota exhausted). | Return Result/Either type, throw typed catchable exception, non-2xx HTTP response. Expected flow, has handler, tested via AB-IDs. |
+
+### 3.2 Per-SPEC Assertion Table (che-spec V20)
+For every SPEC with ≥ 3 B-IDs, a new §4.7 table `ASSERTIVE PROGRAMMING: INVARIANTS AND IMPOSSIBLE STATES` with 4 columns:
+1. **Assertion ID** (A-1, A-2... A-N)
+2. **Impossible Condition** (sentence, technical)
+3. **Where Enforced (absolute path, symbol name)**
+4. **Crash vs Error** (must say CRASH, never Error; if Error, move out of this table)
+
+Minimum rows: `ceil(B_COUNT / 3)` assertions per SPEC.
+
+### 3.3 Enforcements
+| Gate | Skill | Action |
+|---|---|---|
+| G-DbC-1 | che-spec V20 | Table exists, rows ≥ ceil(B/3), column 4 = literal CRASH for every row | Reject SPEC with count of missing rows. |
+| G-DbC-2 | che-code-review Mode B | Auto-scan diff for patterns: `log.error("impossible!") followed by return` without process.exit / throw. If found → HIGH issue tagged "Silent invariant broken = dead program would have told truth, crash it". | Fix before commit. |
+
+---
+
+## 🔴 LEAN RESPONSES + DEEP-DIVE GATE (Non-negotiable)
+
+> Full body of this rule (word budget, permitted sections, ≤2 options rule) lives ONLY in `engineering-contracts` SKILL §18. Only the che process/gate here.
+
+**Mandatory gates before sending ANY response to the user:**
+
+1. **Mandatory trimmer**: after the agent writes its response → mentally run "cut EVERYTHING that does not directly answer what the user asked in this message." Cut it.
+   - DO NOT list 5 options → maximum 2 (or choose the best and ask for OK).
+   - DO NOT explain background / "why I chose the lib" unless asked.
+   - DO NOT list 8 edge cases → maximum 2 (P0/CRITICAL). Everything else: "If intermediaries arise, we'll come back here."
+   - NO giant plans → show **3 visible steps** + 1 offer to deep-dive if they want the remaining ones.
+
+2. **Canonical Shape (4 OPTIONAL sections, FORMAT FOR DIAGONAL READING)**:
    ```markdown
    ### 📍 Status
-   <1-2 frases claras: o que foi feito / estado AGORA>
+   <1-2 clear sentences: what was done / state NOW>
 
-   ### 🧩 Mudanças-chave (max 3 bullets)
-   • **<Escopo 1 negrito>**: <1 linha, 1 pensamento>
-   • **<Escopo 2 negrito>**: <1 linha>
-   • **<Escopo 3 negrito>**: <1 linha>
+   ### 🧩 Key Changes (max 3 bullets)
+   • **<Scope 1 bold>**: <1 line, 1 thought>
+   • **<Scope 2 bold>**: <1 line>
+   • **<Scope 3 bold>**: <1 line>
 
-   ### 🔗 Refs (só os 2-5 mais importantes)
-   • [<NOME_ARQUIVO curto>](file:///path/absoluto#Lx-Ly)
+   ### 🔗 Refs (only the 2-5 most important)
+   • [<short FILENAME>](file:///absolute/path#Lx-Ly)
    • ...
 
-   ### ❓ Próximos / Aprofundar
-   Quer aprofundar em **<UMA ÚNICA coisa>**?
+   ### ❓ Next / Deep-dive
+   Do you want to deep-dive into **<ONE SINGLE thing>**?
    ```
-   **Formatação não-negociável (dentro do Shape):**
-   - **TODOS os bullets, SEMPRE.** 3+ frases consecutivas sem bullet = violação (pare e formate).
-   - **Negrito ( `**X**` )** em todo substantivo/label chave.
-   - *Itálico ( `_X_` )* só para ressalvas/nuances.
-   - `<u>Sublinhado</u>` = MÁXIMO 1 por output, reservado para a CALL-TO-ACTION MAIS CRÍTICA ou consequência 🔴.
-   - 1 pensamento por bullet = ≤2 linhas. Se for maior → quebre em sub-bullets.
-   - **Nunca parede de texto única.** Sempre quebrar em 2-4 seções lógicas com `##` / `###`.
+   **Non-negotiable formatting (within Shape):**
+   - **ALL bullets, ALWAYS.** 3+ consecutive sentences without bullets = violation (stop and format).
+   - **Bold ( `**X**` )** on every key noun/label.
+   - *Italic ( `_X_` )* only for caveats/nuances.
+   - `<u>Underlined</u>` = MAXIMUM 1 per output, reserved for the MOST CRITICAL CALL-TO-ACTION or consequence 🔴.
+   - 1 thought per bullet = ≤2 lines. If larger → break into sub-bullets.
+   - **Never a single wall of text.** Always break into 2-4 logical sections with `##` / `###`.
 
-3. **Oferta de deep-dive = SÓ 1 tópico por vez**. NÃO montar cardápio de 5 opções de aprofundamento.
+3. **Deep-dive offer = ONLY 1 topic at a time**. DO NOT assemble a menu of 5 deep-dive options.
 
-4. **PR Body (che-ship) READABLE enforcement** (atualizado feat(pr-body)): esta regra complementa — PR body em **5 seções canônicas** (What was implemented / Attention points / Breaking se existir / How to verify / Refs) com foco em **legibilidade para pessoa com pouco contexto**: siglas expandidas 1ª vez, cada mudança tem "por quê / impacto usuário final", riscos explicam consequência se revisão falhar, passos de verificação sem jargão. Orçamento ≤50 linhas total. Template e exemplo preenchido (refund feature) em `skills/che-ship/references/PR_DESCRIPTION_TEMPLATE.md`. Gates de processo em `skills/che-ship/SKILL.md §A-4.2`.
+4. **PR Body (che-ship) READABLE enforcement** (updated feat(pr-body)): this rule complements — PR body in **5 canonical sections** (What was implemented / Attention points / Breaking if any / How to verify / Refs) focusing on **readability for someone with little context**: acronyms expanded 1st time, each change has "why / final user impact", risks explain consequence if review fails, verification steps without jargon. Budget ≤50 lines total. Template and filled example (refund feature) in `skills/che-ship/references/PR_DESCRIPTION_TEMPLATE.md`. Process gates in `skills/che-ship/SKILL.md §A-4.2`.
 
 ---
 
-## 🔴 GITHUB INTEGRATION / SHIP RULES (Não negocia) + gh-stack MULTI-PR
+## 🔴 GITHUB INTEGRATION / SHIP RULES (Non-negotiable) + gh-stack MULTI-PR
 
-### A) Ship → Commits padrão
-Para qualquer comando `/che-ship` ou afins:
-- Use SEMPRE `gh` CLI (regras do usuário: GitHub = gh CLI).
-- Commits atômicos + conventional commits.
-  - **Corpo completo conventional commits (tipos válidos + regex + exemplos):** `engineering-contracts` SKILL Appendix B
-- Plano de commits SEMPRE é apresentado ao usuário ANTES de qualquer `git commit`.
-- Esperar aprovação EXPLÍCITA do usuário antes de commitar.
+### A) Ship → Standard Commits
+For any `/che-ship` command or similar:
+- ALWAYS use `gh` CLI (user rules: GitHub = gh CLI).
+- Atomic commits + conventional commits.
+  - **Full body of conventional commits (valid types + regex + examples):** `engineering-contracts` SKILL Appendix B.
+- Commit plan ALWAYS presented to the user BEFORE any `git commit`.
+- Wait for EXPLICIT user approval before committing.
 
 ### B) Push
-- SEMPRE `git push --no-verify` (regras do usuário). Push normal só com aprovação explícita.
-- Branch remota não existir? `--set-upstream origin <branch>` para criar.
+- ALWAYS `git push --no-verify` (user rules). Normal push only with explicit approval.
+- Remote branch does not exist? `--set-upstream origin <branch>` to create.
 
-### C) Abrir PR (Single)
-- SEMPRE abrir PR no modo **DRAFT** (não-ready-for-review) por padrão. Muda para "ready" apenas quando usuário diz explicitamente.
-- Branch base = default branch do repo (`main`, `master` — detectar via `gh repo view --json defaultBranchRef`).
-- Atribuir a PR para `@me` (o próprio usuário).
-- **NÃO fazer merge** automaticamente. Ship pára na criação de DRAFT PR.
-- **NÃO usar labels inexistentes** no repo. Só adicionar labels que já existem; não criar novas.
+### C) Open PR (Single)
+- ALWAYS open PR in **DRAFT** mode (not-ready-for-review) by default. Change to "ready" only when the user explicitly says so.
+- Base branch = default branch of the repo (`main`, `master` — detect via `gh repo view --json defaultBranchRef`).
+- Assign the PR to `@me` (the user themselves).
+- **DO NOT auto-merge.** Ship stops at DRAFT PR creation.
+- **DO NOT use non-existent labels** in the repo. Only add labels that already exist; do not create new ones.
 
-### D) gh-stack HIERARQUIA DE PRS PARCIAIS (NOVO — obrigatório quando scope grande > 1 PR)
-> **Contexto:** `gh-stack` (https://github.com/github/gh-stack) = extensão oficial do gh CLI que cria links e hierarquia entre PRs relacionadas, mantendo ordem e dependências entre branches sequenciais. Ideal para quando o Scrum Master quebra um scope grande em múltiplos PRs auto-contidos.
+### D) gh-stack PARTIAL PR HIERARCHY (NEW — mandatory when large scope > 1 PR)
+> **Context:** `gh-stack` (https://github.com/github/gh-stack) = official gh CLI extension that creates links and hierarchy between related PRs, maintaining order and dependencies between sequential branches. Ideal for when the Scrum Master breaks a large scope into multiple self-contained PRs.
 >
-> **Corpo completo do workflow (when-to-use + commands + examples):** `engineering-contracts` SKILL Appendix C — gh-stack Workflow Reference.
+> **Full body workflow (when-to-use + commands + examples):** `engineering-contracts` SKILL Appendix C — gh-stack Workflow Reference.
 
-**Hard rules do gh-stack no che:**
-1. **QUANDO usar o gh-stack (SM decide no planejamento TASK GRAPH):**
-   - Task Graph tiver ≥3 tasks que formam unidades de PR claramente separáveis.
-   - OU: Usuário explicitamente pediu "entregar em múltiplos PRs".
-   - OU: Uma única task tiver blast radius > 15 arquivos e SM decidir quebrar em 2+ PRs.
-2. **Planejamento (SM cria arquivo `$CHE_WORKSPACE_SHARED/tasks/<TASK_ID>/gh_stack_plan.md` — FORA worktree, via `che_compute_paths`) ANTES do Dev começar:**
-   - Lista ordenada: `PR #N`, título, base branch, head branch, tasks cobertas, ACs do PR, reviewers opcionais, ordem de stack (base → topo).
-   - Exemplo de estrutura: `[PR1 (base main)] contracts types → [PR2 (base PR1 branch)] service layer → [PR3 (base PR2 branch)] API + tests`.
-   - Mostrar plano ao usuário para aprovação ANTES de Dev iniciar.
-3. **Durante o ship (che-ship executa em ORDEM da stack, de BAIXO para CIMA):**
-   - Aplica commits atômicos, push, abre DRAFT PR individual para CADA nível da stack.
-   - Usa `gh-stack` CLI para linkar PRs com relação de dependência (body de cada PR não-base mostra "Depends on: #PR-anterior" + gh-stack mantém graph hierarchy).
-   - Atualiza `gh_stack_plan.md` com URLs dos PRs reais após cada abertura.
+**Che gh-stack hard rules:**
+1. **WHEN to use gh-stack (SM decides in TASK GRAPH planning):**
+   - Task Graph has ≥3 tasks that form clearly separable PR units.
+   - OR: User explicitly asked to "deliver in multiple PRs".
+   - OR: A single task has blast radius > 15 files and SM decides to break into 2+ PRs.
+2. **Planning (SM creates file `$CHE_WORKSPACE_SHARED/tasks/<TASK_ID>/gh_stack_plan.md` — OUTSIDE worktree, via `che_compute_paths`) BEFORE Dev starts:**
+   - Ordered list: `PR #N`, title, base branch, head branch, tasks covered, PR ACs, optional reviewers, stack order (base → top).
+   - Structure example: `[PR1 (base main)] contracts types → [PR2 (base PR1 branch)] service layer → [PR3 (base PR2 branch)] API + tests`.
+   - Show plan to user for approval BEFORE Dev starts.
+3. **During ship (che-ship executes in stack ORDER, from BOTTOM to TOP):**
+   - Applies atomic commits, push, opens individual DRAFT PR for EACH stack level.
+   - Uses `gh-stack` CLI to link PRs with dependency relationship (body of each non-base PR shows "Depends on: #previous-PR" + gh-stack maintains graph hierarchy).
+   - Updates `gh_stack_plan.md` with real PR URLs after each opening.
 4. **Review + Merge:**
-   - Reviewers leem PRs individualmente (de baixo para cima), pois cada um é small + autocontido.
-   - Se PR do meio precisar de fix: faz no branch, rebaseia o topo automaticamente via `gh-stack rebase` (se disponível).
-5. **Quando NÃO usar gh-stack:**
-   - Apenas 1 PR (auto-contido).
-   - Worktree com histórico muito confuso ou branches divergentes (KISS: single PR é mais simples).
-   - Usuário explicitamente disse: "não usar gh-stack, single PR".
+   - Reviewers read PRs individually (from bottom to top), as each one is small + self-contained.
+   - If a middle PR needs a fix: do it in the branch, automatically rebase the top via `gh-stack rebase` (if available).
+5. **When NOT to use gh-stack:**
+   - Only 1 PR (self-contained).
+   - Worktree with very confused history or divergent branches (KISS: single PR is simpler).
+   - User explicitly said: "do not use gh-stack, single PR".
 
-### E) Nunca faça isso no GitHub / Git
-- `git commit --allow-empty` sem motivo + aprovação explícita.
-- `git push --force` sem aprovação explícita dupla do usuário.
-- Commit em branches `main`/`master`/`develop`/default diretamente. SEMPRE feature branch → PR.
-- Commitar arquivos `.env*` com valores reais. Bloquear se houver pattern de secret.
-- "Resolver" um CI failure colocando `continue-on-error: true` ou `.skip` em teste falhando para fazer passar sem aprovação do usuário.
+### E) Never do this in GitHub / Git
+- `git commit --allow-empty` without reason + explicit approval.
+- `git push --force` without double explicit user approval.
+- Commit to `main`/`master`/`develop`/default branches directly. ALWAYS feature branch → PR.
+- Commit `.env*` files with real values. Block if there is a secret pattern.
+- "Resolve" a CI failure by putting `continue-on-error: true` or `.skip` in a failing test to make it pass without user approval.
 
 ---
 
-## 🟢 FERRAMENTAS DE ACORDO COM PREFERÊNCIAS DO USUÁRIO
+## 🟢 PREFERRED TOOLS ACCORDING TO USER PREFERENCES
 
-Sempre use a ferramenta / integração que o usuário definiu, por meio das APIs / CLIs correspondentes:
+Always use the tool / integration that the user defined, via the corresponding APIs / CLIs:
 
-| Sistema | Ferramenta obrigatória | Observações |
+| System | Mandatory tool | Observations |
 |---|---|---|
-| GitHub | `gh` CLI + `gh-stack` (hierarquia multi-PR) | **HARD STOP (única via permitida):** NUNCA usar HTTP/curl/fetch manual, NUNCA usar octokit/SDK direto, NUNCA fazer `git clone https://github.com/...` sem passar por gh (autenticação gerenciada, scopes, rate-limit, repos privados, 2FA, enterprise, auditoria). PR metadata/diff/comments/reviews/checks/releases/search: SEMPRE `gh pr view/create/diff/checks/review` etc. Browser só para UI visual user-facing se pedido explicitamente. |
-| Jira / Confluence | API REST via `DO_JIRA_*` / `DO_CONFLUENCE_*` env vars | Sempre checar presença de vars. |
-| Linear | GraphQL API → `LINEAR_API_KEY` env var | Sempre checar presença. |
-| Figma | Figma REST API → `LAION_FIGMA_PAT` env var | Sempre checar. |
-| Railway | `railway` CLI | 1º uso: checkar conta logada + perguntar ao usuário se mantém. |
-| Vercel | `vercel` CLI | 1º uso: checkar conta logada + perguntar ao usuário se mantém. |
-| Nx | Sempre `--tui false` para travar sem TUI interativo. | `corepack pnpm nx <cmd> --tui false` |
-| CLIs em geral | Procurar flags `-y`, `--non-interactive`, `--tui false`, `--no-tty`, `--yes` | Evitar prompts interrompidos. |
-| Browser integrado do IDE | Apenas para sites genéricos. Para Atlassian/Linear/Figma/etc usar APIs acima. | |
+| GitHub | `gh` CLI + `gh-stack` (multi-PR hierarchy) | **HARD STOP (only allowed route):** NEVER use manual HTTP/curl/fetch, NEVER use direct octokit/SDK, NEVER `git clone https://github.com/...` without going through gh (managed auth, scopes, rate-limit, private repos, 2FA, enterprise, audit). PR metadata/diff/comments/reviews/checks/releases/search: ALWAYS `gh pr view/create/diff/checks/review` etc. Browser only for user-facing visual UI if explicitly requested. |
+| Jira / Confluence | REST API via `DO_JIRA_*` / `DO_CONFLUENCE_*` env vars | Always check for presence of vars. |
+| Linear | GraphQL API → `LINEAR_API_KEY` env var | Always check for presence. |
+| Figma | Figma REST API → `LAION_FIGMA_PAT` env var | Always check. |
+| Railway | `railway` CLI | 1st use: check logged-in account + ask the user if they want to keep it. |
+| Vercel | `vercel` CLI | 1st use: check logged-in account + ask the user if they want to keep it. |
+| Nx | Always `--tui false` to lock without interactive TUI. | `corepack pnpm nx <cmd> --tui false` |
+| CLIs in general | Look for `-y`, `--non-interactive`, `--tui false`, `--no-tty`, `--yes` flags | Avoid interrupted prompts. |
+| Integrated IDE browser | Only for generic sites. For Atlassian/Linear/Figma/etc use the APIs above. | |
 
 ---
 
-## 🟣 TAXONOMIA DE DOMÍNIOS DO CHE (7 CATEGORIES)
+## 🟣 CHE DOMAIN TAXONOMY (7 CATEGORIES)
 
-> **HARD RULE NÃO NEGOCIÁVEL**: Toda **NOVA skill, comando slash `/`, ou SPEC DE NOVO tipo criado a partir de hoje DEVE declarar explicitamente **exatamente um domínio** dos 7 abaixo. Skills novas sem declaram → valor **DEFAULT** (não mais implícito) = `engineering`, AGORA com pasta física oficial. NUNCA "cross-domínio" em 1 skill (se tocar 2 domínios = 2 skills separadas, ou use scrum master com sub-skills).
+> **NON-NEGOTIABLE HARD RULE**: Every **NEW skill, slash command `/`, or SPEC OF A NEW type created from today MUST explicitly declare **exactly one domain** from the 7 below. New skills without declaration → **DEFAULT** value (no longer implicit) = `engineering`, NOW with an official physical folder. NEVER "cross-domain" in 1 skill (if it touches 2 domains = 2 separate skills, or use scrum master with sub-skills).
 
-### 7 Domínios canônicos
+### 7 Canonical Domains
 
-| Slug (valor frontmatter `domain:`) | Nome humano | O que cobre | Pasta física |
+| Slug (frontmatter value `domain:`) | Human name | What it covers | Physical folder |
 |---|---|---|---|
-| **`engineering`** | Engenharia de software (valor DEFAULT para skills novas sem declaram dominio) | Código backend/frontend, arquitetura técnica, CI/CD engenharia, testes unitários/e2e, database migrations, Supabase RLS, code review, ship gates. | `domains/engineering/` |
-| **`product`** | Product Management | PRD, RICE scoring, JTBD, roadmap, tasks, priorização, integração Linear/ClickUp/Jira, gestão backlog. | `domains/product/` |
-| **`ux`** | UI / UX DesignOps | Descoberta UX, wireframe, hi-fi protótipo Figma/PenPot, accessibility (a11y), design tokens, dev-handoff, pixel check. | `domains/ux/` |
-| **`devops`** | DevOps & Observabilidade | Deploy, canary rollout, error budget SLO, Grafana, Sentry, Datadog, pipelines CI/CD gestão, Runbooks, gestão incidentes. | `domains/devops/` |
-| **`copywriting`** | Copywriting criativa | Copy de impacto landing hero/CTA, PAS/AIDA, página de vendas, headlines, A/B spec copy, páginas legais vs copy marketing. | `domains/copywriting/` |
-| **`social`** | Social Media & campanhas pagas/orgânicas | Instagram/TikTok posts, carrosséis 8 slides, stories, roteiros vídeo, campanhas ads Meta/TikTok Ads, UTMs, audiences, gestão campanha. | `domains/social/` |
-| **`seo-analytics`** | SEO, Analytics & Otimização | Keyword research, on-page SEO, technical SEO (sitemap/robots/canonical), schema.org, Lighthouse, GA4/GSC/GTM, Meta Pixel, otimização de conversão CRO. | `domains/seo-analytics/` |
+| **`engineering`** | Software Engineering (DEFAULT value for new skills without declared domain) | Backend/frontend code, technical architecture, engineering CI/CD, unit/e2e tests, database migrations, Database Security by Default (see engineering-contracts SKILL §17 → postgres-supabase-expert SKILL §R-01 for PostgreSQL/Supabase specifics), code review, ship gates. | `domains/engineering/` |
+| **`product`** | Product Management | PRD, RICE scoring, JTBD, roadmap, tasks, prioritisation, Linear/ClickUp/Jira integration, backlog management. | `domains/product/` |
+| **`ux`** | UI / UX DesignOps | UX discovery, wireframe, hi-fi Figma/PenPot prototype, accessibility (a11y), design tokens, dev-handoff, pixel check. | `domains/ux/` |
+| **`devops`** | DevOps & Observability | Deploy, canary rollout, error budget SLO, Grafana, Sentry, Datadog, CI/CD pipeline management, Runbooks, incident management. | `domains/devops/` |
+| **`copywriting`** | Creative Copywriting | High-impact landing hero/CTA copy, PAS/AIDA, sales page, headlines, A/B spec copy, legal pages vs marketing copy. | `domains/copywriting/` |
+| **`social`** | Social Media & paid/organic campaigns | Instagram/TikTok posts, 8-slide carousels, stories, video scripts, Meta/TikTok Ads campaigns, UTMs, audiences, campaign management. | `domains/social/` |
+| **`seo-analytics`** | SEO, Analytics & Optimisation | Keyword research, on-page SEO, technical SEO (sitemap/robots/canonical), schema.org, Lighthouse, GA4/GSC/GTM, Meta Pixel, CRO conversion optimisation. | `domains/seo-analytics/` |
 
-### Cada domínio = 5 artefatos OBRIGATÓRIOS mínimos
+### Each domain = 5 minimum MANDATORY artifacts
 
-Toda pasta por domínio tem a estrutura abaixo. NÃO quebrar (boilerplate criado automaticamente em rollout fase 2 domínios restantes):
+Every domain folder has the structure below. DO NOT break (boilerplate created automatically in phase 2 rollout of remaining domains):
 
-1. **`profile.md`** — Persona do domínio + regras de estilo hard, convenções da casa, padrões proibidos. Carregado **AUTOMATICAMENTE no início scrum master ANTES scope capture** para QUALQUER domínio declarado (incluindo engineering). NUNCA duplique instruções longas de persona no prompt de execução cada skill; profile é fonte única da verdade.
-2. **`playbook.md`** — Ordem obrigatória de etapas NÃO-PULA. Função equivalente a gates §0.9 ship para engenharia, agora generalizada para todos 7 domínios.
-3. **`connectors/`** — Configuração por integrações externas do domínio (CLIs oficiais ou MCP servers. NÃO colar HTTP raw aqui. Seguir engineering-contracts §20 EXTERNAL CONNECTORS — OFFICIAL CLI/MCP ONLY (generalização do §18 GitHub).
-4. **`gates/`** — Quality gates do domínio (cada = PASS/FAIL com THRESHOLD numérico e política retry igual §0.9.1 scope gate. Executados OBRIGATORIAMENTE por `/che-ship` §0.9.5 depois QA, PARA TODOS OS 7 DOMÍNIOS (sem exceção).
-5. **`templates/`** — Templates reutilizáveis entregáveis domínio.
+1. **`profile.md`** — Domain persona + hard style rules, house conventions, prohibited patterns. Loaded **AUTOMATICALLY at the start of scrum master BEFORE scope capture** for ANY declared domain (including engineering). NEVER duplicate long persona instructions in each skill's execution prompt; profile is the single source of truth.
+2. **`playbook.md`** — Mandatory NO-SKIP sequence of stages. Function equivalent to engineering ship gates §0.9, now generalised for all 7 domains.
+3. **`connectors/`** — Configuration per domain external integrations (official CLIs or MCP servers). DO NOT paste raw HTTP here. Follow engineering-contracts §20 EXTERNAL CONNECTORS — OFFICIAL CLI/MCP ONLY (generalisation of §18 GitHub).
+4. **`gates/`** — Domain quality gates (each = PASS/FAIL with numerical THRESHOLD and retry policy equal to §0.9.1 scope gate. Executed MANDATORILY by `/che-ship` §0.9.5 after QA, FOR ALL 7 DOMAINS (no exceptions).
+5. **`templates/`** — Reusable domain deliverable templates.
 
-### Frontmatter `domain:` onde declarar
+### Frontmatter `domain:` where to declare
 
-| Local | Obrigatoriedade | Quem preenche |
+| Location | Mandatory | Who fills it |
 |---|---|---|
-| Skills novas (arquivo `skills/<nova>/SKILL.md` header YAML frente `domain:` frontmatter) | **SIM NOVAS (HOJE 2026-09-01 em diante)** | Skill author antes merge |
-| SPEC (`spec_<slug>.md` YAML frontmatter campo `domain:`) | OPCIONAL — padrão `engineering` | Se não declarada = engenharia normal; se UX/product etc = domínio específico. che-spec skill já seta default engineering se field vazio. |
-| Project registry Level 1.5 `product_context.md` frontmatter campo `domains: [ux, copywriting, ...]` | OPCIONAL array | Quando projeto usa múltiplos domínios frequentemente | Scrum-master carrega profiles de todos domínios listados no início sessão. |
+| New skills (`skills/<new>/SKILL.md` file YAML header frontmatter `domain:` field) | **YES NEW (TODAY 2026-09-01 onwards)** | Skill author before merge |
+| SPEC (`spec_<slug>.md` YAML frontmatter `domain:` field) | OPTIONAL — default `engineering` | If not declared = normal engineering; if UX/product etc = specific domain. che-spec skill already sets default engineering if field is empty. |
+| Project registry Level 1.5 `product_context.md` frontmatter `domains: [ux, copywriting, ...]` field | OPTIONAL array | When project frequently uses multiple domains | Scrum-master loads profiles of all listed domains at the start of the session. |
 
-### Exemplo correto (recomendado) skill frontmatter nova skill:
+### Correct (recommended) skill frontmatter example for new skill:
 
 ```yaml
 ---
@@ -371,165 +502,265 @@ description: "Build KW cluster head-body-long-tail + cannibalism check audit."
 
 ---
 
-## 🟠 LANGUAGE CONFIGURATION PER PROJECT (4 EIXOS INDEPENDENTES — NUNCA MISTURAR)
+## 🟠 LANGUAGE CONFIGURATION PER PROJECT (4 INDEPENDENT AXES — NEVER MIX)
 
-> **HARD RULE VERBATIM USER:** "nunca misturar linguagens". Cada eixo tem EXATAMENTE um idioma por projeto/sessão. Exceção 0: strings UI traduzidas são artefato de i18n e ficam em arquivos JSON de tradução (não conta como LANG_CODE).
+> **USER VERBATIM HARD RULE:** "never mix languages". Each axis has EXACTLY one language per project/session. Exception 0: translated UI strings are i18n artifacts and remain in translation JSON files (not counted as LANG_CODE).
 
-### 4 eixos (flags independentes)
+### 4 axes (independent flags)
 
-| Flag | Default | O que controla | Exemplos de override comum |
+| Flag | Default | What it controls | Common override examples |
 |---|---|---|---|
-| `LANG_CODE` | `en` | **Identificadores de código:** variables, classes, functions, methods, constants, file names, folder names, enum members, type names, exported symbols, i18n keys. | RARO mudar. Apenas se usuário EXPLICITLY pedir. Não confundir com strings de UI traduzidas. |
-| `LANG_DOCS` | `en` | **Texto/documentação COM CÓDIGO:** comments inline non-docstring no source, JSDoc/TSDoc, PR titles + body, conventional commit messages (scope + description), repo docs / ADRs / README / SPEC body + YAML. | **COMUM override:** `LANG_DOCS = pt-BR` → comentários/PR/commits/docs em PT-BR, **mas código variáveis sempre em EN.** |
-| `LANG_CHAT` | `pt-BR` | **Respostas textuais no chat com o usuário.** | Pode ser `en` se usuário preferir. |
-| `LANG_REPORT` | `en` | **Reports estruturados che:** code-review report, scope-checker report, QA report, merge-audit, plan/SPEC YAML frontmatter. | RARO mudar. |
+| `LANG_CODE` | `en` | **Code identifiers:** variables, classes, functions, methods, constants, file names, folder names, enum members, type names, exported symbols, i18n keys. | RARE to change. Only if the user EXPLICITLY asks. Not to be confused with translated UI strings. |
+| `LANG_DOCS` | `en` | **Text/documentation WITH CODE:** inline non-docstring comments in source, JSDoc/TSDoc, PR titles + body, conventional commit messages (scope + description), repo docs / ADRs / README / SPEC body + YAML. | **COMMON override:** `LANG_DOCS = pt-BR` → comments/PR/commits/docs in PT-BR, **but code variables always in EN.** |
+| `LANG_CHAT` | `pt-BR` | **Textual responses in chat with the user.** | Can be `en` if the user prefers. |
+| `LANG_REPORT` | `en` | **Che structured reports:** code-review report, scope-checker report, QA report, merge-audit, plan/SPEC YAML frontmatter. | RARE to change. |
 
-### Onde configurar (ordem de precedência HIGH → LOW)
+### Where to configure (precedence order HIGH → LOW)
 
-1. **Override de sessão (Level 1 registry.jsonl flags entry — BIND_FLAGS_UPDATE event):** Temporário só nesta sessão. `che_registry_append_jsonl $SID FLAGS $WT '{"flags":{"LANG_DOCS":"pt-BR"}}'`.
-2. **Project registry Level 1.5 (.registry/projects/<slug>/product_context.md frontmatter):** `lang_code: en` + `lang_docs: pt-BR` (durable por projeto, compartilhado worktrees × sessões).
-3. **Default CHE_RULES (este arquivo):** Valores tabela acima se nenhum projeto/sessão definiu.
+1. **Session override (Level 1 registry.jsonl flags entry — BIND_FLAGS_UPDATE event):** Temporary only in this session. `che_registry_append_jsonl $SID FLAGS $WT '{"flags":{"LANG_DOCS":"pt-BR"}}'`.
+2. **Project registry Level 1.5 (.registry/projects/<slug>/product_context.md frontmatter):** `lang_code: en` + `lang_docs: pt-BR` (durable per project, shared worktrees × sessions).
+3. **Default CHE_RULES (this file):** Values in the table above if no project/session defined.
 
-### Backward compat flag antiga
+### Legacy backward compatibility flag
 
-Se `LANG_PT_CHECK = DISABLED` legacy existir em flags de sessão → mapeia automaticamente para `LANG_DOCS = pt-BR` e remove a flag antiga (logging mantém por 30 dias, depois migração limpa). Usuário NÃO precisa migrar nada manualmente.
+If `LANG_PT_CHECK = DISABLED` legacy exists in session flags → automatically maps to `LANG_DOCS = pt-BR` and removes the old flag (logging maintained for 30 days, then clean migration). User DOES NOT need to migrate anything manually.
 
 ---
 
-## 🟢 QA / COMPLIANCE / CODE-REVIEW GATES (SÓ TÍTULO + LINK — NÃO DUPLICAR CORPO)
+## 🟢 QA / COMPLIANCE / CODE-REVIEW GATES (TITLE + LINK ONLY — DO NOT DUPLICATE BODY)
 
-> **3-LAYER DEDUP INALTERÁVEL:** Corpo das regras abaixo mora em `REFERENCE_USER_RULES_MINIFIED.md` (Layer 2) + skills específicos (Layer 3). Aqui SÓ title + gate enforcement + link. Zero corpo. Hook `posttooluse-3layer-dedup.sh` bloqueia duplicação ≥4 linhas idênticas.
+> **UNALTERABLE 3-LAYER DEDUP:** Body of the rules below lives in `REFERENCE_USER_RULES_MINIFIED.md` (Layer 2) + specific skills (Layer 3). Here ONLY title + gate enforcement + link. Zero body. `posttooluse-3layer-dedup.sh` hook blocks duplication of ≥4 identical lines.
 
-| Gate | Regra | Local corpo canônico | Enforcement automático |
+| Gate | Rule | Canonical body location | Automatic enforcement |
 |---|---|---|---|
-| ✅ **Test Naming Behavioral** | Nomes de `describe()/it()/test()` = comportamento observável. **PROIBIDO** colocar task id / AC / § / FLO-XXX / regra / SPEC id DIRETO no título. Traceability permitida **SÓ** via comentário JSDoc acima OU linha comentário `// @ac ... | @task ...` DENTRO do bloco. Suites = agrupamento por DOMÍNIO/contexto funcional. | **REGRA 7.9** → [REFERENCE_USER_RULES_MINIFIED.md §7.9](file:///home/laion/.trae/REFERENCE_USER_RULES_MINIFIED.md#L247-L305) | **QA Stage E** (lint scan diffs, FAIL ≥10 bad titles) · **Compliance Scan 6.5** (severidade gradiente 1-9 WARN / ≥10 HIGH) · **CR Cat 4.7** (1-4 LOW / 5-9 MEDIUM / ≥10 HIGH). Todos validam e permitem JSDoc/in-block traceability como exceção. |
-| ✅ **4-Checks Scope Delivery Audit** | **Antes de Draft PR ou ao revisar worktree/PR:** varredura OBRIGATÓRIA de 4 pilares usando fonte PRD/ticket/task-graph/scope: (1) toda AC/entrega tem file evidence no diff mapeada por keyword comportamental, (2) comportamento esperado coberto por testes unit/e2e com nomes REGRA7.9, (3) documentos obrigatórios atualizados (README, AGENTS, runbooks, .env.example) quando trigger heurística aplicar, (4) NENHUMA env var NOVA usada sem declaration em parser (zod schema, env.ts, .env.example, terraform/vercel/railway). Nomes de report REGRA7.9: nao `implementado_bem` mas `entrega_de_escopo_completo_para_ac_<slug>`. | **REGRA 8.2** → [che-scope-checker SKILL §2..§5](file:///home/laion/.trae/skills/che-scope-checker/SKILL.md#L60-L250) · comandos: [/che-scope-check](file:///home/laion/.trae/commands/che-scope-check.md) | **GATE SHIP (FAIL-CLOSED):** `/che-ship` invoca automaticamente antes de abrir Draft PR. Verdict 🔴 bloqueia abertura do PR até action items resolvidos. Audit manual: `/che-scope-check` standalone a qualquer momento. |
+| ✅ **Test Naming Behavioral** | `describe()/it()/test()` names = observable behaviour. **PROHIBITED** to put task id / AC / § / FLO-XXX / rule / SPEC id DIRECTLY in the title. Traceability allowed **ONLY** via JSDoc comment above OR line comment `// @ac ... | @task ...` INSIDE the block. Suites = grouping by functional DOMAIN/context. | **RULE 7.9** → [REFERENCE_USER_RULES_MINIFIED.md §7.9](file:///home/laion/.trae/REFERENCE_USER_RULES_MINIFIED.md#L247-L305) | **QA Stage E** (lint scan diffs, FAIL ≥10 bad titles) · **Compliance Scan 6.5** (severity gradient 1-9 WARN / ≥10 HIGH) · **CR Cat 4.7** (1-4 LOW / 5-9 MEDIUM / ≥10 HIGH). All validate and allow JSDoc/in-block traceability as an exception. |
+| ✅ **4-Checks Scope Delivery Audit** | **Before Draft PR or when reviewing worktree/PR:** MANDATORY scan of 4 pillars using PRD/ticket/task-graph/scope source: (1) every AC/delivery has file evidence in the diff mapped by behavioural keyword, (2) expected behaviour covered by unit/e2e tests with RULE 7.9 names, (3) mandatory documents updated (README, AGENTS, runbooks, .env.example) when heuristic trigger applies, (4) NO NEW env var used without declaration in parser (zod schema, env.ts, .env.example, terraform/vercel/railway). Report names RULE 7.9: not `well_implemented` but `full_scope_delivery_for_ac_<slug>`. | **RULE 8.2** → [che-scope-checker SKILL §2..§5](file:///home/laion/.trae/skills/che-scope-checker/SKILL.md#L60-L250) · commands: [/che-scope-check](file:///home/laion/.trae/commands/che-scope-check.md) | **GATE SHIP (FAIL-CLOSED):** `/che-ship` automatically invokes before opening Draft PR. 🔴 Verdict blocks PR opening until action items are resolved. Manual audit: standalone `/che-scope-check` at any time. |
 
 ---
 
-## 🟠 CHE ESPECÍFICOS POR TIPO DE TAREFA
+## 🟠 CHE SPECIFICS BY TASK TYPE
 
-### Feature (che normal): `/che-act` → SM + Dev + QA + Compliance
-- TASK GRAPH obrigatório.
-- TASK ENVELOPE por task obrigatório.
-- Repo onboarding Q1-Q5 antes de codar (inclui stack match IDE available_skills).
-- Gates explícitos por task.
-- Se SM detectar scope grande → gh-stack multi-PR plan (apresenta plano ao usuário para aprovar).
+### Feature (normal che): `/che-act` → SM + Dev + QA + Compliance
+- TASK GRAPH mandatory.
+- TASK ENVELOPE per task mandatory.
+- Repo onboarding Q1-Q5 before coding (includes stack match IDE available_skills).
+- Explicit gates per task.
+- If SM detects large scope → gh-stack multi-PR plan (presents plan to the user for approval).
 
-### Bug Fix (che diferente): `/che-fix` → Debugger expert
-- **Primeira regra:** REPRODUZIR antes de qualquer análise profunda. Se não reproduzir → não codar, perguntar ao usuário contexto faltante.
-- Loop: Hipótese → Instrumentar → Reproduzir → Analisar → Fixar → Verificar. (Limite 5 iterações, ver timeouts).
-- Aplicar MINIMAL fix. NUNCA refatorar junto com bugfix. Refatoração = PR separada (ou gh-stack PR separado).
-- Ao final: DEMONSTRAR (antes vs depois) ou prover guia passo-a-passo de reprodução para o usuário checar.
+### Bug Fix (different che): `/che-fix` → Debugger expert
+- **First rule:** REPRODUCE before any deep analysis. If no reproduction → do not code, ask the user for missing context.
+- Loop: Hypothesis → Instrument → Reproduce → Analyse → Fix → Verify. (5 iteration limit, see timeouts).
+- Apply MINIMAL fix. NEVER refactor along with bugfix. Refactor = separate PR (or separate gh-stack PR).
+- At the end: DEMONSTRATE (before vs after) or provide step-by-step reproduction guide for the user to check.
 
-### Review: `/che-review` PR link + ticket/descrição
-- **4 categorias somente:** Runtime, Security/PII, Deps/blast-radius, Scope deviation.
-- **Não é para pedantismo de estilo.** NITs, format, naming → CI já resolve. Não comentar.
-- **Code-review optimization (ver `engineering-contracts` §16):** só comentar BLOCKING ou HIGH. Não "gostaria de outro nome".
-- 1 achado = (severidade, categoria, arquivo:linha, snippet, razão, ação corretiva sugerida + snippet opcional).
-- Não subir review oficial no GitHub a menos que usuário peça explicitamente.
+### Review: `/che-review` PR link + ticket/description
+- **4 categories only:** Runtime, Security/PII, Deps/blast-radius, Scope deviation.
+- **Not for style pedantry.** NITs, format, naming → CI already resolves. Do not comment.
+- **Code-review optimisation (see `engineering-contracts` §16):** only comment BLOCKING or HIGH. Not "I'd like another name".
+- 1 finding = (severity, category, file:line, snippet, reason, suggested corrective action + optional snippet).
+- Do not upload official review on GitHub unless explicitly requested by the user.
 
 ### PR Comments: `/che-pr-comments` PR link
-- Classificar BOT vs HUMAN primeiro.
-- HUMAN: CORRECTNESS / SECURITY / SCOPE_CREEP = implementar. QUESTION/NIT/DISCUSSION = resposta.
-- Respostas em INGLÊS, educadas, sem tom argumentativo: agradecer → explicar razão → oferecer alternativa / follow-up PR.
-- Não postar nada em GitHub automaticamente; usuário aprova relatório → só então subir.
+- Classify BOT vs HUMAN first.
+- HUMAN: CORRECTNESS / SECURITY / SCOPE_CREEP = implement. QUESTION/NIT/DISCUSSION = response.
+- Responses in ENGLISH, polite, without argumentative tone: thank → explain reason → offer alternative / follow-up PR.
+- Do not post anything on GitHub automatically; user approves report → only then upload.
 
 ### CI Fail: `/che-ci-fix` run/PR URL
-- Classificar **R1 a R9** categorias (R9 novo: Test mismatch intentional behavior change).
-  - Lista oficial R1-R9: ver `che-ci-fixer` SKILL §Classification (corpo oficial com exemplos).
-- R7 = INFRA/EXTERNAL (secrets, npm 5xx, outage GH). Não codar. Reportar ao usuário.
-- R9 = Test mismatch due to intentional AC/spec change → fix = atualizar teste(s) para novos ACs, NÃO reverter código. Exigir confirmação do usuário que ACs realmente mudaram.
-- Demais categorias: plano de fix → apresentar ao usuário → aprovação → implementar mínimo.
-- Verificar localmente equivalente. Push + re-trigger opcional.
-- NUNCA desabilitar um teste ou job com `continue-on-error` para "mascarar" falha sem aprovação.
-- Limite 3 planos (ver timeouts).
+- Classify **R1 to R9** categories (R9 new: Test mismatch intentional behavior change).
+  - Official R1-R9 list: see `che-ci-fixer` SKILL §Classification (official body with examples).
+- R7 = INFRA/EXTERNAL (secrets, npm 5xx, outage GH). Do not code. Report to user.
+- R9 = Test mismatch due to intentional AC/spec change → fix = update test(s) for new ACs, DO NOT revert code. Require user confirmation that ACs really changed.
+- Other categories: fix plan → present to user → approval → implement minimum.
+- Verify local equivalent. Push + optional re-trigger.
+- NEVER disable a test or job with `continue-on-error` to "mask" failure without approval.
+- 3 plan limit (see timeouts).
 
-### Scope Check Audit: `/che-scope-check` (PR ou worktree) — 4 checks OBRIGATÓRIOS
-- **Fontes ESCOPO (pelo menos 1 — combinação permitida):** `--prd=/path/prd.md` (headings ACs) · `--ticket=<Linear/Jira URL>` (GraphQL/REST) · `--task-graph=/path/task_graph.md` (tasks DONE) · `--scope="texto livre"` · **PR body** (auto extraído Modo A).
-- **2 MODOS (igual che-code-review):**
-  - **Modo A (PR):** PR URL → `gh pr view --json` para metadata/files/patches. PR body = scope source adicional.
-  - **Modo B (Worktree local):** `--worktree <path>` + base branch auto-detect (ask if ambiguous).
-- **4 Checks OBRIGATÓRIOS (todos aplicáveis, sempre roda os 4):**
-  1. **🔍 Entrega escopo completo:** AC × arquivo diff keyword match → 🟢 DELIVERED / 🟡 PARCIAL / 🔴 MISSING. Evidence por linha (file path:range).
-  2. **🧪 Cobertura testes:** test runners detect → arquivos testes no diff mapeados p/ comportamento AC REGRA7.9 → 🟢 TESTED / 🟡 PARCIAL / 🔴 NOT TESTED.
-  3. **📘 Docs atualizadas:** trigger heurística (novo command/skill → README §5; nova premissa arquitetura → AGENTS.md; nova env → .env.example; breaking API → docs) → 🟢 DOCUMENTADO / 🟡 PARCIAL / 🔴 NÃO DOCUMENTADO.
-  4. **🔐 Novas env vars declaradas:** diff scan regex env var usage × cross-check declarations (zod schemas env.ts, .env.example, terraform/railway/vercel vars) → 🟢 DECLARADA / 🟡 FALTA VALIDAÇÃO / 🔴 NÃO DECLARADA.
-- **Verdict cálculo FAIL-CLOSED:** Qualquer item 🔴 → 🔴 BLOCKED (Ship NÃO prossegue p/ Draft PR até action items). Nenhum 🔴, qualquer 🟡 → 🟡 CONDICOES. Tudo 🟢 → 🟢 APPROVED.
-- **Registro output:** `$CHE_WORKSPACE_SHARED/scope-check_<slug>_<YYYYMMDD>.md` — sempre header summary tabela 4 checks + action items ordenados + detalhes 4 tabelas REGRA7.9 por item.
-- **Integração SHIP:** `/che-ship` invoca SCOPE-CHECK **antes de Draft PR aberto.** 🔴 = BLOCK SHIP até resolver.
-
----
-
-### 🔀 Merge Conflict Resolver: `/che-merge` — hunk-a-hunk, default OURS, PERGUNTA na ambiguidade
-
-Quando existem arquivos `UU | AA | DD | AU | UA | DU | UD` (git status unmerged):
-
-- **DEFAULT STRATEGY NON-NEGOTIABLE = OURS:** worktree atual que está rodando vence; incoming branch perde POR HUNK. Só use outra se user passou `--strategy=THEIRS | MANUAL_ASK_ALL` explicitamente.
-- **MIN BLAST RADIUS 1 hunk por vez:** NUNCA `git checkout --ours <FILE>` (arquivo inteiro). NUNCA `-X ours` global. Resolve hunk-a-hunk em loop alfabético.
-- **3 casos canônicos por hunk:**
-  1. 🟢 **TRIVIAL AUTO:** diferença só whitespace / ordem imports / newlines (sem mudar semântica). Resolve sozinho sem ask.
-  2. 🟡 **CLASH:** 2 lados com mudanças código diferentes mas ambas 2 alternativas claras. Exibe preview 5 linhas + **justificativa curta agente POR LADO (nunca recomendar)** + pergunta EXATA 2 opções + optional COMBINAR se aplicável (ex: concatenação sem duplicação). Espera resposta.
-  3. 🔴 **AMBIGUIDADE (nunca decide sozinho):** ≥3 alternativas válidas OU reescreveu função jeitos diferentes OU ordem side-effects importa OU afeta tipos/zod/RLS/contratos API. Agent declara bullets da razão ambiguidade + oferece A=OURS B=THEIRS C="eu edito manual, continue depois". Espera.
-- **Cada hunk → 1 `MERGE_RESOLVE` entry no decisions.log.jsonl.** Audit completo.
-- **Arquivos fora da lista unmerged inicial → NUNCA toca.**
+### Scope Check Audit: `/che-scope-check` (PR or worktree) — 4 MANDATORY checks
+- **SCOPE Sources (at least 1 — combination allowed):** `--prd=/path/prd.md` (AC headings) · `--ticket=<Linear/Jira URL>` (GraphQL/REST) · `--task-graph=/path/task_graph.md` (DONE tasks) · `--scope="free text"` · **PR body** (auto-extracted Mode A).
+- **2 MODES (same as che-code-review):**
+  - **Mode A (PR):** PR URL → `gh pr view --json` for metadata/files/patches. PR body = additional scope source.
+  - **Mode B (Local Worktree):** `--worktree <path>` + base branch auto-detect (ask if ambiguous).
+- **4 MANDATORY Checks (all applicable, always run all 4):**
+  1. **🔍 Full scope delivery:** AC × diff file keyword match → 🟢 DELIVERED / 🟡 PARTIAL / 🔴 MISSING. Evidence per line (file path:range).
+  2. **🧪 Test coverage:** test runners detect → diff test files mapped to AC behaviour RULE 7.9 → 🟢 TESTED / 🟡 PARTIAL / 🔴 NOT TESTED.
+  3. **📘 Updated docs:** heuristic trigger (new command/skill → README §5; new architecture premise → AGENTS.md; new env → .env.example; API breaking → docs) → 🟢 DOCUMENTED / 🟡 PARTIAL / 🔴 NOT DOCUMENTED.
+  4. **🔐 Declared new env vars:** regex diff scan env var usage × cross-check declarations (zod schemas env.ts, .env.example, terraform/vercel/railway vars) → 🟢 DECLARED / 🟡 MISSING VALIDATION / 🔴 NOT DECLARED.
+- **FAIL-CLOSED calculation Verdict:** Any 🔴 item → 🔴 BLOCKED (Ship DOES NOT proceed to Draft PR until action items). No 🔴, any 🟡 → 🟡 CONDITIONS. All 🟢 → 🟢 APPROVED.
+- **Output Record:** `$CHE_WORKSPACE_SHARED/scope-check_<slug>_<YYYYMMDD>.md` — always 4-check table summary header + ordered action items + 4 details tables RULE 7.9 per item.
+- **SHIP Integration:** `/che-ship` invokes SCOPE-CHECK **before Draft PR is opened.** 🔴 = BLOCK SHIP until resolved.
 
 ---
 
-## 🔴 PARALELISMO — Regras Obrigatórias (Não Negocia)
+### 🔀 Merge Conflict Resolver: `/che-merge` — hunk-by-hunk, default OURS, ASK on ambiguity
 
-### 🚀 Quando paralelizar é seguro (TODOS devem ser true)
-1. `task_graph.md` tem **pelo menos 2 tasks**.
-2. **TODOS** os envelopes de task têm **lista EXPLÍCITA e ENUMERADA de arquivos permitidos** (NÃO use globs `src/**/*` nem `packages/` — só paths concretos).
-3. Pelo menos 2 tasks na **mesma onda Kahn (sem dependências mútuas)** têm **interseção vazia de arquivos**.
-4. Worktree está **limpa de alterações não comitadas FORA dos envelopes** (ou usuário deu approve explícito).
-5. Nenhum `$CHE_SESSION_DIR/_locks/*.lock.json` stale com estado `HELD` de sessão abortada anterior existe (resolve via `che_compute_paths`; NEVER inside worktree — se existir, purgar com approve do usuário).
+When `UU | AA | DD | AU | UA | DU | UD` files exist (git status unmerged):
 
-### ❌ Quando NUNCA paralelizar (FALLBACK to serial)
-1. Qualquer arquivo listado em mais de 1 task do mesmo mini-batch → **quebre em mini-batches separados via conflict graph coloring**.
-2. Qualquer task com glob em blast-radius → **refuse paralelismo para essa onda**.
-3. O usuário passou `--serial` flag.
-4. `max_parallel` pedido > 4 → **limita a 4 + warning de segurança** (contexto e tokens crescem O(n)).
-5. Compliance HEAVY, QA cross-file, ou merge-audit HIGH conflict → **rodam SINGLE-THREADED**.
+- **NON-NEGOTIABLE DEFAULT STRATEGY = OURS:** current running worktree wins; incoming branch loses PER HUNK. Only use another if user passed `--strategy=THEIRS | MANUAL_ASK_ALL` explicitly.
+- **MIN BLAST RADIUS 1 hunk at a time:** NEVER `git checkout --ours <FILE>` (entire file). NEVER global `-X ours`. Resolve hunk-by-hunk in alphabetical loop.
+- **3 canonical cases per hunk:**
+  1. 🟢 **TRIVIAL AUTO:** whitespace difference only / imports order / newlines (without changing semantics). Resolve alone without asking.
+  2. 🟡 **CLASH:** 2 sides with different code changes but both clear alternatives. Displays 5-line preview + **short agent justification PER SIDE (never recommend)** + EXACT 2 options question + optional COMBINE if applicable (e.g., concatenation without duplication). Wait for response.
+  3. 🔴 **AMBIGUITY (never decide alone):** ≥3 valid alternatives OR function rewritten different ways OR side-effects order matters OR affects types/zod/RLS/API contracts. Agent declares ambiguity reason bullets + offers A=OURS B=THEIRS C="I'll edit manually, continue later". Wait.
+- **Each hunk → 1 `MERGE_RESOLVE` entry in decisions.log.jsonl.** Full audit.
+- **Files outside initial unmerged list → NEVER touch.**
+
+---
+
+## 🔴 PARALLELISM — Mandatory Rules (Non-negotiable)
+
+### 🚀 When parallelising is safe (ALL must be true)
+1. `task_graph.md` has **at least 2 tasks**.
+2. **ALL** task envelopes have **EXPLICIT and ENUMERATED list of permitted files** (DO NOT use globs `src/**/*` or `packages/` — only concrete paths).
+3. At least 2 tasks in the **same Kahn wave (no mutual dependencies)** have **empty file intersection**.
+4. Worktree is **clean of uncommitted changes OUTSIDE the envelopes** (or user gave explicit approval).
+5. No stale `$CHE_SESSION_DIR/_locks/*.lock.json` with `HELD` state from previous aborted session exists (resolve via `che_compute_paths`; NEVER inside worktree — if exists, purge with user approval).
+
+### ❌ When NEVER to parallelise (FALLBACK to serial)
+1. Any file listed in more than 1 task of the same mini-batch → **break into separate mini-batches via conflict graph colouring**.
+2. Any task with glob in blast-radius → **refuse parallelism for this wave**.
+3. User passed `--serial` flag.
+4. Requested `max_parallel` > 4 → **limit to 4 + security warning** (context and tokens grow O(n)).
+5. Compliance HEAVY, cross-file QA, or HIGH conflict merge-audit → **run SINGLE-THREADED**.
 
 ### 🔒 Lock files & Single-writer rules
-- **Blast-radius file locks:** `$CHE_SESSION_DIR/_locks/<hash>-<basename>.lock.json` (resolve via `che_compute_paths`; NEVER inside worktree) → adquirir ANTES de invocar Dev, liberar APÓS gates passarem + merge-audit LOW/MEDIUM-confirmed.
+- **Blast-radius file locks:** `$CHE_SESSION_DIR/_locks/<hash>-<basename>.lock.json` (resolve via `che_compute_paths`; NEVER inside worktree) → acquire BEFORE invoking Dev, release AFTER gates pass + LOW/MEDIUM-confirmed merge-audit.
 - **Single writers for shared artifacts:**
-  - `task_graph.md` status updates = **APENAS o dispatcher escreve**. Nenhum Dev paralelo toca nesse arquivo.
-  - `session.md` = dispatcher append-only + SM escreve início/fim.
-  - Decision.log = dispatcher apenda conflitos, SM apenda decisões.
-  - Compliance reports por task = arquivos separados `compliance_<TASK_ID>.md`.
-  - `gh_stack_plan.md` (se existir) = SÓ SM + Ship atualizam.
-- Se um Dev paralelo escrever em um arquivo compartilhado listado em outro envelope: **merge-audit HIGH conflito → rollback dessa task + rerun serial**.
+  - `task_graph.md` status updates = **ONLY the dispatcher writes**. No parallel Dev touches this file.
+  - `session.md` = dispatcher append-only + SM writes start/end.
+  - Decision.log = dispatcher appends conflicts, SM appends decisions.
+  - Compliance reports per task = separate `compliance_<TASK_ID>.md` files.
+  - `gh_stack_plan.md` (if exists) = ONLY SM + Ship update.
+- If a parallel Dev writes to a shared file listed in another envelope: **HIGH conflict merge-audit → rollback of that task + serial rerun**.
 
-### 🧩 Algoritmo de paralelismo (executor dispatcher)
-1. **Kahn topological sort** por dependências → ondas.
-2. Dentro de cada onda: **conflict graph** (arestas = interseção de arquivos).
-3. **Graph coloring greedy** → cada cor = mini-batch sem conflito de arquivo.
-4. **Fan-out sub-agentes parallel**: `general_purpose_task` um por task no mini-batch corrente → isolado → escreve `dev_report_<TASK_ID>.md` → NÃO toca nos artefatos compartilhados.
-5. **Merge audit por mini-batch** → confirma nenhum arquivo sobreposto foi escrito.
-6. **Gates por task (serial por task, não por batch)** — SM valida SCOPE / QA / Compliance light individualmente, pois o estado da worktree é compartilhado e QA de T1 não pode afetar T3 no mesmo batch (eles têm arquivos disjuntos, ok).
-7. Tasks falhadas → **sair do paralelismo e voltar para serial 1-por-1**.
+### 🧩 Parallelism Algorithm (executor dispatcher)
+1. **Kahn topological sort** by dependencies → waves.
+2. Within each wave: **conflict graph** (edges = file intersection).
+3. **Greedy graph colouring** → each colour = mini-batch without file conflict.
+4. **Fan-out parallel sub-agents**: `general_purpose_task` one per task in the current mini-batch → isolated → writes `dev_report_<TASK_ID>.md` → DOES NOT touch shared artifacts.
+5. **Merge audit per mini-batch** → confirms no overlapping file was written.
+6. **Per-task gates (serial per task, not per batch)** — SM validates SCOPE / QA / Compliance light individually, as worktree state is shared and T1's QA cannot affect T3 in the same batch (they have disjoint files, ok).
+7. Failed tasks → **exit parallelism and return to 1-by-1 serial**.
 
-### ⚖️ KISS vs Parallelismo (precedência)
-Se parallel adicionar overhead de lock-contention ou > 2 vezes serial-fallback por batch → SM interrompe paralelismo e avisa usuário:
-> "Paralelismo com <N> tasks teve 3 conflitos de arquivo em 2 ondas. Eficiência similar a serial. Deseja continuar paralelo ou fallback para serial total p/ evitar overhead?"
-KISS ganha sempre. Parallel é OTIMIZAÇÃO, não OBRIGATORIEDADE.
+### ⚖️ KISS vs Parallelism (precedence)
+If parallel adds lock-contention overhead or > 2 times serial-fallback per batch → SM interrupts parallelism and warns user:
+> "Parallelism with <N> tasks had 3 file conflicts in 2 waves. Efficiency similar to serial. Wish to continue parallel or fallback to total serial to avoid overhead?"
+KISS always wins. Parallelism is an OPTIMISATION, not a REQUIREMENT.
+
+---
+
+## 🟡 §X CANONICAL SCORING & THRESHOLD TABLE (SSoT — SINGLE SOURCE OF TRUTH)
+
+> **🔴 RIGID RULE — DO NOT DUPLICATE OR REDEFINE IN L3 SKILLS:** Every numeric weight, threshold, trigger, formula, or classification below is the CANONICAL authority. Skills L3 (che-spec, che-plan, che-scope-checker, che-act, domain playbooks) **MUST** REFERENCE these IDs literally (e.g. *"per S12"*, *"S07 threshold"*) and **MUST NEVER** re-write the numeric value inline. If a value needs tuning, it is changed EXACTLY ONCE here and all consumers inherit automatically. Every value has an explicit DESIGN RATIONALE so future you understands *"why this number?"*.
+
+| ID | Rule Name | Literal Formula / Value | Thresholds & Classification | Consumed by these Skills (L3) | **DESIGN RATIONALE (Why this number?)** |
+|---|---|---|---|---|---|
+| **S01** | **ENTROPY_DELTA weights (Broken Windows #2)** | **WEIGHTS:** +1 × lint issue · +2 × coverage regression · +0.5 × TODO/FIXME added · +3 × raw PII/secrets logged or committed | **≤ 0 = PASSTHROUGH (green)** · **≤ +2 = WARN (yellow, still shippable)** · **> +2 = BLOCK SHIP (red, requires explicit override logged)** | Principle §2 + che-qa + che-scope-checker + che-ship | Security (PII ×3) is highest weight — one leak outweighs 3 lint fixes. Lint (×1) is cosmetic. Coverage (×2) = mid — regressing coverage is worse than formatting. TODOs (×0.5) = low-indicator clutter but still entropy. Thresholds follow Broken Windows: small positive drift allowed per PR (≤+2) but accumulation across multiple PRs = total system rot. |
+| **S02** | **DbC V20 minimum assertion density (Principle #3)** | `min_rows_assertions = CEIL(B_COUNT / 3)` | **Triggered IF B_COUNT ≥ 3 per S09** · **If min_rows_assertions === 0 → ERROR, DbC is empty** | Principle §3 + che-plan + che-act SM gate | **Rule of 33%:** At least 1 in every 3 Behaviours must be backed by at least 1 explicit pre/post/invariant assertion line. This floor ensures DbC is not theoretical ("we do DbC in comments") — it has minimum density. B<3 skip = trivial change doesn't need contract paperwork. |
+| **S03** | **che-spec hard-stop file-count ceiling** | `estimated_files_max = 15` | **> 15 = HARD ERROR before spec body generation** → ask user to split scope vertically before continuing | che-spec L157 | **Empirical PR-review ceiling:** A single PR containing >15 files statistically gets superficial review (< 40% of lines actually read by humans, internal review-data benchmark). 15 is the industry sweet-spot for "one human reviewer, one coffee, meaningful review." Split into stacked PRs. |
+| **S04** | **che-spec gh-stack hierarchy triggers** | `estimated_max_lines_add = 400` (single PR) · `800` (MUST use gh-stack) | **> 400 lines → ADVISORY yellow (consider gh-stack)** · **> 800 lines → RED MUST gh-stack + hierarchy declared in task_graph** | che-spec L170 + che-plan | **Line-count research:** 400 added lines = ~2 hours focused review. 800+ lines in 1 PR = reviewer fatigue + review quality collapses. gh-stack (hierarchical stacked PRs) solves size while preserving logical ordering for the merger. |
+| **S05** | **ERD diagram trigger** | `erd_required = TRUE` IF (new top-level table/entity) OR (≥ 3 UNIQUE foreign-key fields changed across existing tables) | TRUE → che-spec emits Data Model section with Mermaid ERD + explicit FK labels · FALSE → no diagram required | che-spec L173 | **Visualisation threshold:** Creating a new table or re-wiring ≥3 FKs means the relational topology has meaningfully shifted — a text-only description hides regressions (missing ON DELETE SET NULL, wrong cardinality, orphan FK). 2 FK changes or fewer = small drift the reviewer can see in diff. |
+| **S06** | **Mermaid sequence/flow diagram trigger** | `mermaid_required = TRUE` IF (B_COUNT ≥ 8) OR (ACTOR_count ≥ 3) OR (risk_level = medium OR high) | TRUE → che-spec emits Behaviour diagram + swimlanes per actor · FALSE → no diagram required | che-spec L174 | **Cognitive-load threshold:** 8+ behaviours = branching explosion the human brain cannot trace reliably without a graph. ≥3 actors = swimlanes remove ambiguity ("which system calls what?"). Risk ≥ medium = diagram reduces mistakes in high-stakes flows. |
+| **S07** | **AB_COUNT bilateral-anchor minimum ratio** | `AB_COUNT ≥ CEIL(B_COUNT / 3)` · ratio floor = **33%** | < 33% → che-spec emits **RED: unilateral-spec warning** + blocks spec save until user adds at least `CEIL(B/3)` AB-IDs bilateral examples | che-spec L249 + L258 | **Golden ratio 1:3 Bilateral ↔ Behaviour.** A unilateral spec (only happy-path, never counter-examples) guarantees bugs at edge conditions. ≥1 anchor bilateral every 3 Behaviours is the minimum statistical coverage the human spec author needs to write — forces them to think "what does failure look like?" |
+| **S08** | **V19 Reversibility Gate trigger (Principle #1)** | `V19_FIRED = TRUE` IF (files_touched ≥ 5) OR (new_external_dependencies ≥ 1) | TRUE → che-plan/che-act runs FULL V19 wrapper-boundary declaration gate (3 declarations) · FALSE → gate is skipped (lightweight, no reversibility paperwork) | che-plan L27-L31 + che-act L252 | **≥5 files = probability ≥ 0.7 you touched at least 1 SDK boundary.** ≥1 new dep = by definition introduces vendor lock-in. Below this threshold, the change is too small to entangle a vendor. Both conditions together catch the two independent ways a change creates irreversible coupling. |
+| **S09** | **V20 Assertive Programming DbC trigger (Principle #3)** | `V20_FIRED = TRUE` IF (B_COUNT ≥ 3) | TRUE → runs full V20 gate (assertion table exists + min_rows per S02) · FALSE → V20 skipped (trivial change, tests alone capture contract) | che-plan L27-L31 + che-act L262 | **B=1 single behaviour: 1 unit test captures entire contract.** B=2 borderline, still reviewable. B≥3 = behavioural branching combinatorics start, and a single line per B with explicit pre/post catches "but we forgot that state" 80% of the time. |
+| **S10** | **Ticket structure single vs Epic** | `SINGLE_TICKET` IF (B≤3) AND (files≤5) AND (change_type ≠ feature). **ALL other cases → EPIC with nested sub-tickets** | SINGLE_TICKET → 1 Linear/ClickUp ticket. EPIC → 1 epic + N sub-tickets via che-plan ticket-engine. | che-plan L45-L46 | **Paperwork cost heuristic.** If small (≤3B ∧ ≤5f ∧ bug/chore), one ticket = less management friction than epic hierarchy. Anything larger = epic allows parallel work + per-subticket ownership + correct burndown. |
+| **S11** | **SCOPE_score (Delivery completeness + Bilateral anchors)** | `raw = 10 × ( AC_DELIVERED + 0.5·AC_PARTIAL ) / MAX(1, TOTAL_ACs)` · **Anchors bilateral coverage applied AFTER raw:** bilateral_coverage ≥ 90% → **+0.5 bonus** clamped; >0% but <70% → **−1.0 penalty**; 0% unilateral → **HARD BLOCK independent of score.** Final: `SCOPE_score = CLAMP(raw_plus_anchors, 0, 10)` | 0% Bilateral = BLOCK (hard stop, regardless of raw). ≥70% + <2 missing anchors = FULLY_LINKED green. ≥90% = S-tier. | che-scope-checker L515-L530 | **Partial 0.5× = delivered but not verified (half credit).** Geometric-mean companion to LEAN: you cannot ship "100% scope delivered, 0% tested" — 0 bilateral = outright block, no loophole. 90%+ bonus rewards thoroughness. <70% penalty punishes specs that drifted unilateral during implementation. |
+| **S12** | **LEAN_penalty density + FINAL LEAN_score** | `LEAN_penalty = (🔴HIGH × 2) + (🟡MEDIUM × 1) + (🔵LOW × 0.3)` base + `+5 if HORIZONTAL-sliced without EXPLICIT_OVERRIDE logged` + `+ MIN(ENTROPY_DELTA, 5) if ENTROPY > +2 AND no ENTROPY_OVERRIDE logged` + `+4 if WRAPPER_LEAKS > 0 AND annotation/override missing`. **LEAN_score = CLAMP( 10 − (LEAN_penalty ÷ 2), 0, 10 )** | HORIZONTAL (+5/2=+2.5 LEAN drop) · ENTROPY cap at +5/2=+2.5 · WRAPPER leak +4/2=+2.0 | che-scope-checker L540-L547 | **Severity tiers ×2 / ×1 / ×0.3:** the geometric companion to SCOPE's delivery side. **HORIZONTAL +5 → ÷2 = 2.5 LEAN pts.** Enough to drag a perfect 10 → 7.5 (Acceptable borderline). **ENTROPY MIN(v,5) CAP:** avoids 100% killing one huge legacy-lint-cleanup PR (could be +100 lint); the cap lets you clean house in a single PR IF you log EXPLICIT_OVERRIDE. ÷2 scaling = max 2.5 LEAN hit from entropy. **WRAPPER +4 → ÷2 = 2.0 LEAN drop.** A 7.5 Acceptable → 5.7 Attention (= fails auto-proceed per S13). **Combined effect of trio (HOR+ENT+WRAP) = one and only one way to reach Excellent ≥9.0 (per S13): clean vertical F0 + ≤+2 entropy + zero wrapper leaks = no broken windows at all.** |
+| **S13** | **FINAL_score (Geometric Mean) + Ship Classification** | `FINAL_score = SQRT( SCOPE_score × LEAN_score )`  (geometric, NOT arithmetic) | **≥ 9.0 → Excellent** (green, outstanding delivery, auto proceed) · **≥ 7.0 → Acceptable** (green, ship) · **5.0–6.9 → Attention** (yellow, user must confirm conditions and sign off) · **< 5.0 → Poor** (red, 🔴 BLOCK SHIP — fails hard, no override via bypass; requires fixes) | che-scope-checker L562 + L568-L573 + che-ship gate 0.9.1 | **Geometric mean = ARRITHMETIC'S anti-loophole cousin.** Arithmetic mean would allow: SCOPE 10 perfect + LEAN 3 garbage → (10+3)/2 = 6.5 Attention (passes! = bad). Geometric: SQRT(10 × 3) = 5.47 Attention — barely, much harsher. Worse: SCOPE=3, LEAN=10 (empty scope, perfect clean code) → SQRT(30)=5.47 — neither extreme passes. **Classification Poor <5.0 = outright BLOCK:** both dimensions are bad, no ship. **≥7 Acceptable = auto-proceed:** both dimensions reasonably good. **≥9 Excellent = reward: both ≥8.1 approx.** |
+| **S14** | **Engineering Domain G-ENG-1 & G-ENG-2 (QA gates)** | **G-ENG-1 test_pass_rate = 100%** (zero failing tests tolerated). **G-ENG-2 coverage:** global ≥ 70% · new code ≥ 80% · branch coverage ≥ 65% | 1 failed test = G-ENG-1 RED (CI red, cannot ship). Coverage below threshold = G-ENG-2 YELLOW (requires user approval + decisions.log entry) | domains/engineering/playbook L43-L54 + che-qa | **100% test pass:** any failing test means a regression or a skipped test silently lying; either way the contract is broken. **70/80/65 coverage ladder:** 70% global = industry default for Node/TypeScript/Python projects. New code ≥80% — forces quality on the delta while allowing legacy 60–70% to incrementally catch up. Branch 65% — slightly lower than line because full branch coverage has diminishing returns (error branches expensive). |
+| **S15** | **Bilateral Anchor Classification per PR** | `bilateral_coverage = COUNT(AB_delivered) / COUNT(AB_total)` | **0% → HARD BLOCK (independent of final score)** · **<70% → WARN yellow** · **≥70% AND missing anchors <2 → FULLY_LINKED green** · **≥90% → BONUS of +0.5 applied to SCOPE_score per S11** | che-scope-checker L336-L338 + S11 | **0% unilateral block — zero tolerance.** A spec that drifts 100% unilateral during implementation (every AB removed or never added) means — by definition — the delivered code was never validated against *any* counter-example or negative path. That is statistically ≥2× more likely to ship P1 bugs. ≥70% minimum = "most of the contract still stands." ≥90% bonus = reward for diligence. |
+
+> **📖 How to tune these values (Future Playbook):**
+> 1. Never change in L3 skills first — always start HERE.
+> 2. If adjusting S12 weights, verify effect on S13 classification ladder: recompute SCOPE=8 / LEAN=? combinations for Excellent / Acceptable / Attention corners.
+> 3. After change, run `che-ship` against a known-passing and a known-failing fixture to confirm no regressions in the classification edge cases (7.0 line, 5.0 line, 9.0 line).
+
+---
+
+## 🟢 §XI ENGINEERING NATIVE-OPTIMIZED ECOSYSTEMS MATRIX (SSoT — 5 Ecosystems NON-NEGOTIABLE)
+
+> **🔴 NON-NEGOTIABLE HARD RULE:** These 5 ecosystems below receive **NATIVE, OPTIMIZED, DEEP-FIRST support** across every engineering skill, QA gate, xray onboarding, scope-checker, and domain workflow. **Every new engineering skill or framework-specific rule MUST explicitly declare which ecosystem it belongs to.** Other ecosystems/languages (Java, C#, Ruby, PHP, Elixir, Kotlin, Swift, Scala etc) are **COMPATIBLE but NOT natively optimized** — generic engineering-contracts apply without framework-specific shortcuts or auto-detection.
+>
+> **Stack auto-detection order (precedence HIGH → LOW in che-xray §2 + che-qa §1 + che-developer onboarding Q2):**
+> 1. `go.mod` → **E04 Go**
+> 2. `Cargo.toml` → **E03 Rust**
+> 3. `pyproject.toml` OR `uv.lock` OR `requirements.txt` → **E02 Python**
+> 4. `package.json` (`engines.node` or `engines.deno`) → **E01 TS / Node / Deno**
+> 5. `Dockerfile` + (`*.tf` OR `helm/` OR `k8s/` OR `kind-config.yaml` OR `Chart.yaml`) → **E05 Cloud Native & DevOps & Observability**
+>
+> (If multiple files exist = multi-stack monorepo. Each sub-package detected per folder via Nx/pnpm/turbo workspace manifest.)
+
+### TABLE 1: Ecosystems Overview (E01–E05)
+
+| ID | Ecosystem Slug | Human Readable Name | Core Frameworks & Libraries (full enumeration NON-NEGOTIABLE — user VERBATIM) | Coverage TODAY (Sep 2026) | Goal AFTER Phase B P0 | Consumed by these L3 gates / skills | Canonical SKILL path |
+|---|---|---|---|---|---|---|---|
+| **E01** | `ts-node-deno` | TypeScript + Node.js + Deno | **Backend:** NestJS, tRPC. **Frontend:** Next.js, Vite + React. **Scripting:** tsx. **Full-stack CMS:** Payload CMS. **E-commerce:** MedusaJS. | **72%** (Gap: MedusaJS 🔴) | **85%** · (close Medusa + Payload modules deep rules) | che-xray §2, che-qa §1 build/test matrix, che-scope-checker lang filters, che-developer Q2-Q3 | [typescript-expert/SKILL.md](file:///home/laion/.trae/skills/typescript-expert/SKILL.md) + [frontend-modern-stack](../skills/frontend-modern-stack/SKILL.md) + [ecommerce-expert](../skills/ecommerce-expert/SKILL.md) + [backend-runtime-expert](../skills/backend-runtime-expert/SKILL.md) |
+| **E02** | `python` | Python | **Backend API:** FastAPI. **Agents AI:** LangChain, LangGraph, LangSmith. **Data / ML:** Jupyter Notebook, asyncio, pyproject.toml ecosystem. **Tooling:** uv (default · beats pip/poetry when uv.lock present). **Testing:** pytest. | **37%** (Gaps: Jupyter DSML 🔴 · LangSmith 🔴 · uv deep 🔴 · asyncio advanced patterns 🔴) | **70%** · (close 4 major gaps above) | same gate consumers as E01 + ai-agent-orchestrator skill Q2 | [python-expert/SKILL.md](file:///home/laion/.trae/skills/python-expert/SKILL.md) + [ai-agent-orchestrator](../skills/ai-agent-orchestrator/SKILL.md) |
+| **E03** | `rust` | Rust | **Backend Web:** axum. **Async Runtime:** tokio. **ORMs / DB:** Diesel, sqlx, SeaORM. **Structured Framework:** loco. **Full-stack SSR + hydration:** Leptos. | **14%** (Gaps: Diesel 🔴 · sqlx 🔴 · SeaORM 🔴 · loco 🔴 ZERO · Leptos exists but shallow) | **45%** · (close 4 ZERO ORM/framework gaps + deepen Leptos) | same gate consumers as E01 + che-qa §1 `cargo test` + `clippy` | [rust-expert/SKILL.md](file:///home/laion/.trae/skills/rust-expert/SKILL.md) |
+| **E04** | `go` | Go (Golang) | **HTTP stdlib + Routers:** net/http standard, Gin · Echo · Fiber · chi. **Database:** database/sql core · sqlx · GORM · sqlc codegen. **RPC:** grpc-go + interceptors chain. **CLI:** cobra + viper + pflag. **Logging:** slog (default 1.21+) + zap (high-performance OTel). **Concurrency:** sync primitives, generics patterns, context propagation best-practices. **Testing:** stdlib table-driven + testify assertions + `-race` + go vet/golangci-lint. | **25%** (Gaps: Routers 🔴 · DB layer 🔴 · gRPC 🔴 · cobra CLI 🔴 · slog/zap OTel structured 🔴 · generics helpers 🔴 · graceful shutdown + healthz 🔴) | **55%** · (close 7 gaps above) | same gate consumers as E01 + che-qa §1 `go test ./...` + `go vet` | [golang-expert/SKILL.md](file:///home/laion/.trae/skills/golang-expert/SKILL.md) |
+| **E05** | `cloud-native-devops-observability` | Cloud Native + DevOps + Observability | **Container & Runtime:** Docker (multi-stage Dockerfile patterns, buildx, non-root USER, HEALTHCHECK, .dockerignore, cache mounts). **Local K8s:** kind. **Kubernetes manifests:** Deployment, StatefulSet, DaemonSet, HPA, PDB, TopologySpreadConstraints, PriorityClass, readiness/liveness/startup probes, resource requests + limits. **K8s packaging + overlays:** Helm charts (templates + _helpers.tpl + values hierarchy {dev,staging,prod} + hooks pre-install migration) · Kustomize (base/ + overlays/ + strategic merge patch + components). **IaC:** Terraform (provider version pinning, module structure variables/outputs/main.tf, remote state backend S3 + DynamoDB lock, tfvars hierarchy). **Observability 3 Pillars + Methodologies:** logs/metrics/traces; USE method (resources), RED metrics (services Rate/Errors/Duration), 4 Golden Signals (Latency/Traffic/Errors/Saturation). **Observability Tools:** OpenTelemetry Collector pipelines (receivers/processors/exporters + sampling) · Prometheus recording rules naming `job:metric:operator` + alertmanager route/inhibition/severity + PromQL patterns `rate()[5m]` / `histogram_quantile(0.95, rate())` · Grafana + Loki (LogQL `{app="x"} |= "error" | json`) + Tempo (TraceQL) · Sentry SDK (beforeSend PII filter + integrations + captureException tags + breadcrumbs + tracesSampleRate env-separated DSNs) · Datadog (unified service tagging env/service/version + dogstatsd + APM dd-trace). | **22%** (Gaps CloudNative: Dockerfile 7 stages 🔴 · Kind cluster config 🔴 · K8s manifest patterns 🔴 · Helm _helpers 🔴 · Kustomize overlays 🔴 · Terraform pin/state/module 🔴. Gaps Observability ZERO TODAY: RED · 4GS · USE formalisms 🔴 ZERO · Prom recording+alert rules 🔴 · OTel Collector pipeline 🔴 · Loki/Tempo query languages 🔴 · Sentry SDK 🔴 · Datadog unified tags 🔴) | **60%** · (close 13 gaps above — split 6 IaC/container + 7 Observability formalisms + tools) | domains/devops playbook, che-xray deploy detection L100, che-scope-checker ENV_USAGE parser, engineering-contracts §20 External SaaSLIST row, che-ci-fixer CI run patterns. Observability subsection is consumed by EVERY skill via engineering-contracts §12 Pointer → §19 Logging Standard → this E05 for tool-specifics. | [devops-infra-expert/SKILL.md](file:///home/laion/.trae/skills/devops-infra-expert/SKILL.md) · (Observability rules live INSIDE this skill under two separate sub-sections) |
+
+### TABLE 2: Per-Framework Coverage Matrix (drill-down into each ecosystem's frameworks)
+
+| Ecosystem ID | Framework / Library | Coverage today | Specific rule-body location |
+|---|---|---|---|
+| **E01 TS** | Next.js (App Router) | ✅ FULL deep via frontend-modern-stack/next-best-practices skills | `skills/frontend-modern-stack/` (community-provided deep sub-skills: next-best-practices, nextjs-developer etc) |
+| E01 TS | tRPC + TanStack Query | ✅ PARCIAL via dedicated community skill | `skills/trpc-tanstack-nextjs/` (when installed; fallback = generic API patterns in typescript-expert) |
+| E01 TS | NestJS | ✅ PARCIAL backend-runtime-expert · gaps deep modules testing | `skills/backend-runtime-expert/SKILL.md` + `skills/nestjs-best-practices/` (if installed) |
+| E01 TS | **MedusaJS E-commerce** | 🔴 **ZERO · GAP P0 #B06** | → TBD inside ecommerce-expert + typescript-expert append section |
+| E01 TS | Payload CMS | 🟡 MEDIUM · deepens in B06 alongside Medusa | backend-runtime-expert + payload skill |
+| **E02 Python** | FastAPI + Pydantic v2 | ✅ PARCIAL · 1 section today in python-expert | `skills/python-expert/SKILL.md §🚀 FastAPI & Pydantic` · uv + Jupyter + LangSmith gaps filled in B02 |
+| E02 Python | LangChain + LangGraph | ✅ MEDIUM via ai-agent-orchestrator skill | `skills/ai-agent-orchestrator/` + `skills/langchain-*` community skills |
+| E02 Python | **uv (DEPENDENCY + TOOLING DEFAULT)** | 🔴 ZERO · GAP P0 B02 | → B02 appends deep rules in python-expert |
+| E02 Python | **Jupyter DSML patterns** | 🔴 ZERO · GAP P0 B02 | → B02 appends DSML section in python-expert |
+| E02 Python | **LangSmith tracing + datasets** | 🔴 ZERO · GAP P0 B02 | → B02 appends inside ai-agent-orchestrator + python-expert cross-ref |
+| **E03 Rust** | axum + tokio | ✅ PARCIAL shallow · 1 section in rust-expert L15-L18 | `skills/rust-expert §⚡ Async Rust (Tokio & Axum)` · gaps: state extractors, middleware from_fn_with_state, Router merge, testing with `axum::test` |
+| E03 Rust | Leptos SSR/Hydration | ✅ PARCIAL · 1 section L20-L23 | `skills/rust-expert §🎨 Leptos Frontend` · gaps: Server Function + Action patterns, forms with `<ActionForm/>`, leptos_axum integration, leptos_meta, island hydration strategies |
+| E03 Rust | **Diesel ORM** | 🔴 ZERO · GAP P0 B01 #1 | → B01 new section ORM in rust-expert |
+| E03 Rust | **sqlx compile-time queries** | 🔴 ZERO · GAP P0 B01 #2 | → B01 new section DB in rust-expert |
+| E03 Rust | **SeaORM** | 🔴 ZERO · GAP P0 B01 #3 | → B01 new section ORM in rust-expert |
+| E03 Rust | **loco framework (Rails-like)** | 🔴 ZERO · GAP P0 B01 #4 | → B01 new structured-framework section in rust-expert |
+| **E04 Go** | naming + style + concurrency basics | ✅ basic · covered L15-L39 today | `skills/golang-expert §📏 Code Style` + `§⚡ Concurrency & Context` · everything deeper = GAP B03 below |
+| E04 Go | **HTTP Routers (Gin / Echo / Fiber / chi) + middleware chains** | 🔴 ZERO · GAP P0 B03 #1 | → B03 new Routers section in golang-expert |
+| E04 Go | **database/sql + sqlx + GORM + sqlc** | 🔴 ZERO · GAP P0 B03 #2 | → B03 new DB section in golang-expert |
+| E04 Go | **gRPC + interceptors + context deadline** | 🔴 ZERO · GAP P0 B03 #3 | → B03 new gRPC section in golang-expert |
+| E04 Go | **cobra + viper CLI stack** | 🔴 ZERO · GAP P0 B03 #4 | → B03 new CLI section in golang-expert |
+| E04 Go | **slog structured + zap OTel fields + traceId** | 🔴 ZERO · GAP P0 B03 #5 | → B03 new Logging + Observability integration section in golang-expert |
+| E04 Go | **Generics helpers (Must / Ptr / Slice/Map utils)** | 🔴 ZERO · GAP P0 B03 #6 | → B03 new Generics section in golang-expert |
+| E04 Go | **graceful shutdown + healthz/readyz + signal.NotifyContext** | 🔴 ZERO · GAP P0 B03 #7 | → B03 new Runtime section in golang-expert (B03 closes 7 framework gaps = 25% → ~55%) |
+| **E05 CloudNative** | IaC high-level bullet | ✅ SHALLOW 3 bullets today L10-L13 in devops-infra-expert | Docker + K8s + Terraform ALL need deepening below |
+| E05 CloudNative | **Dockerfile 7-stage canonical + buildx + USER non-root + HEALTHCHECK + .dockerignore + cache mounts RUN --mount=type=cache** | 🔴 ZERO · GAP P0 B04 #1 | → B04 new Dockerfile canonical in devops-infra-expert |
+| E05 CloudNative | **kind local cluster + metallb + registry mirror + ingress-nginx** | 🔴 ZERO · GAP P0 B04 #2 | → B04 new Kind section in devops-infra-expert |
+| E05 CloudNative | **K8s manifest patterns: Deployment + HPA + PDB + TopologySpreadConst + PriorityClass + startup probes** | 🔴 ZERO · GAP P0 B04 #3 | → B04 new K8s manifests section in devops-infra-expert |
+| E05 CloudNative | **Helm: Chart.yaml · templates/_helpers.tpl · tpl · values-{dev,staging,prod}.yaml hierarchy · hooks pre-install Job DB migration** | 🔴 ZERO · GAP P0 B04 #4 | → B04 new Helm section in devops-infra-expert |
+| E05 CloudNative | **Kustomize: base/ overlays/{dev,stg,prod} strategic-merge-patch patchesJson6902 components secretGenerator configMapGenerator** | 🔴 ZERO · GAP P0 B04 #5 | → B04 new Kustomize section in devops-infra-expert |
+| E05 CloudNative | **Terraform: provider required_providers version pinning + module structure {variables,outputs,main}.tf + backend s3 + dynamodb state lock + tfvars hierarchy** | 🔴 ZERO · GAP P0 B04 #6 | → B04 new Terraform section in devops-infra-expert |
+| **E05 Observability** | generic 4 bullets today L25-L29 (JSON logs · KPI · OTel tracing · alerts) | 🟡 SHALLOW but tools NAMES & formalisms MISSING · GAP P0 B05 massive below | → B05 expands devops-infra-expert with 2 major sub-sections: Observability-Methodologies + Observability-Tools = 7 major new formalisms + tool rules |
+| E05 Observability | **THREE PILLARS (Logs · Metrics · Traces) relationship + when each applies** | 🔴 ZERO formalism · GAP P0 B05 #1 | → B05 §Methodologies in devops-infra-expert |
+| E05 Observability | **RED metrics (Rate · Errors · Duration) for SERVICES** | 🔴 ZERO formal definition · GAP P0 B05 #2 | → B05 §Methodologies |
+| E05 Observability | **4 GOLDEN SIGNALS (Latency · Traffic · Errors · Saturation) for MONITORED ENDPOINTS** | 🔴 ZERO formal definition · GAP P0 B05 #3 | → B05 §Methodologies |
+| E05 Observability | **USE Method (Utilization · Saturation · Errors) for INFRA RESOURCES (CPU, memory, disk, network)** | 🔴 ZERO formal definition · GAP P0 B05 #4 | → B05 §Methodologies |
+| E05 Observability | **Prometheus: recording rules naming `job:metric:operator` + alertmanager group_by/inhibition + severity ladder critical/warn/info + for:5m pending + PromQL `rate()[5m]` not irate() + `histogram_quantile(0.95, rate())`** | 🔴 ZERO · GAP P0 B05 #5 | → B05 §Tools Prometheus in devops-infra-expert |
+| E05 Observability | **OTel Collector: pipeline traces/metrics/logs {receivers → processors (batch · memory_limiter · resource · attributes)} → exporters (otlp · prometheusremotewrite · loki) + tail_based_sampling + resource_detector deployment.environment** | 🔴 ZERO · GAP P0 B05 #6 | → B05 §Tools OTel Collector in devops-infra-expert |
+| E05 Observability | **Grafana + Loki (LogQL: `{app="x"} |= "error" | json | line_format "{{.trace_id}} {{.message}}"`) + Tempo (TraceQL: `{span.http.route = "/api/users"}`) + datasource+dashboard provisioning via configMap** | 🔴 ZERO query language + provisioning · GAP P0 B05 #7 | → B05 §Tools Grafana Stack in devops-infra-expert |
+| E05 Observability | **Sentry SDK: beforeSend filter PII + integrations list + captureException tags/contexts + breadcrumbs + tracesSampleRate per env + ENVIRONMENTS SEPARATED DSNs dev/stg/prod (never mix)** | 🔴 ZERO SDK patterns · GAP P0 B05 #8 | → B05 §Tools Sentry in devops-infra-expert |
+| E05 Observability | **Datadog: unified-service-tagging env/service/version OTel standard + dogstatsd metrics naming + APM dd-trace injection env vars + synthetic monitors heartbeat + log pipeline grok parser** | 🔴 ZERO unified tags standard + patterns · GAP P0 B05 #9 | → B05 §Tools Datadog in devops-infra-expert |
 
 ---
 
 ## 🌍 COMMANDS & SKILLS ARCHITECTURE REFERENCE
 
-> **A referência COMPLETA + sintaxe + exemplos dos 14 comandos está em:** `CHE_COMMANDS.md` (canônico). NÃO DUPLICAR aqui.
+> **COMPLETE reference + syntax + examples of the 14 commands is in:** `CHE_COMMANDS.md` (canonical). DO NOT DUPLICATE here.
 >
-> Visão rápida (14 comandos total):
-> - 9 **pesados (workflow)** → wrapper de validação preflight + `Skill(...)`:
+> Quick view (14 commands total):
+> - 9 **heavy (workflow)** → preflight validation wrapper + `Skill(...)`:
 >   `/che-spec` | `/che-act` | `/che-parallel` | `/che-ship` | `/che-fix` | `/che-review` | `/che-diff` | `/che-manual-test` | `/che-pr-comments` | `/che-ci-fix` | `/che-design` | `/che-figma` | `/che-scope-check` | `/che-merge`
-> - 5 **leves (operação em arquivo)**: inline, NÃO viram skill (ler/escrever markdown, KISS → não criar skill de 3 linhas):
+> - 5 **light (file operation)**: inline, DOES NOT become a skill (read/write markdown, KISS → do not create 3-line skill):
 >   `/che-status` | `/che-skip` | `/che-decisions` | `/che-summary` | `/che-abort`
-> - Contagem atualizada: consultar `CHE_COMMANDS.md` §Architecture Commands vs Skills para Category A (heavy) + Category B (light) exata.
-> - Corpo completo mapping command → skill + arquitetura explicada: `CHE_COMMANDS.md` §Architecture Commands vs Skills.
+> - Updated count: consult `CHE_COMMANDS.md` §Architecture Commands vs Skills for exact Category A (heavy) + Category B (light).
+> - Full body command mapping → skill + architecture explained: `CHE_COMMANDS.md` §Architecture Commands vs Skills.
 
 ---
 
-Fim das regras de processo e fluxo.
+End of process and flow rules.

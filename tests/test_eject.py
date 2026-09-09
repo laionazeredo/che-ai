@@ -50,7 +50,7 @@ def _fake_che_home(root: Path, kind: str = "copy-install") -> Path:
     (che / "commands" / "che-eject.md").write_text("y\n", encoding="utf-8")
     (che / "scripts").mkdir()
     (che / "scripts" / "setup-adapters.sh").write_text("#!/bin/sh\necho adapters\n", encoding="utf-8")
-    # BLACKLIST ABSOLUTA
+    # BLACKLIST ABSOLUTE
     (che / "user_rules").mkdir()
     (che / "user_rules" / "my-rules.md").write_text("keep\n", encoding="utf-8")
     bindings = che / "bindings"
@@ -154,23 +154,23 @@ def test_copy_install_moves_whitelist_preserves_blacklist(tmp_path):
     assert step_move["moved_count"] >= 7  # CHE_RULES.md, CHE_COMMANDS, README, che_core, skills, commands, scripts
     assert (
         step_move["kept_blacklist_count"] >= 4
-    )  # user_rules, bindings, memory, node_modules (copy-install não tem .git)
+    )  # user_rules, bindings, memory, node_modules (copy-install does not have .git)
 
-    # Whitelist FORA de che_home / DENTRO da trash
+    # Whitelist OUTSIDE che_home / INSIDE trash
     assert not (che / "CHE_RULES.md").exists()
     assert not (che / "che_core").is_dir()
     assert not (che / "skills").is_dir()
     assert (trash_dir / "CHE_RULES.md").exists()
     assert (trash_dir / "che_core" / "eject.py").exists()
 
-    # BLACKLIST continua em che_home
+    # BLACKLIST remains in che_home
     assert (che / "user_rules" / "my-rules.md").is_file()
     assert (che / "bindings" / "registry.jsonl").is_file()
     assert (che / "memory" / "state.sqlite").is_file()
     assert (che / "node_modules" / "dep").is_dir()
 
 
-# ── 4. git-clone keep-git default — NÃO move nada ───────────────────────────
+# ── 4. git-clone keep-git default — DOES NOT move anything ───────────────────────────
 
 
 def test_git_clone_keep_git_default_does_not_move(tmp_path):
@@ -182,16 +182,16 @@ def test_git_clone_keep_git_default_does_not_move(tmp_path):
     assert res["status"] == "applied"
     step_keep = _first_step_of_kind(res, "che-home-kept")
     assert step_keep is not None
-    # Whitelist CONTINUA em che_home
+    # Whitelist REMAINS in che_home
     assert (che / "CHE_RULES.md").is_file()
     assert (che / "che_core" / "eject.py").is_file()
     assert (che / ".git" / "HEAD").is_file()
-    # Nenhum item whitelist foi movido
+    # No whitelist items were moved
     assert (che / "skills").is_dir()
     assert (che / "README.md").is_file()
 
 
-# ── 5. snippet .gitignore markers BEGIN/END só removidos ────────────────────
+# ── 5. snippet .gitignore markers BEGIN/END only removed ────────────────────
 
 
 def test_remove_client_gitignore_snippet_only(tmp_path):
@@ -221,7 +221,7 @@ def test_remove_client_gitignore_snippet_only(tmp_path):
     assert step_snip.get("count", 0) >= 1
 
 
-# ── 6. trash-list retorna manifests JSON válidos ─────────────────────────────
+# ── 6. trash-list returns valid JSON manifests ─────────────────────────────
 
 
 def test_eject_trash_list_returns_manifests(tmp_path):
@@ -244,7 +244,7 @@ def test_eject_trash_list_returns_manifests(tmp_path):
     assert manifest["items_moved_count"] > 0
 
 
-# ── 7. restore — move de volta · conflito = skipped · não sobrescreve ────────
+# ── 7. restore — moves back · conflict = skipped · no overwrite ────────
 
 
 def test_restore_moves_back_refuses_conflict_then_succeeds(tmp_path):
@@ -256,7 +256,7 @@ def test_restore_moves_back_refuses_conflict_then_succeeds(tmp_path):
     assert res_eject["status"] == "applied"
     assert not (che / "CHE_RULES.md").exists()
 
-    # Pega o slug via trash_list
+    # Get slug via trash_list
     entries = eject_trash_list(trash_root=trash_root)
     assert len(entries) == 1
     slug = entries[0]["trash_slug"]
@@ -266,16 +266,16 @@ def test_restore_moves_back_refuses_conflict_then_succeeds(tmp_path):
     res_block = eject_restore(slug, trash_root=trash_root, dry_run=False, confirmed=False)
     assert res_block["status"] == "blocked-missing-confirmed"
 
-    # Cria arquivo conflituoso e roda restore confirmed
-    (che / "CHE_RULES.md").write_text("CONFLITO\n", encoding="utf-8")
+    # Create conflicting file and run restore confirmed
+    (che / "CHE_RULES.md").write_text("CONFLICT\n", encoding="utf-8")
     res_conflict = eject_restore(slug, trash_root=trash_root, dry_run=False, confirmed=True)
-    # Detecta conflito via skipped_count > 0, NÃO aborta global
+    # Detects conflict via skipped_count > 0, DOES NOT abort global
     assert res_conflict["status"] == "applied"
     assert res_conflict["skipped_count"] >= 1
-    # Conflito NÃO sobrescrito
-    assert (che / "CHE_RULES.md").read_text(encoding="utf-8") == "CONFLITO\n"
+    # Conflict NOT overwritten
+    assert (che / "CHE_RULES.md").read_text(encoding="utf-8") == "CONFLICT\n"
 
-    # Remove conflito → restore deve mover tudo de volta
+    # Remove conflict → restore should move everything back
     (che / "CHE_RULES.md").unlink()
     res_ok = eject_restore(slug, trash_root=trash_root, dry_run=False, confirmed=True)
     assert res_ok["status"] == "applied"
@@ -283,7 +283,7 @@ def test_restore_moves_back_refuses_conflict_then_succeeds(tmp_path):
     assert (che / "CHE_RULES.md").is_file()
     assert (che / "che_core" / "eject.py").is_file()
     assert (che / "skills").is_dir()
-    # Blacklist intacta
+    # Blacklist intact
     assert (che / "user_rules" / "my-rules.md").is_file()
     assert (che / "bindings" / "registry.jsonl").is_file()
     assert (che / "memory" / "state.sqlite").is_file()

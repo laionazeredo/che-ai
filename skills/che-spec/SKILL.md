@@ -5,10 +5,10 @@ description: "Generate or validate a Che Execution Specification (SPEC). 4 input
 
 # Che Spec Generator (SPEC)
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - Full contracts (precedence 1-18, DbC, BDD incremental, etc): `engineering-contracts` skill
 > - Path resolution (WORKSPACE_NAME, WORKTREE_SLUG, CHE_WORKSPACE_SHARED, CHE_SESSION_DIR): `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"`, call `che_compute_paths WT SID CWD`
-> - Worktree binding 2-LEVEL (Level1 registry, Level2 sessions dir): engineering-contracts §19
+> - 2-LEVEL worktree binding (Level1 registry, Level2 sessions dir): engineering-contracts §19
 
 Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~60–120 lines, 7 sections). Replaces project-specific legacy PRD artifacts. Gate before scope capture in `/che-act` and standalone runnable via `/che-spec`.
 
@@ -17,7 +17,7 @@ Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~
 ## §0 PURPOSE & INTEGRATION
 
 When called:
-1. **From `/che-act` (embedded)**: runs AFTER binding §19 + ensure_dirs, BEFORE scope capture §1. User says which SPEC to use or generates new.
+1. **From `/che-act` (embedded)**: runs AFTER binding §19 + ensure_dirs, BEFORE scope capture §1. User specifies which SPEC to use or generates new.
 2. **Standalone** via `/che-spec`: runs independently; performs binding if needed, then generates or edits spec.
 
 On completion this skill **returns to the caller** two values printed in the last 2 lines of the transcript:
@@ -37,33 +37,33 @@ Fail if any step fails. Stop before proceeding with user.
    che_compute_paths "$WORKTREE_ROOT" "$(che_current_session_id)" "$PWD"
    che_ensure_session_dirs
    ```
-3. **Slug:** If user passed `--slug`, use it as-is (sanitize to `[a-z0-9_-]+`). Otherwise derive from `ticket_ref` or `change_class+why`.
+3. **Slug:** If user passed `--slug`, use it as-is (sanitise to `[a-z0-9_-]+`). Otherwise derive from `ticket_ref` or `change_class+why`.
 
 ### §1.4 Feature Flag Provider Preflight Check (MANDATORY if risk_level ≥ medium)
 
-> **Motivo ONDA4:** NÃO inventar feature flags do zero se o projeto não tiver infraestrutura definida a priori. Só perguntar ao usuário sobre flags SE um provider for detectado. Default fallback = rollback nativo da plataforma de deploy.
+> **Reason WAVE4:** DO NOT invent feature flags from scratch if the project has no predefined infrastructure. Only ask the user about flags IF a provider is detected. Default fallback = native rollback of the deployment platform.
 
-**GATILHO de execução (HARD RULE):**
-- SE `risk_level === low` (frontmatter §HEAD L72) → **SKIP bloco INTEIRO, 0 linhas log, não pergunta nada ao usuário.**
-- SE `risk_level === medium OU risk_level === high` → **EXECUTAR 3 passos ABAIXO, ordem fixa. NÃO pular nenhum passo.**
+**Execution TRIGGER (HARD RULE):**
+- IF `risk_level === low` (frontmatter §HEAD L72) → **SKIP ENTIRE block, 0 log lines, do not ask anything to user.**
+- IF `risk_level === medium OR risk_level === high` → **EXECUTE 3 steps BELOW, fixed order. DO NOT skip any step.**
 
 ```bash
-# DETECTED flag state inicial
+# Initial DETECTED flag state
 FLAG_PROVIDER_DETECTED="none"
 FLAG_PROVIDER_NAME=""
 
-# PASSO 1 — SCAN WORKTREE feature libs conhecidas (maxdepth 5, evita node_modules)
-echo "[PREFLIGHT §1.4 PASSO1/3] Scaneando worktree por libs feature flags..."
+# STEP 1 — SCAN WORKTREE for known feature libs (maxdepth 5, avoid node_modules)
+echo "[PREFLIGHT §1.4 STEP 1/3] Scanning worktree for feature flag libs..."
 FLAG_LIBS_FOUND="$(cd "$WORKTREE_ROOT" && find . -maxdepth 5 -type f \( -iname 'feature.ts' -o -iname 'flags.ts' -o -iname '*.flags.ts' -o -iname 'feature-flags.ts' -o -iname 'feature.js' -o -iname 'flags.js' \) -not -path '*/node_modules/*' -not -path '*/.next/*' -not -path '*/dist/*' 2>/dev/null | tr '\n' ';')"
 if [ -n "$FLAG_LIBS_FOUND" ] && [ "$FLAG_LIBS_FOUND" != ";" ]; then
   FLAG_PROVIDER_DETECTED="worktree_lib"
   FLAG_PROVIDER_NAME="worktree-files:${FLAG_LIBS_FOUND%;}"
-  echo "[INFO §1.4] DETECTADO PASSO1: arquivos feature flags em worktree → pode recomendar flags se risco justificar."
+  echo "[INFO §1.4] STEP 1 DETECTED: feature flag files in worktree → may recommend flags if risk justifies."
 fi
 
-# PASSO 2 — SCAN ENV PATTERNS providers conhecidos (8 patterns canônicos)
+# STEP 2 — SCAN ENV PATTERNS for known providers (8 canonical patterns)
 if [ "$FLAG_PROVIDER_DETECTED" = "none" ]; then
-  echo "[PREFLIGHT §1.4 PASSO2/3] Scaneando .env.example e afins por patterns provider feature flags..."
+  echo "[PREFLIGHT §1.4 STEP 2/3] Scanning .env.example and similar for feature flag provider patterns..."
   ENV_CANDIDATES=".env.example .env.local.example .env.development.example .env.production.example .env"
   ENV_PATTERNS='^(export )?(FLAG_|FEATURE_FLAG_|LD_|UNLEASH_|STATSIG_|EDGE_CONFIG_|OPENFEATURE_|SPLITIO_)'
   FLAG_ENV_FOUND=""
@@ -78,50 +78,50 @@ if [ "$FLAG_PROVIDER_DETECTED" = "none" ]; then
   if [ -n "$FLAG_ENV_FOUND" ]; then
     FLAG_PROVIDER_DETECTED="env_pattern"
     FLAG_PROVIDER_NAME="env-patterns:${FLAG_ENV_FOUND%;}"
-    echo "[INFO §1.4] DETECTADO PASSO2: env pattern provider feature flags → pode recomendar flags."
+    echo "[INFO §1.4] STEP 2 DETECTED: feature flag provider env pattern → may recommend flags."
   fi
 fi
 
-# PASSO 3 — PRODUCT CONTEXT FRONTMATTER feature_flag_provider: (Level 1.5 registry)
+# STEP 3 — PRODUCT CONTEXT FRONTMATTER feature_flag_provider: (Level 1.5 registry)
 if [ "$FLAG_PROVIDER_DETECTED" = "none" ]; then
-  echo "[PREFLIGHT §1.4 PASSO3/3] Verificando product_context.md frontmatter feature_flag_provider..."
+  echo "[PREFLIGHT §1.4 STEP 3/3] Checking product_context.md frontmatter feature_flag_provider..."
   PC_FILE="$CHE_WORKSPACE_SHARED/projects/${PROJECT_SLUG:-default}/product_context.md"
   if [ -f "$PC_FILE" ]; then
     PC_FLAG_PROVIDER="$(grep -E '^feature_flag_provider:\s*' "$PC_FILE" | head -1 | sed -E 's/^feature_flag_provider:\s*//' | tr -d '"' | tr -d "'" | xargs || true)"
     if [ -n "$PC_FLAG_PROVIDER" ] && [ "$PC_FLAG_PROVIDER" != "" ] && [ "$PC_FLAG_PROVIDER" != "none" ] && [ "$PC_FLAG_PROVIDER" != "null" ]; then
       FLAG_PROVIDER_DETECTED="product_context"
       FLAG_PROVIDER_NAME="product_context:${PC_FLAG_PROVIDER}"
-      echo "[INFO §1.4] DETECTADO PASSO3: provider declarado em product_context.md → pode recomendar flags."
+      echo "[INFO §1.4] STEP 3 DETECTED: provider declared in product_context.md → may recommend flags."
     fi
   fi
 fi
 ```
 
-**BRANCH DE RESULTADOS (HARD POLÍTICA, NÃO NEGOCIÁVEL):**
+**RESULTS BRANCHING (HARD POLICY, NON-NEGOTIABLE):**
 
-| Caso | Condição | Ação no draft da SPEC |
+| Case | Condition | Action in SPEC draft |
 |---|---|---|
-| **A — QUALQUER DETECTADO** | `FLAG_PROVIDER_DETECTED != none` (qualquer passo 1, 2 OU 3 achou) | NADA MUDANÇA ESPECIAL. Fluxo normal §3 + §4. PODE recomendar feature flag em §3 Contracts / §5 Risks se risco justificar (medium/high). Não pergunta nada ao usuário sobre flags (automático). |
-| **B — NENHUM DETECTADO + risk ≥ med/high** | `FLAG_PROVIDER_DETECTED = none` AND `risk_level ∈ {medium, high}` | **HARD RULE: NÃO PODE obrigar feature flag em NENHUMA seção da spec (§3 PRE/POST, §4 SbE, §5 Verification, §6 Risks).** INSERIR LINHA OBRIGATÓRIA no draft §3 CONTRACTS → PREconditions bloco (último bullet PRE): <br>`- PRE-FF: Feature flags NOT AVAILABLE (nenhum provider detectado preflight §1.4). Fallback rollback default = plataforma deploy nativa: <Vercel Instant Rollback <30s \| Railway redeploy \| Supabase branch revert \| manual>` <br>Adicionar nota em §5 VERIFICATION (seção "Rollback trigger" se existir, senão como último bullet): <br>`Rollback default usa deploy nativo da plataforma (feature flags indisponíveis nesta worktree — nenhum provider detectado preflight §1.4).` <br>NÃO pergunta ao usuário se quer usar flags. NÃO cria configuração de flag. |
+| **A — ANY DETECTED** | `FLAG_PROVIDER_DETECTED != none` (Step 1, 2 OR 3 found it) | NO SPECIAL CHANGE. Normal flow §3 + §4. MAY recommend feature flag in §3 Contracts / §5 Risks if risk justifies (medium/high). Do not ask anything to the user about flags (automatic). |
+| **B — NONE DETECTED + risk ≥ med/high** | `FLAG_PROVIDER_DETECTED = none` AND `risk_level ∈ {medium, high}` | **HARD RULE: CANNOT mandate feature flag in ANY spec section (§3 PRE/POST, §4 SbE, §5 Verification, §6 Risks).** INSERT MANDATORY LINE in draft §3 CONTRACTS → PREconditions block (last bullet PRE): <br>`- PRE-FF: Feature flags NOT AVAILABLE (no provider detected in preflight §1.4). Fallback default rollback = native deploy platform: <Vercel Instant Rollback <30s \| Railway redeploy \| Supabase branch revert \| manual>` <br>Add note in §5 VERIFICATION ("Rollback trigger" section if exists, otherwise as last bullet): <br>`Default rollback uses native platform deploy (feature flags unavailable in this worktree — no provider detected in preflight §1.4).` <br>DO NOT ask user if they want to use flags. DO NOT create flag configuration. |
 
-**EXCEÇÃO ÚNICA PERMITIDA (override user VERBATIM):**
-- ÚNICO jeito de contornar Branch B (forçar obrigatoriedade de flag SEM provider detectado) = usuário digitar ANTES do spec gerar o literal EXATO: **`EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE`** seguido de justificativa 1-linha. Exemplo usuário:
-  > `EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE: vamos lançar essa feature crítica numa sexta 22h, vou criar lib flags manualmente agora mesmo nesta PR`
-- Se usuário digitou o literal → salvar como decision.log: `che_append_decision_jsonl "SPEC_PREFLIGHT_OVERRIDE" "preflight=§1.4_feature_flags type=EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE rationale=<1-linha user verbatim> risk_level=${risk_level}"`. Depois PODE obrigar flags em seções da spec normalmente. Se NÃO digitou literal → Branch B é HARD STOP, não há discussão.
+**ONLY PERMITTED EXCEPTION (user VERBATIM override):**
+- ONLY way to bypass Branch B (force mandatory flag WITHOUT detected provider) = user types BEFORE spec generation the EXACT literal: **`EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE`** followed by 1-line justification. User example:
+  > `EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE: we're launching this critical feature on a Friday 10pm, I'll create the flags lib manually right now in this PR`
+- If user typed the literal → save as decision.log: `che_append_decision_jsonl "SPEC_PREFLIGHT_OVERRIDE" "preflight=§1.4_feature_flags type=EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE rationale=<1-line user verbatim> risk_level=${risk_level}"`. Then MAY mandate flags in spec sections normally. If NOT typed literal → Branch B is HARD STOP, not discussion.
 
 ### §1.5 Strategic Roadmap Preflight (MANDATORY)
 
 > **Purpose:** Ensure the task is aligned with the project's strategic roadmap (Specflow Phase 2).
 
-**GATILHO de execução:**
-- SE `$CHE_WORKSPACE_SHARED/projects/<slug>/roadmap.md` existir → **EXECUTAR passos abaixo.**
-- SE NÃO existir → avisar usuário: "Roadmap estratégico não encontrado. Recomenda-se rodar `/che-architect` Step 2 antes para melhor navegabilidade."
+**Execution TRIGGER:**
+- IF `$CHE_WORKSPACE_SHARED/projects/<slug>/roadmap.md` exists → **EXECUTE steps below.**
+- IF NOT exists → warn user: "Strategic roadmap not found. Recommended to run `/che-architect` Step 2 first for better navigability."
 
-**Ação:**
-1. Ler `roadmap.md`.
-2. Listar fases disponíveis (IDs e Títulos).
-3. Pedir ao usuário para confirmar a qual fase este SPEC pertence, ou inferir do `ticket_ref`.
-4. Preencher frontmatter `roadmap_phase: <ID>`.
+**Action:**
+1. Read `roadmap.md`.
+2. List available phases (IDs and Titles).
+3. Ask the user to confirm which phase this SPEC belongs to, or infer from `ticket_ref`.
+4. Fill frontmatter `roadmap_phase: <ID>`.
 
 ---
 
@@ -131,47 +131,49 @@ Present choices when input arg is missing or ambiguous. First match wins, never 
 
 | # | Source | User provides | Action before draft |
 |---|---|---|---|
-| A | **Existing SPEC file** | File path OR pick from glob `$CHE_WORKSPACE_SHARED/spec_*.md` | Read it; if `status=Approved` → jump straight to §5 (approval). If Draft → proceed to §3 editing with the existing content pre-filled. |
+| A | **Existing SPEC file** | File path OR pick from glob `$CHE_WORKSPACE_SHARED/spec_*.md` | Read it; if `status=Approved` → jump straight to §5 (approval). If Draft → proceed to §3 editing with existing content pre-filled. |
 | B | **Ticket URL** (Linear FLO-XXX, ClickUp, GitHub issue) | Full URL | 1. Try to extract title + description + status via MCP tools (`mcp_flockr-linear`, `mcp_laion-clickup`, `mcp_github`). If MCP fails → fall back to user-provided inline description. 2. Populate frontmatter `ticket_ref:` + `spec_id:` from slug. 3. Seed §1 WHY bullets from ticket description. 4. Seed §4 MUST ACs = 3 bullets if ticket has Acceptance Criteria field. |
-| C | **Legacy PRD** (.md legado do projeto) | Absolute path to `.md` file | Parse with headings, map: `Problem / Background` → §1 WHY; `Goals` → §4 MUST; `Non-Goals` → §1 Non-goals; `Data Model / Migration` → §6 Hints; `Acceptance Criteria` → §4 MUST AC, each prefixed `GWT` verbatim; `Risk` → §5 Rollback trigger. If section missing → leave empty and prompt user to fill during §4 review. |
+| C | **Legacy PRD** (Project legacy .md) | Absolute path to `.md` file | Parse with headings, map: `Problem / Background` → §1 WHY; `Goals` → §4 MUST; `Non-Goals` → §1 Non-goals; `Data Model / Migration` → §6 Hints; `Acceptance Criteria` → §4 MUST AC, each prefixed `GWT` verbatim; `Risk` → §5 Rollback trigger. If section missing → leave empty and prompt user to fill during §4 review. |
 | D | **Inline brief** (short text 2–5 sentences) | User typed description or typed nothing at all → walk through interactive prompts 1-by-1 | Prompt for: change_class (feature|bug|refactor|perf|ops); 3 bullets §1 WHY; 3 sections §2 (Can Touch ≤ 10 files, Can Create, Cannot Touch ≤ 5 lines); 3 PRE + 3 POST + 2 INVARIANTS in §3; 3 MUST + 1 SHOULD + 1 MAY §4 ACs (each AC must include GWT + TEST_METHOD literal). Defaults: `estimated_files_max=15`, `estimated_max_lines_add=400`, `new_dependencies=[]`, `pii_touch=none`, `supabase_rls_touch=false`, `currency_gbp_pence=false`, `domain=engineering`, `flags=LANG_PT_CHECK=ENABLED`. |
 
 ---
 
 ## §3 SPEC DRAFT STRUCTURE (9 sections — SbE CENTRIC, canonical)
 
-Write the draft in-memory first. File starts with YAML frontmatter, THEN 9 markdown sections (§1-§9). **§4 SbE is the MANDATORY CENTRAL SECTION** (behaviors observable, NOT implementation). Ordem fixa — NÃO reordenar.
+Write the draft in-memory first. File starts with YAML frontmatter, THEN 9 markdown sections (§1-§9). **§4 SbE is the MANDATORY CENTRAL SECTION** (observable behaviours, NOT implementation). Fixed order — DO NOT reorder.
 
 ### §HEAD — YAML Frontmatter (REQUIRED fields — validate all present)
 ```yaml
 ---
-spec_id: <slug-sanitized-alphanum-dash-underscore>
-roadmap_phase: <ID_DA_FASE_NO_ROADMAP.MD> # Link to the strategic roadmap phase
+spec_id: <slug-sanitised-alphanum-dash-underscore>
+roadmap_phase: <PHASE_ID_IN_ROADMAP.MD> # Link to the strategic roadmap phase
 ticket_ref: <"FLO-745" or "NONE">
 worktree_root: <absolute-path>
 change_class: feature|bug|refactor|perf|ops
-domain: engineering                  # valores aceitos: engineering | product | ux | devops | copywriting | social | seo-analytics
-                                      # default = engineering (retrocompat total com specs/sessões/skills antigas sem esse campo)
-                                      # se != engineering → SM §0.3 auto-carrega domains/<domain>/profile.md + playbook.md
-                                      # se != engineering → ship §0.9.5 executa gates obrigatórios playbook
-risk_level: low|medium|high           # NOVO SbE. default = low. Se medium/high → gatilho §4.4 Mermaid obrigatório.
-source_merge_order: [user_prompt, prd_file, linear_ticket, implementer_hints]   # NOVO SbE CANÔNICO. NÃO reordenar sem EXPLICIT_OVERRIDE + decision log.
+domain: engineering                  # accepted values: engineering | product | ux | devops | copywriting | social | seo-analytics
+                                      # default = engineering (total backward compat with old specs/sessions/skills without this field)
+                                      # if != engineering → SM §0.3 auto-loads domains/<domain>/profile.md + playbook.md
+                                      # if != engineering → ship §0.9.5 executes mandatory playbook gates
+risk_level: low|medium|high           # NEW SbE. default = low. If medium/high → mandatory §4.4 Mermaid trigger.
+source_merge_order: [user_prompt, prd_file, linear_ticket, implementer_hints]   # NEW CANONICAL SbE. DO NOT reorder without EXPLICIT_OVERRIDE + decision log.
 status: Draft
-estimated_files_max: <integer; default 15; hard stop per §15>
-estimated_max_lines_add: <integer; default 400; trigger for gh-stack>
+estimated_files_max: <integer; default 15 per S03 CHE_RULES §X; hard stop if ceiling exceeded>
+estimated_max_lines_add: <integer; default 400 per S04 CHE_RULES §X; advisory ≥400 yellow, MUST gh-stack ≥800 red>
 new_dependencies: [ ]
 pii_touch: none|read-only|write
 supabase_rls_touch: true|false
 currency_gbp_pence: true|false
-bound_agent_lang: default|pt-BR|en
-flags: LANG_PT_CHECK=ENABLED[, RLS_MANDATORY=NO]
+bound_agent_lang: en|pt-BR
+flags: LANG_DOCS=en
 approver: ""
 approved_at: ""
-# Contadores SbE auto-calculados (VAL09-V10 validation cross-check) — opcional, preencher no final do draft:
-b_count: 0                            # NOVO: quantidade de B-IDs na §4.2 Behavior Table (auto-count)
-ab_count: 0                           # NOVO: quantidade de AB-IDs na §4.3 Anti-Behavior Table (auto-count)
-erd_required: false                   # NOVO: gatilho ERD. true SE E SOMENTE SE: (a) cria entidade DB NOVA; (b) altera cardinalidade FK ON DELETE/UPDATE; (c) adiciona ≥3 campos com constraints UNIQUE/UK/CHECK.
-mermaid_required: false               # NOVO: gatilho diagrams. true SE E SOMENTE SE: b_count>=8 OR atores_publicos>=3 OR risk_level in {medium, high}.
+# Auto-calculated SbE counters (VAL09-V10 validation cross-check) — optional, fill at the end of draft:
+b_count: 0                            # NEW: quantity of B-IDs in §4.2 Behavior Table (auto-count)
+ab_count: 0                           # NEW: quantity of AB-IDs in §4.3 Anti-Behavior Table (auto-count)
+erd_required: false                   # per S05 CHE_RULES §X. true IF AND ONLY IF: (a) creates NEW DB entity; (b) alters FK ON DELETE/UPDATE cardinality; (c) adds ≥3 fields with UNIQUE/UK/CHECK constraints.
+mermaid_required: false               # per S06 CHE_RULES §X. true IF AND ONLY IF: b_count>=8 OR distinct_public_actors>=3 OR risk_level in {medium, high}.
+vertical_slice_required: true         # CANONICAL #0 (CHE_RULES.md). Default true. ONLY false if EXPLICIT_OVERRIDE_HORIZONTAL_PLAN literal appears in §2 SCOPE with 1-line justification + decision.log entry.
+tracer_f0_defined: false              # CANONICAL #0 (CHE_RULES.md F0 rule). Auto-calculated: flips to true when §4.5 VERTICAL SLICES table has 1+ row with ID=F0 · Layers Touched count>=2 · B-IDs >= 1 · DONE != empty. Auto-validated by V16.
 ---
 ```
 
@@ -181,7 +183,7 @@ Header: `## §1 WHY (Problem Statement)`
   - Current: <what breaks today, 1 line concrete>
   - Risk: <security or business impact or UX pain>
   - Goal: <outcome in 1 line>
-  - Success metric: <curl / behavioral assertion>
+  - Success metric: <curl / behavioural assertion>
   - Non-goals: <what this SPEC does NOT do>
 
 ### §2 SCOPE — Blast Radius (3 lists, each ≤ 10 items)
@@ -191,6 +193,9 @@ Three subsections EXACTLY:
 - `### ✅ CAN CREATE (<=8 files/folders)` — new files; include folder path only if empty dir creation required
 - `### ❌ CANNOT TOUCH (under any circumstances)` — list paths or packages; last bullet always: `Any worktree other than bound <WORKTREE_ROOT> (§19 scissor)`
 - Optional bullet: `### External services touched:` (list services touched or `None`)
+- **Optional CANONICAL OVERRIDE bullet (insert ONLY if user explicitly requires horizontal planning / layer-by-layer execution. Pattern identical to §1.4 EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE literal).** Add as LAST bullet inside `### ❌ CANNOT TOUCH` or as a dedicated sub-bullet immediately after `External services touched`, NEVER anywhere else:
+  `- EXPLICIT_OVERRIDE_HORIZONTAL_PLAN: <1-line justification ≤ 120 chars>`
+  Without this verbatim literal + justification → V17 Horizontal Plan Detector + G-VS-1/2/3/4 gates will REJECT the spec and any derived task graph. With the literal present → V17 passes, and che-act §0.5 appends matching entry to `decisions.log.jsonl` with type=`EXPLICIT_OVERRIDE_HORIZONTAL_PLAN`.
 
 ### §3 CONTRACTS (DbC — PRE / POST / INVARIANTS)
 Header: `## §3 CONTRACTS (Design by Contract)`
@@ -198,144 +203,217 @@ Header: `## §3 CONTRACTS (Design by Contract)`
 - `### POSTconditions (after all tasks DONE — assertion-ready)` — ≥3 bullets, ≤8. Each bullet = a statement you can run a single test against; use `==`, `∈ {x,y}`, or plain assert verbs.
 - `### INVARIANTS (never break, even temporarily)` — ≥1, ≤5. Last INV if empty add: `INV-<N>: Files listed in CANNOT TOUCH §2 remain byte-for-byte unchanged git diff.`
 
-### §4 SPECIFICATION BY EXAMPLE (SbE — CENTRAL OBRIGATÓRIO)
-Header: `## §4 SPECIFICATION BY EXAMPLE (SbE — Public Behaviors Observable)`
+### §4 SPECIFICATION BY EXAMPLE (SbE — CENTRAL MANDATORY)
+Header: `## §4 SPECIFICATION BY EXAMPLE (SbE — Public Behaviours Observable)`
 
-> **CANONICAL SOURCE MERGING ORDER quando construir as tabelas abaixo (não reordenar sem EXPLICIT_OVERRIDE + decision.log):**
->   1st HIGHEST — **User Prompt VERBATIM** atual desta sessão
->   2nd — **Legacy PRD (.md)** (se source = C)
->   3rd — **Ticket Linear / ClickUp / GitHub Acceptance Criteria BRUTOS** (ac → 1 B-pos + 1 AB-neg mínimo)
->   4th LOWEST — Implementer hints (só preenche lacunas NÃO conflitantes)
+> **CANONICAL SOURCE MERGING ORDER when building the tables below (do not reorder without EXPLICIT_OVERRIDE + decision.log):**
+>   1st HIGHEST — current **User Prompt VERBATIM** of this session
+>   2nd — **Legacy PRD (.md)** (if source = C)
+>   3rd — **Linear / ClickUp / GitHub RAW Acceptance Criteria** (ac → 1 B-pos + 1 AB-neg minimum)
+>   4th LOWEST — Implementer hints (only fills non-conflicting gaps)
 >
-> No final do draft §4, SEMPRE pergunte ao usuário:
-> > "Tem mais edge case NEGATIVO (AB-) ou POSITIVO (B-) que devo adicionar às tabelas? Principais lacunas: (listar 2-3 missing behaviors da categoria mais crítica do user prompt)."
+> At the end of draft §4, ALWAYS ask the user:
+> > "Are there more NEGATIVE (AB-) or POSITIVE (B-) edge cases I should add to the tables? Main gaps: (list 2-3 missing behaviours from the most critical user prompt category)."
 
-#### §4.1 KEY RULES (R1..RN — máx 8)
+#### §4.1 KEY RULES (R1..RN — max 8)
 Header: `### §4.1 KEY RULES (Non-negotiable invariants 1–8)`
-- MÁXIMO 8 bullets. Derivado das fontes acima, NÃO de implementação.
-- NOME curto único R1..RN + 1 frase ação + impacto negócio.
-- Exemplos:
-  - R1: Refunds SEMPRE usam Stripe `reverse_transfer=true, refund_application_fee=false` (destination charges invariant).
-  - R2: Nenhum email bruto persistido em logs admin (PII convention).
-  - R3: Duplo clique no botão Confirm Refund NUNCA cria 2 refund (idempotency key dedup).
+- MAXIMUM 8 bullets. Derived from sources above, NOT from implementation.
+- Unique short NAME R1..RN + 1 action sentence + business impact.
+- Examples:
+  - R1: Refunds ALWAYS use Stripe `reverse_transfer=true, refund_application_fee=false` (destination charges invariant).
+  - R2: No raw email persisted in admin logs (PII convention).
+  - R3: Double click on Confirm Refund button NEVER creates 2 refunds (idempotency key dedup).
 
-#### §4.2 BEHAVIOR EXAMPLE TABLE (B-IDs positivos — máx 10, 1st verification anchor)
-Header: `### §4.2 POSITIVE BEHAVIOR EXAMPLES (B-ID 1..≤10)`
+#### §4.2 BEHAVIOUR EXAMPLE TABLE (Positive B-IDs — max 10, 1st verification anchor)
+Header: `### §4.2 POSITIVE BEHAVIOUR EXAMPLES (B-ID 1..≤10)`
 
-**Tabela Markdown OBRIGATÓRIA. Cada coluna = NÃO VAZIA (exceto UI Selector quando Playwright não marcado).**
-| B-ID | Given (Setup Concreto) | When (Ação Única Pública) | Then (Observable Public Behavior ONLY — sem palavras "correctly"/"works" — valores literais / HTTP codes / textos UI / side effects observáveis externos) | Test Layers [Unit ✅|Integ ✅|API-E2E ✅|Playwright ✅|Manual ✅] — marcar ✅ CAMADA CASO-A-CASO, NÃO obrigar todas | UI Selector Contract (só se Playwright ✅) — data-testid 3-parties `<domain>__<component>__<action>`, kebab duplo `__` | Confidence target % | Risks se OMITIR camada marcada ⚠️ |
+**MANDATORY Markdown table. Each column = NON-EMPTY (except UI Selector when Playwright not marked).**
+| B-ID | Given (Concrete Setup) | When (Single Public Action) | Then (Observable Public Behaviour ONLY — no "correctly"/"works" words — literal values / HTTP codes / UI texts / external observable side effects) | Test Layers [Unit ✅|Integ ✅|API-E2E ✅|Playwright ✅|Manual ✅] — mark ✅ CASE-BY-CASE, DO NOT mandate all | UI Selector Contract (only if Playwright ✅) — 3-part data-testid `<domain>__<component>__<action>`, double kebab `__` | Confidence target % | Risks if OMITTING marked layer ⚠️ |
 |---|---|---|---|---|---|---|---|
-| B-1 | Given booking_id=BK-123 exists, status=pending_payment, stripe_capture=succeeded, amount=2000p | When creator POST /api/bookings/:id/refund reason="Duplicate" | Then (HTTP 201 refund.id=RF-456 · booking.status=REFUNDED · customer.emailHash=sha256(..) recebe refundConfirmation template · Stripe dashboard refund.amount=2000 with reverse_transfer=true) | [✅Integ ✅API-E2E ✅Manual] | `creator__bookings-row__refund-btn--BK-123` + `refund__action-btn__confirm` | 98% | Sem Integ: omissão Stripe params causa webhook race → dupla dedução balance. Sem Manual: UX loading state falha visualmente em 3G. |
+| B-1 | Given booking_id=BK-123 exists, status=pending_payment, stripe_capture=succeeded, amount=2000p | When creator POST /api/bookings/:id/refund reason="Duplicate" | Then (HTTP 201 refund.id=RF-456 · booking.status=REFUNDED · customer.emailHash=sha256(..) receives refundConfirmation template · Stripe dashboard refund.amount=2000 with reverse_transfer=true) | [✅Integ ✅API-E2E ✅Manual] | `creator__bookings-row__refund-btn--BK-123` + `refund__action-btn__confirm` | 98% | No Integ: Stripe params omission causes webhook race → double balance deduction. No Manual: UX loading state fails visually on 3G. |
 | B-2 | ... | ... | ... | [...✅] | `...` | ... | ... |
 
-Rules enforcement desta tabela:
-1. **MÁXIMO 10 B-IDs TOTAIS** (se mais gh-stack 2 PRs).
-2. **Then coluna DEVE ser PÚBLICO OBSERVÁVEL:** status HTTP, UI texto literal, email tipo, Stripe/DB campo público. PROIBIDO Then: "o service chama método X internamente" (implementation bias).
-3. **Test Layers coluna:** HONEYCOMB PYRAMID. CASO-A-CASO. Marque ✅ só camadas que realmente resolva o behavior. Regras padrão:
-   - Algoritmo puro isolado (math, formatter, hash): só ✅Unit.
-   - Query/mutation REST+tRPC+DB (no UI): ✅Integ + ✅API-E2E (máx 2 camadas).
-   - UI componente interativo (botão, formulário, loading): ✅Playwright + ✅Manual (2 camadas).
-   - Regra de negócio transfronteiriça (3+ serviços): ✅Unit + ✅Integ + ✅API-E2E (3 camadas).
-4. **Risks if omitir coluna:** DESCREVA NEGÓCIO impacto (não "coverage cai"). Ex: "Dupla dedução Stripe Connect balance $2k".
-5. **UI Selector Contract coluna:** Se Playwright=✅ → OBRIGATÓRIO pelo menos 2 ids por behavior (trigger action + result verify). **Gatilho enforcement G8 Category 8 code-review (ONDA1) contra fragilidade XPath/classes.**
-6. **Mapping Ticket AC → B-ID:** Cada Acceptance Criteria do ticket Linear → 1 B-ID positivo + 1 AB- anti (abaixo §4.3). No final do draft, mostrar lista: `AC-T1 → B-3 + AB-2`.
+Rules enforcement for this table:
+1. **MAXIMUM 10 TOTAL B-IDs** (if more gh-stack 2 PRs).
+2. **Then column MUST be PUBLICLY OBSERVABLE:** HTTP status, literal UI text, email type, public Stripe/DB field. PROHIBITED Then: "service calls method X internally" (implementation bias).
+3. **Test Layers column:** HONEYCOMB PYRAMID. CASE-BY-CASE. Mark ✅ only layers that actually resolve the behaviour. Default rules:
+   - Pure isolated algorithm (math, formatter, hash): only ✅Unit.
+   - Mutation/query REST+tRPC+DB (no UI): ✅Integ + ✅API-E2E (max 2 layers).
+   - Interactive UI component (button, form, loading): ✅Playwright + ✅Manual (2 layers).
+   - Cross-border business rule (3+ services): ✅Unit + ✅Integ + ✅API-E2E (3 layers).
+4. **Risks if omit column:** DESCRIBE BUSINESS impact (not "coverage drops"). E.g. "Double deduction Stripe Connect balance $2k".
+5. **UI Selector Contract column:** If Playwright=✅ → MANDATORY at least 2 ids per behaviour (trigger action + result verify). **G8 Category 8 code-review enforcement trigger against XPath/classes fragility.**
+6. **Mapping Ticket AC → B-ID:** Each Linear ticket Acceptance Criteria → 1 positive B-ID + 1 anti-AB (below §4.3). At the end of draft, show list: `AC-T1 → B-3 + AB-2`.
 
-#### §4.3 ANTI-BEHAVIOR EXAMPLE TABLE (AB-IDs negativos — MÍNIMO 33% DE B-IDs)
-Header: `### §4.3 ANTI-BEHAVIOR EXAMPLES (AB-ID 1..≥ceil(B_COUNT/3))`
+#### §4.3 ANTI-BEHAVIOUR EXAMPLE TABLE (Negative AB-IDs — MINIMUM 33% OF B-IDs per S07 CHE_RULES §X)
+Header: `### §4.3 ANTI-BEHAVIOUR EXAMPLES (AB-ID 1..≥ceil(B_COUNT/3) per S07)`
 
-Tabela idêntica a §4.2, mas **Then = comportamento proibido que NUNCA deve acontecer.**
-| AB-ID | Given (Setup IDENTICO a B-ID correspondente — MESMO Given) | When (Ação PERIGOSA / inválida / duplicada / race) | Then PROIBIDO (public observável — o que NÃO ACONTECE, com valores literais) | Test Layers obrigatórios (≥1 camada ✅ por AB) | UI Selector (se Playwright) | Confidence target % | Risks se OMITIR teste AB |
+Table identical to §4.2, but **Then = prohibited behaviour that MUST NEVER happen.**
+| AB-ID | Given (Setup IDENTICAL to corresponding B-ID — SAME Given) | When (DANGEROUS / invalid / duplicate / race action) | Then PROHIBITED (public observable — what DOES NOT HAPPEN, with literal values) | Mandatory Test Layers (≥1 layer ✅ per AB) | UI Selector (if Playwright) | Confidence target % | Risks if OMITTING AB test |
 |---|---|---|---|---|---|---|---|
-| AB-1 | Given BK-123 pending_payment capture=succeeded amount=2000p idempotency_key=IK-XYZ | When DOUBLE-POST /api/bookings/:id/refund (2x paralelo com MESMO idempotency_key) | Then (HTTP 200 idempotent replay SAME RF-456 · booking.status NÃO transita · Stripe refund_count=1 · balance 1 movimento apenas) | [✅Integ ✅API-E2E] | `refund__action-btn__confirm` (double click rate limit check) | 99,5% | Não testar → 5% dos refund em click duplo geram transfer reversal negativo e dispute. |
-| AB-2 | ... | ... | Then NÃO... | [...✅] | ... | ... | ... |
+| AB-1 | Given BK-123 pending_payment capture=succeeded amount=2000p idempotency_key=IK-XYZ | When DOUBLE-POST /api/bookings/:id/refund (2x parallel with SAME idempotency_key) | Then (HTTP 200 idempotent replay SAME RF-456 · booking.status DOES NOT transition · Stripe refund_count=1 · balance 1 movement only) | [✅Integ ✅API-E2E] | `refund__action-btn__confirm` (double click rate limit check) | 99,5% | Not testing → 5% of refunds on double click generate negative transfer reversal and dispute. |
+| AB-2 | ... | ... | Then DOES NOT... | [...✅] | ... | ... | ... |
 
-Rules enforcement desta tabela:
-1. **MÍNIMO 33% RATIO: `AB_COUNT ≥ ceil( B_COUNT / 3 )`** (validação V10). Ex: B=9→AB≥3; B=1→AB≥1; B=4→AB≥2.
-2. **Given DEVE ser o MESMO setup de um B-ID positivo correspondente** (mesma linha Given). Prova que o sistema resiste ao lado ruim do happy path.
-3. **When = ação que o usuário faria ERRADO ou atacante exploraria.** Double click, race condition, auth bypass, campo negativo, id já processado, etc.
-4. **Then NÃO pode ser vago.** Valores literais. Then coluna SEMPRE começa com a palavra "Then NÃO" ou "Then (HTTP 4xx ... NÃO altera booking.status)".
+Rules enforcement for this table:
+1. **MINIMUM 33% RATIO: `AB_COUNT ≥ ceil( B_COUNT / 3 )` (V10 validation, per S07 CHE_RULES §X)**. E.g. B=9→AB≥3; B=1→AB≥1; B=4→AB≥2.
+2. **Given MUST be the SAME setup as a corresponding positive B-ID** (same Given line). Proves the system resists the bad side of the happy path.
+3. **When = action user would do WRONG or attacker would exploit.** Double click, race condition, auth bypass, negative field, already processed id, etc.
+4. **Then cannot be vague.** Literal values. Then column ALWAYS starts with the word "Then DOES NOT" or "Then (HTTP 4xx ... DOES NOT alter booking.status)".
 
-#### §4.4 MERMAID DIAGRAMS (CONDICIONAL OBRIGATÓRIO — se gatilho disparado)
+#### §4.4 MERMAID DIAGRAMS (CONDICIONAL MANDATORY — if trigger fired)
 Header: `### §4.4 MERMAID DIAGRAMS (skip or mandatory — based on triggers)`
 
-**Gatilho §4.4.1 + §4.4.2 OBRIGATÓRIOS SE E SOMENTE SE:**
-`(B_COUNT >= 8) OR (COUNT(public_actors_distinct) >= 3) OR (risk_level in ["medium", "high"]) OR (frontmatter.mermaid_required = true)`
-→ Se NENHUM: escrever exatamente `> ⚠️ Skipped (low complexity): B_COUNT=X<8 · public_actors=Y<3 · risk=low`.
+**§4.4.1 + §4.4.2 MANDATORY Triggers IF AND ONLY IF (per S06 CHE_RULES §X):**
+`(B_COUNT >= 8) OR (COUNT(distinct_public_actors) >= 3) OR (risk_level in ["medium", "high"]) OR (frontmatter.mermaid_required = true)`
+→ If NONE: write exactly `> ⚠️ Skipped (low complexity): B_COUNT=X<8 · public_actors=Y<3 · risk=low`.
 
-**Gatilho §4.4.3 ERDiagram OBRIGATÓRIO SE E SOMENTE SE:**
-`(nova_entidade_DB = true) OR (altera_cardinalidade_FK_ON_DELETE = true) OR (campos_novos_com_constraint_UNIQUE_CHECK >= 3) OR (frontmatter.erd_required = true)`
+**§4.4.3 ERDiagram MANDATORY Trigger IF AND ONLY IF (per S05 CHE_RULES §X):**
+`(new_DB_entity = true) OR (alters_FK_ON_DELETE_cardinality = true) OR (new_fields_with_UNIQUE_CHECK_constraint >= 3) OR (frontmatter.erd_required = true)`
 
-Mermaid rules HARD (parser crash se violar — validação V13):
-- Shapes SÓ rectangle `ID["label"]`, diamond `ID{"?"}`, edge labels `|"txt"|`. NÃO stadium shapes.
-- Quebras linha NO internamente aos labels SÓ `<br/>` HTML. NÃO literal `\n`.
-- Atores SÓ PÚBLICOS (ex: Creator, Attendee, StripeWebhook, AdminUI). NÃO nome services interno (ex: RefundService, StripeClient). Proibido.
-- TODOS nós e setas DEVEM ter referência `B-X` ou `AB-Y` no label. Ex: `Creator["Creator (B-1, B-2)"]`.
+HARD Mermaid rules (parser crash if violated — V13 validation):
+- Shapes ONLY rectangle `ID["label"]`, diamond `ID{"?"}`, edge labels `|"txt"|`. NO stadium shapes.
+- Internal label line breaks ONLY `<br/>` HTML. NO literal `
+`.
+- Actors ONLY PUBLIC (e.g. Creator, Attendee, StripeWebhook, AdminUI). NO internal service names (e.g. RefundService, StripeClient). Prohibited.
+- ALL nodes and arrows MUST have `B-X` or `AB-Y` reference in the label. E.g. `Creator["Creator (B-1, B-2)"]`.
 
-Sub-seções se gatilho disparar:
-- **§4.4.1 sequenceDiagram** — Ordem atores e mensagens. Cada mensagem = B-ID ou AB-ID.
-- **§4.4.2 flowchart TD** — Branches: (a) Happy path solid edge; (b) Sad/Error path dashed edge; (c) Rollback edge `--ROLLBACK-->` tracejado vermelho label. Nós = B-AB-IDs.
-- **§4.4.3 erDiagram** (se ERD gatilho) — Cardinalidade Mermaid oficial: `| = exactly 1; o| = 0 or 1; }o = 0 or N; }| = 1 or N`. Cada FK ou campo novo com B-ID correspondente no comment. Constraints UK/CHECK/UNIQUE listadas explicitamente com o número B-ID do behavior que a usa.
+Sub-sections if trigger fires:
+- **§4.4.1 sequenceDiagram** — Actor and message order. Each message = B-ID or AB-ID.
+- **§4.4.2 flowchart TD** — Branches: (a) Happy path solid edge; (b) Sad/Error path dashed edge; (c) Rollback edge `--ROLLBACK-->` red dashed label. Nodes = B-AB-IDs.
+- **§4.4.3 erDiagram** (if ERD trigger) — Official Mermaid cardinality: `| = exactly 1; o| = 0 or 1; }o = 0 or N; }| = 1 or N`. Each FK or new field with corresponding B-ID in comment. UK/CHECK/UNIQUE constraints listed explicitly with B-ID number of the behaviour that uses it.
+
+#### §4.5 VERTICAL SLICES — F0 TRAcer + F1..FN MANDATORY (Non-negotiable unless EXPLICIT_OVERRIDE_HORIZONTAL_PLAN logged)
+Header: `### §4.5 VERTICAL SLICES (F0 Tracer Bullet Mandatory — unless override logged in §2 SCOPE + decision.log)`
+
+> **CANONICAL #0 (CHE_RULES.md §Principle #0):** Every SPEC, task graph and plan MUST be decomposed into VERTICAL end-to-end SLICES (UI ↔ API ↔ DB ↔ External). The FIRST slice is ALWAYS F0 — the thinnest possible complete Tracer Bullet that proves the whole vertical plumbing works. Horizontal decomposition ("all models first, then all routes, then all pages") is PROHIBITED unless the literal `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN` appears verbatim in §2 SCOPE with a 1-line justification AND a corresponding decision.log entry is appended by SM before che-act runs.
+
+**MANDATORY Markdown table. NEVER empty. ALWAYS at minimum 1 row = F0. F0 is first, always.**
+| Slice ID | Slice Name (1 single MINIMAL end-to-end behaviour) | B-IDs / AB-IDs Covered in this slice (refs §4.2 / §4.3 — 1 B-ID minimum for F0) | Layers / Files TOUCHED (ALL layers in the vertical slice listed — UI · API · DB · External if applies) | Minimum Test per Layer Touched (1 test per layer listed above) | DONE Criterion (PUBLICLY OBSERVABLE, testable in 1 sentence) |
+|---|---|---|---|---|---|
+| **F0** | Tracer: Confirm Event Saved & Returned in Dashboard | **B-1 only** (1 B-ID — smallest possible) | `pages/events/new.tsx` (UI) · `app/api/events/route.ts` (API) · `packages/db/src/entities/Event.entity.ts` (DB) | Playwright click + fill → redirect (UI) · Vitest route POST 201 → row in events table (API) · Jest/TypeORM `event.save()` + `repo.find()` returns it (DB) | Creator fills title + clicks "Save Event" → redirects to `/dashboard/events` → the new event title is visible at row 1 of the list, within ≤1s, on a clean db. |
+| F1 | ... | B-2, AB-1 | ... | ... | ... |
+| F2 | ... | B-3, B-4 | ... | ... | ... |
+
+**Hard enforcement rules applied by V16 / V17 / G-VS-4 scope-checker:**
+1. **F0 row ALWAYS EXISTS**. Table MUST have at least 1 row whose 1st column is literally `F0`. If missing → V16 FAIL.
+2. **F0 Layers Touched count ≥ 2.** Split "Layers / Files TOUCHED" column by ` · ` separator — distinct top-level folder/domain count = `N`. If `N < 2` for F0 → V16 FAIL with: "F0 Tracer slice is not vertical. Layers Touched distinct count=N<2. Minimum 2 distinct architectural layers required. Either add the missing layer(s) OR declare EXPLICIT_OVERRIDE_HORIZONTAL_PLAN in §2 SCOPE with 1-line justification AND append decision.log entry."
+3. **F0 B-IDs covered count ≥ 1.** Column 3 empty or 0 B-IDs → V16 FAIL.
+4. **F0 DONE Criterion is NON-EMPTY.** Column 6 must contain ≥ 1 word, with no "works correctly" / "as expected" weasel words allowed — same literal-value rule as §4.2 Then column.
+5. **Subsequent slices (F1, F2, ...):** Also require Layers Touched ≥ 2, unless the slice ID has the explicit suffix `H-OVERRIDE-<number>` and a matching override decision.log hash exists.
+6. **Anti-pattern detection (V17 + scope-checker G-VS-4):** If ≥ 3 consecutive rows in this table have "Layers / Files TOUCHED" column with 1 single top-level folder AND NO F0 touches ≥2 layers → pattern is HORIZONTAL. V17 FAIL unless the literal override is present.
+
+#### §4.6 REVERSIBILITY DECLARATIONS (CANONICAL #1 — Non-negotiable unless EXPLICIT_OVERRIDE_REVERSIBILITY logged)
+Header: `### §4.6 REVERSIBILITY DECLARATIONS (Wrapper Boundaries · Rollback Flags · Forking Road)`
+
+> **CANONICAL #1 (CHE_RULES.md §Principle #1):** Every SPEC with `estimated_files_max ≥ 5` OR with ≥ 1 external dependency listed in §2 External services MUST declare 3 sub-tables below. All declarations are PROJECT-AGNOSTIC: no SDK names are hardcoded; they come ONLY from §2 user input.
+
+**§4.6.1 Wrapper Boundary Table (V19a)** — 1 row per unique external dependency declared in §2 External services. NEVER empty if §2 External services list is non-empty.
+| External Dependency Name (import alias / SDK name from §2) | Authoritative Wrapper Path (SINGLE glob / folder — 1 path only, NO commas / semicolons / multiple paths) | Touch-Count if Swapped (estimated # of files touched to replace this dependency with top competitor) |
+|---|---|---|
+| `<example: stripe>` | `<example: packages/platform/server/integrations/stripe/**>` | `<example: 8>` |
+| ... | ... | ... |
+
+**§4.6.2 Critical Rollback Feature Flags (V19b)** — minimum 1 row IF any B-ID in §4.2 touches a "critical path" (payment, auth, refund, checkout, deploy, publish, deletion). Optional otherwise.
+| B-ID(s) Affected (comma separated) | Runtime Feature Flag Name | Where Evaluated (absolute path) | Rollback Time Estimate (minutes — MUST be ≤ 5) |
+|---|---|---|---|
+| `<example: B-1, B-2>` | `<example: ENABLE_NEW_CHECKOUT_FLOW>` | `<example: packages/platform/server/services/checkout.service.ts:42>` | `<2>` |
+
+**§4.6.3 Forking Road Test Answers (V19c)** — 1 row per unique Wrapper Path declared in §4.6.1 (same count, 1:1 correspondence).
+| Wrapper Path (copied verbatim from §4.6.1 col 2) | Question: "If we swapped this dependency for its top competitor, how many files OUTSIDE this wrapper path would we need to touch?" | If Answer > 10 files OR > 2 packages → Annotate as TECHNICAL COUPLING in §2 SCOPE with 1-line mitigation plan here or N/A |
+|---|---|---|
+| `<example: packages/platform/server/integrations/stripe/**>` | `<example: 3 files — adapter pattern already abstracts it>` | `N/A` |
+| ... | ... | ... or `TECHNICAL COUPLING: migrate remaining inline SDK calls inside wrapper before B-3 ships.` |
+
+#### §4.7 ASSERTIVE PROGRAMMING — INVARIANTS AND IMPOSSIBLE STATES (CANONICAL #3 — Non-negotiable if B_COUNT ≥ 3)
+Header: `### §4.7 ASSERTIVE PROGRAMMING: INVARIANTS AND IMPOSSIBLE STATES (CANONICAL #3 DbC, V20)`
+
+> **CANONICAL #3 (CHE_RULES.md §Principle #3):** Distinction ASSERTION vs ERROR is mandatory. Assertions CRASH immediately (dead programs tell no lies). Error-returns handle expected runtime contingencies (covered by AB-IDs).
+
+Table required IF AND ONLY IF `B_COUNT ≥ 3`. Minimum rows = `ceil(B_COUNT / 3)`.
+| Assertion ID | Impossible Condition (1 technical sentence — NEVER happens in correct code) | Where Enforced (absolute path + symbol name) | Crash vs Error (MUST be literal "CRASH" — if Error, remove this row from here and handle via AB-ID in §4.3 instead) |
+|---|---|---|---|
+| **A-1** | `<example: auth_user_id is empty string or null on POST /api/refunds route — request has valid session cookie so session.userId MUST exist>` | `<example: packages/platform/server/middleware/requireAuth.ts invariant(session?.user?.id, "session.user.id missing on authenticated route")` | **CRASH** |
+| A-2 | ... | ... | **CRASH** |
+
+#### §4.8 DRY KNOWLEDGE SINGLE SOURCE OF TRUTH (V21 — MANDATORY if B_COUNT ≥ 5)
+Header: `### §4.8 DRY KNOWLEDGE SINGLE-SOURCE (V21 — Single Authoritative Representation per Business Rule)`
+
+> **CANONICAL #1 pragmatic-programmer SKILL §DRY:** DRY is about KNOWLEDGE DUPLICATION, not code syntax similarity. Each business rule = EXACTLY 1 authoritative representation.
+
+Required IF `B_COUNT ≥ 5`. One row per UNIQUE non-trivial business rule that appears in ≥ 2 B-ID Then-clauses or ≥ 1 AB-ID.
+| Business Rule Text (1 sentence, plain English — e.g. "UK VAT = 20% on ticket face value for events in England") | Authoritative Single-Source Absolute Path (the ONLY file/module/DB-table-column/constant that defines this rule — exactly 1 path) | List of Other Locations That Reference/Consume This Rule (consumers are OK — duplications = violation) | DRY Status (PASS / DRY_VIOLATION + mitigation plan) |
+|---|---|---|---|
+| `<example: Booking Service Fee = 7.5% of face value, capped at 25 GBP per ticket>` | `<example: packages/platform/server/constants/fees.ts SERVICE_FEE_RATE + SERVICE_FEE_CAP_GBP>` | `<1. route handler reads it; 2. Admin dashboard pricing page reads it; 3. Stripe price calculation reads it>` | **PASS** (1 source, 3 consumers — no duplication) |
+| ... | ... | ... | ... or **DRY_VIOLATION: fee percentage hardcoded in admin pricing page + DB column + Stripe handler. Mitigation: move sole authority to packages/platform/server/pricing engine before merge.** |
+
+#### §4.9 ORTHOGONALITY COUPLING MAP (V22 — MANDATORY if distinct_top_level_packages_touched ≥ 3)
+Header: `### §4.9 ORTHOGONALITY COUPLING MAP (V22 — Can we swap each layer in under a week? Forking Road per Layer)`
+
+Required IF `COUNT(DISTINCT top-level packages touched from §2 CAN TOUCH) ≥ 3`. One row per distinct top-level package / architectural layer.
+| Top-Level Package / Architectural Layer (e.g. `packages/db`, `pages/`, `app/api/`, `packages/auth`) | Question: "If we swapped this package's underlying framework/technology for its most popular competitor (TypeORM → Prisma, Next Pages → App Router, Auth.js → Clerk, etc), how many files OUTSIDE this package would need changes?" | If Answer > 10 → Annotate COUPLING_RISK in §2 External services section. | Orthogonality Status (OK / COUPLING_RISK + mitigation plan) |
+|---|---|---|---|
+| `<example: packages/db>` | `<example: ~22 files — business logic queries repo methods directly instead of interfaces>` | Yes | **COUPLING_RISK: introduce Service interfaces via DI before scope expands to B-7+** |
+| ... | ... | ... | **OK** |
 
 ### §5 VERIFICATION MATRIX (Bilateral B-ID ↔ Test File ↔ Evidence)
 Header: `## §5 VERIFICATION MATRIX (Bilateral — B → Test → B)`
 
-> **Purpose:** TODO checklist vivo que o che atualiza AUTOMATICAMENTE em cada loop do SM/Developer/QA.
-> **Ancoras bilateral:** (1) Spec §4 B-ID → (2) Comentário `// @ac B-X` 1ª linha dentro do `it()`/`test()` → (3) Resultado/evidence sha256.
-> **Scope-checker CHECK2 (ONDA2 próximo bloco) valida o reverso: (2) → (1) + (3).**
+> **Purpose:** Living TODO checklist that che updates AUTOMATICALLY in each SM/Developer/QA loop.
+> **Bilateral anchors:** (1) Spec §4 B-ID → (2) `// @ac B-X` comment 1st line inside `it()`/`test()` → (3) Resultado/evidence sha256.
+> **Scope-checker CHECK2 validates the reverse: (2) → (1) + (3).**
 
-Tabela Markdown OBRIGATÓRIA (B-IDs first, depois AB-IDs abaixo):
-| Anchor (B or AB) | Status (Planned|Written|Passed|Failed|Skipped) | Test file ABSOLUTE PATH (real path dentro worktree bound) | Evidence sha256 (hash stdout/err ou screenshot png hash) | QA Owner Assigned | Notes |
-|---|---|---|---|---|---|
+MANDATORY Markdown table (B-IDs first, then AB-IDs below):
+| Anchor (B or AB) | Status (Planned|Written|Passed|Failed|Skipped) | Test file ABSOLUTE PATH (real path inside bound worktree) | Evidence sha256 (stdout/err hash or screenshot png hash) | QA Owner Assigned | Notes |
+|---|---|---|---|---|---|---|
 | B-1 | Planned | `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts` L:78-111 | | Developer (SM) | // @ac B-3 | @ticket FLO-513 anchor |
 | B-2 | Planned | ... | ... | ... | ... |
-| AB-1 | Planned | `packages/platform/server/__tests__/integration/refundIdempotency.integ.test.ts` | | QA | Double click — Playwright extra step após integ |
+| AB-1 | Planned | `packages/platform/server/__tests__/integration/refundIdempotency.integ.test.ts` | | QA | Double click — Playwright extra step after integ |
 | AB-2 | ... | ... | ... | ... | ... |
 
-Atualização AUTOMÁTICA desta matriz EM CADA LOOP:
-- Developer termina task → atualiza `Status=Written` + `Test file path`.
-- QA run → atualiza `Status=Passed|Failed|Skipped` + append Evidence SHA256 (gerar via `sha256sum stdout.log | cut -d' ' -f1`).
-- Failed → nova linha Notes "Reproduce: command X".
-- **G5 Regression Location (linha Notes OBRIGATÓRIA para testes regression/repro lock):**
-  Notes também deve indicar explicitamente **LOCATION do arquivo regression:
-  - DEFAULT: ✅ `[colocated na pasta da feature / domínio — @ticket FLO-123` (regra padrão).
-  - EXCEÇÃO (apenas se cross-cutting ≥4 domínios / infra pura): ⚠️ `[tests/regression/FLO-123--refund-idempotency.test.ts] — EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER decisions.log entry: auth+billing+notification+db ≥4 domínios — justificativa 1-linha`. Se o teste for o testes está em tests/regression com ticket ID no nome arquivo SEM entrada Notes vazia → scope-checker CHECK2 bilateral marca warning SCOPE_score -2 penalty).
+AUTOMATIC update of this matrix IN EACH LOOP:
+- Developer finishes task → updates `Status=Written` + `Test file path`.
+- QA run → updates `Status=Passed|Failed|Skipped` + append Evidence SHA256 (generate via `sha256sum stdout.log | cut -d' ' -f1`).
+- Failed → new Notes line "Reproduce: command X".
+- **G5 Regression Location (MANDATORY Notes line for regression/repro lock tests):**
+  Notes must also explicitly indicate **regression file LOCATION**:
+  - DEFAULT: ✅ `[colocated in feature / domain folder — @ticket FLO-123]` (standard rule).
+  - EXCEPTION (only if cross-cutting ≥4 domains / pure infra): ⚠️ `[tests/regression/FLO-123--refund-idempotency.test.ts] — EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER decisions.log entry: auth+billing+notification+db ≥4 domains — 1-line justification`. If test is in tests/regression with ticket ID in filename WITHOUT non-empty Notes entry → scope-checker CHECK2 bilateral marks warning SCOPE_score -2 penalty).
 
-### §6 MANUAL SMOKE TEST PLAN (Staging + Prod HUMAN — OBRIGATÓRIO SEMPRE)
+### §6 MANUAL SMOKE TEST PLAN (Staging + Prod HUMAN — ALWAYS MANDATORY)
 Header: `## §6 MANUAL SMOKE TEST PLAN (HUMAN — Staging + Prod)`
 
-> **User requirement VERBATIM: "Além dos testes e2e, devemos ter um plano de testes manual ... também deve ser pensado desde o inicio o teste manual quando for pra produção."**
-> Mínimo 3 passos STAGING + 2 passos PROD.
+> **User requirement VERBATIM: "In addition to e2e tests, we should have a manual test plan ... manual testing should also be thought of from the beginning when going to production."**
+> Minimum 3 STAGING steps + 2 PROD steps.
 
-#### §6.1 Ambiente STAGING (post-deploy pre-PR merge — 3..8 steps)
-| Step # | Role (Creator|Attendee|Admin|Staff Scanner) | Ação Manual Concreta 1-clique / 1-tela | Expected Result (literal, public observável — matches Then de B-ID correspondente) | Anchor B-ID |
-|---|---|---|---|---|
-| S1 | Creator | Login staging; navegar Bookings → linha BK-123 → botão Refund → modal → Confirm. | (1) Toast verde "Refund RF-456 created"; (2) Status da linha → "Refunded"; (3) Email staging inbox → assunto "Your refund is on its way". | B-1 |
+#### §6.1 STAGING Environment (post-deploy pre-PR merge — 3..8 steps)
+| Step # | Role (Creator|Attendee|Admin|Staff Scanner) | Concrete Manual Action 1-click / 1-screen | Expected Result (literal, public observable — matches corresponding B-ID Then) | Anchor B-ID |
+|---|---|---|---|---|---|
+| S1 | Creator | Login staging; navigate Bookings → BK-123 row → Refund button → modal → Confirm. | (1) Green toast "Refund RF-456 created"; (2) Row status → "Refunded"; (3) Staging email inbox → subject "Your refund is on its way". | B-1 |
 | S2 | ... | ... | ... | B-2 |
-| S3 | Creator | Repetir Step S1 DUPLO CLIQUE rápido no botão Confirm | (1) Apenas 1 toast; (2) 1 entrada Refunds history; (3) Stripe dashboard staging → 1 refund only. | AB-1 |
+| S3 | Creator | Repeat Step S1 quick DOUBLE CLICK on Confirm button | (1) Only 1 toast; (2) 1 Refunds history entry; (3) Staging Stripe dashboard → 1 refund only. | AB-1 |
 
-#### §6.2 Ambiente PROD (post deploy live — 2..5 steps MÍNIMO NON-DESTRUCTIVE)
-| Step # | Role | Ação Manual SEGURA (NÃO tocar dado produção real — usar dummy canary event se possível) | Expected Result Canary | Anchor B-ID |
+#### §6.2 PROD Environment (post deploy live — 2..5 steps MINIMUM NON-DESTRUCTIVE)
+| Step # | Role | SAFE Manual Action (DO NOT touch real production data — use dummy canary event if possible) | Canary Expected Result | Anchor B-ID |
 |---|---|---|---|---|
-| P1 | Admin | Acessar `/admin/health` → aba "Refund health check" (criar se não existir) → Executar canary refund de 0.01 GBP em sandbox connected account CA-TEST-ONLY. | Canary result: Stripe reverse_transfer=true; response 200; DB canary_refund_audit table 1 row. | B-1 |
-| P2 | Admin | Visualizar Logs produção últimos 15 min → filtro `service=refund` | Nenhum ERROR / stacktrace após deploy. | B-4 |
+| P1 | Admin | Access `/admin/health` → "Refund health check" tab (create if none) → Run canary refund of 0.01 GBP in sandbox connected account CA-TEST-ONLY. | Canary result: Stripe reverse_transfer=true; response 200; DB canary_refund_audit table 1 row. | B-1 |
+| P2 | Admin | View production Logs last 15 min → filter `service=refund` | No ERROR / stacktrace after deploy. | B-4 |
 
-#### §6.3 UI ONLY Extra Steps (se Playwright marcado em qualquer B-ID OU risk≥medium)
-→ Se gatilho falso → escrever: `> ⚠️ Skipped: nenhum behavior com Playwright layer AND risk=low`.
-→ Se gatilho verdadeiro → adicionar tabela steps UI cross-browser (Chrome/Firefox/Safari iOS 17):
-| Step | Device/Browser | Ação | Expected UI visual | Anchor |
+#### §6.3 UI ONLY Extra Steps (if Playwright marked in any B-ID OU risk≥medium)
+→ If false trigger → write: `> ⚠️ Skipped: no behaviour with Playwright layer AND risk=low`.
+→ If true trigger → add cross-browser UI steps table (Chrome/Firefox/Safari iOS 17):
+| Step | Device/Browser | Action | Expected visual UI | Anchor |
 |---|---|---|---|---|
-| UI-1 | Chrome Desktop 128, 125% zoom | 3G throttled. Confirm Refund → loading spinner → toast. | Spinner aparece ≥500ms ≤2s. Toast verde text match literal. Sem layout shift. | B-1 loading. |
+| UI-1 | Chrome Desktop 128, 125% zoom | 3G throttled. Confirm Refund → loading spinner → toast. | Spinner appears ≥500ms ≤2s. Green toast text match literal. No layout shift. | B-1 loading. |
 
 ### §7 IMPLEMENTATION HINTS (opt-in, only if re-use exists or gotchas — 2..5 bullets MAX)
 Header: `## §7 IMPLEMENTATION HINTS (Optional — reference existing code only)`
-- Bullet 1: Reference existing function/class/commit hash or existing pattern from graphify-out community hub ou `packages/platform/server/providers/stripe/StripeClient.ts createRefund` params.
-- Bullet 2: Gotcha runtime. Ex: "Vercel edge runtime: NÃO usar setImmediate para envio email; usar queues/await direto ou webhook."
-- NÃO adicionar implementação sketch aqui → seções §4 SbE já definem comportamento público. Isso é só acelerador de contexto.
-
+- Bullet 1: Reference existing function/class/commit hash or existing pattern from graphify-out community hub or `packages/platform/server/providers/stripe/StripeClient.ts createRefund` params.
+- Bullet 2: Runtime gotcha. E.g. "Vercel edge runtime: DO NOT use setImmediate for email sending; use queues/await directly or webhook."
+- DO NOT add implementation sketch here → §4 SbE sections already define public behaviour. This is only a context accelerator.
 
 ---
 
-## §4 VALIDATION PASS (auto-run on draft — SbE rules V9..V15 NEW)
+## §4 VALIDATION PASS (auto-run on draft — NEW SbE rules V9..V15)
 
 Reject draft and loop back to §2 source if ANY check fails. Run in order.
 
@@ -345,26 +423,63 @@ Reject draft and loop back to §2 source if ANY check fails. Run in order.
 3. **V3** §1 WHY bullets ≤ 5.
 4. **V4** §2 CAN TOUCH count ≤ 10 literal files or glob entries.
 5. **V5** §3 ≥3 POSTconditions, ≥1 INVARIANT.
-6. **V6** (legacy supercedido por V9-V15 mas ainda run para specs antigas sem SbE) → se spec NÃO contém header `## §4 SPECIFICATION BY EXAMPLE` ainda: §4 ACs ≥3 MUST, cada bullet contém GIVEN/WHEN/THEN/TEST literal. Else SKIP this check gracefully (SbE drafts NÃO usam mais MoSCoW ACs).
-7. **V7** (legacy, skip se SbE draft) §5 rollback trigger = exactly 1 trigger sentence, non-empty.
-8. **V8** (optional, always run se domain preenchido diferente default) → `domain:` MUST estar no EXATO 7-slugs enum canônico: `engineering | product | ux | devops | copywriting | social | seo-analytics`. Se typo/fora enum → **REJECT draft with clear msg**: "Campo `domain: <valor_invalido>` inválido. Valores aceitos: engineering | product | ux | devops | copywriting | social | seo-analytics. Default omissão = engineering (retrocompat). Corrija frontmatter ou remova o campo. Default é engineering."
+6. **V6** (legacy superseded by V9-V15 but still run for old specs without SbE) → if spec DOES NOT yet contain header `## §4 SPECIFICATION BY EXAMPLE`: §4 ACs ≥3 MUST, each bullet contains GIVEN/WHEN/THEN/TEST literal. Else SKIP this check gracefully (SbE drafts NO longer use MoSCoW ACs).
+7. **V7** (legacy, skip if SbE draft) §5 rollback trigger = exactly 1 trigger sentence, non-empty.
+8. **V8** (optional, always run if domain filled non-default) → `domain:` MUST be in EXACT 7-slugs canonical enum: `engineering | product | ux | devops | copywriting | social | seo-analytics`. If typo/outside enum → **REJECT draft with clear msg**: "Field `domain: <invalid_value>` invalid. Accepted values: engineering | product | ux | devops | copywriting | social | seo-analytics. Default omission = engineering (retrocompat). Fix frontmatter or remove the field. Default is engineering."
 
-### SbE MANDATORY checks (V9-V15 — run SOMENTE se header `## §4 SPECIFICATION BY EXAMPLE` existe no draft. Hoje = SEMPRE, porque SbE = default.)
-9.  **V9 B-IDs max 10:** Contar linhas na §4.2 POSITIVE BEHAVIOR TABLE cuja 1ª coluna começa exatamente com `B-` e tem dígitos após (`B-1`, `B-10`). `B_COUNT = COUNT`. Se `B_COUNT > 10` → REJECT: "Positive behaviors (B-IDs) = $B_COUNT. MÁXIMO permitido = 10. Reduza scope ou use gh-stack para 2 PRs independentes (ver engineering-contracts §15 gh-stack multi-PR reference)."
-10. **V10 Anti-behavior ratio min 33%:** Contar AB-IDs na §4.3 ANTI-BEHAVIOR TABLE → `AB_COUNT = COUNT`. Calcular `EXPECTED_AB_MIN = ceil(B_COUNT / 3)`. Se `AB_COUNT < EXPECTED_AB_MIN` → REJECT: "Anti-behaviors (AB-IDs) faltantes. B_COUNT=$B_COUNT, AB_COUNT=$AB_COUNT, MÍNIMO ESPERADO = ceil($B_COUNT/3) = $EXPECTED_AB_MIN. Adicione pelo menos ($EXPECTED_AB_MIN - $AB_COUNT) AB- negativos (race/edge/inválido/ataque) na tabela §4.3."
-11. **V11 Cada B-ID tem ≥1 Test Layer marcado ✅:** Parse cada linha B- na tabela §4.2 coluna "Test Layers" — se NÃO contém caractere literal `✅` pelo menos 1 vez → REJECT: "B-XX coluna Test Layers não tem NENHUMA camada marcada ✅ (Unit/Integ/API-E2E/Playwright/Manual). Marque pelo menos 1 camada CASO-A-CASO (honeycomb pyramid; não obrigue todas)."
-12. **V12 UI Selector Contract regex validation:** Para cada linha B-ID onde coluna "Test Layers" CONTÉM literal `Playwright` → extrair ids da coluna "UI Selector Contract". Cada data-testid DEVE bater REGEX canônico Category 8 G8.3: `^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*(--[a-z0-9][a-z0-9-]*)?$`. Se NÃO bater → REJECT: "B-XX data-testid=`<id>` fora convenção 3-partes `<domain>__<component>__<action>[--unique-suffix]`. Regex esperado: `^[a-z0-9-]+__[a-z0-9-]+__[a-z0-9-]+(--[a-z0-9-]+)?$`."
+### SbE MANDATORY checks (V9-V15 — run ONLY if header `## §4 SPECIFICATION BY EXAMPLE` exists in draft. Today = ALWAYS, as SbE = default.)
+9.  **V9 B-IDs max 10:** Count lines in §4.2 POSITIVE BEHAVIOR TABLE whose 1st column starts exactly with `B-` and has digits after (`B-1`, `B-10`). `B_COUNT = COUNT`. If `B_COUNT > 10` → REJECT: "Positive behaviours (B-IDs) = $B_COUNT. MAXIMUM allowed = 10. Reduce scope or use gh-stack for 2 independent PRs (see engineering-contracts §15 gh-stack multi-PR reference)."
+10. **V10 Anti-behaviour ratio min 33%:** Count AB-IDs in §4.3 ANTI-BEHAVIOR TABLE → `AB_COUNT = COUNT`. Calculate `EXPECTED_AB_MIN = ceil(B_COUNT / 3)`. If `AB_COUNT < EXPECTED_AB_MIN` → REJECT: "Missing anti-behaviours (AB-IDs). B_COUNT=$B_COUNT, AB_COUNT=$AB_COUNT, MINIMUM EXPECTED = ceil($B_COUNT/3) = $EXPECTED_AB_MIN. Add at least ($EXPECTED_AB_MIN - $AB_COUNT) negative AB- (race/edge/invalid/attack) in table §4.3."
+11. **V11 Each B-ID has ≥1 Test Layer marked ✅:** Parse each B- line in table §4.2 "Test Layers" column — if DOES NOT contain literal `✅` character at least once → REJECT: "B-XX Test Layers column has NO layer marked ✅ (Unit/Integ/API-E2E/Playwright/Manual). Mark at least 1 layer CASE-BY-CASE (honeycomb pyramid; do not mandate all)."
+12. **V12 UI Selector Contract regex validation:** For each B-ID line where "Test Layers" column CONTAINS `Playwright` literal → extract ids from "UI Selector Contract" column. Each data-testid MUST match canonical Category 8 G8.3 REGEX: `^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*(--[a-z0-9][a-z0-9-]*)?$`. If NOT matching → REJECT: "B-XX data-testid=`<id>` outside 3-part convention `<domain>__<component>__<action>[--unique-suffix]`. Expected regex: `^[a-z0-9-]+__[a-z0-9-]+__[a-z0-9-]+(--[a-z0-9-]+)?$`."
 13. **V13 Mermaid diagrams trigger compliance:**
-    a. Calcular GATILHO_MERMAID = `(B_COUNT >= 8) OR (risk_level == "medium") OR (risk_level == "high") OR (mermaid_required == true) OR (atores_publicos_distintos >= 3)`.
-    b. Se GATILHO_MERMAID == TRUE → validar que o draft CONTÉM os 2 headings exatos: `### §4.4.1 sequenceDiagram` E `### §4.4.2 flowchart TD`. Se faltar QUALQUER um → REJECT: "Gatilho Mermaid disparado (B=$B_COUNT, risk=$risk_level). §4.4.1 sequenceDiagram e §4.4.2 flowchart TD AMBOS obrigatórios. Falta X."
-    c. Calcular GATILHO_ERD = `(erd_required == true) OR (nova_entidade_DB detectada pela palavra CREATE TABLE/ TypeORM Entity() nova em §2 CAN CREATE) OR (campos_novos >= 3 palavras UNIQUE|CHECK|UK em §2 SCOPE)`.
-    d. Se GATILHO_ERD == TRUE → validar que o draft CONTÉM heading exato `### §4.4.3 erDiagram`. Se faltar → REJECT: "Gatilho ERD disparado (nova entidade DB ou alteração FK/cardinalidade ou ≥3 campos constraints). §4.4.3 erDiagram obrigatório."
-    e. (Anti-crash parser Mermaid) Se §4.4 contiver mermaid code blocks: validar que NENHUM nó contém shapes stadium `[/` ou `([` ou `\]/` ou `)]`. Se tiver stadium shape → WARNING (não fatal mas recomenda correção antes de Approved): "Warning: Mermaid stadium shapes ( [/label/] ou ([label]) ) colidem com chars ()/ no label texto → parser crash 10.x+ Mermaid. Trocar por rectangle quoted `ID[\"label\"]`."
-14. **V14 §6 Manual Smoke Plan staging minimum 3 steps e prod minimum 2 steps:** Contar linhas da tabela §6.1 Staging coluna Step # com S-1,S-2,S-3 → se `< 3 passos` → REJECT: "Manual Smoke Plan STAGING (§6.1) tem $N passos. MÍNIMO 3 passos obrigatórios." Contar passos §6.2 Prod P-1,P-2 → se `< 2 passos` → REJECT: "Manual Smoke Plan PROD (§6.2) tem $N passos. MÍNIMO 2 passos obrigatórios NON-DESTRUCTIVE."
-15. **V15 Frontmatter counters match actual tables:** Se b_count ou ab_count estão preenchidos no YAML (≠ 0 ou empty) → validar `frontmatter.b_count == B_COUNT real da tabela §4.2` AND `frontmatter.ab_count == AB_COUNT real da tabela §4.3`. Se divergir → WARNING não fatal: "Warning: frontmatter.b_count=$front ab_count=$front != tabela real B=$realB AB=$realAB. Auto-fix before Approved."
+    a. Calculate MERMAID_TRIGGER = `(B_COUNT >= 8) OR (risk_level == "medium") OR (risk_level == "high") OR (mermaid_required == true) OR (distinct_public_actors >= 3)`.
+    b. If MERMAID_TRIGGER == TRUE → validate that draft CONTAINS 2 exact headings: `### §4.4.1 sequenceDiagram` AND `### §4.4.2 flowchart TD`. If ANY missing → REJECT: "Mermaid trigger fired (B=$B_COUNT, risk=$risk_level). §4.4.1 sequenceDiagram and §4.4.2 flowchart TD BOTH mandatory. X missing."
+    c. Calculate ERD_TRIGGER = `(erd_required == true) OR (new_DB_entity detected by CREATE TABLE word / new TypeORM Entity() in §2 CAN CREATE) OR (new_fields >= 3 UNIQUE|CHECK|UK words in §2 SCOPE)`.
+    d. If ERD_TRIGGER == TRUE → validate that draft CONTAINS exact heading `### §4.4.3 erDiagram`. If missing → REJECT: "ERD trigger fired (new DB entity or FK/cardinality change or ≥3 field constraints). §4.4.3 erDiagram mandatory."
+    e. (Anti-crash Mermaid parser) If §4.4 contains mermaid code blocks: validate that NO node contains stadium shapes `[/` or `([` or `\]/` or `)]`. If stadium shape present → WARNING (non-fatal but correction recommended before Approved): "Warning: Mermaid stadium shapes ( [/label/] or ([label]) ) collide with ()/ chars in label text → Mermaid 10.x+ parser crash. Replace with quoted rectangle `ID["label"]`."
+14. **V14 §6 Manual Smoke Plan staging minimum 3 steps and prod minimum 2 steps:** Count §6.1 Staging table lines in Step # column with S-1,S-2,S-3 → if `< 3 steps` → REJECT: "Manual Smoke Plan STAGING (§6.1) has $N steps. MINIMUM 3 mandatory steps." Count §6.2 Prod P-1,P-2 steps → if `< 2 steps` → REJECT: "Manual Smoke Plan PROD (§6.2) has $N steps. MINIMUM 2 NON-DESTRUCTIVE mandatory steps."
+15. **V15 Frontmatter counters match actual tables:** If b_count or ab_count are filled in YAML (≠ 0 or empty) → validate `frontmatter.b_count == real B_COUNT of table §4.2` AND `frontmatter.ab_count == real AB_COUNT of table §4.3`. If diverging → non-fatal WARNING: "Warning: frontmatter.b_count=$front ab_count=$front != real table B=$realB AB=$realAB. Auto-fix before Approved."
 
-### Cross-ref scope-checker CHECK2 bilateral (ONDA2 próximo bloco)
-When this VALIDATION PASS runs GREEN (all pass), the che also prints a 1-line footer:
+16. **V16 Vertical Slice F0 Mandatory (CANONICAL #0):** (runs ONLY if `frontmatter.vertical_slice_required == true`) Parse table under header `### §4.5 VERTICAL SLICES`. Fail conditions → REJECT with structured fix offer:
+    a. **Missing table or empty:** Header `### §4.5 VERTICAL SLICES` not found OR table has 0 data rows. Msg: "§4.5 VERTICAL SLICES table missing or empty. CANONICAL #0 requires at minimum 1 row = **F0 Tracer Bullet**. Fix: (A) Auto-insert F0 template now (B) Declare EXPLICIT_OVERRIDE_HORIZONTAL_PLAN in §2 SCOPE with 1-line justification."
+    b. **No F0 row:** Table has rows but none whose Slice ID column = literal `F0` or `**F0**`. Msg: "§4.5 table has no F0 row. First slice MUST be F0 (thinnest possible complete end-to-end path). Add F0 as row 1."
+    c. **F0 Layers Touched < 2:** F0 row "Layers / Files TOUCHED" column — split by separator ` · `, extract distinct top-level folder/domain prefixes (first path segment before `/` or word in parentheses). Distinct count < 2 → REJECT: "F0 Tracer is NOT a vertical slice — distinct architectural layers touched=$N < 2. Add missing layer (e.g. if only models listed → add route + page, or declare override)."
+    d. **F0 B-IDs count 0:** "B-IDs / AB-IDs Covered" column of F0 row has no B-N or AB-N literal → REJECT: "F0 Tracer must cover at minimum 1 positive B-ID from §4.2. Cover B-1 (smallest behaviour) in F0."
+    e. **F0 DONE criterion empty or weasel:** Column 6 (DONE) is empty OR contains banned words `correctly|as expected|properly|works|ok` case-insensitive → REJECT: "F0 DONE criterion is missing or uses weasel words. Write 1 single PUBLICLY OBSERVABLE sentence with literal values (HTTP codes, UI text, DB row count, observable side effects). Same rule as §4.2 Then column."
+    If ALL a-e pass → auto-set frontmatter `tracer_f0_defined: true` and proceed.
+
+17. **V17 Horizontal Plan Detector (CANONICAL #0 Anti-pattern):** Parse: (i) §4.5 VERTICAL SLICES table rows (after header), (ii) §2 CAN TOUCH / CAN CREATE lists. Compute for each slice row: if "Layers / Files TOUCHED" column lists only 1 top-level folder (all paths share same first segment) → mark slice H=1. Consecutive H=1 slice count = H_CONSECUTIVE.
+    - If H_CONSECUTIVE ≥ 3 AND NO slice has Layers ≥ 2 → pattern = HORIZONTAL.
+    - Additionally: if §2 CAN TOUCH lists ONLY files from a single top-level folder (only `packages/db/**` OR only `pages/**` etc) AND estimated_files_max > 5 → pattern = HORIZONTAL.
+    HORIZONTAL detected → ONLY permit if:
+    1. The literal string `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN` appears VERBATIM anywhere in §2 SCOPE (Cannot Touch, External services, or a dedicated override bullet), AND
+    2. The literal is immediately followed by a 1-line colon-prefixed justification of ≤ 120 chars. E.g. `- EXPLICIT_OVERRIDE_HORIZONTAL_PLAN: schema-only migration for 12 tables — no UI/API change possible`.
+    If conditions (1)+(2) met → V17 PASS, append decision.log entry with the justification. If ANY condition missing → REJECT with: "Horizontal slice pattern detected (H_CONSECUTIVE=$N single-layer slices or CAN TOUCH=$single-folder only). Default strategy = VERTICAL (F0 + F1/FN). Options: (A) Add a vertical F0 + re-order slices so ≥ 2 layers per row (B) Paste literal `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN: <1-line reason>` as a new bullet in §2 SCOPE Cannot Touch or External services section → decision.log will be appended by che-act SM §0.5 pre-gate."
+
+18. **V19 Reversibility Declarations (CANONICAL #1 — 3 sub-tables):** Compute TRIGGER_V19 = `(estimated_files_max >= 5) OR (external_deps_count_in_§2 >= 1)`. If TRIGGER_V19 = false → SKIP V19 silently. Else validate 3 sub-tables:
+    a. **V19a Wrapper Boundary**: Header `§4.6.1` exists. Row count = `external_deps_count` (1 row per dep). Column 2 `Authoritative Wrapper Path` must contain EXACTLY 1 single glob/path (no `,` `;` `|` multiple separators). If any violation → REJECT: "§4.6.1 Wrapper Boundary table (V19a) missing or row count mismatch ($N rows vs $M external deps listed in §2) or wrapper path has multiple separators. Options: (A) Auto-insert empty wrapper table now (B) Add literal `EXPLICIT_OVERRIDE_REVERSIBILITY: <1-line reason>` as a new §2 SCOPE bullet (for 100% internal scopes with zero external deps)."
+    b. **V19b Rollback Flags**: Header `§4.6.2` exists. If ANY B-ID Then column contains keywords `checkout|payment|refund|auth|deploy|publish|delete|critical` (regex insensitive) → table §4.6.2 MUST have ≥ 1 row. Each row's Rollback Time Estimate column MUST be ≤ 5 (parse integer, reject if `>5` or non-numeric). Violation → REJECT with msg + list of critical B-IDs detected.
+    c. **V19c Forking Road**: Header `§4.6.3` exists. Row count = exactly count of unique wrapper paths from §4.6.1.
+
+19. **V20 Assertive Programming / Invariants (CANONICAL #3 DbC):** Compute TRIGGER_V20 = `(B_COUNT >= 3)`. If TRIGGER_V20 = false → SKIP silently. Else:
+    - Header `§4.7` table exists.
+    - `A_COUNT = number of rows with Assertion ID A-<N>`.
+    - Minimum rows required = `ceil(B_COUNT / 3)`.
+    - For each row, column 4 (Crash vs Error) MUST contain literal word `CRASH` (case-insensitive match), NOT word `Error`.
+    - If `A_COUNT < ceil(B/3)` OR missing header OR ≥1 row contains `Error` → REJECT: "§4.7 Assertive Programming invariants table (V20) missing or too few rows (A=$A_COUNT, MIN=ceil($B_COUNT/3)=$MIN) or rows marked Error instead of CRASH. Error contingencies belong in §4.3 Anti-behaviour table as AB-IDs; §4.7 is only for IMPOSSIBLE conditions that MUST crash immediately."
+
+20. **V21 DRY Knowledge Single-Source (pragmatic-programmer #1 DRY):** TRIGGER_V21 = `(B_COUNT >= 5)`. If false → SKIP silently. Else:
+    - Header `§4.8` table exists with ≥ 2 rows.
+    - Each row column 4 (DRY Status) must say PASS or DRY_VIOLATION: followed by a non-empty mitigation plan sentence.
+    - No duplicate Business Rule Text in column 1.
+
+21. **V22 Orthogonality Coupling Map (pragmatic-programmer #2 Orthogonality):** TRIGGER_V22 = `(COUNT(DISTINCT top-level packages in §2 CAN TOUCH paths) >= 3)`. If false → SKIP silently. Else:
+    - Header `§4.9` table exists with ≥ 3 rows.
+    - Each row column 4 = either `OK` or starts with `COUPLING_RISK:` followed by non-empty mitigation.
+
+### Bilateral cross-ref scope-checker CHECK2 (ONDA2 next block)
+When this VALIDATION PASS runs GREEN (all pass), che also prints a 1-line footer:
 > `SbE spec valid: B=$B_COUNT AB=$AB_COUNT AB_ratio=$RATIO% Mermaid=$TRIG ERD=$ERD_TRIG.`
 This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bilateral B-ID ↔ test file cross-validation.
 
@@ -387,32 +502,32 @@ This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bila
 
 ---
 
-## §6 SAVE (atomic write via contrato helpers)
+## §6 SAVE (atomic write via contract helpers)
 
-1. **Final sanitize slug:** `slug = frontmatter.spec_id` sanitized `[^a-zA-Z0-9_-] → -`.
-2. **Construir path ÚNICO na RAIZ do workspace (NUNCA manual):**
+1. **Final sanitise slug:** `slug = frontmatter.spec_id` sanitised `[^a-zA-Z0-9_-] → -`.
+2. **Build UNIQUE path at workspace ROOT (NEVER manual):**
    ```bash
-   # related_id = "" para salvar na raiz de $CHE_WORKSPACE_SHARED/specs/
-   # scope = workspace → DURÁVEL
+   # related_id = "" to save at root of $CHE_WORKSPACE_SHARED/specs/
+   # scope = workspace → DURABLE
    SPEC_FINAL_PATH="$(che_output_path "spec" "spec" "${slug}" "workspace" "md" "")"
    ```
-   Resultado esperado: `$CHE_WORKSPACE_SHARED/specs/spec_<slug>.md`
-   → Note: O SM /che-act busca por `$CHE_WORKSPACE_SHARED/spec_*.md`. Vamos alinhar para que o spec seja salvo diretamente no padrão esperado pelo gate de execução.
-3. **Check existing overwrite:** If file already exists AND status in existing is Approved → ask "Overwrite Approved spec? Yes/No" before writing. Yes = overwrite. No = append suffix `-v2`, `-v3` to slug until unused.
-4. **Escrever EXCLUSIVAMENTE via atomic write helper:**
+   Expected result: `$CHE_WORKSPACE_SHARED/specs/spec_<slug>.md`
+   → Note: SM /che-act searches for `$CHE_WORKSPACE_SHARED/spec_*.md`. We will align so the spec is saved directly in the pattern expected by the execution gate.
+3. **Check existing overwrite:** If file already exists AND existing status is Approved → ask "Overwrite Approved spec? Yes/No" before writing. Yes = overwrite. No = append `-v2`, `-v3` suffix to slug until unused.
+4. **Write EXCLUSIVELY via atomic write helper:**
    ```bash
-   # Salva na raiz do workspace shared para ser visível ao /che-act
+   # Saves at shared workspace root to be visible to /che-act
    che_write_file_atomic "$CHE_WORKSPACE_SHARED/spec_${slug}.md" <<'SPEC_EOF'
    ---
-   # YAML frontmatter completo aqui
+   # Full YAML frontmatter here
    ---
-   # 7 seções do SPEC aqui
+   # 7 sections of SPEC here
    SPEC_EOF
    ```
-   (O helper já roda `che_assert_outside_worktree` automaticamente antes do write.)
-5. **Append decision entry via `che_append_decision_jsonl` (NÃO construa path nem formate JSON manualmente):**
+   (The helper already runs `che_assert_outside_worktree` automatically before writing.)
+5. **Append decision entry via `che_append_decision_jsonl` (DO NOT build path or format JSON manually):**
    ```bash
-   # o helper decisions já garante path fora worktree + atomic append
+   # decisions helper already ensures path outside worktree + atomic append
    che_append_decision_jsonl "SPEC" "${slug} ${status} saved. Approver=${approver}"
    ```
 

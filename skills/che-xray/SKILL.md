@@ -1,127 +1,129 @@
 ---
 name: "che-xray"
-description: "Onboarding raio-X de repositório NOVO. Detecta stack, linguagem, estrutura monorepo vs single, convenções de pastas, padrões de código, testes, CI, DB, serviços. Gera 12-seção project_profile.md persistido no registry global do projeto (Nível 1.5) e popula metade de architecture.md automaticamente via graphify. Usar PRIMEIRA VEZ que o che toca num repo. Idempotente: rerun para refresh."
+description: "X-ray onboarding for NEW repositories. Detects stack, language, monorepo vs single structure, folder conventions, code patterns, tests, CI, DB, and services. Generates a 12-section project_profile.md persisted in the global project registry (Level 1.5) and populates half of architecture.md automatically via graphify. Use the FIRST TIME che touches a repo. Idempotent: rerun for refresh."
 ---
 
-# Che X-Ray — Repo Onboarding Raio-X
+# Che X-Ray — Repo Onboarding X-Ray
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - Full engineering contracts (precedence 1-18, DbC, KISS, No Accidental Complexity, Ousterhout): `engineering-contracts` skill
-> - Path resolution + project registry Nível 1.5 helpers: `source "${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che_sessions_contract.sh"`
-> - Knowledge graph AST: `/che-graph refresh` (wrapper graphify CLI pipx: `graphifyy`)
-> - Complemento humano contexto produto: `/che-onboarding`
+> - Path resolution + project registry Level 1.5 helpers: `source "${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che_sessions_contract.sh"`
+> - Knowledge graph AST: `/che-graph refresh` (graphify CLI pipx wrapper: `graphifyy`)
+> - Human product context complement: `/che-onboarding`
+
+---
 
 ## 0. WHEN TO CALL
 
-**EXATAMENTE 1 VEZ por PROJETO (não por worktree, não por sessão):**
-- Primeira vez que o che encosta neste repositório (qualquer worktree)
-- Ou refresh explícito quando arquitetura mudar muito (ex: migrou monolito → monorepo, trocou framework)
+**EXACTLY ONCE per PROJECT (not per worktree, not per session):**
+- The first time che touches this repository (any worktree)
+- Or an explicit refresh when architecture changes significantly (e.g. migrated monolith → monorepo, changed framework)
 
-**NON-GOALS (não usa X-Ray):**
-- Não é task spec → use `/che-spec`
-- Não é contexto humano do produto → use `/che-onboarding`
-- Não é conhecimento em tempo real de diff → use `/che-diff`
+**NON-GOALS (do not use X-Ray for):**
+- Task spec → use `/che-spec`
+- Human product context → use `/che-onboarding`
+- Real-time diff knowledge → use `/che-diff`
 
 ---
 
-## 1. PREFLIGHT (obrigatório antes de qualquer scan)
+## 1. PREFLIGHT (Mandatory before any scan)
 
-Execute o script Python do X-Ray para resolver os caminhos seguros (fora da worktree):
+Execute the X-Ray Python script to resolve safe paths (outside worktree):
 
 ```bash
 python3 -m che_core.xray "$WORKTREE_ROOT" "$SESSION_ID"
 ```
 
-Capture as variáveis de ambiente que o script imprimir (ex: `XRAY_PROJECT_PROFILE_PATH`, `XRAY_ARCHITECTURE_PATH`, `GRAPHIFY_OK`).
+Capture the environment variables printed by the script (e.g. `XRAY_PROJECT_PROFILE_PATH`, `XRAY_ARCHITECTURE_PATH`, `GRAPHIFY_OK`).
 
-### 1.1 Escrevendo artefatos do registry (3 outputs)
+### 1.1 Writing registry artifacts (3 outputs)
 
-**NÃO FAÇA write manual `cat > arquivo` dentro worktree.** Use a tool `Write` para salvar os arquivos nos caminhos exatos (absolutos) retornados pelo preflight.
+**DO NOT perform manual `cat > file` write inside worktree.** Use the `Write` tool to save files to the exact (absolute) paths returned by preflight.
 
-Após gerar e salvar os arquivos, finalize a auditoria rodando:
+After generating and saving the files, finalise the audit by running:
 
 ```bash
-python3 -m che_core.xray "$WORKTREE_ROOT" "$SESSION_ID" --finalize --files-scanned <QTD>
+python3 -m che_core.xray "$WORKTREE_ROOT" "$SESSION_ID" --finalize --files-scanned <COUNT>
 ```
 
 ---
 
-## 2. 7-PASSO SCAN PIPELINE (ordem fixa)
+## 2. 7-STEP SCAN PIPELINE (Fixed order)
 
-### Passo 1 — Graphify (Obrigatório, ~15s)
+### Step 1 — Graphify (Mandatory, ~15s)
 ```
-/che-graph refresh          # gera Knowledge Graph no nível L2 do projeto (project/graphify/)
-/che-graph stats            # extrai contagem símbolos, linguagens, arquivos
+/che-graph refresh          # generates Knowledge Graph at project L2 level (project/graphify/)
+/che-graph stats            # extracts symbol counts, languages, files
 ```
-Extrai automaticamente do graph output (L2):
+Automatically extracts from graph output (L2):
 - entry points (Next.js apps, package.json main, server.ts, main.py)
 - data layer tables/entities/repositories
 - test framework detection (Vitest/Jest/Pytest)
-- dependency graph hubs (módulos mais importados)
+- dependency graph hubs (most imported modules)
 
-### Passo 2 — Fallback lightweight AST scan (se GRAPHIFY_OK=0)
-Alternativa sem graphify (grep + Glob heurísticas):
-- `*Glob **/*.{ts,tsx,py,rs,go,java,rb}` → top 3 extensões por contagem → linguagem primária
-- `Glob package.json  pyproject.toml  Cargo.toml  go.mod  pom.xml  build.gradle` → build system
-- `Glob docker-compose.yml  compose.yml  .env.example  docker/` → infra containers
-- `Glob .github/workflows/*  .gitlab-ci.yml  .circleci/*  nx.json  turbo.json` → CI/orquestrador
-- `Glob **/migrations/  **/prisma/schema.prisma  supabase/migrations/*` → DB layer
+### Step 2 — Fallback lightweight AST scan (if GRAPHIFY_OK=0)
+Alternative without graphify (grep + Glob heuristics):
+- `*Glob **/*.{ts,tsx,py,rs,go,java,rb}` → top 3 extensions by count → primary language
+- `Glob package.json pyproject.toml Cargo.toml go.mod pom.xml build.gradle` → build system
+- `Glob docker-compose.yml compose.yml .env.example docker/` → container infra
+- `Glob .github/workflows/* .gitlab-ci.yml .circleci/* nx.json turbo.json` → CI/orchestrator
+- `Glob **/migrations/ **/prisma/schema.prisma supabase/migrations/*` → DB layer
 
-### Passo 3 — Estrutura + monorepo detection
-Classifica em:
-- `SINGLE-REPO` (1 app): existe 1 único package.json na raiz
-- `PNPM-MONOREPO-WORKSPACES`: `pnpm-workspace.yaml` na raiz + `packages/`
+### Step 3 — Structure + monorepo detection
+Classifies as:
+- `SINGLE-REPO` (1 app): single package.json at root
+- `PNPM-MONOREPO-WORKSPACES`: `pnpm-workspace.yaml` at root + `packages/`
 - `NPM-MONOREPO-WORKSPACES`: root package.json `"workspaces": []`
-- `NX-MONOREPO`: `nx.json` na raiz
-- `TURBOREPO`: `turbo.json` na raiz
-- `POETRY/WORKSPACES` Python: `workspaces = true` em pyproject.toml
-- `UNKNOWN-CUSTOM` se múltiplos apps em pastas `apps/*/src`
+- `NX-MONOREPO`: `nx.json` at root
+- `TURBOREPO`: `turbo.json` at root
+- `POETRY/WORKSPACES` Python: `workspaces = true` in pyproject.toml
+- `UNKNOWN-CUSTOM` if multiple apps in `apps/*/src` folders
 
-Extrai:
-- Número de apps e packages
-- Nome de cada package (e escopo `@org/pkg` se tiver)
-- Convenção de pastas canônicas detectadas: `src/`, `app/`, `pages/`, `components/`, `services/`, `repositories/`, `lib/`, `db/`, `tests/`
+Extracts:
+- Number of apps and packages
+- Name of each package (and `@org/pkg` scope if present)
+- Detected canonical folder conventions: `src/`, `app/`, `pages/`, `components/`, `services/`, `repositories/`, `lib/`, `db/`, `tests/`
 
-### Passo 4 — Stack tecnológica (auto-detect)
-Preenche tabela stack 10 categorias:
-| Categoria | Auto-detect sources |
+### Step 4 — Tech Stack (auto-detect)
+Populates 10-category stack table:
+| Category | Auto-detect sources |
 |---|---|
-| Linguagem primária | % arquivos .ts/.py/.rs/.go + package.json engines |
-| Frontend framework | next/react/vue/angular/svelte em dependencies |
+| Primary language | % .ts/.py/.rs/.go files + package.json engines |
+| Frontend framework | next/react/vue/angular/svelte in dependencies |
 | Backend framework | nest/express/fastify/django/fastapi/actix/gin/spring |
 | Database driver | pg/postgres prisma typeorm sqlite mysql redis neo4j |
 | Auth provider | next-auth supabase-auth auth0 clerk jwt |
-| Payment (se houver) | stripe braintree paypal mercadopago |
+| Payment (if any) | stripe braintree paypal mercadopago |
 | Testing framework | vitest jest playwright cypress pytest pnpm test: |
 | Lint/format | biome eslint prettier ruff black gofmt |
 | CI/CD provider | .github → GitHub Actions; .gitlab → GitLab CI; railway.json → Railway; vercel.json → Vercel |
 | Deploy target | vercel.json → Vercel; railway.json → Railway; Dockerfile + k8s manifests → K8s; terraform → TF provider |
 
-### Passo 5 — Convenções de código + padrões
-Auto-detecta (heurísticas grep + glob):
-- **Import strategy**: `tsconfig.json` tem `paths:`? → `@/` alias; `moduleResolution:"bundler"`? → `exports` field
-- **Arquitetura 3 camadas?** Existem arquivos `*Router.* + *Service.* + *Repository.*` em ≥2 lugares → Router→Service→Repository pattern
-- **Colocação de testes**: `tests/` global OU `__tests__/` colocado OU `*.test.ts` lado a lado?
-- **Env var parsing**: existe `zod` + schema? → safe parsing validado; `.env.example` existe?
-- **Logger estruturado?** Procura por `pino`, `winston`, `bunyan`, `@flockr/logger` pattern de fields OTel
-- **Convenção commits**: `.husky/commit-msg`? → conventional; `cz`/commitlint config?
-- **i18n** (se houver): `next-intl`, `i18next` messages dirs detectados?
+### Step 5 — Code Conventions + Patterns
+Auto-detects (grep + glob heuristics):
+- **Import strategy**: `tsconfig.json` has `paths:`? → `@/` alias; `moduleResolution:"bundler"`? → `exports` field
+- **3-Layer Architecture?** `*Router.* + *Service.* + *Repository.*` files exist in ≥2 places → Router→Service→Repository pattern
+- **Test location**: global `tests/` OR co-located `__tests__/` OR side-by-side `*.test.ts`?
+- **Env var parsing**: `zod` + schema exists? → validated safe parsing; `.env.example` exists?
+- **Structured Logger?** Search for `pino`, `winston`, `bunyan`, `@flockr/logger` OTel fields pattern
+- **Commit convention**: `.husky/commit-msg`? → conventional; `cz`/commitlint config?
+- **i18n** (if any): `next-intl`, `i18next` messages dirs detected?
 
-### Passo 6 — Riscos arquiteturais óbvios (red flags para scrum master)
-Marca SIM/NÃO + 1 linha evidência:
-| Red flag | Onde procurar |
+### Step 6 — Obvious Architectural Risks (red flags for Scrum Master)
+Mark YES/NO + 1-line evidence:
+| Red flag | Where to search |
 |---|---|
-| ⚠️ God package único ≥1k arquivos | 1 package só contém tudo |
-| ⚠️ Circular imports suspeitos | graphify cycle detection ou grep `from "../"` em profundidade |
-| ⚠️ Raw SQL sem migração | `.execute()` em arquivos `.ts` que não estão em migrations/ |
-| ⚠️ No teste unitário detectado | 0 arquivos `*.test.*` em project inteiro |
-| ⚠️ Secrets hardcoded (HEURÍSTICA) | grep `sk_`, `-----BEGIN RSA`, `NEXT_PUBLIC_SECRET` — avisa não executa action |
-| ⚠️ Hard-coded environment URLs | grep `http://prod.` / `app.<tld>` sem .env |
+| ⚠️ Single God package ≥1k files | 1 package contains everything |
+| ⚠️ Suspicious circular imports | graphify cycle detection or deep grep `from "../"` |
+| ⚠️ Raw SQL without migration | `.execute()` in `.ts` files not in migrations/ |
+| ⚠️ No unit tests detected | 0 `*.test.*` files in entire project |
+| ⚠️ Hardcoded secrets (HEURISTIC) | grep `sk_`, `-----BEGIN RSA`, `NEXT_PUBLIC_SECRET` — warn only, do not execute action |
+| ⚠️ Hardcoded environment URLs | grep `http://prod.` / `app.<tld>` without .env |
 
-### Passo 7 — Gera arquivos no registry Nível 1.5
-Escreve 3 artefatos **ABAIXO de `$CHE_PROJECT_DIR/`** (compartilhado worktrees):
+### Step 7 — Generate registry Level 1.5 files
+Writes 3 artifacts **UNDER `$CHE_PROJECT_DIR/`** (shared across worktrees):
 
-#### 7a. `project_profile.md` — OBRIGATÓRIO, 12 SEÇÕES FIXAS
+#### 7a. `project_profile.md` — MANDATORY, 12 FIXED SECTIONS
 ```markdown
 ---
 project_slug: <CHE_PROJECT_SLUG>
@@ -135,23 +137,23 @@ graphify_used: true|false
 # Project Profile — <slug>
 
 ## 1. Repo Classification
-- Estrutura: SINGLE-REPO | PNPM-MONOREPO | NX-MONOREPO | etc
-- Número de apps detectados: N
-- Número de shared packages detectados: N
+- Structure: SINGLE-REPO | PNPM-MONOREPO | NX-MONOREPO | etc
+- Number of detected apps: N
+- Number of detected shared packages: N
 
-## 2. Stack Tecnológica (auto-detect)
-| Categoria | Ferramenta(s) detectadas |
+## 2. Tech Stack (auto-detect)
+| Category | Detected Tool(s) |
 |---|---|
-| Linguagem | ... |
+| Language | ... |
 | Frontend | ... |
-| (continua as 10 categorias acima) |
+| (continues 10 categories above) |
 
-## 3. Shared Packages (se monorepo — tabela nome→propósito→path relativo)
-| Package | Public exports entry points | Propósito inferido | Risco de alteração (1-5) |
+## 3. Shared Packages (if monorepo — table name→purpose→relative path)
+| Package | Public exports entry points | Inferred Purpose | Change Risk (1-5) |
 |---|---|---|---|
-| `@scope/db` | `., ./qrcode` | Entidades + QR | 5 = alto impacto cross-app |
+| `@scope/db` | `., ./qrcode` | Entities + QR | 5 = high cross-app impact |
 
-## 4. Convenções de Pastas Canônicas
+## 4. Canonical Folder Conventions
 ```
 root/
 ├── apps/
@@ -159,70 +161,70 @@ root/
 │   └── scanner/     → Next.js PWA scanner
 └── packages/
     ├── db/          → data layer
-    └── ui/          → componentes compartilhados
+    └── ui/          → shared components
 ```
 
-## 5. Entry Points Principais
-- App A: `apps/platform/src/server.ts` (porta 3000, Next.js standalone)
-- App B: `packages/scanner/src/pages/_app.tsx` (export padrão)
+## 5. Main Entry Points
+- App A: `apps/platform/src/server.ts` (port 3000, Next.js standalone)
+- App B: `packages/scanner/src/pages/_app.tsx` (default export)
 
-## 6. Camada de Dados Detectada
+## 6. Detected Data Layer
 - ORM/Query builder: TypeORM v0.3.x / Prisma v5 / ...
 - Migrations path: `packages/db/src/migrations/*.ts`
-- Entities principais (top-5 por referências no graph): Order, Ticket, User, Event, Refund
-- RLS (Row Level Security): Supabase enabled? SIM/NÃO + tabelas
+- Primary Entities (top-5 by graph references): Order, Ticket, User, Event, Refund
+- RLS (Row Level Security): Supabase enabled? YES/NO + tables
 
 ## 7. Auth & Security Model
 - Strategy: NextAuth (Auth.js) v5 / Supabase Auth / Clerk / ...
-- Session store: Cookie JWT | DB sessão | Redis
-- PII data where: tabelas com email, phone, address fields listadas
+- Session store: Cookie JWT | Session DB | Redis
+- PII data location: tables with email, phone, address fields listed
 
-## 8. Testing Stack (onde ficam os testes, como rodar)
+## 8. Testing Stack (location, how to run)
 - Unit test framework: Vitest (pnpm vitest run)
 - E2E framework: Playwright (CI=1 pnpm test:e2e)
-- Coverage: `--coverage` → cobertura mínima? (se detectado)
+- Coverage: `--coverage` → minimum coverage? (if detected)
 
-## 9. CI/CD Pipeline Detectada
+## 9. Detected CI/CD Pipeline
 - Provider: GitHub Actions
-- Arquivos principais: `.github/workflows/ci.yml` (build+typecheck+test), `.github/workflows/deploy.yml`
+- Main files: `.github/workflows/ci.yml` (build+typecheck+test), `.github/workflows/deploy.yml`
 - Deploy targets: Vercel (apps: platform + scanner) / Railway / K8s
 
-## 10. Padrões Arquiteturais Detectados
-- Router → Service → Repository: SIM (>=2 locais) | NÃO
-- Composition patterns: React hooks + context providers | Compound components detectados?
-- Observability: Structured logger (pino + trace_id) | Logs estruturados OTel?
+## 10. Detected Architectural Patterns
+- Router → Service → Repository: YES (>=2 locations) | NO
+- Composition patterns: React hooks + context providers | Compound components detected?
+- Observability: Structured logger (pino + trace_id) | OTel structured logs?
 
-## 11. Red Flags Arquiteturais (Passo 6)
-| Red flag | Evidência | Ação sugerida primeiro contato |
+## 11. Architectural Red Flags (Step 6)
+| Red flag | Evidence | Suggested first contact action |
 |---|---|---|
-| (ex: God package) | `packages/db` 2.3k arquivos, tudo lá | Split em subpackages quando touchar |
+| (e.g. God package) | `packages/db` 2.3k files, everything there | Split into subpackages when touching |
 
-## 12. Knowledge Graph Index (se graphify)
-- graphify-out/GRAPH_REPORT.md existe? SIM
-- Hubs de importação top-5:
-  1. `@scope/db/src/index.ts` (importado 142 vezes)
-  2. `@scope/trpc/src/client.ts` (importado 89 vezes)
+## 12. Knowledge Graph Index (if graphify)
+- graphify-out/GRAPH_REPORT.md exists? YES
+- Top-5 Import Hubs:
+  1. `@scope/db/src/index.ts` (referenced 142 times)
+  2. `@scope/trpc/src/client.ts` (referenced 89 times)
   3. ...
 ```
 
-#### 7b. `architecture.md` — PRÉ-PREENCHE metade AUTOMÁTICA, deixa resto HUMANO
+#### 7b. `architecture.md` — AUTO-FILL half, leave HUMAN the rest
 ```markdown
 # Architecture — <slug>
 
-## ⚙️ Auto-populated by che-xray (NÃO editar esta seção manualmente)
+## ⚙️ Auto-populated by che-xray (DO NOT edit this section manually)
 - Project Profile: [project_profile.md](./project_profile.md)
-- Estrutura detectada: ...
+- Detected structure: ...
 - Stack: ...
 - Entry points: ...
 - Data layer: ...
 
-## 🧭 Manual Part — PREENCHER via /che-onboarding
-### Arquitetura Geral (desenho mental: 1 página)
-### Diagrama de Contexto C4 (Level 1: sistemas externos + este)
-### Diagrama de Container C4 (Level 2: apps + DB + cache + filas)
-### Componentes Principais (Level 3: módulos cross-apps)
-### Decisões Arquiteturais Registradas (ADRs — links)
-### Roadmap Arquitetural (próximas mudanças planejadas)
+## 🧭 Manual Part — FILL via /che-onboarding
+### General Architecture (mental map: 1 page)
+### C4 Context Diagram (Level 1: external systems + this one)
+### C4 Container Diagram (Level 2: apps + DB + cache + queues)
+### Main Components (Level 3: cross-app modules)
+### Registered Architectural Decisions (ADRs — links)
+### Architectural Roadmap (planned upcoming changes)
 ```
 
 #### 7c. Append line to `registry.jsonl` (audit trail)
@@ -232,31 +234,31 @@ root/
 
 ---
 
-## 3. PÓS-SCAN: 1-PAGE RESUMO DEVOLVIDO AO AGENTE
+## 3. POST-SCAN: 1-PAGE SUMMARY RETURNED TO AGENT
 
-NÃO encha de linhas no chat. Devolve 10 linhas compactas no final:
+DO NOT fill the chat with lines. Return 10 compact lines at the end:
 
 ```
 [che-xray] ✅ DONE — project_flockr--Lumos (registry: ~/code/che-sessions/.registry/projects/...)
-  ├─ Estrutura: NX-MONOREPO PNPM workspaces · 2 apps · 8 shared packages
+  ├─ Structure: NX-MONOREPO PNPM workspaces · 2 apps · 8 shared packages
   ├─ Stack: TS v5 + Next.js 16 (RSC) · TypeORM v0.3 · Postgres · Redis · Stripe
-  ├─ Arquitetura: Router→Service→Repository SIM (detectado 14 routers)
-  ├─ Testes: Vitest + Playwright · 0 arquivos unitários / 14 specs E2E
-  ├─ Data layer: @flockr/db packages · 38 migrations · RLS Supabase
+  ├─ Architecture: Router→Service→Repository YES (14 routers detected)
+  ├─ Tests: Vitest + Playwright · 0 unit files / 14 E2E specs
+  ├─ Data layer: @flockr/db packages · 38 migrations · Supabase RLS
   ├─ Auth: Auth.js v5 + cookie JWT session
   ├─ CI/CD: GitHub Actions → Vercel deploy 2 apps
-  ├─ ⚠️  2 RED FLAGS: (1) @flockr/db god package 2.3k arquivos (2) sem tests unitários
-  ├─ Knowledge graph: graphify v0.9.53 OK (4286 arquivos indexados)
-  └─ ── Next step: agora rode /che-onboarding para preencher produto, roadmap, arquitetura manual
+  ├─ ⚠️  2 RED FLAGS: (1) @flockr/db god package 2.3k files (2) no unit tests
+  ├─ Knowledge graph: graphify v0.9.53 OK (4286 files indexed)
+  └─ ── Next step: now run /che-onboarding to fill in product, roadmap, manual architecture
 ```
 
 ---
 
-## 4. IDEMPOTÊNCIA + REFRESH
+## 4. IDEMPOTENCY + REFRESH
 
-Quando rerun `/che-xray`:
-1. Lê o `project_profile.md` existente, mergeia novos findings NÃO destrói seção human-edited (marcadas "Manual Part")
-2. A seção "⚙️ Auto-populated" sempre sobrescreve (elas são geradas)
-3. Seções "🧭 Manual Part" NUNCA são tocadas (só são criadas na 1ª vez)
-4. Dá diff do que mudou desde último scan: `2 novas packages adicionadas, 1 framework versão upgrade: Next 15→16`
-5. Sempre append 1 linha nova em `registry.jsonl` com diff resumido.
+When rerunning `/che-xray`:
+1. Reads existing `project_profile.md`, merges new findings, DOES NOT destroy human-edited section (marked "Manual Part")
+2. The "⚙️ Auto-populated" section always overwrites (they are generated)
+3. "🧭 Manual Part" sections are NEVER touched (only created the 1st time)
+4. Provides diff of what changed since last scan: `2 new packages added, 1 framework version upgrade: Next 15→16`
+5. Always appends 1 new line to `registry.jsonl` with summary diff.

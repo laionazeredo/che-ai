@@ -38,7 +38,7 @@
 Statuses flow: `TODO` → `IN_PROGRESS` → `SCOPE_OK` → `QA_OK` → `DONE`.
 Failure state: `BLOCKED:<reason short>`.
 
-Domain enum (7 slugs canônicos): `engineering` | `product` | `ux` | `devops` | `copywriting` | `social` | `seo-analytics`. Default = `engineering`.
+Domain enum (7 canonical slugs): `engineering` | `product` | `ux` | `devops` | `copywriting` | `social` | `seo-analytics`. Default = `engineering`.
 
 ## Dependency Graph (visual)
 

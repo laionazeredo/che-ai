@@ -16,7 +16,7 @@ CHE_CLI_CMD = [sys.executable, "-m", "che_core.cli"]
 
 @pytest.fixture(autouse=True)
 def _isolate_workspaces_root(tmp_path, monkeypatch):
-    """Override CHE_WORKSPACES_ROOT para TUDO dentro de tmp_path — NÃO toca ~/.che-workspaces real."""
+    """Override CHE_WORKSPACES_ROOT for EVERYTHING within tmp_path — DOES NOT touch real ~/.che-workspaces."""
     isolated = tmp_path / "che-ws-test"
     isolated.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("CHE_WORKSPACES_ROOT", str(isolated))
@@ -24,7 +24,7 @@ def _isolate_workspaces_root(tmp_path, monkeypatch):
 
 
 def _run_cli(*args):
-    """Roda o CLI do che e retorna (exit_code, stdout, stderr)."""
+    """Runs Che CLI and returns (exit_code, stdout, stderr)."""
     proc = subprocess.run(
         CHE_CLI_CMD + list(args),
         capture_output=True,
@@ -46,7 +46,7 @@ def _parse_json(s):
 
 
 def test_workspace_create_and_list_cli():
-    """che workspace create foo → cria dir; che workspace list → retorna entry."""
+    """che workspace create foo → creates dir; che workspace list → returns entry."""
     code, out, _ = _run_cli("workspace", "create", "Test WS")
     assert code == 0, out
     data = _parse_json(out)
@@ -64,10 +64,10 @@ def test_workspace_create_and_list_cli():
 
 
 def test_workspace_remove_3_safety_gates():
-    """remove segue 3 gates: (1) dry-run default (2) confirmed obrigatório (3) move pra trash não apaga."""
+    """remove follows 3 gates: (1) dry-run default (2) mandatory confirmed (3) move to trash, no delete."""
     _run_cli("workspace", "create", "yolo-deleteme")
 
-    # Gate 1: dry-run default → NÃO move
+    # Gate 1: dry-run default → DOES NOT move
     code, out, _ = _run_cli("workspace", "remove", "yolo-deleteme")
     assert code == 0
     data = _parse_json(out)
@@ -75,7 +75,7 @@ def test_workspace_remove_3_safety_gates():
     assert "action_would_be" in data
     assert "to" in data
 
-    # Gate 2: sem dry-run mas também sem confirmed → aborted=True
+    # Gate 2: no dry-run but also no confirmed → aborted=True
     code2, out2, _ = _run_cli("workspace", "remove", "yolo-deleteme", "--no-dry-run")
     assert code2 == 0
     d2 = _parse_json(out2)
@@ -85,7 +85,7 @@ def test_workspace_remove_3_safety_gates():
     _, out_list, _ = _run_cli("workspace", "list")
     assert "yolo-deleteme" in out_list
 
-    # Gate 3: com dupla flag → move para trash (não apaga)
+    # Gate 3: with double flag → move to trash (no delete)
     code3, out3, _ = _run_cli("workspace", "remove", "yolo-deleteme", "--no-dry-run", "--confirm")
     assert code3 == 0
     d3 = _parse_json(out3)
@@ -99,7 +99,7 @@ def test_workspace_remove_3_safety_gates():
 
 
 def test_workspace_trash_list_and_restore():
-    """remove → trash-list mostra → restore traz de volta, conflito-safe."""
+    """remove → trash-list shows → restore brings back, conflict-safe."""
     _run_cli("workspace", "create", "restore-me")
     _, out_rm, _ = _run_cli("workspace", "remove", "restore-me", "--no-dry-run", "--confirm")
     rm = _parse_json(out_rm)
@@ -123,7 +123,7 @@ def test_workspace_trash_list_and_restore():
 
 
 def test_project_create_scaffold_8_files_and_ensure_l3(tmp_path):
-    """che project create → scaffold 8 artefatos L2 + L3 no CHE_WORKSPACE_SHARED (fora do worktree, contratual §4)."""
+    """che project create → scaffold 8 L2 + L3 artifacts in CHE_WORKSPACE_SHARED (outside worktree, contractual §4)."""
     # Create a workspace first
     _run_cli("workspace", "create", "my-ws")
 
@@ -136,7 +136,7 @@ def test_project_create_scaffold_8_files_and_ensure_l3(tmp_path):
     code, out, err = _run_cli("project", "create", str(wt), "--workspace", "my-ws")
     assert code == 0, f"exit={code} stderr={err} stdout={out}"
     d = _parse_json(out)
-    assert d["initialized"] is True
+    assert d["initialised"] is True
     assert d["files_created_count"] >= 7
 
     project_dir = Path(d["project_dir"])
@@ -150,24 +150,24 @@ def test_project_create_scaffold_8_files_and_ensure_l3(tmp_path):
     ]
     for rel in expected_files:
         p = project_dir / rel
-        assert p.is_file(), f"Faltando scaffold file: {rel} em {project_dir}"
+        assert p.is_file(), f"Missing scaffold file: {rel} in {project_dir}"
 
-    # _db/README.txt agora é vizinho de project
+    # _db/README.txt is now a neighbor of project
     db_readme = project_dir.parent / "_db" / "README.txt"
-    assert db_readme.is_file(), f"Faltando scaffold file: _db/README.txt em {project_dir.parent}"
+    assert db_readme.is_file(), f"Missing scaffold file: _db/README.txt in {project_dir.parent}"
 
     arch_content = (project_dir / "architecture.md").read_text()
     assert "C4 L1" in arch_content or "System Context" in arch_content
 
-    # L3 worktree shared dir é FORA do worktree (contrato canônico paths.py):
-    # agora é o próprio diretório da worktree dentro da hierarquia do che
+    # L3 worktree shared dir is OUTSIDE the worktree (canonical paths.py contract):
+    # it is now the worktree directory itself within the che hierarchy
     ws_shared = Path(d["paths"]["CHE_WORKSPACE_SHARED"])
-    assert ws_shared.is_dir(), f"L3 CHE_WORKSPACE_SHARED deveria existir: {ws_shared}"
+    assert ws_shared.is_dir(), f"L3 CHE_WORKSPACE_SHARED should exist: {ws_shared}"
     assert ws_shared.name == resolve_worktree_slug(str(wt))
 
 
 def test_project_remove_and_restore_safety():
-    """project remove segue mesmas 3 safety gates + restore ok."""
+    """project remove follows same 3 safety gates + restore ok."""
     # Create a workspace first
     _run_cli("workspace", "create", "safety-ws")
 
@@ -210,12 +210,12 @@ def test_project_remove_and_restore_safety():
 
 
 def test_hook_worktree_add_payload_creates_l3(tmp_path):
-    """Hook detecta RunCommand com 'git worktree add <path>' → chama ensure_worktree_l3_dirs."""
+    """Hook detects RunCommand with 'git worktree add <path>' → calls ensure_worktree_l3_dirs."""
     target = tmp_path / "wt-feature-x"
     target.mkdir()
     (target / ".git").mkdir(exist_ok=True)
 
-    # Payload segue schema que o hook espera: toolName + toolArgs.command
+    # Payload follows schema the hook expects: toolName + toolArgs.command
     payload = {
         "toolName": "RunCommand",
         "toolArgs": {"command": f"cd /tmp && git worktree add {target} feat/x"},
@@ -223,31 +223,31 @@ def test_hook_worktree_add_payload_creates_l3(tmp_path):
     result = posttooluse_git_worktree(payload)
     assert result.get("decision") in ("allow", None)
     ctx = result.get("additionalContext", "")
-    assert "L3" in ctx or "AUTO" in ctx or "criado" in ctx or "CHE_WORKSPACE_SHARED" in ctx
+    assert "L3" in ctx or "AUTO" in ctx or "created" in ctx or "CHE_WORKSPACE_SHARED" in ctx
 
-    # L3 shared dir existe em CHE_WORKSPACES_ROOT/workspaces/<workspace>/<project>/worktrees/<worktree_slug>
+    # L3 shared dir exists in CHE_WORKSPACES_ROOT/workspaces/<workspace>/<project>/worktrees/<worktree_slug>
     ws_name = resolve_workspace_name(str(target))
     wt_slug = resolve_worktree_slug(str(target))
     project_slug = project_slug_from_git_origin(str(target))
     ws_root = Path(os.environ["CHE_WORKSPACES_ROOT"])
     l3_shared = ws_root / "workspaces" / ws_name / project_slug / "worktrees" / wt_slug
-    assert l3_shared.is_dir(), f"L3 shared deveria existir em {l3_shared}"
+    assert l3_shared.is_dir(), f"L3 shared should exist in {l3_shared}"
 
 
 def test_hook_worktree_remove_payload_moves_to_trash(tmp_path):
-    """Hook detecta 'git worktree remove' → cleanup l3 move para trash."""
+    """Hook detects 'git worktree remove' → cleanup l3 moves to trash."""
     target = tmp_path / "wt-old-feature"
     target.mkdir()
     (target / ".git").mkdir(exist_ok=True)
     ensure_worktree_l3_dirs(str(target))
 
-    # ANTES: confirma L3 shared existe (via paths canônicos)
+    # BEFORE: confirm L3 shared exists (via canonical paths)
     ws_name = resolve_workspace_name(str(target))
     wt_slug = resolve_worktree_slug(str(target))
     project_slug = project_slug_from_git_origin(str(target))
     ws_root = Path(os.environ["CHE_WORKSPACES_ROOT"])
     l3_parent = ws_root / "workspaces" / ws_name / project_slug / "worktrees" / wt_slug
-    assert l3_parent.is_dir(), f"L3 parent deveria existir ANTES do remove: {l3_parent}"
+    assert l3_parent.is_dir(), f"L3 parent should exist BEFORE remove: {l3_parent}"
 
     payload = {
         "toolName": "Bash",

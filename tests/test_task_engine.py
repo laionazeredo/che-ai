@@ -1,4 +1,4 @@
-"""Smoke test para task_engine: list/show/set-status. Sem task_graph não crasha."""
+"""Smoke test for task_engine: list/show/set-status. Does not crash without task_graph."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ def _mk_worktree(tmp_path: Path):
 def test_list_tasks_empty_returns_serializable(tmp_path: Path):
     wt = _mk_worktree(tmp_path)
     result = list_tasks(str(wt))
-    # list_tasks retorna hoje lista de dicts; garantimos serializável.
+    # list_tasks currently returns a list of dicts; we ensure it's serialisable.
     json.dumps(result)
-    # Se é lista, aceitamos; dict também
+    # If it's a list, we accept it; dict too
     assert isinstance(result, (list, dict))
 
 

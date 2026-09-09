@@ -1,61 +1,62 @@
 # 🌍 Che — Global Slash Commands Reference
 
 These are slash commands the user can type in the chat to interact with the che.
-The agent MUST recognize these and react immediately.
+The agent MUST recognise these and react immediately.
 
 > Convention: `/che-*` commands are global and work on ANY repo / worktree.
 > All commands first validate: "is the worktree confirmed?" If not, block and ask for worktree path.
 
 ---
 
-## 🏗 ARCHITECTURE: Commands vs Skills (CANONICAL — TOP LEVEL — NÃO DUPLICAR)
+## 🏗 ARCHITECTURE: Commands vs Skills (CANONICAL — TOP LEVEL — DO NOT DUPLICATE)
 
-> **Diferença conceitual:** Commands = UX entry point (slash `/che-X`) ↔ Skills = conteúdo/executor do trabalho.
-> NÃO transformar TODOS os commands em skills. A separação abaixo é intencional (KISS).
+> **Conceptual difference:** Commands = UX entry point (slash `/che-X`) ↔ Skills = content/executor of work.
+> DO NOT turn ALL commands into skills. The separation below is intentional (KISS).
 
-### Categoria A — 22 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invocam Skill / módulo CLI correspondente:
-| Command | Skill / módulo | Por que wrapper separado? |
+### Category A — 22 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
+| Command | Skill / module | Why separate wrapper? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
 | `/che-archeology` | `che-archeology` | Infers project Intent and Roadmap from git history and merged PRs. |
 | `/che-xray [worktree]` | `che-xray` | Scans tech stack, structure, and patterns. |
 | `/che-onboarding [worktree]` | `che-onboarding` | Interactive Product & Architecture context capture. |
-| `/che-spec [input] [worktree] [slug]` | `che-spec` | Preflight binding §19 (worktree confirmado + nível 2 criado) → skill gera/valida SPEC em $CHE_WORKSPACE_SHARED. 4 fontes input. Gate Approved. **NÃO depende de /che-act — roda sozinho.** |
-| `/che-plan [worktree] [slug]` | `che-plan` | Preflight SPEC Approved → skill transforma spec em tickets Jira/Linear/ClickUp com BDD ACs. |
-| `/che-act` | `che-act` | Preflight worktree → skill executa §0.5 SPEC GATE (auto-invoca che-spec se não houver Approved) → scope capture + TASK GRAPH. |
-| `/che-parallel` | `che-act` → `che-executor-dispatcher` | Preflight worktree + force_parallel flag + error if not parallelizable. |
-| `/che-ship` | `che-ship` | Preflight worktree + `gh auth` + no-secret-staged check → skill commits/push/PR. |
-| `/che-fix` | `che-debugger-bugfix` | Preflight worktree + capture 4 required inputs → skill roda scientific debug loop. |
-| `/che-review` | `che-code-review` | Preflight `gh auth` + PR URL parseable → skill puxa diff + metadata + 4-category review. |
-| `/che-diff` | `che-diff-context` | Preflight worktree (Modo B) / gh auth (Modo A) → relatório leve CONTEXTO p/ conversar sobre diff (PR URL ou worktree local vs branch default). DIFERENTE de /che-review (review blocking vs contexto). |
-| `/che-manual-test` | `che-manual-test-executor` | Preflight worktree + session binding §19 + encontra manual_test_plan.md via --task-id ou --plan-path → GATE de setup approval obrigatório → executa steps via Playwright MCP + evidências screenshots + report final 8 seções. DIFERENTE de /che-qa (QA = só comandos automatizados build/lint/test; Manual = browser step-a-step c/ evidências). |
-| `/che-pr-comments` | `che-pr-comments` | Preflight `gh auth` + PR URL → skill baixa comentários + classification + triage. |
-| `/che-ci-fix` | `che-ci-fixer` | Preflight `gh auth` + worktree → skill classifica R1-R9 + aplica minimal fix. |
-| `/che-design` / `/che-figma` | `che-social-ui-designer` | Pergunta modo (A Social Media / B UI-UX / C Design System) + path save arquivo → skill usa open-pencil MCP p/ construir tudo localmente. |
-| `/che-export [--include-db] [--db-size-limit-mb=N]` | `che_core.portability` | Exports project durable data (L2+L3) to a portable archive. **NOVO: flag `--include-db` OPCIONAL inclui bancos SQLite state+rag se tamanho <= limite (default 250MB). |
-| `/che-import [--include-db]` | `che_core.portability` | Imports project durable data from an archive, resolving conflicts. **NOVO: flag `--include-db` OPCIONAL restaura também bancos SQLite (conflito = sufixo `--import-<timestamp>`). |
-| `/che-task [list|show|resume|set-status|graph-summary]` | `che_core.task_engine` | Multi-domain task graph picker + bind ACTIVE_TASK_ID no registry + recomenda comando downstream (che-act / che-design / che-spec) por domínio da task envelope. |
-| `/che-workspace [add|list|remove|restore|trash-list]` | `che_core.workspaces` | **NOVO:** Gerencia workspaces L1 (`~/.che-workspaces/workspaces/<slug>/`). |
-| `/che-project [init|list|remove|restore]` | `che_core.workspaces` | **NOVO:** Inicializa projeto L2 dentro do workspace. |
-| `/che-eject [plan|trash-list|restore]` | `che_core.eject` | **NOVO:** Ejeta Che de forma segura e reversível. Detecta install_kind (git-clone / copy-install), desinstala adapters via scripts oficiais, move whitelist para `.trash/che-eject/` (nunca rm), limpa snippets `.gitignore` de clientes + restore. 3 safety gates obrigatórios: `--dry-run default`, `--confirmed`, `--i-know-what-im-doing`. Blacklist absoluta: `user_rules/`, `bindings/registry.jsonl`, `memory/`, `.git/`, `node_modules/`. |
-| `/che-query --sql "..." [--bind ...] [--force]` | `che_core.state_store` | SQL parametrizada (?) no state store SQLite. Default SÓ READ (SELECT / EXPLAIN / PRAGMA). Para writes precisa `--force` explícito. |
-| `/che-sanitize [--max-age-days=N] [--max-decisions=N] [--dry-run]` | `che_core.state_store` | Sanitize state store: purge decisions/bindings/sessions antigos + VACUUM. **`--dry-run` OBRIGATÓRIO default antes de efetivar (flag só passa no 2º comando sem dry-run. **SSOT filesystem INTACTO**: purge reversível via `rebuild-index`. |
-| `/che-search "..." [--top-k=N] [--scope=all\|tasks\|specs\|decisions\|envelopes]` | `che_core.state_store` | Full-text search FTS5 + BM25 ranking. Pré-flight: rebuild se DB mais velho que decisions.log mtime. |
-| `/che-rag [build-index|search] [--provider=auto\|none\|openai\|st] [--top-k=N] [--no-hybrid]` | `che_core.rag` | RAG híbrido BM25(40%) + vetor(60%). Build incremental por chunk hash. sqlite-vec OPCIONAL. Zero-dep fallback `none` SEMPRE funciona sem pip install. |
+| `/che-spec [input] [worktree] [slug]` | `che-spec` | §19 binding preflight (confirmed worktree + level 2 created) → skill generates/validates SPEC in $CHE_WORKSPACE_SHARED. 4 input sources. Approved gate. **DOES NOT depend on /che-act — runs alone.** |
+| `/che-plan [worktree] [slug]` | `che-plan` | Preflight SPEC Approved → skill transforms spec into Jira/Linear/ClickUp tickets with BDD ACs. |
+| `/che-act` | `che-act` | Worktree preflight → skill executes §0.5 SPEC GATE (auto-invokes che-spec if none Approved) → scope capture + TASK GRAPH. |
+| `/che-parallel` | `che-act` → `che-executor-dispatcher` | Worktree preflight + force_parallel flag + error if not parallelisable. |
+| `/che-ship` | `che-ship` | Worktree preflight + `gh auth` + no-secret-staged check → skill commits/push/PR. |
+| `/che-fix` | `che-debugger-bugfix` | Worktree preflight + capture 4 required inputs → skill runs scientific debug loop. |
+| `/che-review` | `che-code-review` | Preflight `gh auth` + parseable PR URL → skill pulls diff + metadata + 4-category review. |
+| `/che-diff` | `che-diff-context` | Worktree preflight (Mode B) / gh auth (Mode A) → lightweight CONTEXT report for diff conversation (PR URL or local worktree vs default branch). DIFFERENT from /che-review (blocking review vs context). |
+| `/che-manual-test` | `che-manual-test-executor` | Worktree preflight + §19 session binding + finds manual_test_plan.md via --task-id or --plan-path → mandatory setup approval GATE → executes steps via Playwright MCP + screenshot evidence + final 8-section report. DIFFERENT from /che-qa (QA = only automated build/lint/test commands; Manual = step-by-step browser with evidence). |
+| `/che-pr-comments` | `che-pr-comments` | Preflight `gh auth` + PR URL → skill downloads comments + classification + triage. |
+| `/che-ci-fix` | `che-ci-fixer` | Preflight `gh auth` + worktree → skill classifies R1-R9 + applies minimal fix. |
+| `/che-design` / `/che-figma` | `che-social-ui-designer` | Asks mode (A Social Media / B UI-UX / C Design System) + file save path → skill uses open-pencil MCP to build everything locally. |
+| `/che-export [--include-db] [--db-size-limit-mb=N]` | `che_core.portability` | Exports project durable data (L2+L3) to a portable archive. **NEW: optional `--include-db` flag includes SQLite state+rag databases if size <= limit (default 250MB). |
+| `/che-import [--include-db]` | `che_core.portability` | Imports project durable data from an archive, resolving conflicts. **NEW: optional `--include-db` flag also restores SQLite databases (conflict = suffix `--import-<timestamp>`). |
+| `/che-task [list|show|resume|set-status|graph-summary]` | `che_core.task_engine` | Multi-domain task graph picker + ACTIVE_TASK_ID bind in registry + recommends downstream command (che-act / che-design / che-spec) by task envelope domain. |
+| `/che-config [--lang-chat=...] [--lang-docs=...] [--lang-report=...] [--pt-check=...]` | `che_core.cli config` | **NEW:** Set session configuration flags (chat language, docs language, PT detection). |
+| `/che-workspace [add|list|remove|restore|trash-list]` | `che_core.workspaces` | **NEW:** Manages L1 workspaces (`~/.che-workspaces/workspaces/<slug>/`). |
+| `/che-project [init|list|remove|restore]` | `che_core.workspaces` | **NEW:** Initializes L2 project within workspace. |
+| `/che-eject [plan|trash-list|restore]` | `che_core.eject` | **NEW:** Ejects Che safely and reversibly. Detects install_kind (git-clone / copy-install), uninstalls adapters via official scripts, moves whitelist to `.trash/che-eject/` (never rm), cleans client `.gitignore` snippets + restore. 3 mandatory safety gates: `--dry-run default`, `--confirmed`, `--i-know-what-im-doing`. Absolute blacklist: `user_rules/`, `bindings/registry.jsonl`, `memory/`, `.git/`, `node_modules/`. |
+| `/che-query --sql "..." [--bind ...] [--force]` | `che_core.state_store` | Parameterized SQL query in SQLite state store. Default READ ONLY (SELECT / EXPLAIN / PRAGMA). Needs explicit `--force` for writes. |
+| `/che-sanitize [--max-age-days=N] [--max-decisions=N] [--dry-run]` | `che_core.state_store` | Sanitize state store: purge old decisions/bindings/sessions + VACUUM. **MANDATORY `--dry-run` default** before effective (flag only passes on 2nd command without dry-run. **Filesystem SSOT INTACT**: reversible purge via `rebuild-index`. |
+| `/che-search "..." [--top-k=N] [--scope=all\|tasks\|specs\|decisions\|envelopes]` | `che_core.state_store` | Full-text search FTS5 + BM25 ranking. Pre-flight: rebuild if DB older than decisions.log mtime. |
+| `/che-rag [build-index|search] [--provider=auto\|none\|openai\|st] [--top-k=N] [--no-hybrid]` | `che_core.rag` | Hybrid RAG BM25(40%) + vector(60%). Incremental build by chunk hash. OPTIONAL sqlite-vec. `none` zero-dep fallback ALWAYS works without pip install. |
 
-### Categoria B — 5 "light" commands = inline leves (5 linhas ler/escrever markdown) → **NÃO viram skills (KISS)**:
-| Command | Implementação inline | Por que NÃO é skill? |
+### Category B — 5 "light" commands = lightweight inline (5 lines to read/write markdown) → **DO NOT become skills (KISS)**:
+| Command | Inline implementation | Why NOT a skill? |
 |---|---|---|
-| `/che-status` | Lê `task_graph.md` → conta buckets → print status PT-BR | Skill seria 10 linhas, overhead > valor. |
-| `/che-skip` | Append `decisions.log.jsonl` (SKIP GATE entry) + mark `task_graph.md` gate como skipped | 3 linhas de escrita de arquivos. |
-| `/che-decisions` | Lê `decisions.log.jsonl` → sumariza PT-BR | 2 linhas read + summarize. |
-| `/che-summary` | Usa SM logic p/ gerar interim summary structure | 8 linhas assembly summary object. |
-| `/che-abort` | Escreve ABORTED em `session.md` + `task_graph.md` | 2 writes + confirm. |
+| `/che-status` | Read `task_graph.md` → count buckets → print status (Portuguese) | Skill would be 10 lines, overhead > value. |
+| `/che-skip` | Append `decisions.log.jsonl` (SKIP GATE entry) + mark `task_graph.md` gate as skipped | 3 lines of file writing. |
+| `/che-decisions` | Read `decisions.log.jsonl` → summarise (Portuguese) | 2 lines read + summarise. |
+| `/che-summary` | Use SM logic to generate interim summary structure | 8 lines summary object assembly. |
+| `/che-abort` | Write ABORTED in `session.md` + `task_graph.md` | 2 writes + confirm. |
 
-### Regra rígida (KISS):
-- Se um "light" command NÃO ultrapassa ~15 linhas de lógica → inline.
-- Se crescer além → extraia para skill.
-- NÃO criar skill de 5 linhas.
+### Strict rule (KISS):
+- If a "light" command DOES NOT exceed ~15 lines of logic → inline.
+- If it grows beyond → extract to skill.
+- DO NOT create a 5-line skill.
 
 ---
 
@@ -74,14 +75,14 @@ The agent MUST recognize these and react immediately.
 ---
 
 ## `/che-architect`
-**What it does:** A strategic architecture partner that helps design a complete system from a business idea. Iteratively covers stack, infra, security, compliance, accessibility, localization, observability, and operations.
+**What it does:** A strategic architecture partner that helps design a complete system from a business idea. Iteratively covers stack, infra, security, compliance, accessibility, localisation, observability, and operations.
 **When to invoke:** Before starting a new repository or when refactoring/designing a major new system component.
 **Agent action:** Call `che-architect` skill.
 
 ---
 
 ## `/che-archeology`
-**What it does:** Infers the project's strategic backbone (Intent and Roadmap) by analyzing git history, merged PRs, and README evolution.
+**What it does:** Infers the project's strategic backbone (Intent and Roadmap) by analysing git history, merged PRs, and README evolution.
 **When to invoke:** When adopting an existing project into the Che framework to establish Specflow alignment.
 **Agent action:** Call `che-archeology` skill.
 
@@ -89,23 +90,23 @@ The agent MUST recognize these and react immediately.
 
 ## `/che-spec [input_type:ticket|prd-flockr|desc|existing] [input_value] [worktree] [slug]`
 
-**What it does:** Standalone entry-point for generating or validating a **Che Execution Specification (SPEC)** — artefato de planejamento anti-alucinação/anti-scope-drift que substitui o PRD Flockr legado. Salva DURÁVEL em `$CHE_WORKSPACE_SHARED/spec_<slug>.md` (fora sessions/, fora worktree user). 4 fontes input aceitas: (A) SPEC Approved existente; (B) Ticket URL (Linear FLO-XXX / ClickUp / GitHub Issue); (C) PRD Flockr legado path (.md); (D) Descrição breve inline com prompts iterativos.
-**When to invoke:** User quer redigir/atualizar um SPEC **antes** do /che-act, ou standalone para documento de planejamento, ou quando /che-act SM §0.5 o invoca automaticamente por não haver Approved.
+**What it does:** Standalone entry-point for generating or validating a **Che Execution Specification (SPEC)** — anti-hallucination/anti-scope-drift planning artifact that replaces legacy Flockr PRD. Saves DURABLE in `$CHE_WORKSPACE_SHARED/spec_<slug>.md` (outside sessions/, outside user worktree). 4 accepted input sources: (A) existing Approved SPEC; (B) Ticket URL (Linear FLO-XXX / ClickUp / GitHub Issue); (C) legacy-project PRD path (.md); (D) brief inline description with iterative prompts.
+**When to invoke:** User wants to draft/update a SPEC **before** /che-act, or standalone for planning document, or when SM §0.5 auto-invokes it because no Approved SPEC exists.
 **Agent action on this command:**
 1. IMMEDIATELY call `che-spec` skill.
-2. Preflight: verifica binding §19 Level1 existente; se não houver, pergunta worktree + cria binding 2-LEVEL antes.
-3. Skill executa fluxo 4 fontes → valida §4 7 checks → loop aprovação 1-pass → save atômico temp+mv.
-4. **Retorna 2 últimas linhas parseável para SM:**
+2. Preflight: check existing Level 1 binding; if none, ask worktree + create 2-LEVEL binding first.
+3. Skill executes 4-source flow → validates §4 7 checks → 1-pass approval loop → atomic temp+mv save.
+4. **Returns last 2 parseable lines for SM:**
    ```
-   SPEC_PATH=<absoluto sem quotes>
+   SPEC_PATH=<absolute without quotes>
    SPEC_STATUS=Approved|Draft
    ```
-5. Append `[SPEC] <slug> <status> saved at <ISO>` em `$CHE_WORKSPACE_SHARED/decisions.log.jsonl`.
+5. Append `[SPEC] <slug> <status> saved at <ISO>` in `$CHE_WORKSPACE_SHARED/decisions.log.jsonl`.
 **Syntax examples:**
 ```
 /che-spec input=ticket https://linear.app/flockr/issue/FLO-745 slug=api-fail-closed
 /che-spec input=prd-flockr docs/prd/payments/refunds.md slug=refund-flow
-/che-spec input=desc slug=fix-qr-scan "QR scanner nao valida ticket ja usado"
+/che-spec input=desc slug=fix-qr-scan "QR scanner does not validate already used ticket"
 /che-spec input=existing slug=api-fail-closed
 ```
 
@@ -120,13 +121,13 @@ The agent MUST recognize these and react immediately.
 
 ## `/che-act [input_type:ticket|prd-flockr|desc] [input_value] [--slug=slug]`
 
-**What it does:** Triggers the full che flow from Phase 0. **SM §0.5 auto-invoca `/che-spec` automaticamente se não houver SPEC Approved na worktree**, aceitando os mesmos args de input (ticket/prd/desc) e passando-os para che-spec.
+**What it does:** Triggers the full che flow from Phase 0. **SM §0.5 auto-invokes `/che-spec` automatically if no Approved SPEC exists in worktree**, accepting same input args (ticket/prd/desc) and passing them to che-spec.
 **When to invoke:** User wants to start implementing a feature/bugfix through the simulated Agile team.
 **Agent action on this command:**
 1. IMMEDIATELY call `che-act` skill.
-2. Scrum Master executes Pre-Flight (worktree path + `che_compute_paths` → ensure_dirs + Level2 binding).
-3. **SM §0.5 SPEC GATE (antes scope capture):** Glob `$CHE_WORKSPACE_SHARED/spec_*.md` → parse Approved. Se 0 OU usuário forneceu input → **invoca che-spec Skill automaticamente**, passando args de entrada do usuário (ticket/prd/desc).
-4. Captura 2 linhas retorno: `SPEC_PATH` + `SPEC_STATUS`. Gate: Approved → libera Scope Capture; Draft → oferece (A) Override `[SPEC-OVERRIDE]` logado em decisions / (B) Parar, terminar SPEC depois via `/che-spec` standalone.
+2. Scrum Master executes Pre-Flight (worktree path + `che_compute_paths` → ensure_dirs + Level 2 binding).
+3. **SM §0.5 SPEC GATE (before scope capture):** Glob `$CHE_WORKSPACE_SHARED/spec_*.md` → parse Approved. If 0 OR user provided input → **automatically invoke che-spec Skill**, passing user input args (ticket/prd/desc).
+4. Capture 2 return lines: `SPEC_PATH` + `SPEC_STATUS`. Gate: Approved → releases Scope Capture; Draft → offers (A) `[SPEC-OVERRIDE]` Override logged in decisions / (B) Stop, finish SPEC later via standalone `/che-spec`.
 5. Scrum Master proceeds to Scope Capture.
 **Syntax examples:**
 ```
@@ -142,14 +143,14 @@ The agent MUST recognize these and react immediately.
 **What it does:** Prints a concise status report of the CURRENT che session.
 **When to invoke:** User wants to see where we are in the TASK GRAPH progress.
 **Agent action:**
-1. Source `$HOME/.trae/contracts/che_sessions_contract.sh` → `che_compute_paths WORKTREE_ROOT` → look for `task_graph.md` at `$CHE_WORKSPACE_SHARED/task_graph.md` (FORA worktree).
-2. If not found → "Nenhuma sessão do che ativa nesta worktree. Use `/che-act`."
+1. Source `$HOME/.trae/contracts/che_sessions_contract.sh` → `che_compute_paths WORKTREE_ROOT` → look for `task_graph.md` at `$CHE_WORKSPACE_SHARED/task_graph.md` (OUTSIDE worktree).
+2. If not found → "No active che session in this worktree. Use `/che-act`."
 3. If found → print in Portuguese:
-   - Qual task está IN_PROGRESS e em qual fase (scope/qa/compliance)
-   - Contagem: Total / TODO / SCOPE_OK / QA_OK / DONE / BLOCKED
-   - Lista de tasks bloqueadas, se houver
-   - Avisos: tasks perto de estourar 2 iterações
-   - Caminhos dos artefatos (todos FORA worktree): `$CHE_WORKSPACE_SHARED/` (durável) + `$CHE_SESSION_DIR/` (efêmero)
+   - Which task is IN_PROGRESS and in which phase (scope/qa/compliance)
+   - Counts: Total / TODO / SCOPE_OK / QA_OK / DONE / BLOCKED
+   - List of blocked tasks, if any
+   - Warnings: tasks near bursting 2 iterations
+   - Artifact paths (all OUTSIDE worktree): `$CHE_WORKSPACE_SHARED/` (durable) + `$CHE_SESSION_DIR/` (ephemeral)
 
 ---
 
@@ -164,22 +165,22 @@ The agent MUST recognize these and react immediately.
 - `compliance-heavy` — skip FINAL heavy compliance stage (EXTREMELY RISKY — disallow unless user insists TWICE)
 **Agent action:**
 1. Confirm user wants to skip this gate (ASK if reason was not provided).
-2. For `compliance-heavy`: require EXPLICIT confirmation TWICE. Print a huge warning in Portuguese: "Isso vai liberar sem checagem de segurança profunda. Continuar mesmo assim?"
+2. For `compliance-heavy`: require EXPLICIT confirmation TWICE. Print a huge warning in Portuguese: "This will release without deep security check. Continue anyway?"
 3. Append to `decisions.log.jsonl`:
    - `[<date>] [SKIP GATE] <gate> — reason: <reason> — user-approved`
 4. Proceed flow as if the gate passed (mark in TASK GRAPH: `QA_OK (SKIPPED — see decision.log)`.
 
 Syntax examples:
 ```
-/che-skip qa T3 reason:"hotfix para staging - testes de unidade quebrados por infra não relacionada"
-/che-skip compliance-light ALL reason:"revisando manualmente um PR enorme; refaço compliance no final"
+/che-skip qa T3 reason:"hotfix for staging - unit tests broken by unrelated infra"
+/che-skip compliance-light ALL reason:"manually reviewing a huge PR; will redo compliance at the end"
 ```
 
 ---
 
 ## `/che-decisions`
 
-**What it does:** Reads and prints (summarized) all entries from `decisions.log.jsonl` for the current session.
+**What it does:** Reads and prints (summarised) all entries from `decisions.log.jsonl` for the current session.
 **When to invoke:** User wants to review trade-offs made so far.
 
 ---
@@ -232,7 +233,7 @@ Agent action: ask confirmation first.
 4. Wait for your explicit APPROVAL of the commit plan.
 5. Apply each commit individually.
 6. `git push --no-verify --set-upstream origin <branch>` (creates remote if missing).
-7. Build readable PR body (default English; PT only if YOU explicitly request) from: `$CHE_WORKSPACE_SHARED/manual_test_plan.md` + `PR_DESCRIPTION_TEMPLATE.md` (filled style reference, follow it strictly) + relevant decisions from `$(che_decisions_path)`. Resolve paths via `che_compute_paths`; NEVER read from `<WORKTREE_ROOT>/.trae/*`. Enforce §A-4.2 process gates (acronyms expanded, 1 bullet = 1 change + why, risk→consequence, plain steps to verify, ≤50 lines total).
+7. Build readable PR body (default English; Portuguese only if YOU explicitly request) from: `$CHE_WORKSPACE_SHARED/manual_test_plan.md` + `PR_DESCRIPTION_TEMPLATE.md` (filled style reference, follow it strictly) + relevant decisions from `$(che_decisions_path)`. Resolve paths via `che_compute_paths`; NEVER read from `<WORKTREE_ROOT>/.trae/*`. Enforce §A-4.2 process gates (acronyms expanded, 1 bullet = 1 change + why, risk→consequence, plain steps to verify, ≤50 lines total).
 8. Open DRAFT PR against default branch → assign to `@me` → print PR URL.
 **Syntax examples:**
 ```
@@ -245,12 +246,12 @@ Agent action: ask confirmation first.
 
 ## `/che-fix <optional worktree>`
 
-**What it does:** Bug fix che (DIFERENTE de feature che). Scientific debug loop: user provides expected behavior + reproduction steps. Debugger expert builds hypotheses, instruments, reproduces, analyzes, applies minimal fix + regression test, demonstrates it to you with clear steps to verify or shows the failing→passing test run.
-**When to invoke:** You want to report an existing bug / wrong runtime behavior and have it fixed. NOT for feature work.
+**What it does:** Bug fix che (DIFFERENT from feature che). Scientific debug loop: user provides expected behaviour + reproduction steps. Debugger expert builds hypotheses, instruments, reproduces, analyses, applies minimal fix + regression test, demonstrates it to you with clear steps to verify or shows the failing→passing test run.
+**When to invoke:** You want to report an existing bug / wrong runtime behaviour and have it fixed. NOT for feature work.
 **Agent action:**
 1. Invoke `che-debugger-bugfix` skill.
 2. Preflight: worktree path confirmed (ASK if missing).
-3. Capture REQUIRED inputs from you: (a) expected behavior, (b) actual bug behavior, (c) exact numbered reproduction steps, (d) ticket reference if any.
+3. Capture REQUIRED inputs from you: (a) expected behaviour, (b) actual bug behaviour, (c) exact numbered reproduction steps, (d) ticket reference if any.
 4. Baseline: REPRODUCE the bug fresh → capture evidence (logs, stacks, HTTP).
 5. Debug loop (max 5 iterations per bug): HYPOTHESIZE → INSTRUMENT → REPRODUCE → CONFIRM/REFUTE root cause.
 6. Once root cause confirmed: write failing test → apply minimal fix → confirm test passes.
@@ -266,7 +267,7 @@ Agent action: ask confirmation first.
 
 ## `/che-review <PR_URL> --ticket <LINEAR_OR_JIRA_URL or --scope "text description">`
 
-**What it does:** High-impact focused code review of a GitHub PR. Only flags BLOCKING issues — never bikeshed style/formatting. Focus areas: (1) runtime breakage / silent incorrect behavior, (2) security / PII / compliance, (3) unjustified new dependencies / huge PR scope, (4) scope deviation from ticket/description.
+**What it does:** High-impact focused code review of a GitHub PR. Only flags BLOCKING issues — never bikeshed style/formatting. Focus areas: (1) runtime breakage / silent incorrect behaviour, (2) security / PII / compliance, (3) unjustified new dependencies / huge PR scope, (4) scope deviation from ticket/description.
 **When to invoke:** You paste a link of a PR you want a fast, meaningful review for.
 **Agent action:**
 1. Invoke `che-code-review` skill.
@@ -287,19 +288,19 @@ Agent action: ask confirmation first.
 
 ## `/che-diff <PR_URL OR --worktree /abs/path> [--base origin/dev]`
 
-**What it does:** Leve "conversa preparada" sobre um diff. **DIFERENTE de `/che-review`** (que dá verdict de approve/request-changes com issues CRITICAL + HIGH only). Este entrega um relatório 5 seções p/ VOCÊ TER CONTEXTO pra conversar sobre o diff com alguém: (1) o que implementa (alto nível), (2) principais mudanças por módulo, (3) CI checks status (Modo A) ou buckets JáCommitado/PorCommitar/Untracked (Modo B), (4) riscos leves, (5) 3 pontos de atenção pra pautar na call/comentário. Modo A = PR URL via gh CLI. Modo B = worktree local, compara com branch default (pergunta qual base se ambíguo).
+**What it does:** Lightweight "prepared conversation" about a diff. **DIFFERENT from `/che-review`** (which gives approve/request-changes verdict with CRITICAL + HIGH issues only). This delivers a 5-section report for YOU TO HAVE CONTEXT to discuss the diff with someone: (1) what it implements (high level), (2) main changes by module, (3) CI checks status (Mode A) or AlreadyCommitted/ToCommit/Untracked buckets (Mode B), (4) slight risks, (5) 3 attention points to discuss in a call/comment. Mode A = PR URL via gh CLI. Mode B = local worktree, compares with default branch (asks which base if ambiguous).
 
-**When to invoke:** Você colou um link de PR OU apontou pra worktree e quer "entender o que aconteceu aqui" + pontos de conversa, sem o rigor formal de review. Quando quiser review blocking issues → use `/che-review`.
+**When to invoke:** You pasted a PR link OR pointed to a worktree and want to "understand what happened here" + conversation points, without formal review rigor. When you want review blocking issues → use `/che-review`.
 
 **Agent action:**
 1. Invoke `che-diff-context` skill.
-2. Preflight Modo A (PR URL): `gh auth status` OK; URL parseável e reachable.
-3. Preflight Modo B (--worktree): worktree confirmada, session binding §19 lido (pergunta mismatch). Base branch: tenta auto-detect (origin/main ou origin/dev), se ambíguo → AskUserQuestion 2 opções + "outro".
-4. Coleta 3 fontes contexto Modo A: PR descr/metadata via gh pr view --json, diff names/stat, CI checks gh pr checks.
-5. Coleta 4 buckets Modo B: Já Commitado (base..HEAD), Por Commitar (staged + unstaged tracked), Untracked, Branch metadata.
-6. Estrutura relatório nas 5 seções CANÔNICAS (contexto alto / áreas mudança / CI ou buckets / riscos leves / 3 pontos conversa).
-7. Salva arquivo em `.trae/diff-context_PR-<N>_<ts>.md` (Modo A) ou `.trae/diff-context_LOCAL_<ts>.md` (Modo B).
-8. Entrega no chat resumo condensado §18 contracts (250–500w + 4 seções). Full report salvo em disco.
+2. Preflight Mode A (PR URL): `gh auth status` OK; URL parseable and reachable.
+3. Preflight Mode B (--worktree): worktree confirmed, §19 session binding read (ask mismatch). Base branch: auto-detect attempt (origin/main or origin/dev), if ambiguous → AskUserQuestion 2 options + "other".
+4. Collect 3 context sources Mode A: PR descr/metadata via gh pr view --json, diff names/stat, CI checks gh pr checks.
+5. Collect 4 buckets Mode B: Already Committed (base..HEAD), To Commit (staged + unstaged tracked), Untracked, Branch metadata.
+6. Structure report in 5 CANONICAL sections (high context / change areas / CI or buckets / slight risks / 3 conversation points).
+7. Save file to `.trae/diff-context_PR-<N>_<ts>.md` (Mode A) or `.trae/diff-context_LOCAL_<ts>.md` (Mode B).
+8. Deliver condensed summary in chat §18 contracts (250–500w + 4 sections). Full report saved to disk.
 
 **Syntax examples:**
 ```
@@ -312,21 +313,21 @@ Agent action: ask confirmation first.
 
 ## `/che-manual-test <--worktree /abs/path> [--task-id <slug> OR --plan-path <abs/path/to/manual_test_plan.md>]`
 
-**What it does:** Executa passo-a-passo o `manual_test_plan.md` do Scrum Master via **Playwright MCP** (browser real: navigate/click/fill/submit + screenshot evidências) e HTTP driver para API calls. DIFERENTE de `/che-qa` (QA = só comandos automatizados build/lint/test sem browser). Este che Abre navegador, passo-a-passo com plano, grava evidências (PNG, visible_text, console_log) por step, e entrega report final 8 seções com verdict global. Safety: NÃO toca prod URLs sem 2 confirmações, setup approval gate OBRIGATÓRIO antes de qualquer comando shell setup.
+**What it does:** Executes step-by-step the Scrum Master's `manual_test_plan.md` via **Playwright MCP** (real browser: navigate/click/fill/submit + screenshot evidence) and HTTP driver for API calls. DIFFERENT from `/che-qa` (QA = only automated build/lint/test commands without browser). This che Opens browser, step-by-step with plan, records evidence (PNG, visible_text, console_log) per step, and delivers final 8-section report with global verdict. Safety: DOES NOT touch prod URLs without 2 confirmations, mandatory setup approval gate BEFORE any shell setup command.
 
-**When to invoke:** Scrum Master finalizou o `manual_test_plan.md` (todas ACs do plano escritas, ambiente pronto) e você quer o AGENTE EXECUTAR os testes manuais (abrir browser, clicar, preencher formulários, tirar prints) ao invés de você manualmente. Se só quer build/lint/test automáticos → use `/che-qa`.
+**When to invoke:** Scrum Master has finished the `manual_test_plan.md` (all plan ACs written, environment ready) and you want the AGENT TO EXECUTE the manual tests (open browser, click, fill forms, take prints) instead of you manually. If you only want automated build/lint/test → use `/che-qa`.
 
 **Agent action:**
-1. Invoke `che-manual-test-executor` skill IMEDIATAMENTE.
-2. Preflight #1: confirmar worktree path + validar session binding §19 (mismatch = block pergunta).
-3. Preflight #2: resolver path manual_test_plan.md → (a) `--plan-path` dado → use; (b) default (nenhum flag): `source $HOME/.trae/contracts/che_sessions_contract.sh && che_compute_paths $WORKTREE_ROOT && echo $CHE_WORKSPACE_SHARED/manual_test_plan.md`; (c) nenhum binding criado → AskUserQuestion qual opção.
-4. Preflight #3: parse do plano (§0 Setup env, AC-N steps com GWT, Smoke S1..S5, HUMAN_ONLY items §3).
-5. **GATE setup approval OBRIGATÓRIO (antes qualqeur comando shell setup):** perguntar usuário (A=Executar setup, B=Pular app já roda, C=Cancelar).
-6. Criar evidence dir: `$CHE_SESSION_DIR/manual_test_evidence/` (FORA worktree) com subdirs AC-1, AC-2, ... + `execution.log`.
-7. **AC Execution Loop:** Para cada AC-N → classificação step pattern → driver Playwright/HTTP. Step por step com evidência cada. THEN assertion final → veredict ✅/⚠️/❌/⏭️ → close playwright session isolation.
-8. **Smoke S1..S5:** S1=build, S2=lint via comandos; S3=Login scenario Playwright; S4=top-level 3 pages Nav; S5=log grep CRITICAL/ERROR.
-9. Build report final 8 seções conforme references/MANUAL_TEST_EXECUTION_REPORT.md → save em `$CHE_SESSION_DIR/reports/MANUAL_TEST_EXECUTION_REPORT.md` (FORA worktree, `che_assert_outside_worktree`).
-10. Entrega chat resumo condensado §18 contracts (≤500w, 4 seções: status + ACs pass/fail counts + key failures ≤3 bullets + links report/evidence/plan + 1 oferta deep-dive).
+1. Invoke `che-manual-test-executor` skill IMMEDIATELY.
+2. Preflight #1: confirm worktree path + validate §19 session binding (mismatch = block question).
+3. Preflight #2: resolve manual_test_plan.md path → (a) `--plan-path` given → use; (b) default (no flag): `source $HOME/.trae/contracts/che_sessions_contract.sh && che_compute_paths $WORKTREE_ROOT && echo $CHE_WORKSPACE_SHARED/manual_test_plan.md`; (c) no binding created → AskUserQuestion which option.
+4. Preflight #3: plan parse (§0 Setup env, AC-N steps with GWT, Smoke S1..S5, HUMAN_ONLY items §3).
+5. **MANDATORY setup approval GATE (before any shell setup command):** ask user (A=Execute setup, B=Skip app already running, C=Cancel).
+6. Create evidence dir: `$CHE_SESSION_DIR/manual_test_evidence/` (OUTSIDE worktree) with subdirs AC-1, AC-2, ... + `execution.log`.
+7. **AC Execution Loop:** For each AC-N → step pattern classification → Playwright/HTTP driver. Step by step with evidence each. THEN final assertion → verdict ✅/⚠️/❌/⏭️ → close playwright session isolation.
+8. **Smoke S1..S5:** S1=build, S2=lint via commands; S3=Login scenario Playwright; S4=top-level 3 pages Nav; S5=log grep CRITICAL/ERROR.
+9. Build final 8-section report according to references/MANUAL_TEST_EXECUTION_REPORT.md → save to `$CHE_SESSION_DIR/reports/MANUAL_TEST_EXECUTION_REPORT.md` (OUTSIDE worktree, `che_assert_outside_worktree`).
+10. Deliver condensed summary in chat §18 contracts (≤500w, 4 sections: status + ACs pass/fail counts + key failures ≤3 bullets + report/evidence/plan links + 1 deep-dive offer).
 
 **Syntax examples:**
 ```
@@ -377,26 +378,26 @@ Agent action: ask confirmation first.
 
 ---
 
-## `/che-design` <modo: A|B|C opcional> [--path /abs/path/to/save.pen] [--palette #HEX1,#HEX2] [--tone "Tom de Voz"]
+## `/che-design` <modo: A|B|C optional> [--path /abs/path/to/save.pen] [--palette #HEX1,#HEX2] [--tone "Tone of Voice"]
 
 ## Alias: `/che-figma`
 
-**What it does:** Full design che: 3 modos. (A) Social Media: 6 criativos (Feed/Stories/Reels) + copy profissional + imagens geradas por IA + export PNG 2×. (B) UI/UX Feature: wireframes → high-fidelity → dev-spec (tokens Tailwind exportáveis). (C) Design System atômico: Tailwind tokens ↔ variáveis (Light/Dark mode) + 12 componentes (Button/Card/Input etc.) 4 variants + export CSS/JSON/Tailwind. Uses **local** `mcp_open-pencil` MCP (140+ tools equivalente a Figma desktop).
-**When to invoke:** Você quer designs profissionais prontos para produção direto por aqui: criativos de rede sociais com copy, telas de produto, ou um design system atômico sincronizado com Tailwind.
-**Agent action (PREFLIGHT obrigatório se parâmetros faltarem):**
-1. Invocar **`che-social-ui-designer`** skill IMEDIATAMENTE.
-2. Preflight pergunta #1 (se `--mode` omitido): "Qual modo? A) Social Media / B) UI-UX / C) Design System" (AskUserQuestion 1 pergunta, 3 opções).
-3. Preflight pergunta #2 (equivalente a "qual projeto figma trabalhar", user-asked): qual caminho ABSOLUTO para salvar o arquivo de design (`.pen` = OpenPencil / Figma-equivalente). Default `/home/laion/.trae/designs/<modo>-<slug>-YYYYMMDD.pen`.
-4. Preflight pergunta #3 (se faltar): paleta / tipografia / tom de voz (copy).
-5. Skill executa o modo selecionado §A/B/C com fail-fast + quality gates WCAG AA.
-6. Entrega final sempre com: arquivos exportados PNG 2× / tokens / source `.pen` + 1 ÚNICA oferta de aprofundar (§18 contracts).
+**What it does:** Full design che: 3 modes. (A) Social Media: 6 creatives (Feed/Stories/Reels) + professional copy + IA generated images + 2× PNG export. (B) UI/UX Feature: wireframes → high-fidelity → dev-spec (exportable Tailwind tokens). (C) Atomic Design System: Tailwind tokens ↔ variables (Light/Dark mode) + 12 components (Button/Card/Input etc.) 4 variants + CSS/JSON/Tailwind export. Uses **local** `mcp_open-pencil` MCP (140+ tools equivalent to Figma desktop).
+**When to invoke:** You want professional production-ready designs right from here: social media creatives with copy, product screens, or an atomic design system synced with Tailwind.
+**Agent action (MANDATORY PREFLIGHT if parameters are missing):**
+1. Invoke **`che-social-ui-designer`** skill IMMEDIATELY.
+2. Preflight question #1 (if `--mode` omitted): "Which mode? A) Social Media / B) UI-UX / C) Design System" (AskUserQuestion 1 question, 3 options).
+3. Preflight question #2 (equivalent to "which figma project to work on", user-asked): which ABSOLUTE path to save the design file (`.pen` = OpenPencil / Figma-equivalent). Default `/home/laion/.trae/designs/<modo>-<slug>-YYYYMMDD.pen`.
+4. Preflight question #3 (if missing): palette / typography / tone of voice (copy).
+5. Skill executes selected mode §A/B/C with fail-fast + WCAG AA quality gates.
+6. Final delivery always with: 2× PNG exported files / tokens / source `.pen` + ONE SINGLE offer to deep-dive (§18 contracts).
 
 **Syntax examples:**
 ```
-/che-design A                                # Social Media batch completo (2 feed + 2 stories + 2 reels templates + copy + imagens)
-/che-design B --path /home/laion/designs/dashboard-creator.pen  # UI-UX feature dashboard
-/che-design C --palette "#6D28D9,#F59E0B,#111827,#F9FAFB" --tone "Luxo minimalista"
-/che-figma A slug:"lancamento-festival-UK"   # alias igual
+/che-design A                                # Full Social Media batch (2 feed + 2 stories + 2 reels templates + copy + images)
+/che-design B --path /home/laion/designs/dashboard-creator.pen  # UI-UX dashboard feature
+/che-design C --palette "#6D28D9,#F59E0B,#111827,#F9FAFB" --tone "Minimalist luxury"
+/che-figma A slug:"UK-festival-launch"   # same alias
 ```
 
 ---
@@ -405,24 +406,35 @@ Agent action: ask confirmation first.
 
 | Command | Primary skill invoked |
 |---|---|
-| `/che-spec` | `che-spec` (4 input sources: existing / ticket URL / PRD Flockr path / brief description; YAML frontmatter + 7 canonical sections; Approved gate; saves DURÁVEL workspace-shared; standalone ou invocado automaticamente por /che-act SM §0.5) |
-| `/che-act` | `che-act` (§0.5 auto-invokes che-spec if no Approved SPEC; auto-detects serial vs parallel; falls back serial if any precondition fails) |
-| `/che-parallel` | `che-act` → `che-executor-dispatcher` (explicit parallel; ERROR if can't parallelize; no serial fallback) |
+| `/che-spec` | `che-spec` (4 input sources: existing / ticket URL / legacy PRD path / brief description; YAML frontmatter + 7 canonical sections; Approved gate; saves DURABLE workspace-shared; standalone or automatically invoked by SM §0.5 in /che-act) |
+| `/che-act` | `che-act` (§0.5 auto-invokes che-spec if no Approved SPEC; auto-detects serial vs parallel; falls back to serial if any precondition fails) |
+| `/che-parallel` | `che-act` → `che-executor-dispatcher` (explicit parallel; ERROR if cannot parallelise; no serial fallback) |
 | `/che-ship` | `che-ship` (commits → push → DRAFT PR → assign) |
 | `/che-fix` | `che-debugger-bugfix` (scientific debug loop, different from features) |
 | `/che-review` | `che-code-review` (HIGH / CRITICAL + scope only) |
-| `/che-diff` | `che-diff-context` (contexto conversa leve — NO verdict) |
-| `/che-manual-test` | `che-manual-test-executor` (Playwright MCP + HTTP driver, steps de manual_test_plan.md c/ evidências screenshot + report 8 seções. Setup approval gate OBRIGATÓRIO. Fronteira vs che-qa: QA = build/lint/test automatizados; Manual = browser/interativo real.) |
+| `/che-diff` | `che-diff-context` (lightweight conversation context — NO verdict) |
+| `/che-manual-test` | `che-manual-test-executor` (Playwright MCP + HTTP driver, manual_test_plan.md steps with screenshot evidence + 8-section report. MANDATORY setup approval gate. Boundary vs che-qa: QA = automated build/lint/test; Manual = real browser/interactive.) |
 | `/che-pr-comments` | `che-pr-comments` (triage, implementation plan, reply drafts) |
 | `/che-ci-fix` | `che-ci-fixer` (classify CI failure + minimal fix) |
-| `/che-design` | `che-social-ui-designer` (3 modos: Social Media / UI-UX / Design System — local open-pencil MCP equivalente Figma) |
+| `/che-design` | `che-social-ui-designer` (3 modes: Social Media / UI-UX / Design System — local open-pencil Figma-equivalent MCP) |
 | `/che-status` | Reads `task_graph.md` directly, no skill invocation needed |
 | `/che-skip` | Updates `decisions.log.jsonl` + `task_graph.md`; tells SM to treat gate as passed |
 | `/che-decisions` | Reads `decisions.log.jsonl` |
 | `/che-summary` | Uses SM logic to generate interim final_summary |
 | `/che-abort` | SM writes ABORTED metadata |
-| `/che-export` | `portability.py` logic | Exports project durable data (L2+L3). |
+| `/che-config` | `che_core.cli config` |
+| `/che-export` | `portability.py` logic | Exports project durable data (L2+L3) to a portable archive. |
 | `/che-import` | `portability.py` logic | Imports project durable data from archive. |
+
+---
+
+## `/che-config [--lang-chat=...] [--lang-docs=...] [--lang-report=...] [--pt-check=...]`
+**What it does:** Sets configuration flags for the current session, such as chat language, documentation language, and Portuguese text detection. Flags are stored in the Level 1 registry.
+**When to invoke:** When you want to change the agent's behavior regarding language or security hooks for the current session.
+**Agent action:**
+1. Resolve `WORKTREE_ROOT` and `SESSION_ID`.
+2. Execute: `python3 -m che_core.cli config "$SESSION_ID" "$WORKTREE_ROOT" ...`.
+3. Report the updated configuration to the user.
 
 ---
 
@@ -449,10 +461,10 @@ Agent action: ask confirmation first.
 
 ## Rules for the AGENT when user issues a command
 
-1. **Worktree check FIRST.** If `/che-*` is called but worktree is not yet confirmed → **ASK FOR WORKTREE before executing anything else.** Even if the command is just `/che-status`. EXCEÇÃO: `/che-spec` roda binding preflight se não houver (auto-cria Level 1+2).
-2. **English for files, Portuguese for chat.** The reports printed to the user (status, decisions, warnings) are in Portuguese. The files written to disk are in English.
-3. **Do NOT invent new commands.** Only those listed above, plus any repo-local `/flockr-*` commands already defined per-worktree.
-4. **Logging.** Every command execution results in a new entry to `session.md` under `$CHE_SESSION_DIR/` (resolvido via contract `che_compute_paths`; NÃO mais em worktree/.trae — MORATÓRIA §19.1).
-5. **SPEC GATE ordem de precedência para planejamento:**
-   - `/che-spec` standalone = apenas documento (sem scope-capture / dev), roda antes do che-act.
-   - `/che-act` = SM §0.5 auto-chama che-spec SE não houver SPEC Approved, passando args input (ticket/prd/desc) do usuário; Approved libera scope-capture.
+1. **Worktree check FIRST.** If `/che-*` is called but worktree is not yet confirmed → **ASK FOR WORKTREE before executing anything else.** Even if the command is just `/che-status`. EXCEPTION: `/che-spec` runs preflight binding if none exists (auto-creates Level 1+2).
+2. **English for files, Portuguese for chat.** The reports printed to the user (status, decisions, warnings) are in Portuguese (as per user preference). The files written to disk are in English.
+3. **Do NOT invent new commands.** Only those listed above, plus any repo-local commands already defined per-worktree.
+4. **Logging.** Every command execution results in a new entry to `session.md` under `$CHE_SESSION_DIR/` (resolved via `che_compute_paths` contract; NO longer in worktree/.trae — §19.1 MORATORIUM).
+5. **SPEC GATE precedence order for planning:**
+   - Standalone `/che-spec` = document only (no scope-capture / dev), runs before che-act.
+   - `/che-act` = SM §0.5 auto-calls che-spec IF no Approved SPEC exists, passing user input args (ticket/prd/desc); Approved releases scope-capture.

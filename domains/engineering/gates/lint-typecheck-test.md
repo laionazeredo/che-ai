@@ -1,37 +1,40 @@
-# Gate G-ENG-1: Lint · Typecheck · Test Pass Rate (100% obrigatório)
+# Gate G-ENG-1: Lint · Typecheck · Test Pass Rate (100% mandatory)
 
-Rodado AUTOMATICAMENTE pelo ship §0.9.5 DOMAIN GATES quando `domain=engineering` (default).
+Run AUTOMATICALLY by ship §0.9.5 DOMAIN GATES when `domain=engineering` (default).
 
 ---
 
-## Thresholds numéricos (OBRIGATÓRIO, sem números vira gate HUMAN ONLY)
-| Métrica | Threshold HARD PASS | O que mede |
+## Numerical Thresholds (MANDATORY, without numbers it becomes a HUMAN ONLY gate)
+
+| Metric | HARD PASS Threshold | What it measures |
 |---|---|---|
 | Lint errors | **`0`** | Biome check --error-on-warnings=false, eslint max-warnings 0 |
-| Lint warnings | `N` (permitido, mas HIGH review comment automaticamente) | Code review §0.9.2 sugere correção se warnings ≥5. Não falha o gate |
+| Lint warnings | `N` (allowed, but HIGH review comment automatically) | Code review §0.9.2 suggests fix if warnings ≥5. Does not fail the gate |
 | Typecheck errors | **`0`** | tsc --noEmit / cargo check / mypy strict |
-| Typecheck warnings | `N` (permitido) | HIGH se ≥10 |
-| Test pass rate (unit + integration) | **`100.0%`** (0 FAIL, 0 ERROR) | Nenhum teste pode estar FAILING em CI. Flaky = retry seed 2x |
-| Test total count ≥ | `1` por AC definida no SPEC | Mínimo absoluto. Não é substituto de coverage G-ENG-2. |
+| Typecheck warnings | `N` (allowed) | HIGH if ≥10 |
+| Test pass rate (unit + integration) | **`100.0%`** (0 FAIL, 0 ERROR) | No test can be FAILING in CI. Flaky = retry seed 2x |
+| Test total count ≥ | `1` per AC defined in SPEC | Absolute minimum. Not a substitute for coverage G-ENG-2. |
 
 ---
 
-## Detecção & Retry policy
+## Detection & Retry Policy
+
 ### 1st FAIL:
-- Retry 1 automático GRÁTIS com mesmo seed.
-- Se 2a execução PASSA = marcado "FLAKY" no log, gate = PASS e warn.
-- Se 2a ainda FAIL = reporta top 3 FAILURES com stack trace.
+- 1 FREE automatic retry with same seed.
+- If 2nd run PASSES = marked as "FLAKY" in log, gate = PASS with warning.
+- If 2nd still FAILS = report top 3 FAILURES with stack trace.
 
-### 2nd FAIL (após retry ou deterministic fail):
+### 2nd FAIL (after retry or deterministic fail):
 → **HARD STOP HUMAN REQUIRED**.
-Agente não corrige testes quebrados de arquitetura ou refactors grandes SEM SPEC atualizado. User escolhe: (A) corrigir manualmente (B) EXPLICIT_OVERRIDE logado (só em casos extremos, como teste obsoleto removido) (C) cancelar ship.
+Agent does not fix broken architecture tests or large refactors WITHOUT updated SPEC. User chooses: (A) fix manually (B) logged user EXPLICIT_OVERRIDE (only in extreme cases, like obsolete test removed) (C) cancel ship.
 
 ---
 
-## Como executar manualmente (se quiser rodar antes de ship)
-Cada projeto define `lint`, `typecheck`, `test` via Nx targets / package scripts.
+## How to execute manually (if you want to run before ship)
+Each project defines `lint`, `typecheck`, `test` via Nx targets / package scripts.
+
 ```bash
-# Exemplo monorepo pnpm + nx:
+# Example monorepo pnpm + nx:
 corepack pnpm nx run-many --all --target=lint --tui false
 corepack pnpm nx run-many --all --target=typecheck --tui false
 corepack pnpm nx run-many --all --target=test --tui false
@@ -39,7 +42,8 @@ corepack pnpm nx run-many --all --target=test --tui false
 
 ---
 
-## Artifacts gerados (obrigatório anexar a PR description se ship)
+## Generated Artifacts (mandatory to attach to PR description if shipping)
+
 ```
 reports/domain-gates/
 └── G-ENG-1--lint-typecheck-test_<timestamp>.json
@@ -56,9 +60,10 @@ reports/domain-gates/
 
 ---
 
-## Casos especiais
-| Cenário | Ação |
+## Special Cases
+
+| Scenario | Action |
 |---|---|
-| Monorepo multi-pacote | Roda G1 separadamente por pacote. Falha 1 = falha geral. Relatório agregado. |
-| Worktree-only mudou markdown/docs | Skip typecheck/lint/TEST automático (mas não se mudou .ts/.rs/.py) — detecta via diff. |
-| Projeto sem testes definido no SPEC? | 1st gate FAIL. Exigir EXPLICIT_OVERRIDE user SEMPRE. NÃO pode passar gate sem override. |
+| Multi-package monorepo | Run G1 separately per package. 1 failure = general failure. Aggregated report. |
+| Worktree-only changed markdown/docs | Automatic skip of typecheck/lint/TEST (but not if .ts/.rs/.py changed) — detected via diff. |
+| Project without tests defined in SPEC? | 1st gate FAIL. Require user EXPLICIT_OVERRIDE ALWAYS. Cannot pass gate without override. |

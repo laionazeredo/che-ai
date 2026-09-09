@@ -5,7 +5,7 @@ description: "Scans all comments on a GitHub PR, classifies them (human vs bot /
 
 # Che — PR Comments Triage & Response Drafts
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - GitHub CLI gh auth + pull/post comments commands: `_shared_checklists/GITHUB_CLI_COMMON.md`
 > - Security/PII triage for review comments about compliance: `_shared_checklists/SECURITY_PII_COMMON.md`
 
@@ -14,7 +14,7 @@ Given a GitHub PR URL, this skill:
 2. Classifies and groups.
 3. Produces a triage report: what to IMPLEMENT, what to RESPOND and reject, what to mark as resolved without action.
 
-**NEVER actually posts comments to GitHub UNLESS user explicitly says "suba essas respostas". First deliver the triage + plan + draft responses to the user chat for approval.**
+**NEVER actually posts comments to GitHub UNLESS user explicitly says "upload these responses". First deliver the triage + plan + draft responses to the user chat for approval.**
 
 ---
 
@@ -98,10 +98,10 @@ For HUMAN comments → classify content:
 
 ## 3. Triage Report Structure
 
-### 2.9 🔴 STORAGE PREFLIGHT + PATH OBRIGATÓRIOS (ANTES DO PRIMEIRO WRITE)
+### 2.9 🔴 STORAGE PREFLIGHT + MANDATORY PATHS (BEFORE FIRST WRITE)
 
-Rode EXATAMENTE este bloco; depois use SOMENTE o helper `che_output_path`. NUNCA construa paths manualmente.
-NUNCA crie `<worktree>/.trae/` nem `<worktree>/reports/` nem `<worktree>/pr_comments/`. MORATÓRIA §20.
+Run EXACTLY this block; then use ONLY the helper `che_output_path`. NEVER construct paths manually.
+NEVER create `<worktree>/.trae/` or `<worktree>/reports/` or `<worktree>/pr_comments/`. MORATORIUM §20.
 
 ```bash
 CHE_HOME="${CHE_HOME:-$HOME/.trae}"
@@ -110,7 +110,7 @@ if [ -f "$CONTRACT" ]; then
   # shellcheck disable=SC1090
   source "$CONTRACT"
 else
-  echo "❌ FATAL: che_sessions_contract.sh não encontrado em $CONTRACT. Abortando write."
+  echo "❌ FATAL: che_sessions_contract.sh not found at $CONTRACT. Aborting write."
   exit 98
 fi
 
@@ -121,24 +121,24 @@ if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
   che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "WORKSPACE_SHARED"
 fi
 
-# Construir path ÚNICO via helper:
-# - type = pr_comments (mapeia para subpasta pr_comments/)
+# Construct UNIQUE path via helper:
+# - type = pr_comments (maps to subfolder pr_comments/)
 # - slug = triage-report
-# - related_id = pr-<ID> (agrupa tudo relacionado a esta PR)
-# - scope = workspace (durável: compartilhado entre sessões nesta worktree, pode ser reaberto amanhã)
+# - related_id = pr-<ID> (groups everything related to this PR)
+# - scope = workspace (durable: shared between sessions in this worktree, can be reopened tomorrow)
 # - ext = md
 PR_COMMENTS_REPORT_PATH="$(che_output_path "pr_comments" "triage-report" "pr-${PR_ID}" "workspace" "md")"
 ```
 
-Resultado exemplo: `$CHE_WORKSPACE_SHARED/pr_comments/pr-382/20260902-111500-triage-report.md`
-→ Timestamp no prefix ordena automaticamente se houver múltiplas rodadas de triage na mesma PR.
-→ related_id = `pr-382` agrupa tudo junto. Busca futura trivial: `ls -1 pr_comments/pr-382/*.md`.
+Example result: `$CHE_WORKSPACE_SHARED/pr_comments/pr-382/20260902-111500-triage-report.md`
+→ Timestamp prefix automatically sorts if there are multiple triage rounds on the same PR.
+→ related_id = `pr-382` groups everything together. Trivial future search: `ls -1 pr_comments/pr-382/*.md`.
 
-**Arquivo final escrito usando atomic write:**
+**Final file written using atomic write:**
 ```bash
-# pipe o conteúdo markdown completo para o helper atômico (tmp → mv):
+# pipe the full markdown content to the atomic helper (tmp → mv):
 cat <<'MARKDOWN_EOF' | che_write_file_atomic "$PR_COMMENTS_REPORT_PATH"
-# ... corpo do triage report aqui ...
+# ... triage report body here ...
 MARKDOWN_EOF
 ```
 
@@ -265,6 +265,6 @@ Estimated total files touched: 6 (≤ 10 ✅)
 ## 5. Hard stops / rules
 
 - **Never write a response that sounds aggressive / dismissive.** Always: thank → explain rationale → offer follow-up / alternative path.
-- **Never auto-decide ARCHITECTURE_REQUEST or DISCUSSION when reviewer is a repo OWNER/MEMBER.** Flag to user: "Este reviewer é owner/mantenedor. Sugiro implementar a menos que você discorde fortemente."
-- **Never auto-post replies to GitHub.** Only do so when user explicitly types: "suba essas respostas" or similar, and AFTER user approves the full triage report + plan + response drafts.
+- **Never auto-decide ARCHITECTURE_REQUEST or DISCUSSION when reviewer is a repo OWNER/MEMBER.** Flag to user: "This reviewer is an owner/maintainer. I suggest implementing unless you strongly disagree."
+- **Never auto-post replies to GitHub.** Only do so when user explicitly types: "upload these responses" or similar, and AFTER user approves the full triage report + plan + response drafts.
 - If any comment says "Merge conflicts" / "This branch is out-of-date with base" — classify as BOT_MERGE_CONFLICT → HIGH priority, must resolve as part of Section 1 before anything else.

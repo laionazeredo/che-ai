@@ -65,10 +65,10 @@ def entry_date(e: Dict[str, Any]) -> Optional[datetime]:
     ts = to_str(e.get("ts"))
     if not ts:
         return None
-    normalized = ts if ts.endswith("Z") else ts.replace("+00:00", "Z")
-    normalized = normalized.replace("Z", "+00:00")
+    normalised = ts if ts.endswith("Z") else ts.replace("+00:00", "Z")
+    normalised = normalised.replace("Z", "+00:00")
     try:
-        return datetime.fromisoformat(normalized)
+        return datetime.fromisoformat(normalised)
     except Exception:
         return None
 
@@ -117,7 +117,7 @@ def matches_filters(e: Dict[str, Any], args: argparse.Namespace) -> bool:
 
 
 def cmd_summary(entries: List[Dict[str, Any]], args: argparse.Namespace):
-    lang = getattr(args, "lang", "pt") or "pt"
+    lang = getattr(args, "lang", "en") or "en"
     last_n = getattr(args, "last", 20) or 20
 
     sorted_entries = sorted(entries, key=lambda x: to_str(x.get("ts")), reverse=True)[:last_n]
@@ -129,7 +129,7 @@ def cmd_summary(entries: List[Dict[str, Any]], args: argparse.Namespace):
 
     for e in sorted_entries:
         sid = f" ({to_str(e.get('spec_id'))})" if e.get("spec_id") else ""
-        ev = to_str(e.get("event")).replace("_", " ") if lang == "pt" else to_str(e.get("event"))
+        ev = to_str(e.get("event")).replace("_", " ")
         txt = data_text(e)[:120]
         print(f"- [{fmt_ts_short(to_str(e.get('ts')))}] {ev} | {txt}{sid}")
 
@@ -198,7 +198,7 @@ def main():
 
     p_sum = subparsers.add_parser("summary")
     p_sum.add_argument("--last", type=int, default=20)
-    p_sum.add_argument("--lang", choices=["pt", "en"], default="pt")
+    p_sum.add_argument("--lang", choices=["pt", "en"], default="en")
 
     p_fil = subparsers.add_parser("filter")
     p_fil.add_argument("--spec")

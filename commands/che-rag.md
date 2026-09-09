@@ -2,76 +2,76 @@
 description: "RAG (Retrieval Augmented Generation) search with hybrid BM25 lexical + vector embeddings. Builds incremental index from project durable docs (architecture, specs, envelopes, decisions). sqlite-vec optional, zero-deps fallback always works."
 arguments:
   - name: action
-    description: "build-index | search. build-index = atualiza índice incremental. search = consulta híbrida."
+    description: "build-index | search. build-index = updates incremental index. search = hybrid query."
     required: true
   - name: worktree
     description: "Absolute worktree path. If session BOUND binding exists, uses WORKTREE_ROOT default."
     required: false
   - name: query_text
-    description: "Apenas para action=search. Query de busca semântica em português ou inglês. Colocar em aspas."
+    description: "Only for action=search. Semantic search query in Portuguese or English. Wrap in quotes."
     required: false
   - name: provider
-    description: "Apenas para action=build-index. auto | none | sentence-transformers | openai. Default = auto (sempre cai em none se nada disponível)."
+    description: "Only for action=build-index. auto | none | sentence-transformers | openai. Default = auto (always falls back to none if nothing available)."
     required: false
   - name: top_k
-    description: "Apenas para action=search. Default = 10. Quantidade de resultados híbridos."
+    description: "Only for action=search. Default = 10. Number of hybrid results."
     required: false
   - name: no-hybrid
-    description: "Apenas para action=search. Flag sem valor: se passado, roda só BM25 lexical sem vetor."
+    description: "Only for action=search. Flag without value: if passed, runs only BM25 lexical without vector."
     required: false
 ---
 
 # `/che-rag` — Retrieval Augmented Generation
 
-Oferece duas ações:
+Offers two actions:
 
-**A) `build-index`**: Constrói/refresca de forma **incremental** o índice RAG a partir das fontes de verdade canônicas:
+**A) `build-index`**: Incrementally builds/refreshes the RAG index from canonical sources of truth:
 - L2 Project Durable: `project_profile.md`, `architecture.md`, `product_context.md`, `roadmap.md`.
-- L3 Worktree Shared: `specs/*.md` (todos specs Approved/Draft), `tasks/*/envelope.md` (envelopes), `decisions.log.jsonl` (blocos de 50 linhas), `task_graph.md`.
+- L3 Worktree Shared: `specs/*.md` (all Approved/Draft specs), `tasks/*/envelope.md` (envelopes), `decisions.log.jsonl` (50-line blocks), `task_graph.md`.
 
-Chunking: 512 tokens ≈ 384 palavras com 10% overlap. Hash SHA-256 por chunk (caminho + id + texto) → chunks inalterados são SKIPADOS.
+Chunking: 512 tokens ≈ 384 words with 10% overlap. SHA-256 hash per chunk (path + id + text) → unchanged chunks are SKIPPED.
 
-Providers suportados:
-- `auto` (recomendado) → tenta sentence-transformers → OPENAI_API_KEY → sempre cai em `none` (sem crash).
-- `none` → fallback ZERO DEPENDÊNCIAS: vetores dummy, scores vetoriais = constante → 100% BM25. Sempre funciona.
-- `openai` / `sentence-transformers` → requer lib e chave instalada/setada; se faltar cai `none` + aviso no retorno.
+Supported providers:
+- `auto` (recommended) → tries sentence-transformers → OPENAI_API_KEY → always falls back to `none` (no crash).
+- `none` → ZERO DEPENDENCIES fallback: dummy vectors, vector scores = constant → 100% BM25. Always works.
+- `openai` / `sentence-transformers` → requires library and key installed/set; if missing, falls back to `none` + warning in return.
 
-sqlite-vec é **opcional**: se extensão não puder carregar (ambiente restrito), build e search ainda funcionam via lexical only.
+sqlite-vec is **optional**: if the extension cannot load (restricted environment), build and search still work via lexical only.
 
-**B) `search`**: Busca **híbrida ponderada (40% BM25 lexical + 60% vetor cosseno)**. Cada score é normalizado [0,1] antes do merge. Resultados ordenados por `hybrid_score`.
+**B) `search`**: Weighted **hybrid search (40% BM25 lexical + 60% cosine vector)**. Each score is normalized [0,1] before merging. Results ordered by `hybrid_score`.
 
 ---
 
-## Pré-flight por ação
+## Pre-flight per action
 
-### Ação `build-index`
+### Action `build-index`
 1. Resolve WORKTREE_ROOT.
-2. NÃO precisa de state store. Roda standalone.
-3. Executa:
+2. DOES NOT need state store. Runs standalone.
+3. Execute:
    ```bash
    python3 -m che_core.cli rag build-index "$WORKTREE_ROOT" \
      --chunk-size 512 \
      --provider auto
    ```
-4. Reporta ao usuário: `chunks_total`, `inserted` (novo), `skipped_cached` (não mudou), `deleted_stale` (removido), `sqlite_vec_loaded` (bool), `provider` real utilizado.
+4. Report to user: `chunks_total`, `inserted` (new), `skipped_cached` (unchanged), `deleted_stale` (removed), `sqlite_vec_loaded` (bool), actual `provider` used.
 
-### Ação `search`
+### Action `search`
 1. Resolve WORKTREE_ROOT.
-2. Se DB `che_rag.sqlite` não existir OU tiver sido criado há mais de 7 dias ou mais novo que `decisions.log` mtime → executa `build-index` SILENCIOSAMENTE primeiro (não pede user).
-3. Executa:
+2. If `che_rag.sqlite` DB does not exist OR was created more than 7 days ago OR is newer than `decisions.log` mtime → execute `build-index` SILENTLY first (do not ask user).
+3. Execute:
    ```bash
    python3 -m che_core.cli rag search "$WORKTREE_ROOT" "$QUERY_TEXT" \
      --top-k 10 \
      --hybrid
    ```
-4. Exibe os top-k ordenados por `hybrid_score`, mostrando `scope` + `source_path` (com #Lx-Ly se existir) + 2 linhas de snippet do `text_body`.
+4. Display top-k ordered by `hybrid_score`, showing `scope` + `source_path` (with #Lx-Ly if applicable) + 2-line `text_body` snippet.
 
 ---
 
-## Exemplos
+## Examples
 
 ```
 /che-rag action=build-index worktree=/home/laion/code/flockr/Lumos provider=auto
-/che-rag action=search  worktree=/home/laion/code/flockr/Lumos "Quais decisões sobre RLS no banco de eventos?" top_k=8
-/che-rag action=search "refund flow no Stripe" no-hybrid
+/che-rag action=search  worktree=/home/laion/code/flockr/Lumos "Which decisions about RLS in the events database?" top_k=8
+/che-rag action=search "refund flow in Stripe" no-hybrid
 ```

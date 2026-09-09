@@ -1,39 +1,39 @@
 ---
 name: "che-onboarding"
-description: "Registro humano compartilhado (Nível 1.5 registry) de contexto do PRODUTO + ARQUITETURA MANUAL + ROADMAP + PESSOAS. Complemento de che-xray (automático): este skill é o lado HUMANO. O che SEMPRE lê product_context.md + architecture.md ANTES de gerar QUALQUER SPEC via che-spec. Gate obrigatório ANTES de /che-spec em projetos que nunca passaram por aqui. Registry FICA FORA worktree user em $CHE_SESSIONS_ROOT/.registry/projects/<slug>/. NÃO cria nada na worktree a menos que usuário peça VERBATIM."
+description: "Shared human registry (Level 1.5 registry) of PRODUCT + MANUAL ARCHITECTURE + ROADMAP + PEOPLE context. Complementary to che-xray (automatic): this skill is the HUMAN side. Che ALWAYS reads product_context.md + architecture.md BEFORE generating ANY SPEC via che-spec. Mandatory gate BEFORE /che-spec in projects that have never passed through here. Registry stays OUTSIDE user worktree in $CHE_SESSIONS_ROOT/.registry/projects/<slug>/. DOES NOT create anything in the worktree unless the user explicitly asks VERBATIM."
 ---
 
-# Che Project Knowledge — Registry Humano do Projeto
+# Che Project Knowledge — Human Project Registry
 
 > **SHARED REFERENCES (CANONICAL):**
-> - Auto-onboarding complementar: `/che-xray` (este skill não substitui xray)
+> - Complementary auto-onboarding: `/che-xray` (this skill does not replace xray)
 > - Paths: `source "${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che_sessions_contract.sh"`
-> - Regras de complexidade acidental + deep modules: `engineering-contracts` §1 + Appendix D (Ousterhout)
+> - Accidental complexity rules + deep modules: `engineering-contracts` §1 + Appendix D (Ousterhout)
 
 ---
 
-## -0.1 STORAGE BOUNDARY PREFLIGHT (OBRIGATÓRIO ANTES DO PRIMEIRO WRITE)
+## -0.1 STORAGE BOUNDARY PREFLIGHT (MANDATORY BEFORE FIRST WRITE)
 
 ```bash
-# 1. Carrega contrato de sessões (registry helpers + paths)
+# 1. Load sessions contract (registry helpers + paths)
 source ~/.trae/contracts/che_sessions_contract.sh
 
-# 2. WORKTREE_ROOT obrigatório para resolver PROJECT_SLUG canônico
+# 2. WORKTREE_ROOT required to resolve canonical PROJECT_SLUG
 WORKTREE_ROOT="${WORKTREE_ROOT:-$(pwd)}"
 SESSION_ID="${SESSION_ID:-onboarding-$(date -u +%Y%m%d-%H%M%S)}"
 
-# 3. Paths canônicos + assegura dirs (cria CHE_PROJECT_DIR abaixo .registry/projects)
+# 3. Canonical paths + ensure dirs (creates CHE_PROJECT_DIR under .registry/projects)
 che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
 che_ensure_session_dirs "$WORKTREE_ROOT"
 
-# 4. Double-guard: registry FICA FORA worktree (por construção .registry/ está em CHE_SESSIONS_ROOT)
-[ -n "${CHE_PROJECT_DIR:-}" ] || { echo "[che-onboarding] ❌ CHE_PROJECT_DIR não definido. compute_paths falhou?" >&2; exit 99; }
+# 4. Double-guard: registry stays OUTSIDE worktree (by design .registry/ is in CHE_SESSIONS_ROOT)
+[ -n "${CHE_PROJECT_DIR:-}" ] || { echo "[che-onboarding] ❌ CHE_PROJECT_DIR not defined. compute_paths failed?" >&2; exit 99; }
 che_assert_outside_worktree "$CHE_PROJECT_DIR" "$WORKTREE_ROOT" "CHE_PROJECT_DIR"
 che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
 
-# 5. Constrói UMA VEZ os 4 paths canônicos do registry via helper type=project_registry
+# 5. Construct canonical registry paths ONCE via type=project_registry helper
 PROJECT_REGISTRY_DIR="$(dirname -- "$(che_output_path "project_registry" ".keep" "${CHE_PROJECT_SLUG:-unknown}" "workspace" "md")")"
-# Se helper gerou subpath abaixo WORKSPACE_SHARED mas registry canônico usa CHE_PROJECT_DIR → use CHE_PROJECT_DIR
+# If helper generated subpath under WORKSPACE_SHARED but canonical registry uses CHE_PROJECT_DIR → use CHE_PROJECT_DIR
 [ -d "$CHE_PROJECT_DIR" ] || mkdir -p "$CHE_PROJECT_DIR"
 
 PROJECT_PROFILE_PATH="${CHE_PROJECT_DIR}/project_profile.md"
@@ -43,65 +43,65 @@ ROADMAP_PATH="${CHE_PROJECT_DIR}/roadmap.md"
 PROJECT_REGISTRY_JSONL="${CHE_PROJECT_DIR}/registry.jsonl"
 ```
 
-**NÃO INVENTE paths:** Os 4 arquivos do registry + audit jsonl ficam SEMPRE abaixo de `$CHE_PROJECT_DIR`. NUNCA crie `./docs/product_context.md` dentro worktree. Se usuário pedir VERBATIM "salve também na worktree para comitar", isso é exceção; mas a fonte canônica SEMPRE fica em `$CHE_PROJECT_DIR`.
+**DO NOT INVENT paths:** The 4 registry files + audit jsonl always stay under `$CHE_PROJECT_DIR`. NEVER create `./docs/product_context.md` inside the worktree. If the user asks VERBATIM to "also save to the worktree to commit", that is an exception; but the canonical source ALWAYS stays in `$CHE_PROJECT_DIR`.
 
 ---
 
-## 0. POR QUE EXISTE (Lean Motivation)
+## 0. WHY IT EXISTS (Lean Motivation)
 
-che-xray = automático, lê CÓDIGO.
-che-onboarding = humano, lê INTENÇÃO, CONTEXTO DE NEGÓCIO, PESSOAS.
+che-xray = automatic, reads CODE.
+che-onboarding = human, reads INTENT, BUSINESS CONTEXT, PEOPLE.
 
-Sem este skill: o che gera specs tecnicamente corretos mas **desalinhados do produto**, errando personas, limites de escopo, integrações planejadas e riscos conhecidos do negócio. Economiza 3-5 interações de "não era isso" por feature.
+Without this skill: che generates technically correct but **product-misaligned** specs, missing personas, scope limits, planned integrations, and known business risks. Saves 3-5 "that wasn't it" iterations per feature.
 
 ---
 
-## 1. QUANDO CHAMAR
+## 1. WHEN TO CALL
 
-| Momento | Ação |
+| Moment | Action |
 |---|---|
-| ✅ PRIMEIRA VEZ depois de `/che-xray` (obrigação) | Preencher **product_context.md** + **roadmap.md** + architecture.md manual |
-| ✅ MUDANÇA DE ESCOPO DO PRODUTO (ex: pivô, nova feature grande, novo segmento) | Atualizar product_context + roadmap |
-| ✅ MUDANÇA ARQUITETURAL GRANDE (ex: monolito → microservices, troca DB) | Atualizar architecture.md manual |
-| ✅ NOVO MEMBRO DO TIME entra | Usar `--show` para dar onboarding estruturado |
-| ✅ ANTES DE `/che-spec` se for a primeira feature do projeto | Ler tudo + absorver |
+| ✅ FIRST TIME after `/che-xray` (obligation) | Fill **product_context.md** + **roadmap.md** + manual architecture.md |
+| ✅ PRODUCT SCOPE CHANGE (e.g. pivot, major new feature, new segment) | Update product_context + roadmap |
+| ✅ MAJOR ARCHITECTURAL CHANGE (e.g. monolith → microservices, DB switch) | Update manual architecture.md |
+| ✅ NEW TEAM MEMBER joins | Use `--show` to provide structured onboarding |
+| ✅ BEFORE `/che-spec` if it is the project's first feature | Read everything + absorb |
 
-**Não use se:** é só refresh de código → `/che-xray`.
+**Do not use if:** it is just a code refresh → `/che-xray`.
 
 ---
 
-## 2. 4 ARQUIVOS NO REGISTRY NÍVEL 1.5 (compartilhado worktrees)
+## 2. 4 FILES IN REGISTRY LEVEL 1.5 (shared across worktrees)
 
-Sempre ABAIXO de `$CHE_PROJECT_DIR/` (= paths construídos no PREFLIGHT; NUNCA dentro worktree user):
+Always UNDER `$CHE_PROJECT_DIR/` (= paths constructed in PREFLIGHT; NEVER inside user worktree):
 
 ```
 ${CHE_PROJECT_DIR:-$CHE_SESSIONS_ROOT/.registry/projects/<slug>}/
-├── project_profile.md   ← AUTO (che-xray)   · 12 seções técnicas
-├── product_context.md   ← HUMANO (ESTE SKILL)    · 8 seções OBRIGATÓRIAS
-├── architecture.md      ← HYBRID                  · auto do xray + manual aqui
-├── roadmap.md           ← HUMANO (ESTE SKILL)    · épicos planejados
+├── project_profile.md   ← AUTO (che-xray)   · 12 technical sections
+├── product_context.md   ← HUMAN (THIS SKILL)    · 8 MANDATORY sections
+├── architecture.md      ← HYBRID                  · xray auto + manual here
+├── roadmap.md           ← HUMAN (THIS SKILL)    · planned epics
 └── registry.jsonl       ← append-only audit via che_append_decision_jsonl
 ```
 
-### 2.1 Como escrever no registry (3 regras HARD)
+### 2.1 How to write to the registry (3 HARD rules)
 
-1. **Todo write é write atômico tmp→mv** via `che_write_file_atomic <path>` (NÃO `cat > file`, NÃO edite in-place em Modo B interactive).
-2. **Todo audit append** em registry.jsonl **usa `che_append_decision_jsonl`**; NÃO faça `echo "{}" >> registry.jsonl` manualmente.
-3. **NUNCA crie docs dentro worktree como primário.** Exceção só se usuário pedir VERBATIM "salve esse product_context.md no worktree para comitar"; nesse caso, a fonte canônica continua `$PRODUCT_CONTEXT_PATH` e (OPCIONALMENTE) `cp` um snapshot para a worktree.
+1. **Every write is an atomic tmp→mv write** via `che_write_file_atomic <path>` (DO NOT `cat > file`, DO NOT edit in-place in interactive Mode B).
+2. **Every audit append** in registry.jsonl **uses `che_append_decision_jsonl`**; DO NOT `echo "{}" >> registry.jsonl` manually.
+3. **NEVER create docs inside the worktree as primary.** Exception only if the user asks VERBATIM to "save this product_context.md in the worktree to commit"; in that case, the canonical source remains `$PRODUCT_CONTEXT_PATH` and snapshotted (OPTIONALLY) to the worktree.
 
-Exemplo Modo B item 8 audit trail (ANTERIORMENTE echo manual → AGORA helper):
+Example Mode B item 8 audit trail (PREVIOUSLY manual echo → NOW helper):
 ```bash
 che_append_decision_jsonl "PROJECT_KNOWLEDGE_UPDATE" "{\"project_slug\":\"${CHE_PROJECT_SLUG:-unknown}\",\"updated_sections\":[\"product_context.1\",\"roadmap.E1\"]}"
-# Output cai AUTOMATICAMENTE no decisions.log.jsonl CANÔNICO (fora worktree)
-# + opcionalmente append no $PROJECT_REGISTRY_JSONL se quiser registry-local audit:
+# Output lands AUTOMATICALLY in CANONICAL decisions.log.jsonl (outside worktree)
+# + optionally append to $PROJECT_REGISTRY_JSONL if registry-local audit desired:
 che_append_decision_jsonl "PROJECT_KNOWLEDGE_UPDATE" "{...}" 2>/dev/null || true
 ```
 
 ---
 
-## 3. MODELO OBRIGATÓRIO `product_context.md` (8 SEÇÕES)
+## 3. MANDATORY `product_context.md` TEMPLATE (8 SECTIONS)
 
-ESTE SKILL gera o esqueleto abaixo e INTERAGE com o usuário para preencher cada seção. Não inventa nada; se o usuário não souber → deixa `[PENDENTE — preencher depois]`.
+THIS SKILL generates the skeleton below and INTERACTS with the user to fill each section. It does not invent anything; if the user does not know → leaves `[PENDING — fill later]`.
 
 ```markdown
 ---
@@ -112,166 +112,166 @@ lang_code: en
 lang_docs: en
 # ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑
 # LANGUAGE PER-PROJECT CONFIGURATION
-# - lang_code: en (DEFAULT — quase nunca mude) → controls identifiers, variables,
-#   classes, functions, file/folder names, type names. ALWAYS English por padrão.
-#   SÓ MUDE SE usuário EXPLICITLY disser que quer código em outro idioma.
+# - lang_code: en (DEFAULT — almost never change) → controls identifiers, variables,
+#   classes, functions, file/folder names, type names. ALWAYS English by default.
+#   ONLY CHANGE IF the user EXPLICITLY says they want code in another language.
 # - lang_docs: en (DEFAULT) → controls inline comments, JSDoc, PR titles/bodies,
 #   commit messages, ADRs, README, SPEC docs.
-#   CONFIGURAÇÃO MAIS COMUM DE OVERRIDE:
-#     lang_docs: pt-BR   (código variáveis continua EN → comments/PR/commits = PT)
-# HARD RULE (verbatim user): nunca misturar linguagens. Se lang_docs = pt-BR,
-# TODO comment do arquivo TODO em PT-BR. Se lang_code = en, TODO nome variável
-# TODO em EN. Não faça metade PT metade EN.
+#   MOST COMMON OVERRIDE CONFIGURATION:
+#     lang_docs: en   (DEFAULT — variable code EN → comments/PR/commits = EN)
+# HARD RULE (verbatim user): never mix languages. If lang_docs = pt-BR,
+# EVERY comment in EVERY file in PT-BR. If lang_code = en, EVERY variable name
+# EVERYWHERE in EN. Do not do half PT half EN.
 ---
 
-# Product Context — <Nome Amigável do Produto>
+# Product Context — <Friendly Product Name>
 
-## 1. O que é este produto? (elevator pitch 2-3 frases)
-> Ex: "Flockr é uma plataforma de ingressos para eventos no Reino Unido focada em criadores independentes. Público final: quem organiza eventos (criador) + quem comparece (comprador). Diferencial: QR de ingresso com anti-fraud offline scanner."
-- Nome curto:
-- Nome longo (se marca tiver):
-- País / região primária: ex UK, BR, US, Global
-- Moeda canônica: ex GBP pence integer, BRL cents, USD cents
-- Timezone canônico display: ex Europe/London, America/Sao_Paulo
+## 1. What is this product? (2-3 sentence elevator pitch)
+> E.g.: "Flockr is an event ticketing platform in the UK focused on independent creators. Target audience: event organisers (creator) + attendees (buyer). Key differentiator: ticket QR with anti-fraud offline scanner."
+- Short name:
+- Long name (if brand has one):
+- Primary country / region: e.g. UK, BR, US, Global
+- Canonical currency: e.g. GBP pence integer, BRL cents, USD cents
+- Canonical display timezone: e.g. Europe/London, America/Sao_Paulo
 
-## 2. Segmento de mercado + personas PRINCIPAIS
-> MÁXIMO 3 personas. Menos = menos ambiguidade no che.
-| ID | Persona | Exemplo de ação diária NESTE produto | Nível técnico (1-5) |
+## 2. Market segment + PRIMARY personas
+> MAXIMUM 3 personas. Fewer = less ambiguity in che.
+| ID | Persona | Daily action example IN THIS product | Technical level (1-5) |
 |---|---|---|---|
-| P1 | Criador de eventos independente | Cria evento, define preços, vê vendas | 2 = não sabe CLI |
-| P2 | Comprador de ingressos | Procura evento, compra, recebe email com QR | 1 = só mobile app/site |
-| P3 | Staff segurança na porta | Escaneia QR na entrada, offline | 1 = só toca no botão scan |
+| P1 | Independent event creator | Creates event, sets prices, views sales | 2 = does not know CLI |
+| P2 | Ticket buyer | Searches for event, buys, receives email with QR | 1 = mobile app/site only |
+| P3 | Door security staff | Scans QR at entrance, offline | 1 = only touches scan button |
 
-## 3. Domínio / ramo de negócio (palavras-chave para o che não errar termos)
-> Ex: ingressos, eventos, QR code offline scanner, antifraude em QR, capacidade de venue, criador vs comprador personas, Stripe Connect split payout.
-- Palavras-chave negócio (10-20):
-- Termos do domínio que NÃO PODEM ser confundidos: ex "refund" ≠ "cancel event" (defina 5 exemplos)
+## 3. Domain / business line (keywords so che doesn't get terms wrong)
+> E.g.: tickets, events, QR code offline scanner, QR anti-fraud, venue capacity, creator vs buyer personas, Stripe Connect split payout.
+- Business keywords (10-20):
+- Domain terms that MUST NOT be confused: e.g. "refund" ≠ "cancel event" (define 5 examples)
 
-## 4. Stack high-level + integrações EXTERNAS CONHECIDAS
-> Foco em NEGÓCIO, não em detalhe técnico (detalhe vai no project_profile.md).
-- Pagamento: Stripe (Connect para criadores), PayPal, Apple/Google Pay?
+## 4. High-level stack + KNOWN EXTERNAL integrations
+> Focus on BUSINESS, not technical detail (detail goes in project_profile.md).
+- Payment: Stripe (Connect for creators), PayPal, Apple/Google Pay?
 - Email: Resend, Sendgrid, SES, Postal?
-- SMS/WhatsApp (se tiver): Twilio, Messagebird?
+- SMS/WhatsApp (if any): Twilio, Messagebird?
 - Outbound analytics: GA4, Segment, PostHog?
-- CRMs externos (se tiver): HubSpot, Pipedrive?
-- Storage de arquivos/imagens: S3, Supabase storage, Cloudflare R2?
-- Outros SaaS: Slack webhooks, Linear/Jira tickets, etc
+- External CRMs (if any): HubSpot, Pipedrive?
+- File/image storage: S3, Supabase storage, Cloudflare R2?
+- Other SaaS: Slack webhooks, Linear/Jira tickets, etc.
 
-## 5. Regras de negócio NÃO-NEGOCIÁVEIS (hard invariants)
-> Lista curta 5-10 itens. NÃO TÉCNICAS. Negócio.
-> Ex: "Ingresso NÃO pode ser escaneado 2 vezes (mesmo se 2 pessoas diferentes tiverem cópia do QR)". "Criador NÃO pode retirar fundos 7 dias antes do evento (política antifraude)".
+## 5. NON-NEGOTIABLE business rules (hard invariants)
+> Short list 5-10 items. NOT TECHNICAL. Business.
+> E.g.: "Ticket CANNOT be scanned twice (even if 2 different people have a copy of the QR)". "Creator CANNOT withdraw funds 7 days before the event (anti-fraud policy)".
 1.
 2.
 3.
 4.
 5.
 
-## 6. Riscos do negócio + compliance (se aplicável)
-> Ex: UK GDPR (PII), PCI DSS (pagamentos), CCPA (California), LGPD (BR), Gambling Commission (se for apostas).
-- Regulatórios:
-- Reputacionais (ex: vazamento de dados de compradores = K.O.):
-- Operacionais (ex: offline scanner funcionar SEM internet no dia evento = prioridade 1):
+## 6. Business risks + compliance (if applicable)
+> E.g.: UK GDPR (PII), PCI DSS (payments), CCPA (California), LGPD (BR), Gambling Commission (if betting).
+- Regulatory:
+- Reputational (e.g. buyer data leak = K.O.):
+- Operational (e.g. offline scanner working WITHOUT internet on event day = priority 1):
 
-## 7. Papéis + permissões (auth model)
-> Se tiver multi-tenant / múltiplos papéis, defina aqui.
-| Papel | Pode | NÃO pode |
+## 7. Roles + permissions (auth model)
+> If multi-tenant / multiple roles, define here.
+| Role | Can | CANNOT |
 |---|---|---|
-| Admin global | Acessa tudo, inclusive billing | (nenhuma restrição) |
-| Criador | Gerencia SEUS eventos, ingressos, payouts | Vê eventos de OUTROS criadores |
-| Staff porta | Só escaneia QR no evento atribuído | Vê dashboard vendas |
-| Comprador logado | Vê SEUS pedidos, transfere ingresso | Vê pedidos de outros |
-| Anônimo | Procura evento, compra sem login | Acessa /admin/* |
+| Global Admin | Accesses everything, including billing | (no restrictions) |
+| Creator | Manages THEIR events, tickets, payouts | Views OTHER creators' events |
+| Door Staff | Only scans QR at assigned event | Views sales dashboard |
+| Logged-in Buyer | Views THEIR orders, transfers ticket | Views others' orders |
+| Anonymous | Searches event, buys without login | Accesses /admin/* |
 
-## 8. URLs de referência (produto real, docs, etc)
-> NÃO colocar aqui segredos. Só URLs públicas ou staging conhecidas.
-- Ambiente produção público: https://...
-- Ambiente staging: https://...
-- Docs do produto (Notion, Confluence, etc): https://...
-- Figma (se tiver): https://...
+## 8. Reference URLs (real product, docs, etc.)
+> DO NOT put secrets here. Only known public or staging URLs.
+- Public production environment: https://...
+- Staging environment: https://...
+- Product docs (Notion, Confluence, etc.): https://...
+- Figma (if any): https://...
 - Linear / ClickUp / Jira board: https://...
 ```
 
 ---
 
-## 4. MODELO OBRIGATÓRIO `roadmap.md` (simples, não overengineer)
+## 4. MANDATORY `roadmap.md` TEMPLATE (simple, no overengineering)
 
 ```markdown
 # Roadmap — <slug>
-> Atualizado em: <ISO8601>
+> Updated at: <ISO8601>
 
-## Épicos Confirmados (próximos 3 meses)
-> Cada épico = 1 linha. Nível épico (não nível task — tasks ficam no project tracker).
-- E1: Refund automation (FLO-513 em diante) — comprador pode pedir reembolso, criador aprova/rejeita, executa via Stripe
-- E2: Transferência de ingresso entre usuários (P2P)
-- E3: Analytics para criadores (vendidos por dia, taxa comparecimento, taxa scan)
+## Confirmed Epics (next 3 months)
+> Each epic = 1 line. Epic level (not task level — tasks stay in project tracker).
+- E1: Refund automation (FLO-513 onwards) — buyer can request refund, creator approves/rejects, executes via Stripe
+- E2: P2P ticket transfer between users
+- E3: Analytics for creators (sold per day, attendance rate, scan rate)
 
-## Épicos Planejados (3-6 meses)
-- E4: Waitlist para eventos esgotados
-- E5: Multi-tenant organizações (vários criadores na mesma conta empresa)
+## Planned Epics (3-6 months)
+- E4: Waitlist for sold-out events
+- E5: Multi-tenant organisations (multiple creators in same company account)
 
-## Backlog Ideias (>6 meses, hipóteses não validadas)
-- B1: App mobile nativo (hoje é PWA scanner)
-- B2: White-label para promotoras grandes
-- B3: Integração Facebook Eventbrite import
+## Idea Backlog (>6 months, unvalidated hypotheses)
+- B1: Native mobile app (currently PWA scanner)
+- B2: White-label for large promoters
+- B3: Facebook Eventbrite import integration
 
-## FUNCIONALIDADES EXPLICITAMENTE FORA DO ESCOPO (não é de graça, é decisão)
-> IMPORTANTE para o che não propor features "óbvias" mas que produto já decidiu não fazer.
-- ❌ Não vamos fazer marketplace agregador de múltiplas plataformas (somente nosso ingressos)
-- ❌ Não vamos fazer vendas presenciais via PDV (foco 100% online checkin QR)
-- ❌ Não vamos oferecer serviço de impressão de ingressos físicos (cliente imprime ou usa QR)
+## FEATURES EXPLICITLY OUT OF SCOPE (not free, a decision)
+> IMPORTANT so che doesn't propose "obvious" features product already decided against.
+- ❌ We will not build a multi-platform aggregator marketplace (only our tickets)
+- ❌ We will not support in-person POS sales (100% online QR check-in focus)
+- ❌ We will not offer physical ticket printing services (client prints or uses QR)
 ```
 
 ---
 
-## 5. MODOS DE EXECUÇÃO DO SKILL
+## 5. SKILL EXECUTION MODES
 
-### Modo A — `--show` (leitura + resumo)
-Quando usuário só quer revisar, não editar.
-Devolve em PT-BR (ou idioma user_rules) resumo estruturado:
+### Mode A — `--show` (read + summary)
+When the user only wants to review, not edit.
+Returns a structured summary in English:
 ```
-[che-onboarding] 📄 Registry atual — <slug>
-  ├─ Produto: <nome> · <pitch 1 frase>
-  ├─ 3 Personas: P1 (Criador) · P2 (Comprador) · P3 (Staff)
-  ├─ Hard invariants: 5 regras (listar 1ª palavra cada: antifraude-QR, split-payout, 7-day-payout, offline-scan, max-1-scan)
-  ├─ Integrações externas: Stripe Connect · Resend · Supabase Storage
-  ├─ Roadmap: 3 épicos confirmados (E1 refund, E2 transfer, E3 analytics)
-  ├─ Decisões arquiteturais manual: (não preenchido — 0 ADRs registrados)
-  └─ Fora de escopo: 3 items (não marketplace, não PDV físico, não impressão física)
+[che-onboarding] 📄 Current Registry — <slug>
+  ├─ Product: <name> · <1-sentence pitch>
+  ├─ 3 Personas: P1 (Creator) · P2 (Buyer) · P3 (Staff)
+  ├─ Hard invariants: 5 rules (list 1st word each: QR-anti-fraud, split-payout, 7-day-payout, offline-scan, max-1-scan)
+  ├─ External integrations: Stripe Connect · Resend · Supabase Storage
+  ├─ Roadmap: 3 confirmed epics (E1 refund, E2 transfer, E3 analytics)
+  ├─ Manual architectural decisions: (not filled — 0 ADRs registered)
+  └─ Out of scope: 3 items (no marketplace, no physical POS, no physical printing)
 ```
 
-### Modo B — default (interativo preencher / atualizar)
-1. Carrega contracts helpers, confirma PROJECT_DIR existe.
-2. **LÊ product_context.md, architecture.md, roadmap.md existentes** (se existirem — não sobrescreve sem perguntar).
-3. Pergunta ao usuário **8 perguntas estruturadas** (uma por seção do product_context template).
-4. Pede confirmação de cada item (Não é "tudo certo?" — é "§3 Palavras-chave domínio: estão corretas ou quer editar?").
-5. **Sobrescreve apenas as seções que o usuário confirmou.**
-6. Faz o mesmo para roadmap.md (épicos confirmados, planejados, backlog, fora escopo).
-7. Atualiza a parte MANUAL de architecture.md (pergunta se quer adicionar ADRs, diagramas C4 em texto).
-8. **Append 1 linha audit em registry.jsonl:**
+### Mode B — default (interactive fill / update)
+1. Loads contract helpers, confirms PROJECT_DIR exists.
+2. **READS existing product_context.md, architecture.md, roadmap.md** (if they exist — does not overwrite without asking).
+3. Asks the user **8 structured questions** (one per product_context template section).
+4. Requests confirmation for each item (Not "all good?" — but "§3 Domain keywords: are they correct or do you want to edit?").
+5. **Overwrites only the sections confirmed by the user.**
+6. Does the same for roadmap.md (confirmed epics, planned, backlog, out of scope).
+7. Updates the MANUAL part of architecture.md (asks if user wants to add ADRs, text C4 diagrams).
+8. **Appends 1 audit line to registry.jsonl:**
    ```json
    {"ts":"ISO8601","event":"PROJECT_KNOWLEDGE_UPDATE","project_slug":"...","data":{"updated_sections":["product_context.1","roadmap.E1"]}}
    ```
 
-### Modo C — `--bootstrap` (1ª vez, modo mais rápido)
-Não faz perguntas. Cria os 3 arquivos (product_context, architecture manual, roadmap) **VAZIOS com o template padrão** `[PENDENTE]` em todas as seções. Devolve a lista de sections para o usuário preencher via chat ou manualmente.
+### Mode C — `--bootstrap` (1st time, fastest mode)
+Does not ask questions. Creates the 3 files (product_context, manual architecture, roadmap) **EMPTY with the standard `[PENDING]` template** in all sections. Returns the list of sections for the user to fill via chat or manually.
 
 ---
 
-## 6. CONTRATO DE LEITURA: COMO OUTROS SKILLS USAM ISSO
+## 6. READING CONTRACT: HOW OTHER SKILLS USE THIS
 
-**OBRIGAÇÃO DOS DEMAIS SKILLS (engineering-contracts §X):**
-Antes de QUALQUER `che-spec` gerar SPEC de feature, o che DEVE:
-1. Rodar `source contracts/che_sessions_contract.sh` + resolver `$CHE_PROJECT_DIR`
-2. Se `product_context.md` existir → **ler as seções §2 (personas) + §5 (hard invariants) + §8 (fora escopo)**.
-3. Injetar no começo da SPEC:
+**OBLIGATION OF OTHER SKILLS (engineering-contracts §X):**
+Before ANY `che-spec` generates a feature SPEC, che MUST:
+1. Run `source contracts/che_sessions_contract.sh` + resolve `$CHE_PROJECT_DIR`
+2. If `product_context.md` exists → **read sections §2 (personas) + §5 (hard invariants) + §8 (out of scope)**.
+3. Inject at the beginning of the SPEC:
    ```
-   > Project Context absorbed from registry Nível 1.5:
-   > - Personas: P1 Criador, P2 Comprador, P3 Staff (ver product_context §2)
-   > - Hard invariants do negócio: 5 regras (§5)
-   > - Fora de escopo: não marketplace, não PDV, não impressão (§roadmap último)
+   > Project Context absorbed from Level 1.5 registry:
+   > - Personas: P1 Creator, P2 Buyer, P3 Staff (see product_context §2)
+   > - Business hard invariants: 5 rules (§5)
+   > - Out of scope: no marketplace, no POS, no printing (see last §roadmap)
    ```
 
-Se `product_context.md` NÃO existir num projeto que já tem worktrees e commits → WARN no começo da SPEC:
+If `product_context.md` DOES NOT exist in a project that already has worktrees and commits → WARN at the beginning of the SPEC:
 ```
-> ⚠️ [project knowledge não preenchido] — rode /che-onboarding para reduzir ambiguidade do produto.
+> ⚠️ [project knowledge not filled] — run /che-onboarding to reduce product ambiguity.
 ```

@@ -1,482 +1,472 @@
 ---
 name: "che-social-ui-designer"
-description: "V4 — Backend-neutral design pipeline 4 modos: (A) Social Media, (B) UI/UX Feature, (C) Design System, (D) Logotipo & Marca. Mandatory SPEC approval gate, staged execution ≤5 etapas, visual review por etapa. Supports capability-selected OpenPencil, Figma or spec-only execution. Trigger: /che-design, /che-figma."
+description: "V4 — Backend-neutral design pipeline with 4 modes: (A) Social Media, (B) UI/UX Feature, (C) Design System, (D) Logo & Branding. Mandatory SPEC approval gate, staged execution ≤5 stages, visual review per stage. Supports capability-selected OpenPencil, Figma or spec-only execution. Trigger: /che-design, /che-figma."
 ---
 
 # Che — Social UI Designer (Orchestrator) v4.0
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo):**
-> - **Formatting + verbosity ≤500w**: engineering-contracts §18 (subtítulos ## / ###, bullets ≤2 linhas, bold keywords)
-> - **Hard-won session lessons** (composição offline / template text nodes / validação unique colors): §3 abaixo
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body):**
+> - **Formatting + verbosity ≤500w**: engineering-contracts §18 (subheadings ## / ###, bullets ≤2 lines, bold keywords)
+> - **Hard-won session lessons** (offline composition / template text nodes / unique colors validation): §3 below
 > - **Design tokens + Tailwind**: engineering-contracts skill (DS section)
-> - **Image source fallback waterfall**: §3 item #1 (Unsplash real > text_to_image endpoint > G(search) headless)
-> - **SVG vetor quality gates**: §12 logo/marca
+> - **Image source fallback waterfall**: §3 item #1 (Real Unsplash > text_to_image endpoint > headless G(search))
+> - **SVG vector quality gates**: §12 logo/branding
 
-Este é o **orquestrador top-level** do design che. O workflow é backend-neutral.
+This is the **top-level orchestrator skill** for che design. The workflow is backend-neutral.
 Backend selection MUST follow `references/DESIGN_BACKEND_CONTRACT.md`.
 OpenPencil-specific instructions apply ONLY when backend=`openpencil`.
 Figma execution follows `references/backends/FIGMA.md` when backend=`figma`.
 Never select a backend only because the runtime is Trae or Codex.
-Backend default fallback = `mcp_open-pencil` local (equivalente a Figma desktop, sem auth/limites).
+Backend default fallback = local `mcp_open-pencil` (equivalent to Figma desktop, without auth/limits).
 
 ### Design source bootstrap
 
-Before the design SPEC gate, capture optional `source_ref` and
-`requested_backend`, then resolve the complete `design_source` object through
-`references/DESIGN_BACKEND_CONTRACT.md`. Classification precedes capability
-validation. Do not call either backend while `effective_backend=none`.
+Before the design SPEC gate, capture optional `source_ref` and `requested_backend`, then resolve the complete `design_source` object through `references/DESIGN_BACKEND_CONTRACT.md`. Classification precedes capability validation. Do not call either backend while `effective_backend=none`.
 
-If routing fails closed, report `source_kind`, `capability_status`, and `reason`
-plus the supported input forms. Stop before design execution. Never convert a
-Figma source to OpenPencil or an OpenPencil source to Figma.
+If routing fails closed, report `source_kind`, `capability_status`, and `reason` plus the supported input forms. Stop before design execution. Never convert a Figma source to OpenPencil or an OpenPencil source to Figma.
 
 ### Runtime bootstrap
 
 Before creating any durable design artifact:
 
 ```bash
-python3 -m che_core.designer bootstrap "$WORKTREE_ROOT" "$SESSION_ID" "<modo>" "<slug>"
+python3 -m che_core.designer bootstrap "$WORKTREE_ROOT" "$SESSION_ID" "<mode>" "<slug>"
 ```
 
 Create `$CHE_DESIGN_DIR` only after the bound-worktree/session preflight passes.
-**4 modos mutuamente exclusivos** (escolher 1 no início via `AskUserQuestion`):
-- **MODE A → Social Media Posts**: posts 1:1 / stories 9:16 + copies profissionais.
+**4 mutually exclusive modes** (choose 1 at start via `AskUserQuestion`):
+- **MODE A → Social Media Posts**: 1:1 posts / 9:16 stories + professional copy.
 - **MODE B → UI/UX Feature**: wireframes → hi-fi → dev-spec (React/Tailwind 4).
-- **MODE C → Design System**: Tailwind 4 tokens ↔ OpenPencil variables + componentes atômicos.
-- **MODE D → Logotipo & Marca**: descoberta profunda de marca → briefing de marca → conceitos logo → refinamento vetorial → brandbook completo (SVG obrigatório).
+- **MODE C → Design System**: Tailwind 4 tokens ↔ OpenPencil variables + atomic components.
+- **MODE D → Logo & Branding**: deep brand discovery → brand briefing → logo concepts → vector refinement → full brandbook (SVG mandatory).
 
 ---
 
-## 🔴 0. NON-NEGOTIABLE GATES (executar NA ORDEM — falha = STOP)
+## 🔴 0. NON-NEGOTIABLE GATES (execute IN ORDER — failure = STOP)
 
-### GATE -1 (HARD — NÃO passa SEM APROVAÇÃO) → ESCREVER + ITERAR UI/POST SPEC OBRIGATÓRIA
-> **Regra dura:** *Nenhum pixel é desenhado, nenhuma imagem baixada, nenhuma etapa executada até o usuário responder explicitamente "Aprovo a spec" a um documento estruturado.*
+### GATE -1 (HARD — DOES NOT pass WITHOUT APPROVAL) → WRITE + ITERATE MANDATORY UI/POST SPEC
+> **Hard rule:** *No pixels are drawn, no images downloaded, no stages executed until the user explicitly responds "I approve the spec" to a structured document.*
 >
-> 2 rounds de ajuste na spec ainda ambíguo → oferecer defaults em 1 linha (§7 fail-fast).
+> 2 rounds of spec adjustment still ambiguous → offer defaults in 1 line (§7 fail-fast).
 
-#### 0.1 Escrever spec completa (use §9 TEMPLATE abaixo como base)
-Spec deve ter **TODOS** esses campos preenchidos, por peça/screen:
+#### 0.1 Write complete spec (use §9 TEMPLATE below as base)
+Spec must have **ALL** these fields filled, per piece/screen:
 
-When a design source was supplied, include a `Design Source` section with
-`source_ref`, `source_kind`, `requested_backend`, `effective_backend`,
-`capability_status`, and the fail-closed `reason` when present. Add Figma file
-key/page/node or OpenPencil identifiers only when the active driver exposes them.
+When a design source was supplied, include a `Design Source` section with `source_ref`, `source_kind`, `requested_backend`, `effective_backend`, `capability_status`, and the fail-closed `reason` when present. Add Figma file key/page/node or OpenPencil identifiers only when the active driver exposes them.
 
-| Campo (por peça) | Descrição exemplo (MODE A Post 1:1) |
+| Field (per piece) | Example description (MODE A Post 1:1) |
 |---|---|
-| **ID / Nome peça** | `C1-CAPA` , `C2-CARDAPIO` |
-| **Objetivo peça** | Hook inicial, tráfego perfil |
-| **Copy verbatim (nenhum caractere pode mudar)** | Headline / Subline / Body / CTA (wordcount max por linha) |
-| **Paleta hex (exatos, p/ peça)** | bg=#FFF7ED | headline=#C2410C | cta=#EA580C | text=#292524 |
-| **Dimensão base + export scale** | 1080×1080 → scale 2 = 2160×2160 PNG |
-| **Layout grid (posições absolutas ou relative)** | Foto 360×360 x=696 y=540 canto inf-dir; Bloco texto x=72 y=72 w=936 padding=24 |
-| **Imagem (fallback cascade por §3.1)** | (1) Unsplash ID `photo-1586444248902-2f64eddc13df` / (2) prompt stock / (3) prompt text_to_image |
-| **Estética visual (por elemento)** | Foto: radius=28 / stroke branco=6 / shadow=4 8 blur14 alpha40; Overlay dark #1C1917 alpha=35% SE foto for quente+texto branco |
-| **Tipografia (peso/tamanho/leading)** | Headline: Inter Black 72/76; CTA: Inter SemiBold 48/52 |
-| **Contraste WCAG obrigatório** | Headline sobre bg min 4.5:1 body / 3:1 grande (explicar overlay se necessário) |
-| **Stacking order camadas (INDEX baixo → alto)** | 0=foto → 1=overlay (se houver) → 2=headline/subline → 3=CTA button → NUNCA foto sobre texto |
-| **Saída esperada** | `FINAL-C1-CAPA@2x.png` 2160×2160 |
+| **ID / Piece Name** | `C1-COVER`, `C2-MENU` |
+| **Piece Goal** | Initial hook, profile traffic |
+| **Verbatim Copy (not a single char can change)** | Headline / Subline / Body / CTA (max wordcount per line) |
+| **Hex Palette (exact, per piece)** | bg=#FFF7ED | headline=#C2410C | cta=#EA580C | text=#292524 |
+| **Base dimension + export scale** | 1080×1080 → scale 2 = 2160×2160 PNG |
+| **Layout grid (absolute or relative positions)** | Photo 360×360 x=696 y=540 bottom-right corner; Text block x=72 y=72 w=936 padding=24 |
+| **Image (fallback cascade per §3.1)** | (1) Unsplash ID `photo-1586444248902-2f64eddc13df` / (2) stock prompt / (3) text_to_image prompt |
+| **Visual aesthetics (per element)** | Photo: radius=28 / white stroke=6 / shadow=4 8 blur14 alpha40; Dark overlay #1C1917 alpha=35% IF photo is warm + white text |
+| **Typography (weight/size/leading)** | Headline: Inter Black 72/76; CTA: Inter SemiBold 48/52 |
+| **Mandatory WCAG Contrast** | Headline over bg min 4.5:1 body / 3:1 large (explain overlay if needed) |
+| **Layer stacking order (INDEX low → high)** | 0=photo → 1=overlay (if any) → 2=headline/subline → 3=CTA button → NEVER photo over text |
+| **Expected output** | `FINAL-C1-COVER@2x.png` 2160×2160 |
 
-Campos extra para **MODE B UI screens**: persona, job story, 3 core behaviors max, breakpoints responsive (mobile 375 / tablet 768 / desktop 1280).
-Campos extra para **MODE C Design System**: origem tokens (Tailwind 4 config / do zero), dark mode obrigatório, lista componentes (Button/Card/Input/Textarea/Badge/Avatar/Alert/Toggle/Switch/Radio/Checkbox/Select — default 12).
-Campos extra para **MODE D Logotipo & Marca (OBRIGATÓRIOS 100% preenchidos)**:
-| Campo MODE D | Descrição obrigatória |
+Extra fields for **MODE B UI screens**: persona, job story, 3 core behaviors max, responsive breakpoints (mobile 375 / tablet 768 / desktop 1280).
+Extra fields for **MODE C Design System**: tokens origin (Tailwind 4 config / from scratch), mandatory dark mode, components list (Button/Card/Input/Textarea/Badge/Avatar/Alert/Toggle/Switch/Radio/Checkbox/Select — default 12).
+Extra fields for **MODE D Logo & Branding (100% fill MANDATORY)**:
+| MODE D Field | Mandatory description |
 |---|---|
-| **Nome marca + slogan (se houver)** | Texto VERBATIM do wordmark; slogan opcional. |
-| **Ideia central / posicionamento marca** | 1-2 frases "A marca X é para Y que querem Z". |
-| **Setor + público-alvo (persona mínimo)** | Ex: "Padaria artesanal UK, público 25-55 anos, classe média-alta". |
-| **Paleta primária (cores marca hex)** | 2-5 cores hex (primary / secondary / accent / neutrals). Se não definida → descobrir. |
-| **Tipografia wordmark + corpo** | Família wordmark (Display) + Body (ex: Playfair Display Bold 72 / Inter 400). |
-| **Voz da marca (brand voice doc) + 3 frases exemplo** | Tom (amigável / premium / minimalista / jovem / sério) + 3 exemplos de comunicação escrita. |
-| **Referências (até 5)** | (a) URLs de sites/marcas similares; (b) Logotipos existentes em anexo; (c) Temas/estilos visuais (ex: "minimalista nórdico", "artesanal papel kraft"). |
-| **Estilo logotipo (até 3 escolher)** | Wordmark-only / Lettermark (monograma iniciais) / Pictorial mark (ícone) / Combination mark (ícone+palavra) / Emblem (selo). |
-| **Arquitetura de informação do brandbook final** | Capa → Logos → Paleta → Tipografia → Aplicações mockups → Do/Don't (mínimo 6 seções). |
-| **Variantes logo obrigatórias** | Primary (horizontal full) / Secondary (stacked / vert.) / Monochrome preto / Monochrome branco / Icon only / Favicon 64×64. ≥6 variantes. |
-| **SVG deliverable OBRIGATÓRIO (HARD GATE)** | Todas variantes devem ser SVG standalone, SEM bitmaps embutidos, < 128KB, viewBox `0 0 1024 1024` default. |
+| **Brand name + slogan (if any)** | Wordmark VERBATIM text; optional slogan. |
+| **Core idea / brand positioning** | 1-2 sentences "Brand X is for Y who want Z". |
+| **Sector + target audience (min persona)** | E.g.: "Artisanal bakery UK, 25-55 audience, upper-middle class". |
+| **Primary palette (brand hex colors)** | 2-5 hex colors (primary / secondary / accent / neutrals). If not defined → discover. |
+| **Wordmark + body typography** | Wordmark family (Display) + Body (e.g. Playfair Display Bold 72 / Inter 400). |
+| **Brand voice (brand voice doc) + 3 example phrases** | Tone (friendly / premium / minimalist / young / serious) + 3 written communication examples. |
+| **References (up to 5)** | (a) Similar site/brand URLs; (b) Attached existing logos; (c) Visual themes/styles (e.g. "Nordic minimalist", "artisanal kraft paper"). |
+| **Logo style (choose up to 3)** | Wordmark-only / Lettermark (initials monogram) / Pictorial mark (icon) / Combination mark (icon+word) / Emblem (seal). |
+| **Final brandbook info architecture** | Cover → Logos → Palette → Typography → Mockup applications → Do/Don't (min 6 sections). |
+| **Mandatory logo variants** | Primary (horizontal full) / Secondary (stacked / vert.) / Monochrome black / Monochrome white / Icon only / Favicon 64×64. ≥6 variants. |
+| **MANDATORY SVG deliverable (HARD GATE)** | All variants must be standalone SVG, NO embedded bitmaps, < 128KB, `0 0 1024 1024` default viewBox. |
 
-#### 0.2 Escrever spec no disco e pedir aprovação explícita
-- Salvar spec em: `$CHE_DESIGN_DIR/spec.md`
-- Mostrar spec ao usuário **formatada para leitura diagonal** (tabelas, negrito, bullets).
-- Pergunta única de aprovação (obrigatória):
-  > **"Aprovo esta spec do jeito que está — pode executar (Sim / Não, ajustar estes X pontos)"**
-- Se NÃO → ajustar apenas os pontos listados; re-apresentar; repetir.
+#### 0.2 Write spec to disk and ask for explicit approval
+- Save spec at: `$CHE_DESIGN_DIR/spec.md`
+- Show spec to user **formatted for diagonal reading** (tables, bold, bullets).
+- Single approval question (mandatory):
+  > **"I approve this spec as it is — you may execute (Yes / No, adjust these X points)"**
+- If NO → adjust only the listed points; re-present; repeat.
 
 ---
 
-### GATE 0: Escolher modo A/B/C/D (se user não especificou)
-Se pedido do usuário já indica modo → direto. Senão parar e perguntar via `AskUserQuestion` (4 opções: A Social / B UI-UX / C Design System / **D Logotipo & Marca**).
+### GATE 0: Choose mode A/B/C/D (if user did not specify)
+If user request already indicates mode → direct. Otherwise stop and ask via `AskUserQuestion` (4 options: A Social / B UI-UX / C Design System / **D Logo & Branding**).
 
-### GATE 0.1 → MODE D EXCLUSIVO: Perguntas de descoberta profunda OBRIGATÓRIAS
-Se modo = **D (Logotipo & Marca)**, ANTES de escrever spec §0.1, rodar **5 lotes de perguntas** (lote por lote, esperar respostas por lote):
+### GATE 0.1 → EXCLUSIVE MODE D: MANDATORY Deep Discovery Questions
+If mode = **D (Logo & Branding)**, BEFORE writing spec §0.1, run **5 question batches** (batch by batch, wait for responses per batch):
 
-| Lote D | Perguntas OBRIGATÓRIAS (max 5 por lote) |
+| Batch D | MANDATORY Questions (max 5 per batch) |
 |---|---|
-| **Lote D1 — Identidade** | 1. Nome completo marca (verbatim, maiúsculas/minúsculas exatas)? 2. Slogan existe? Se sim qual verbatim. 3. Quando a marca nasceu? Tem história curta para contar? 4. Qual setor/indústria exato? 5. Região/país onde opera? |
-| **Lote D2 — Posicionamento** | 1. Qual problema a marca resolve? 1 frase. 2. Quem é o cliente ideal (persona, 3 características). 3. Quem são os 3-5 principais concorrentes diretos. 4. Diferencial 1 único contra concorrentes. 5. 3 adjetivos que descrevem personalidade da marca (ex: acolhedor, premium, jovem). |
-| **Lote D3 — Estilo & Estética (até 5 cada)** | 1. 3-5 **URLs de marcas/sites de referência** (amamos / odiamos). 2. 3-5 temas/estilos visuais de referência: minimalista / brutalista / artesanal / luxo / retro / moderno / orgânico / tech etc. 3. Você tem logotipos antigos, sketches, desenhos, moodboards existentes anexar? 4. Quais cores associadas à marca (ou cores que NÃO quer usar de jeito nenhum). 5. Tipografia favorita (ou família que odeia). |
-| **Lote D4 — Voz & Comunicação** | 1. Tom de voz 1 frase (ex: "especialista acessível", "amigo que explica bem", "luxo discreto"). 2. 3 frases EXEMPLO de como marca falaria com cliente (uma saudação, um agradecimento, um CTA). 3. Frases proibidas / NUNCA dizer. 4. Uso de emoji permitido? (Sim / Não / Com moderação). 5. Língua principal e outras línguas que marca opera. |
-| **Lote D5 — Aplicações & Restrições** | 1. Top 5 lugares onde o logo vai aparecer (Instagram perfil / cartão visita / fachada loja / camiseta / site header / embalagem...). 2. O que o logo NÃO PODE ter (ex: "nenhum ícone de pãozinho genérico", "não queremos uso de gradient"). 3. Você já tem paleta/tipografia definida? (Sim → compartilhar / Não → construímos do zero). 4. Variantes logo obrigatórias? (mini favicon, horizontal stacked, preto, branco, monograma iniciais). 5. Formatos entrega finais? (SVG obrigatório default + PNG 1x/2x + PDF vetor / Favicon .ico / fonte wordmark?). |
+| **Batch D1 — Identity** | 1. Full brand name (verbatim, exact case)? 2. Is there a slogan? If so, verbatim. 3. When was the brand born? Short story to tell? 4. Exact sector/industry? 5. Region/country of operation? |
+| **Batch D2 — Positioning** | 1. What problem does the brand solve? 1 sentence. 2. Who is the ideal customer (persona, 3 characteristics). 3. Who are the 3-5 main direct competitors. 4. Single differentiator against competitors. 5. 3 adjectives describing brand personality (e.g. welcoming, premium, young). |
+| **Batch D3 — Style & Aesthetics (up to 5 each)** | 1. 3-5 **reference brand/site URLs** (love / hate). 2. 3-5 reference visual themes/styles: minimalist / brutalist / artisanal / luxury / retro / modern / organic / tech etc. 3. Do you have old logos, sketches, drawings, existing moodboards to attach? 4. Colors associated with the brand (or colors to AVOID). 5. Favorite typography (or family you hate). |
+| **Batch D4 — Voice & Communication** | 1. Tone of voice in 1 sentence (e.g. "accessible specialist", "friend who explains well", "discreet luxury"). 2. 3 EXAMPLE phrases of how brand speaks to customer (greeting, thank you, CTA). 3. Forbidden phrases / NEVER say. 4. Emoji use allowed? (Yes / No / Moderately). 5. Primary language and other operational languages. |
+| **Batch D5 — Applications & Restrictions** | 1. Top 5 places logo will appear (Instagram profile / business card / shop front / t-shirt / site header / packaging...). 2. What the logo CANNOT have (e.g. "no generic bread icon", "no gradients"). 3. Do you have a defined palette/typography? (Yes → share / No → build from scratch). 4. Mandatory logo variants? (favicon, horizontal stacked, black, white, initials monogram). 5. Final delivery formats? (SVG mandatory default + PNG 1x/2x + vector PDF / .ico Favicon / wordmark font?). |
 
-**Fail-fast lote D (se 2 lotes ainda ambíguo)**: perguntar 1 vez: "Default: minimalista, tons terrosos neutros, Inter + Playfair, 3 conceitos, 6 variantes. Seguir assim e ir refinando por etapa? (Sim / Não — listar ajustes)".
+**Batch D fail-fast (if 2 batches still ambiguous)**: ask once: "Default: minimalist, neutral earthy tones, Inter + Playfair, 3 concepts, 6 variants. Proceed like this and refine per stage? (Yes / No — list adjustments)".
 
 ### GATE 1: Save path + brandbook
-- **Design directory**: `CHE_DESIGN_DIR="$CHE_DESIGN_ROOT/<modo>-<slug>-YYYYMMDD"`. Source representation is backend-specific.
-- **Brandbook (3 bullets curtos)**: paleta hex / tipografia (default Inter) / tom de voz copy (default "Profissional acessível").
-- Inicializar/abrir a fonte de design usando o driver ativo. OpenPencil pode criar source local; Figma registra metadata em `$CHE_DESIGN_DIR/figma-source.md`.
+- **Design directory**: `CHE_DESIGN_DIR="$CHE_DESIGN_ROOT/<mode>-<slug>-YYYYMMDD"`. Source representation is backend-specific.
+- **Brandbook (3 short bullets)**: hex palette / typography (Inter default) / copy tone of voice ("Professional accessible" default).
+- Initialize/open design source using the active driver. OpenPencil can create local source; Figma registers metadata in `$CHE_DESIGN_DIR/figma-source.md`.
 
 ---
 
-## 🧯 3. HARD-WON LESSONS (CANÔNICO — fallback obrigatório NESTA ORDEM)
-> *Jamais deviar desta ordem. Custou 4 horas + 14 bugs descobrir isso em produção.*
+## 🧯 3. HARD-WON LESSONS (CANONICAL — mandatory fallback in THIS ORDER)
+> *Never deviate from this order. It cost 4 hours + 14 bugs to discover this in production.*
 
-### 3.1 Cascade de fonte de FOTOS reais (garantir unique colors > 25.000)
-1. **PRIORIDADE 1 — Unsplash photo URLs reais (GARANTIDO)**:
+### 3.1 Real PHOTO source cascade (ensure unique colors > 25,000)
+1. **PRIORITY 1 — Real Unsplash photo URLs (GUARANTEED)**:
    ```
    https://images.unsplash.com/photo-<ID>?auto=format&fit=crop&w=1024&h=1024&q=90
    ```
-   Headers obrigatórios: `User-Agent: Mozilla/5.0` + `Accept: image/webp,image/jpeg,*/*`. **NÃO usar source.unsplash.com (descontinuado → HTML 403)**. Validar magic bytes `ffd8ff` (JPEG) ou `89504e47` (PNG), size > 80KB — senão cair.
-2. **PRIORIDADE 2 — text_to_image endpoint (checar por placeholder)**:
+   Mandatory headers: `User-Agent: Mozilla/5.0` + `Accept: image/webp,image/jpeg,*/*`. **DO NOT use source.unsplash.com (deprecated → HTML 403)**. Validate magic bytes `ffd8ff` (JPEG) or `89504e47` (PNG), size > 80KB — otherwise fall back.
+2. **PRIORITY 2 — text_to_image endpoint (check for placeholder)**:
    ```
    https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=<ENCODED>&image_size=square_hd|portrait_16_9
    ```
-   **VALIDAÇÃO OBRIGATÓRIA**: MD5 da foto ≠ MD5 de outras; unique colors > 25.000; SEM substring `The image is generating` ou `refresh page` no raw bytes. Se falhar → p/ 3.
-3. **PRIORIDADE 3 — `stock_photo` MCP open-pencil**: aplicar diretamente a um `create_shape(RECTANGLE 360×360 leaf)` via requests JSON array (query + orientation=square). Útil se OpenPencil desktop GUI aberto (headless pode não baixar — se falhar → p/4).
-4. **PRIORIDADE 4 — fallback offline PILLOW/IMAGEMAGICK**: compositor offline 100% garantido (colar foto baixada em 1 ou 2, sobre PNG base do canvas já renderizado com textos + fills). **Este fallback NUNCA FALHA**.
+   **MANDATORY VALIDATION**: photo MD5 ≠ others' MD5; unique colors > 25,000; NO `The image is generating` or `refresh page` substring in raw bytes. If fail → go to 3.
+3. **PRIORITY 3 — open-pencil `stock_photo` MCP**: apply directly to a `create_shape(RECTANGLE 360×360 leaf)` via JSON array requests (query + orientation=square). Useful if OpenPencil desktop GUI is open (headless might not download — if fail → go to 4).
+4. **PRIORITY 4 — PILLOW/IMAGEMAGICK offline fallback**: 100% guaranteed offline compositor (paste downloaded photo from 1 or 2 over rendered canvas base PNG with texts + fills). **This fallback NEVER FAILS**.
 
-### 3.2 TEXT nodes no OpenPencil v0.8.4 — ESTRUTURA RODA APENAS COM TEMPLATE BUILT-IN
-- **PROIBIDO criar `TEXT` manualmente via `create_shape` ou `I(null,{type:text,...})`**: node fica width=height=0, sem runs de layout/Fonte internos no engine Rust → **TEXTO INVISÍVEL / clip / chapado**.
-- **MÉTODO CANÔNICO OBRIGATÓRIO**: `use-template knowledge-card-square` (1080×1080, 31 nodes por card) → gera toda a store de texto/runs/fontes corretamente. Depois sobrescrever só copies/fills/fontes via MCP `set_text` + `set_font`.
-- Salvar SEMPRE via `save_document(filePath)` depois de alterar texto (salva stores internas no .op — sem isso SHA256 diferente e texto some no desktop).
+### 3.2 TEXT nodes in OpenPencil v0.8.4 — STRUCTURE ONLY RUNS WITH BUILT-IN TEMPLATE
+- **PROHIBITED to create `TEXT` manually via `create_shape` or `I(null,{type:text,...})`**: node becomes width=height=0, without internal layout/font runs in Rust engine → **INVISIBLE / clipped / flat TEXT**.
+- **MANDATORY CANONICAL METHOD**: `use-template knowledge-card-square` (1080×1080, 31 nodes per card) → generates full text/run/font store correctly. Then overwrite only copies/fills/fonts via MCP `set_text` + `set_font`.
+- ALWAYS save via `save_document(filePath)` after changing text (saves internal stores in .op — otherwise different SHA256 and text disappears on desktop).
 
-### 3.3 Validação VISUAL OFFLINE (SEM PRECISAR ABRIR GUI DESKTOP) — unique colors
-Heurística **definitiva** Python (rodar sobre qualquer PNG exportado, validar por peça):
-| Faixa unique colors | Significado | Ação |
+### 3.3 OFFLINE VISUAL validation (WITHOUT OPENING DESKTOP GUI) — unique colors
+Python **definitive** heuristic (run on any exported PNG, validate per piece):
+| Unique colors range | Meaning | Action |
 |---|---|---|
-| **< 2.000** | Chapado / nada renderizou | Reproduzir etapa |
-| **2.000 — 8.000** | Texto + fills OK, SEM FOTOS | Se etapa esperava foto → fallback 3.1.4 (Pillow) |
-| **> 25.000** | FOTOGRAFIA REAL renderizada (gradientes naturais, pixel data) | ✅ PASS |
+| **< 2,000** | Flat / nothing rendered | Reproduce stage |
+| **2,000 — 8,000** | Text + fills OK, NO PHOTOS | If stage expected photo → fallback 3.1.4 (Pillow) |
+| **> 25,000** | REAL PHOTOGRAPHY rendered (natural gradients, pixel data) | ✅ PASS |
 
-Rodar snippet Python em §10 após CADA export de etapa.
+Run Python snippet in §10 after EACH stage export.
 
-### 3.4 Stacking order OBRIGATÓRIO (fotos NUNCA sobrepõem texto!)
-Por frame (card/screen):
-- **INDEX 0 → (FOTO)**: sempre fundo, ATRÁS de tudo.
-- **INDEX 1 → (OVERLAY dark se WCAG pede, alpha 30-40%)**: só **se** foto for luminosa/quente E texto for branco. Mesmo radius da foto.
-- **INDEX 2..N-1 → (TEXTOS headline/subline/body)**: sempre em cima de foto + overlay.
-- **INDEX ÚLTIMO filho → (CTA button)**: sempre na camada mais alta, garante clique/tap target.
+### 3.4 MANDATORY Stacking order (photos NEVER overlap text!)
+Per frame (card/screen):
+- **INDEX 0 → (PHOTO)**: always background, BEHIND everything.
+- **INDEX 1 → (dark OVERLAY if WCAG requires, 30-40% alpha)**: only **if** photo is bright/warm AND text is white. Same radius as photo.
+- **INDEX 2..N-1 → (Headline/Subline/Body TEXTS)**: always on top of photo + overlay.
+- **LAST INDEX child → (CTA button)**: always highest layer, ensures click/tap target.
 
-### 3.5 Imagem nodes no OpenPencil headless LIMIT
-- `batch_design operations G(slot_id, "search", prompt)` cria node filho no slot, mas **CLI headless NÃO baixa a foto stock** (sem backend integração no runtime headless).
-- A foto SÓ renderiza ao abrir o .op no GUI desktop (ele baixa no load). **Se a entrega precisa de PNG RÁPIDO sem abrir GUI → obrigatório cair em fallback offline Pillow 3.1.4**.
+### 3.5 Image nodes in OpenPencil headless LIMIT
+- `batch_design operations G(slot_id, "search", prompt)` creates child node in slot, but **headless CLI DOES NOT download stock photo** (no backend integration in headless runtime).
+- Photo ONLY renders when opening .op in desktop GUI (it downloads on load). **If delivery requires FAST PNG without opening GUI → mandatory to fall back to Pillow 3.1.4 offline composition**.
 
 ---
 
-## 📐 1. MODE A — Social Media Creatives (Execução POR ETAPAS + REVISOR POR ETAPA)
-Goal: Entregar N criativos (default 4 Feed 1:1) com copies 100% verbatim, paleta, layout grid, fotos, estética, export @2x, **tudo alinhado à spec §GATE -1 aprovada**.
+## 📐 1. MODE A — Social Media Creatives (Execution BY STAGES + REVISOR PER STAGE)
+Goal: Deliver N creatives (default 4 Feed 1:1) with 100% verbatim copies, palette, layout grid, photos, aesthetics, @2x export, **all aligned with approved §GATE -1 spec**.
 
-### 1.0 Precondição hard: Spec APROVADA pelo usuário (§GATE -1)
-- Copiar spec aprovada para: `$CHE_DESIGN_DIR/spec.APPROVED.md` (SHA256 salvo para revisor comparar).
+### 1.0 Hard precondition: Spec APPROVED by user (§GATE -1)
+- Copy approved spec to: `$CHE_DESIGN_DIR/spec.APPROVED.md` (SHA256 saved for revisor comparison).
 
-### Fluxo etapas (≤4 etapa total, 1 etapa executa de cada vez)
-**POR ETAPA → (a) Agente Executor (designer) executa; (b) Agente Revisor Visual valida contra spec; (c) Se passar → próxima etapa; (d) Se reprovar ≤2 vezes → rework etapa; >2 vezes → voltar spec ajuste.**
+### Stage flow (≤4 total stages, 1 stage executes at a time)
+**BY STAGE → (a) Executor Agent (designer) executes; (b) Visual Revisor Agent validates against spec; (c) If pass → next stage; (d) If reject ≤2 times → stage rework; >2 times → back to spec adjustment.**
 
-| Etapa | O que executa (Agente Executor) | O que valida Revisor Visual |
+| Stage | Action (Executor Agent) | Visual Revisor Validation |
 |---|---|---|
-| **ETAPA 1 — Assets Fotos** | Baixar 1 foto por peça via cascade §3.1; salvar em `/assets/<piece>.png`; center crop 1024×1024; unsharp 0.8 110% | (1) 4 arquivos PNG existem; (2) Cada unique colors >25.000; (3) MD5 diferentes (não placeholder repetido); (4) Query Unsplash / prompt text_to_image corresponde temática da peça na spec. |
-| **ETAPA 2 — Estrutura Canvas + Textos Verbatim** | 1 template `knowledge-card-square` por peça (TEXT nodes OK); nomear layers semanticamente (`C1-Headline`, `C2-CTA-Buy`); setar copies 100% verbatim da spec (char-by-char, nenhum alterado); setar fontes da spec; setar fills de cor hex paleta spec | Export @1x e validar: (1) Unique colors 2k-8k (texto/fills OK); (2) Copies idênticos spec (hash do texto); (3) Paleta hex corresponde spec (`analyze_colors`); (4) Layers não tem "Rectangle12" (todos semânticos); (5) Contraste WCAG AA. |
-| **ETAPA 3 — Slots Foto + Estética Visual** | Criar slot rect 360×360 por peça na posição x/y EXATA da spec; aplicar foto asset (ou fallback 3.1.4 Pillow composição offline se headless não render). Aplicar radius, stroke branco, shadow, overlay dark (tudo valores EXATOS spec). **Stacking order INDEX 0 (foto) → INDEX1 (overlay) → textos sempre acima.** | Export @1x: (1) Posição x/y EXATA da spec (dif px ≤2); (2) radius + stroke + shadow exatos (pixel check via máscara de edge); (3) Overlay dark SOMENTE se spec pedia; (4) Foto NUNCA cobre headline/CTA (stacking); (5) Unique colors >25.000 EM TODAS PEÇAS (prova foto incorporada). |
-| **ETAPA 4 — Export @2x Final + QA Final Gate** | Export cada peça scale=2 format=PNG; save_document source `.op` + `.openpencil` SHA idênticos; agrupar em `/exports/` com nomes exatos spec; rodar gates §4 em TODOS outputs | Todos gates §4 passam; entregas listadas; spec vs output checklist completa. |
+| **STAGE 1 — Photo Assets** | Download 1 photo per piece via §3.1 cascade; save in `/assets/<piece>.png`; center crop 1024×1024; unsharp 0.8 110% | (1) 4 PNG files exist; (2) Each unique colors >25,000; (3) Different MD5s (no repeated placeholder); (4) Unsplash query / text_to_image prompt matches piece theme in spec. |
+| **STAGE 2 — Canvas Structure + Verbatim Texts** | 1 `knowledge-card-square` template per piece (TEXT nodes OK); name layers semantically (`C1-Headline`, `C2-CTA-Buy`); set 100% verbatim copies from spec (char-by-char, none changed); set spec fonts; set spec palette hex fills | Export @1x and validate: (1) Unique colors 2k-8k (text/fills OK); (2) Copies identical to spec (text hash); (3) Hex palette matches spec (`analyze_colors`); (4) Layers have no "Rectangle12" (all semantic); (5) WCAG AA contrast. |
+| **STAGE 3 — Photo Slots + Visual Aesthetics** | Create 360×360 slot rect per piece at EXACT x/y from spec; apply photo asset (or §3.1.4 Pillow fallback if headless not rendering). Apply radius, white stroke, shadow, dark overlay (all EXACT spec values). **Stacking order INDEX 0 (photo) → INDEX 1 (overlay) → texts always above.** | Export @1x: (1) EXACT x/y position from spec (diff ≤2px); (2) exact radius + stroke + shadow (pixel check via edge mask); (3) Dark overlay ONLY if spec requested; (4) Photo NEVER covers headline/CTA (stacking); (5) Unique colors >25,000 ON ALL PIECES (photo embedded). |
+| **STAGE 4 — Final @2x Export + Final QA Gate** | Export each piece scale=2 format=PNG; save_document source `.op` + `.openpencil` identical SHA; group in `/exports/` with exact spec names; run §4 gates on ALL outputs | All §4 gates pass; deliverables listed; spec vs output checklist complete. |
 
 ---
 
-## 🖥 2. MODE B — UI/UX Feature Design (mesma estrutura Spec → Etapas + Revisor)
+## 🖥 2. MODE B — UI/UX Feature Design (same Spec → Stages + Revisor structure)
 Goal: Wireframes → Hi-Fi → Dev-Spec (React/Tailwind 4 pasteable output).
 
-| Etapa | Ação Executor | Revisor valida |
+| Stage | Executor Action | Revisor Validates |
 |---|---|---|
-| **SPEC GATE-1** | Escrever spec completa: persona / job story / 3 core behaviors / 2-3 screens / breakpoints / dark mode / tokens / paleta / componentes reuso | Spec aprovada user → `APPROVED.md` salvo. |
-| **ETAPA B1** | Low-fi wireframes (only boxes + labels; NO fills/photos). Max 3 screens. | Estrutura alinhada spec; labels corretas; sem fill/gradient. |
-| **ETAPA B2** | Design tokens collection (OpenPencil variables): 8 cor / 6 radius / 8 spacing / 3 typography; ligar layers a variables (SEM raw hex). | Todas layers ligadas a var; sem raw hex em elementos sistema; collection criada com 2 modos se dark mode. |
-| **ETAPA B3** | High-fi: fills via var; fontes + sizes exatos; radius + efeitos; hero foto via cascade §3.1; components (Button/Card) → `create_component`. | Variáveis ligadas; paleta 100% da spec; foto >25k unique colors; WCAG AA; componentes criados. |
-| **ETAPA B4** | Export dev-spec: `design_to_tokens(tailwind)` + PNG 2× screens + SVG components + 15-line `dev-spec.md` (1 para components / tokens / breakpoints). | Output tailwind pasteable; PNGs screens 2× 2560×1440; SVG components com variáveis; dev-spec 15 lines. |
+| **SPEC GATE-1** | Write complete spec: persona / job story / 3 core behaviors / 2-3 screens / breakpoints / dark mode / tokens / palette / reuse components | User approved spec → `APPROVED.md` saved. |
+| **STAGE B1** | Low-fi wireframes (boxes + labels only; NO fills/photos). Max 3 screens. | Structure aligned with spec; correct labels; no fill/gradient. |
+| **STAGE B2** | Design tokens collection (OpenPencil variables): 8 color / 6 radius / 8 spacing / 3 typography; bind layers to variables (NO raw hex). | All layers bound to vars; no raw hex in system elements; collection created with 2 modes if dark mode. |
+| **STAGE B3** | High-fi: fills via vars; exact fonts + sizes; radius + effects; hero photo via §3.1 cascade; components (Button/Card) → `create_component`. | Variables bound; palette 100% from spec; photo >25k unique colors; WCAG AA; components created. |
+| **STAGE B4** | Export dev-spec: `design_to_tokens(tailwind)` + PNG 2× screens + SVG components + 15-line `dev-spec.md` (1 for components / tokens / breakpoints). | Pasteable tailwind output; 2× 2560×1440 screen PNGs; SVG components with variables; 15-line dev-spec. |
 
 ---
 
 ## 🎨 3. MODE C — Design System (Tailwind 4 ↔ OpenPencil variables)
-Goal: Extrair tokens Tailwind → criar variables + 12 componentes atômicos × 4 variants (primary/secondary/ghost/destructive) + export 3 formatos (tailwind / CSS / JSON DTCG).
+Goal: Extract Tailwind tokens → create variables + 12 atomic components × 4 variants (primary/secondary/ghost/destructive) + export 3 formats (tailwind / CSS / DTCG JSON).
 
-| Etapa | Ação Executor | Revisor valida |
+| Stage | Executor Action | Revisor Validates |
 |---|---|---|
-| **SPEC GATE-1** | Spec: origem tokens (Tailwind config / do zero) / dark mode obrigatório / 12 components default; aprovar. | Spec aprovada salvo. |
-| **ETAPA C1** | Criar collection 2 modos (Light/Dark) → ~60 semantic vars (cor/radius/spacing/typography/shadow/opacity). Bind SEMPRE via semantic (nunca raw hex). | 60+ vars criadas; 2 modos se dark; sem raw hex layers; naming semantic (color/brand/50, semantic/bg/primary). |
-| **ETAPA C2** | 12 components atômicos: Button (5 variants + 3 sizes + disabled) / Card / Input+Textarea (focus ring) + Badge/Avatar/Alert/Toggle/Checkbox/Radio/Select/Modal-header. Cada 4 variants; grupo SECTION por componente → `create_component`. | 48 variants total; padding/radius ligados a vars; focus state via stroke+effects; components criados (não só frames). |
-| **ETAPA C3** | `design_to_tokens` 3 formatos (tailwind/CSS/JSON) → salvar `/tokens/` | 3 arquivos tokens; tailwind output colado em `packages/ui/tailwind.config` se existir Flockr. |
+| **SPEC GATE-1** | Spec: token origin (Tailwind config / from scratch) / mandatory dark mode / 12 default components; approve. | Approved spec saved. |
+| **STAGE C1** | Create 2-mode collection (Light/Dark) → ~60 semantic vars (color/radius/spacing/typography/shadow/opacity). ALWAYS bind via semantic (never raw hex). | 60+ vars created; 2 modes if dark; no raw hex layers; semantic naming (color/brand/50, semantic/bg/primary). |
+| **STAGE C2** | 12 atomic components: Button (5 variants + 3 sizes + disabled) / Card / Input+Textarea (focus ring) + Badge/Avatar/Alert/Toggle/Checkbox/Radio/Select/Modal-header. 4 variants each; SECTION group per component → `create_component`. | 48 variants total; padding/radius bound to vars; focus state via stroke+effects; components created (not just frames). |
+| **STAGE C3** | `design_to_tokens` 3 formats (tailwind/CSS/JSON) → save to `/tokens/` | 3 token files; tailwind output pasted in `packages/ui/tailwind.config` if Flockr exists. |
 
 ---
 
-## 🏷 4. MODE D — Logotipo & Marca (SVG OBRIGATÓRIO + Brandbook)
-Goal: Descoberta profunda marca → briefing validado → 3 conceitos logo (esboço baixo-fidelidade na OpenPencil) → refinamento vetorial de 1 conceito → **SVG standalone por variante** (HARD) → brandbook final com paleta/tipografia/aplicações + voz da marca.
+## 🏷 4. MODE D — Logo & Branding (MANDATORY SVG + Brandbook)
+Goal: Deep brand discovery → validated briefing → 3 logo concepts (low-fidelity sketch in OpenPencil) → vector refinement of 1 concept → **standalone SVG per variant** (HARD) → final brandbook with palette/typography/applications + brand voice.
 
-### Pré-condições HARD MODE D (falhar = STOP):
-1. **5 lotes perguntas descoberta GATE 0.1 respondidos.**
-2. **Spec MODE D (§GATE -1 campos extra D) 100% preenchida e APROVADA pelo usuário → salva em `spec.APPROVED.md`.**
-3. **Pelo menos 2 referências (URL / logos anexos / temas) informadas.**
+### MODE D HARD Preconditions (fail = STOP):
+1. **5 discovery question batches GATE 0.1 answered.**
+2. **MODE D spec (§GATE -1 extra D fields) 100% filled and APPROVED by user → saved in `spec.APPROVED.md`.**
+3. **At least 2 references (URL / attached logos / themes) provided.**
 
-### Fluxo etapas MODE D (≤5 etapa total; cada etapa valida com usuário ANTES de próxima):
-**Cada etapa SEMPRE nesta ordem → (a) Executor cria; (b) Revisor Visual valida alinhado spec; (c) Usuário confirma PASS / pede ajustes ≤2 bullets; (d) Se aprovado user → próxima etapa.**
+### MODE D Stage Flow (≤5 total stages; each stage validates with user BEFORE next):
+**Each stage ALWAYS in this order → (a) Executor creates; (b) Visual Revisor validates against spec; (c) User confirms PASS / requests adjustments ≤3 bullets; (d) If user approved → next stage.**
 
-| Etapa MODE D | O que executa (Agente Executor Designer) | O que valida Revisor Visual antes de mostrar user | Checkpoint OBRIGATÓRIO usuário |
+| MODE D Stage | Action (Designer Executor Agent) | Visual Revisor Validation before showing user | MANDATORY User Checkpoint |
 |---|---|---|---|
-| **D0 — Brand Briefing Validado** | Escrever `brandbook/00-briefing.md`: nome, slogan, posicionamento, persona, concorrentes, diferencial, 5 adjetivos personalidade, voz da marca + 3 frases exemplo, top 5 aplicações, restrições proibidas. | (1) Todos campos D1-D5 de descoberta aparecem no briefing; (2) 3 frases voz da marca escritas; (3) ≤2 referências por URL/anexo listadas. | ✅ Usuário assina: "Briefing correto — pode gerar conceitos" (Sim / Não ajustes X) |
-| **D1 — 3 Conceitos Baixa Fidelidade** | No OpenPencil, 3 artboards lado-a-lado 1024×1024 (CONCEITO-A / B / C). Cada um: **caixas + labels** (nenhuma estética final): posição wordmark / posição ícone / iniciais / proporção geral horizontal ou empilhada. Apenas formas básicas + labels de texto. | (1) 3 conceitos existem; (2) Nenhum bitmap / gradient / fill estético; (3) Cada conceito tem proporção / estilo diferente (ex: A = horizontal wordmark only; B = ícone+palavra vertical; C = monograma circular). | ✅ Usuário escolhe 1 conceito para refinar (pode dizer "híbrido A topo + B corpo"). ≤1 híbrido permitido. |
-| **D2 — Refinamento Vetorial do Conceito Escolhido** | No OpenPencil, em 1 artboard só: construir **vectors puros** (BOOLEANOS union/subtract/intersect — SEM raster, SEM bitmaps) para: (a) wordmark (1 tipo ligado em curvas se display); (b) ícone / símbolo / monograma; (c) combinação primary horizontal full. Aplicar paleta hex da spec; aplicar tipografia wordmark exata; ajustar kerning visual. | (1) **TODOS nós são vetores** (ver export SVG — sem `<image>`, sem base64); (2) Paleta exata hex spec (`analyze_colors`); (3) Tipografia ligada; (4) SVG inicial exportado < 256KB; (5) Proporções alinhadas conceito escolhido D1. | ✅ Usuário valida traço / kerning / cores do vetor. |
-| **D3 — 6 Variantes + Export SVG (HARD GATE)** | Criar **≥6 variantes logo obrigatórias**: (1) Primary horizontal full (wordmark + ícone); (2) Secondary stacked vertical; (3) Lettermark / monograma iniciais square; (4) Pictorial icon-only; (5) Monochrome preto (1 cor); (6) Monochrome branco (1 cor reverse). **TODAS 6 exportar individualmente como SVG standalone vetor puro.** Validar via snippet §12.1 antes de avançar. Extra opcional: favicon 64×64 SVG. | (1) **6 arquivos SVG em `/vectors/`**; (2) **Cada SVG: zero tags `<image>` / zero base64 (validar regex)**; (3) Cada SVG `viewBox="0 0 1024 1024"` (ou proporção correta); (4) Tamanho cada < 128KB; (5) 2 variantes monocromáticas (preto + branco) 100% 1 cor; (6) SVG standalone abre em browser sem erros (validar via parse XML). | ✅ Usuário valida as 6 variantes finais. Pede ajustes finais de cor / espaçamento (≤3 bullets). |
-| **D4 — Brandbook Final Completo + Aplicações Mockups** | (a) Montar estrutura brandbook 6 seções mínimo: `01-capa.md`, `02-logos-e-variantes.md` (todas 6 SVGs embed), `03-paleta.md` (nomes cores + hex + usos: primary / secondary / text / bg), `04-tipografia.md` (Display wordmark + Body + weights + line heights + examples), `05-aplicacoes.md` (≥3 mockups aplicação real: perfil Insta 1:1 / cartão visita / header site 1280×640 — gerar PNG mockups em canvas separado), `06-do-and-dont.md` (3 DO + 3 DON'T: ex: DO deixar clear space 0.5× altura "X" / DON'T colocar sobre fotos sem contraste). (b) Export PNG 2× todas SVGs em `/exports/logo-*@2x.png`. | (1) 6 seções brandbook em markdown + assets; (2) 3 mockups PNG criados (≥2560 wide); (3) DO/DON'T tem pelo menos 3 cada; (4) TODAS SVGs já validadas permanecem em `/vectors/`; (5) Voz da marca consistente no texto do brandbook. | ✅ Usuário aprova brandbook final. |
+| **D0 — Validated Brand Briefing** | Write `brandbook/00-briefing.md`: name, slogan, positioning, persona, competitors, differentiator, 5 personality adjectives, brand voice + 3 example phrases, top 5 applications, prohibited restrictions. | (1) All D1-D5 discovery fields appear in briefing; (2) 3 brand voice phrases written; (3) ≤2 references per URL/attachment listed. | ✅ User signs off: "Briefing correct — generate concepts" (Yes / No adjustments X) |
+| **D1 — 3 Low-Fidelity Concepts** | In OpenPencil, 3 side-by-side 1024×1024 artboards (CONCEPT-A / B / C). Each: **boxes + labels** (no final aesthetics): wordmark position / icon position / initials / general horizontal or stacked proportion. Basic shapes + text labels only. | (1) 3 concepts exist; (2) No bitmap / gradient / aesthetic fill; (3) Each concept has different proportion / style (e.g. A = horizontal wordmark only; B = vertical icon+word; C = circular monogram). | ✅ User chooses 1 concept to refine (can say "hybrid A top + B body"). ≤1 hybrid allowed. |
+| **D2 — Vector Refinement of Chosen Concept** | In OpenPencil, on 1 artboard: build **pure vectors** (BOOLEAN union/subtract/intersect — NO raster, NO bitmaps) for: (a) wordmark (type converted to paths if display); (b) icon / symbol / monogram; (c) primary horizontal full combination. Apply spec hex palette; apply exact wordmark typography; adjust visual kerning. | (1) **ALL nodes are vectors** (check SVG export — no `<image>`, no base64); (2) Exact hex palette from spec (`analyze_colors`); (3) Linked typography; (4) Initial SVG export < 256KB; (5) Proportions aligned with chosen D1 concept. | ✅ User validates vector stroke / kerning / colors. |
+| **D3 — 6 Variants + SVG Export (HARD GATE)** | Create **≥6 mandatory logo variants**: (1) Primary horizontal full (wordmark + side icon); (2) Secondary stacked vertical (wordmark below icon); (3) Lettermark / initials monogram square; (4) Pictorial icon-only; (5) Monochrome black (1 fill color); (6) Monochrome white (1 reverse color). **Export ALL 6 individually as pure vector standalone SVG.** Validate via §12.1 snippet before advancing. Optional extra: 64×64 SVG favicon. | (1) **6 SVG files in `/vectors/`**; (2) **Each SVG: zero `<image>` tags / zero base64 (regex validation)**; (3) Each SVG `viewBox="0 0 1024 1024"` (or correct proportion); (4) Each size < 128KB; (5) 2 monochrome variants (black + white) 100% 1 color; (6) Standalone SVG opens in browser without errors (XML parse validation). | ✅ User validates final 6 variants. Requests final color / spacing adjustments (≤3 bullets). |
+| **D4 — Full Final Brandbook + Mockup Applications** | (a) Assemble 6-section min brandbook structure: `01-cover.md`, `02-logos-variants.md` (all 6 SVGs embedded), `03-palette.md` (color names + hex + uses: primary / secondary / text / bg), `04-typography.md` (Display wordmark + Body + weights + line heights + examples), `05-applications.md` (≥3 real mockups: IG profile 1:1 / business card / 1280×640 site header — generate mockup PNGs on separate canvas), `06-do-and-dont.md` (3 DO + 3 DON'T: e.g. DO leave 0.5× "X" height clear space / DON'T place on low-contrast photos). (b) Export 2× PNG of all SVGs to `/exports/logo-*@2x.png`. | (1) 6 brandbook sections in markdown + assets; (2) 3 PNG mockups created (≥2560 wide); (3) DO/DON'T has at least 3 each; (4) ALL already validated SVGs remain in `/vectors/`; (5) Consistent brand voice in brandbook text. | ✅ User approves final brandbook. |
 
 ---
 
-### Fluxo de validação usuário por etapa MODE D (HARD — NÃO pula):
-1. Executor termina etapa → salva arquivos.
-2. Revisor emite PASS/REWORK ≤3 bullets.
-3. Se REWORK → executor corrige só desvios.
-4. Se PASS do revisor → **sobe pro usuário pergunta única**: `"Etapa D<N> concluída. Aprova para avançar para D<N+1>? (Sim / Não — ajustes: [1,2,3 pontos])"`.
-5. Se NÃO → ajustar apenas os pontos listados; re-subir para aprovação. **Não avança para próxima etapa sem Sim explícito do usuário.**
+### MODE D user validation flow per stage (HARD — NO skipping):
+1. Executor finishes stage → saves files.
+2. Revisor issues PASS/REWORK ≤3 bullets.
+3. If REWORK → executor fixes deviations only.
+4. If Revisor PASS → **raise single question to user**: `"Stage D<N> complete. Approve to advance to D<N+1>? (Yes / No — adjustments: [1,2,3 points])"`.
+5. If NO → adjust listed points only; re-submit for approval. **Do not advance to next stage without explicit user Yes.**
 
 ---
 
-## ✅ 4. QUALITY GATES (HARD FAIL se não passar → fix antes de entregar)
-Todos gates 1-7 aplicam a **QUALQUER MODO** e **toda etapa final**. Gates D1-D5 são **MODE D exclusivos (HARD)**:
+## ✅ 4. QUALITY GATES (HARD FAIL if not passed → fix before delivery)
+All gates 1-7 apply to **ANY MODE** and **every final stage**. Gates D1-D5 are **MODE D exclusive (HARD)**:
 
-### Gates globais (todos modos)
-1. **CONTRASTE WCAG AA**: Body text ≥ 4.5:1; large text ≥3:1. Checar com `analyze_colors` MCP se dúvida. Overlay dark obrigatório se texto branco + foto luminosa (card forno lenha = exemplo).
-2. **IMAGENS VALIDADAS**: (a) `unique colors > 25.000` (§3.3) POR PEÇA que esperava foto; (b) SEM placeholder endpoint (checar bytes + MD5); (c) Tema da foto corresponde à peça.
-3. **SEMPRE EXPORT SCALE 2 (2×)**: Feed 2160×2160; Stories 2160×3840; Screens desktop ≥2560 wide.
-4. **LAYERS SEM NOMES LIXO**: SEM "Rectangle 12", "Text 4". Sempre: `<Piece>-<Role>` (ex `C1-Headline-Hero`, `CTA-Buy-Ticket`).
-5. **FALLBACK OFFLINE OBRIGATÓRIO SE ETAPA 3 FOTOS HEADLESS FALHAR**: Rodar compositor Pillow §3.1.4 (colar foto asset baixada sobre PNG base texto renderizado) — este é o gate final para entregar foto **garantida**.
-6. **STORAGE PATHS LIMPOS**: outputs duráveis ficam em `$CHE_DESIGN_DIR`; assets em `$CHE_DESIGN_DIR/assets/`; exports em `$CHE_DESIGN_DIR/exports/`.
-7. **SPEC CHECKSUM**: Saída final **DEVE** corresponder à `APPROVED-spec.md`. Revisor compara item por item (paleta / copies verbatim / layout / dimensão).
+### Global gates (all modes)
+1. **WCAG AA CONTRAST**: Body text ≥ 4.5:1; large text ≥ 3:1. Check with `analyze_colors` MCP if in doubt. Dark overlay mandatory if white text + bright photo.
+2. **VALIDATED IMAGES**: (a) `unique colors > 25,000` (§3.3) PER PIECE expecting photo; (b) NO endpoint placeholder (check bytes + MD5); (c) Photo theme matches piece.
+3. **ALWAYS EXPORT SCALE 2 (2×)**: Feed 2160×2160; Stories 2160×3840; Desktop screens ≥2560 wide.
+4. **NO GARBAGE LAYER NAMES**: NO "Rectangle 12", "Text 4". Always: `<Piece>-<Role>` (e.g. `C1-Headline-Hero`, `CTA-Buy-Ticket`).
+5. **MANDATORY OFFLINE FALLBACK IF HEADLESS STAGE 3 PHOTOS FAIL**: Run Pillow §3.1.4 offline compositor (paste downloaded photo asset over rendered text base PNG) — this is the final gate to deliver **guaranteed** photo.
+6. **CLEAN STORAGE PATHS**: durable outputs in `$CHE_DESIGN_DIR`; assets in `$CHE_DESIGN_DIR/assets/`; exports in `$CHE_DESIGN_DIR/exports/`.
+7. **SPEC CHECKSUM**: Final output **MUST** correspond to `spec.APPROVED.md`. Revisor compares item by item (palette / verbatim copies / layout / dimension).
 
-### Gates MODE D exclusivos (Logotipo & Marca) — HARD fail
-8. **D1: SVG PURO (SEM BITMAPS)**: Nenhuma variante logo pode conter `<image>` tags inline, base64 bitmaps, `<foreignObject>`, ou raster data embed. Validar via regex em cada arquivo SVG. Se precisar de foto → PNG separado, NÃO dentro do logo SVG.
-9. **D2: VARIANTES OBRIGATÓRIAS MÍNIMAS 6**: Primary horizontal + Secondary stacked + Monochrome preto + Monochrome branco + Icon only + Monogram/Lettermark iniciais. ≥6 arquivos em `/vectors/` ao final da D3.
-10. **D3: SVG PEQUENO, STANDALONE, VIEWBOX CORRETO**: Cada SVG ≤128KB; `viewBox` (ex: `0 0 1024 1024` square OU proporção width:height natural); SEM dependências externas (fonts linkadas remotas, URLs); abre em qualquer navegador moderno sem erros. Validar snippet §12.1.
-11. **D4: MONOCROMÁTICO 1 COR**: variantes preta (`#000000` ou cor escura spec) E branca (`#FFFFFF`) DEVEM ter 100% dos paths em SÓ 1 fill. Nenhum gradient, nenhuma sombra rasterizada. Para testar: abrir SVG em editor de texto → substituir fill → só 1 cor muda (não partes).
-12. **D5: BRANDBOOK 6 SEÇÕES MÍNIMO**: 00-briefing / 02-logos-variantes / 03-paleta / 04-tipografia / 05-aplicacoes-mockups (≥3) / 06-do-and-dont (≥3 DO / ≥3 DON'T). Mockups PNG ≥2560px cada.
-13. **D6: NOMENCLATURA SVG CANÔNICA**: `logo-primary.svg`, `logo-stacked.svg`, `logo-monochrome-black.svg`, `logo-monochrome-white.svg`, `logo-icon.svg`, `logo-monogram-<INITIALS>.svg`. Nenhum espaço / caractere especial.
-14. **D7: CLEAR SPACE & MIN SIZE DOCUMENTADO**: Brandbook 02-logos-variantes deve ter tabela: clear-space mínimo (ex: "0.5× a altura do X do wordmark") e tamanho mínimo impressão / digital (ex: "≥48px altura digital").
+### MODE D exclusive gates (Logo & Branding) — HARD fail
+8. **D1: PURE SVG (NO BITMAPS)**: No logo variant may contain inline `<image>` tags, base64 bitmaps, `<foreignObject>`, or embedded raster data. Validate via regex in each SVG file. If photo needed → separate PNG, NOT inside logo SVG.
+9. **D2: MINIMUM 6 MANDATORY VARIANTS**: Primary horizontal + Secondary stacked + Monochrome black + Monochrome white + Icon only + Initials Monogram/Lettermark. ≥6 files in `/vectors/` at end of D3.
+10. **D3: SMALL, STANDALONE SVG, CORRECT VIEWBOX**: Each SVG ≤128KB; `viewBox` (e.g. `0 0 1024 1024` square OR natural width:height proportion); NO external dependencies (remote linked fonts, URLs); opens in any modern browser without errors. Validate §12.1 snippet.
+11. **D4: 1-COLOR MONOCHROME**: black (`#000000` or spec dark) AND white (`#FFFFFF`) variants MUST have 100% paths in ONLY 1 fill. No gradient, no rasterized shadow. Test: open SVG in text editor → replace fill → only 1 color changes.
+12. **D5: MINIMUM 6-SECTION BRANDBOOK**: 00-briefing / 02-logos-variants / 03-palette / 04-typography / 05-applications-mockups (≥3) / 06-do-and-dont (≥3 DO / ≥3 DON'T). PNG mockups ≥2560px each.
+13. **D6: CANONICAL SVG NOMENCLATURE**: `logo-primary.svg`, `logo-stacked.svg`, `logo-monochrome-black.svg`, `logo-monochrome-white.svg`, `logo-icon.svg`, `logo-monogram-<INITIALS>.svg`. No spaces / special characters.
+14. **D7: DOCUMENTED CLEAR SPACE & MIN SIZE**: Brandbook 02-logos-variants must have table: minimum clear-space (e.g. "0.5× wordmark X-height") and minimum size for print / digital (e.g. "≥48px digital height").
 
 ---
 
-## 👀 5. AGENTE REVISOR VISUAL ESPECIALISTA (papel e critérios)
-Invocado **APÓS CADA ETAPA** (antes de próxima). Papel = QA visual + compliance spec.
+## 👀 5. SPECIALIST VISUAL REVISOR AGENT (role and criteria)
+Invoked **AFTER EACH STAGE** (before next). Role = visual QA + spec compliance.
 
-### 5.1 Protocolo revisão por etapa
+### 5.1 Per-stage revision protocol
 ```
 Input:
-  - SPEC_APPROVED_PATH (arquivo salvo após aprovação)
-  - ETAPA_ID (1/2/3/4)
-  - OUTPUT_FILES da etapa (lista paths PNG / .op / json)
+  - SPEC_APPROVED_PATH (file saved after approval)
+  - STAGE_ID (1/2/3/4)
+  - STAGE OUTPUT_FILES (PNG / .op / json path list)
   - ENGINEERING_CONTRACTS §18 verbosity
-Saída:
-  [PASS] → 1 frase "Alinhado à spec em todos os gates. Próxima etapa liberada."
-  [REWORK] → ≤3 bullets APENAS dos desvios (ex: "C3 radius=24 mas spec pede 28"; "Unique colors C2 = 3.200 (esperado >25k foto)")
+Output:
+  [PASS] → 1 sentence "Aligned with spec in all gates. Next stage released."
+  [REWORK] → ≤3 bullets of ONLY the deviations (e.g. "C3 radius=24 but spec asks 28"; "C2 unique colors = 3,200 (expected >25k photo)")
 ```
 
-### 5.2 Limites
-- ≤ 2 rounds REWORK por etapa; **>2 rounds REWORK = STOP e voltar spec para ajuste** (problema na especificação).
-- Revisor NUNCA altera arquivos; só emite PASS / REWORK com lista ≤3 desvios.
-- Validação visual offline: sempre rodar snippet unique colors (§3.3) + `analyze_colors` para contraste antes de decidir.
+### 5.2 Limits
+- ≤ 2 REWORK rounds per stage; **>2 REWORK rounds = STOP and back to spec adjustment** (specification problem).
+- Revisor NEVER modifies files; only issues PASS / REWORK with ≤3 deviations list.
+- Offline visual validation: always run unique colors snippet (§3.3) + `analyze_colors` for contrast before deciding.
 
 ---
 
-## 🚦 7. FAIL-FAST RULES (todos modos)
-- **2 rounds de ajuste na Spec Gate-1 ainda ambíguo** → 1 pergunta: "Quer defaults e vai? A) Sim / B) Vou detalhar mais".
-- **2 rounds ajustes copies/layout etapa NÃO passam revisor** → voltar Spec Gate-1.
-- **Fotos placeholder 3x em cascade** → pular direto fallback Pillow offline 3.1.4 (garantido).
+## 🚦 7. FAIL-FAST RULES (all modes)
+- **2 adjustment rounds in Gate-1 Spec still ambiguous** → 1 question: "Want defaults and go? A) Yes / B) I will detail more".
+- **2 stage copy/layout adjustment rounds DO NOT pass revisor** → back to Gate-1 Spec.
+- **Placeholder photos 3x in cascade** → skip directly to §3.1.4 Pillow offline fallback (guaranteed).
 
 ---
 
-## 📝 6. OUTPUT SHAPE §18 (todas respostas ≤500w)
+## 📝 6. OUTPUT SHAPE §18 (all responses ≤500w)
 ```
-### 📍 Status <1 frase>
-### 🧩 Mudanças-chave (≤3 bullets)
-  • **<Rótulo>**: ≤2 linhas.
+### 📍 Status <1 sentence>
+### 🧩 Key Changes (≤3 bullets)
+  • **<Label>**: ≤2 lines.
 ### 🔗 Refs (≤5 links)
-  • [<nome-arq>](file:///absoluto/path)
-### ❓ Aprofundar
-Quer aprofundar em **<UMA COISA ÚNICA>**? (Sim / Não)
+  • [<filename>](file:///absolute/path)
+### ❓ Deep-dive
+Do you want to deep-dive into **<ONE SINGLE THING>**? (Yes / No)
 ```
 
 ---
 
-## 📁 8. NOMENCLATURA PATHS
+## 📁 8. PATH NOMENCLATURE
 ```
 $CHE_DESIGN_DIR/
-  ├── spec.md                  # Spec draft (iteração)
-  ├── spec.APPROVED.md         # Spec SHA256 travada após aprovação (GATE-1)
+  ├── spec.md                  # Spec draft (iteration)
+  ├── spec.APPROVED.md         # SHA256 spec locked after approval (GATE-1)
   ├── assets/
-  │   ├── C1-hero.png          # Imagens 1024×1024 (>25k unique colors)
+  │   ├── C1-hero.png          # 1024×1024 images (>25k unique colors)
   │   └── C2-flatlay.png
   ├── exports/
-  │   ├── FINAL-<piece>@2x.png # Saídas 2160×2160 / 2160×3840 (modos A/B)
-  │   └── logo-primary@2x.png  # (MODE D only) PNG 2× de cada variante SVG
-  ├── vectors/ (MODE D only OBRIGATÓRIO)
+  │   ├── FINAL-<piece>@2x.png # 2160×2160 / 2160×3840 outputs (A/B modes)
+  │   └── logo-primary@2x.png  # (MODE D only) 2× PNG of each SVG variant
+  ├── vectors/ (MANDATORY for MODE D only)
   │   ├── logo-primary.svg
   │   ├── logo-stacked.svg
   │   ├── logo-monochrome-black.svg
   │   ├── logo-monochrome-white.svg
   │   ├── logo-icon.svg
-  │   └── logo-monogram-<INICIAIS>.svg
+  │   └── logo-monogram-<INITIALS>.svg
   ├── brandbook/ (MODE D only)
   │   ├── 00-briefing.md
-  │   ├── 01-capa.md
-  │   ├── 02-logos-e-variantes.md (embed todos SVG)
-  │   ├── 03-paleta.md
-  │   ├── 04-tipografia.md
-  │   ├── 05-aplicacoes.md
+  │   ├── 01-cover.md
+  │   ├── 02-logos-variants.md (all SVG embedded)
+  │   ├── 03-palette.md
+  │   ├── 04-typography.md
+  │   ├── 05-applications.md
   │   └── 06-do-and-dont.md
   ├── tokens/ (MODE C only)
   │   ├── tokens.tailwind.txt / tokens.css / tokens.json
-  └── dev-spec.md (MODE B only, ≤15 linhas)
+  │   └── dev-spec.md (MODE B only, ≤15 lines)
 ```
 
-Backend source artifacts are conditional: backend=`openpencil` stores `source.pen`
-plus the identical `source.openpencil` copy; backend=`figma` stores only
-`figma-source.md` metadata. backend=`spec-only` creates neither source artifact.
+Backend source artifacts are conditional: backend=`openpencil` stores `source.pen` plus the identical `source.openpencil` copy; backend=`figma` stores only `figma-source.md` metadata. backend=`spec-only` creates neither source artifact.
 
 ---
 
-## 🗂 9. SPEC TEMPLATE COMPLETO (exemplo MODE A MasterPan Instagram 4 posts 1:1)
-> *Copiar este template, preencher 100% campos, apresentar, esperar aprovação explícita "Sim, aprovo spec" antes de qualquer execução.*
+## 🗂 9. FULL SPEC TEMPLATE (MODE A MasterPan Instagram 4 posts 1:1 example)
+> *Copy this template, fill 100% fields, present, wait for explicit "Yes, I approve spec" approval before any execution.*
 
 ```
-# SPEC — Carrossel Instagram MasterPan Padaria (4 posts 1:1 1080×1080)
+# SPEC — MasterPan Bakery Instagram Carousel (4 posts 1:1 1080×1080)
 ## Meta
-- Objetivo campanha: Apresentar MasterPan como padaria artesanal.
-- Tom de voz: Aconchegante, artesanal, clássico, caloroso.
-- Paleta global (todos cards): #FFF7ED bg-stone-50 | #C2410C headline-orange-700 | #EA580C cta-orange-600 | #292524 text-stone-800 | #FFFFFF stroke-white
-- Tipografia global: Inter (Black 72 headlines, Bold 40 subline, SemiBold 48 CTA)
-- Export por card: 1080 base → scale 2 → 2160×2160 PNG final.
+- Campaign goal: Present MasterPan as an artisanal bakery.
+- Tone of voice: Cozy, artisanal, classic, warm.
+- Global palette (all cards): #FFF7ED bg-stone-50 | #C2410C headline-orange-700 | #EA580C cta-orange-600 | #292524 text-stone-800 | #FFFFFF stroke-white
+- Global typography: Inter (Black 72 headlines, Bold 40 subline, SemiBold 48 CTA)
+- Export per card: 1080 base → scale 2 → 2160×2160 final PNG.
 
 ---
-## Por Peça (4x)
-| Campo | C1-CAPA | C2-CARDÁPIO | C3-PROCESSO | C4-VISITE |
+## Per Piece (4x)
+| Field | C1-COVER | C2-MENU | C3-PROCESS | C4-VISIT |
 |---|---|---|---|---|
-| **Objetivo** | Hook hero: "Quem somos" | 3 pães icônicos | Forno lenha = autenticidade | Localização + CTA visitar |
-| **Headline (verbatim)** | *MasterPan* | *Nossos Pães* | *Assados em Forno a Lenha* | *Venha nos Visitar* |
-| **Subline (verbatim)** | Padaria Artesanal | Clássicos. Quentes. Sempre frescos | Desde 1998, com paciência e brasa | Rua das Flores 123 • Centro |
-| **Body bullets** | 1. Fermentação natural longa; 2. Ingredientes orgânicos | 1. Pão francês quente 7h; 2. Pão de queijo mineiro; 3. Croissant amanteigado | 1. Tijolos refratários; 2. Assados diariamente 5h | 1. Ter-Dom 7h-19h; 2. Delivery WhatsApp; 3. Wifi gratuito |
-| **CTA button text** | Ver Cardápio → | Pedir Agora → | Ver Processo → | Traçar Rota → |
-| **Pos foto (x,y) 360×360** | (696, 540) inf-dir | (696, 88) sup-dir | (696, 540) inf-dir | (696, 88) sup-dir |
-| **Foto Unsplash ID / prompt** | photo-1586444248902 (sourdough hero dourado luz quente) | photo-1549931319 (flat lay 3 pães parchment) | photo-1556909114 (forno lenha brasa tijolos) | photo-1555507036 (fachada padaria toldo amarelo manhã) |
-| **Foto radius | stroke | shadow** | 28 / 6 branco / 4 8 blur14 alpha40 | igual C1 | igual C1 | igual C1 |
-| **Overlay dark?** | Não | Não | **SIM #1C1917 alpha 35%** (texto branco) | Não |
-| **Stacking order (0→N)** | 0=foto → 1=textos → último=CTA | 0=foto → 1=textos → último=CTA | 0=foto → 1=overlay → 2=textos brancos → último=CTA | 0=foto → 1=textos → último=CTA |
-| **Nome saída final** | FINAL-WITH-REAL-PHOTO_C1-CAPA@2x.png | FINAL-WITH-REAL-PHOTO_C2-CARDAPIO@2x.png | FINAL-WITH-REAL-PHOTO_C3-PROCESSO@2x.png | FINAL-WITH-REAL-PHOTO_C4-VISITE@2x.png |
+| **Goal** | Hero hook: "Who we are" | 3 iconic breads | Wood oven = authenticity | Location + Visit CTA |
+| **Headline (verbatim)** | *MasterPan* | *Our Breads* | *Wood-Fired Oven Baked* | *Come Visit Us* |
+| **Subline (verbatim)** | Artisanal Bakery | Classics. Warm. Always fresh | Since 1998, with patience and embers | 123 Flower Street • Center |
+| **Body bullets** | 1. Long natural fermentation; 2. Organic ingredients | 1. Warm French bread 7am; 2. Cheese bread; 3. Butter croissant | 1. Refractory bricks; 2. Baked daily 5am | 1. Tue-Sun 7am-7pm; 2. WhatsApp Delivery; 3. Free Wifi |
+| **CTA button text** | View Menu → | Order Now → | View Process → | Get Directions → |
+| **Photo pos (x,y) 360×360** | (696, 540) bottom-right | (696, 88) top-right | (696, 540) bottom-right | (696, 88) top-right |
+| **Unsplash ID / prompt** | photo-1586444248902 (golden hero sourdough warm light) | photo-1549931319 (flat lay 3 breads parchment) | photo-1556909114 (wood oven embers bricks) | photo-1555507036 (bakery facade yellow awning morning) |
+| **Photo radius | stroke | shadow** | 28 / 6 white / 4 8 blur14 alpha40 | same as C1 | same as C1 | same as C1 |
+| **Dark overlay?** | No | No | **YES #1C1917 alpha 35%** (white text) | No |
+| **Stacking order (0→N)** | 0=photo → 1=texts → last=CTA | 0=photo → 1=texts → last=CTA | 0=photo → 1=overlay → 2=white texts → last=CTA | 0=photo → 1=texts → last=CTA |
+| **Final output name** | FINAL-WITH-REAL-PHOTO_C1-COVER@2x.png | FINAL-WITH-REAL-PHOTO_C2-MENU@2x.png | FINAL-WITH-REAL-PHOTO_C3-PROCESS@2x.png | FINAL-WITH-REAL-PHOTO_C4-VISIT@2x.png |
 
 ---
-## Gate WCAG (por peça)
-- C1: Texto laranja sobre bg-stone-50 → 5.2:1 ✅
-- C2: idem C1
-- C3: Texto branco sobre foto forno + overlay 35% → ≥4.5:1 via overlay
-- C4: idem C1
+## WCAG Gate (per piece)
+- C1: Orange text over bg-stone-50 → 5.2:1 ✅
+- C2: same as C1
+- C3: White text over oven photo + 35% overlay → ≥4.5:1 via overlay
+- C4: same as C1
 ```
 
 ---
 
-## 🗂 9.1 SPEC TEMPLATE COMPLETO — MODE D (Logotipo & Marca)
-> **MODE D EXCLUSIVO.** Copiar este template, preencher 100% campos após rodar 5 lotes perguntas D1-D5, apresentar ao usuário, esperar APROVAÇÃO EXPLÍCITA "Sim, aprovo spec" antes de qualquer vetor desenhado.
+## 🗂 9.1 FULL SPEC TEMPLATE — MODE D (Logo & Branding)
+> **MODE D EXCLUSIVE.** Copy this template, fill 100% fields after running 5 discovery batches D1-D5, present to user, wait for EXPLICIT APPROVAL "Yes, I approve MODE D spec" before any vector is drawn.
 
 ```
-# SPEC MODE D — Logotipo & Marca <NOME-MARCA> (YYYY-MM-DD)
-## D0 — Identidade e Posicionamento
-- Nome marca (VERBATIM maiúsculas/minúsculas):
-- Slogan (se existe, VERBATIM):
-- História curta / origem marca (1-2 frases):
-- Setor / indústria exato:
-- Região / país opera:
-- Problema que resolve (1 frase):
-- Cliente ideal (persona: 3 características):
-- 3-5 concorrentes diretos + URL seus sites:
-- 1 diferencial único vs concorrentes:
-- 5 adjetivos personalidade da marca:
-- Voz da marca (1 frase tom):
-  - 3 frases EXEMPLO de como marca fala com cliente:
-  - Frases PROIBIDAS / NUNCA dizer:
-  - Emojis permitidos? (Sim / Não / Com moderação)
-  - Língua principal + outras línguas:
+# SPEC MODE D — Logo & Branding <BRAND-NAME> (YYYY-MM-DD)
+## D0 — Identity and Positioning
+- Brand name (VERBATIM exact case):
+- Slogan (if any, VERBATIM):
+- Short story / brand origin (1-2 sentences):
+- Exact sector / industry:
+- Region / country of operation:
+- Problem solved (1 sentence):
+- Ideal customer (persona: 3 characteristics):
+- 3-5 direct competitors + site URLs:
+- 1 unique differentiator vs competitors:
+- 5 brand personality adjectives:
+- Brand voice (1 sentence tone):
+  - 3 EXAMPLE phrases of brand-customer talk:
+  - FORBIDDEN phrases / NEVER say:
+  - Emojis allowed? (Yes / No / Moderately)
+  - Primary language + other languages:
 
-## D1 — Estética, Referências e Restrições
-### Referências OBRIGATÓRIAS (pelo menos 2 de uma categoria):
-- (a) 3-5 URLs de marcas/sites de referência (amamos):
-- (b) 3-5 URLs de marcas/sites de referência (odiamos):
-- (c) Logotipos antigos / sketches / moodboards existentes anexados (lista paths):
-- (d) Temas/estilos visuais de referência (ex: "minimalista nórdico", "brutalista", "luxo", "artesanal kraft"):
-### Cores:
-- Paleta hex DEFINIDA (se já tiver): primary=#XXXXXX | secondary=#XXXXXX | accent=#XXXXXX | neutrals=#XXXXXX,#XXXXXX,#XXXXXX
-- Cores PROIBIDAS NUNCA USAR:
-### Tipografia:
-- Wordmark (Display) família já definida? (Sim → qual / Não → escolheremos no D2)
-- Body família já definida? (Sim → qual / Não)
-- Famílias tipográficas PROIBIDAS odiamos:
-### Estilo(s) logotipo (escolher até 3):
-- [ ] Wordmark-only (só texto)
-- [ ] Lettermark / monograma iniciais
-- [ ] Pictorial mark (ícone abstrato / ilustração)
-- [ ] Combination mark (ícone + palavra horizontal)
-- [ ] Emblem / selo (circular, retangular)
-### Top 5 lugares logo vai aparecer (definem proporções e min-size):
-1. Ex: perfil Instagram 320×320
-2. Ex: cartão visita 85×55mm (300dpi)
-3. Ex: header site 1280×640 (256px altura máx)
-4. Ex: embalagem frente
-5. Ex: camiseta serigrafia
-### O QUE O LOGO NÃO PODE TER (restrições explícitas):
-- Proibição 1 (ex: "nenhum ícone genérico de pão"):
-- Proibição 2 (ex: "sem gradient, cor chata só"):
-- Proibição 3:
+## D1 — Aesthetics, References and Restrictions
+### MANDATORY References (at least 2 from one category):
+- (a) 3-5 reference brand/site URLs (love):
+- (b) 3-5 reference brand/site URLs (hate):
+- (c) Old logos / sketches / moodboards attached (list paths):
+- (d) Reference visual themes/styles (e.g. "Nordic minimalist", "brutalist", "luxury", "artisanal kraft"):
+### Colors:
+- DEFINED hex palette (if already have): primary=#XXXXXX | secondary=#XXXXXX | accent=#XXXXXX | neutrals=#XXXXXX,#XXXXXX,#XXXXXX
+- FORBIDDEN colors NEVER USE:
+### Typography:
+- Wordmark (Display) family already defined? (Yes → which / No → choose in D2)
+- Body family already defined? (Yes → which / No)
+- FORBIDDEN typographic families we hate:
+### Logo style(s) (choose up to 3):
+- [ ] Wordmark-only
+- [ ] Lettermark / initials monogram
+- [ ] Pictorial mark (abstract icon / illustration)
+- [ ] Combination mark (icon + horizontal word)
+- [ ] Emblem / seal (circular, rectangular)
+### Top 5 places logo will appear (define proportions and min-size):
+1. E.g. Instagram profile 320×320
+2. E.g. business card 85×55mm (300dpi)
+3. E.g. site header 1280×640 (256px max height)
+4. E.g. packaging front
+5. E.g. screen printing t-shirt
+### WHAT LOGO CANNOT HAVE (explicit restrictions):
+- Restriction 1 (e.g. "no generic bread icon"):
+- Restriction 2 (e.g. "no gradient, flat color only"):
+- Restriction 3:
 
-## D2 — Variantes obrigatórias + arquitetura brandbook
-### Variantes logo OBRIGATÓRIAS (≥6):
-1. Primary horizontal full (wordmark + ícone lado)
-2. Secondary stacked vertical (wordmark abaixo do ícone)
-3. Monochrome preto (1 cor fill único, sem gradiente)
-4. Monochrome branco (1 cor fill único, reverse)
-5. Icon / pictorial mark only (quadrado)
-6. Lettermark / monograma iniciais (quadrado)
-7. (opcional) Favicon 64×64 SVG
-### Nomes arquivos SVG finais (HARD gate D6):
+## D2 — Mandatory variants + brandbook architecture
+### MANDATORY logo variants (≥6):
+1. Primary horizontal full (wordmark + side icon)
+2. Secondary stacked vertical (wordmark below icon)
+3. Monochrome black (1 single fill color, no gradient)
+4. Monochrome white (1 single fill color, reverse)
+5. Icon / pictorial mark only (square)
+6. Lettermark / initials monogram (square)
+7. (optional) Favicon 64×64 SVG
+### Final SVG filenames (HARD gate D6):
 - `vectors/logo-primary.svg`
 - `vectors/logo-stacked.svg`
 - `vectors/logo-monochrome-black.svg`
 - `vectors/logo-monochrome-white.svg`
 - `vectors/logo-icon.svg`
-- `vectors/logo-monogram-<INICIAIS>.svg`
-### Brandbook (6 seções mínimo):
-1. Capa (nome marca + slogan + logo primary + data)
-2. Logos e variantes (todas 6 SVGs + clear-space + min-size table)
-3. Paleta de cores (nomes + hex + usos: primary / secondary / texto / fundo)
-4. Tipografia (Display wordmark + Body + weights + line-height + exemplos)
-5. Aplicações reais (≥3 mockups PNG 2×: perfil IG / cartão / header site)
-6. DO and DON'T (≥3 DO + ≥3 DON'T, cada um com explicação curta)
+- `vectors/logo-monogram-<INITIALS>.svg`
+### Brandbook (min 6 sections):
+1. Cover (brand name + slogan + primary logo + date)
+2. Logos and variants (all 6 SVGs + clear-space + min-size table)
+3. Color palette (names + hex + uses: primary / secondary / text / background)
+4. Typography (Display wordmark + Body + weights + line-height + examples)
+5. Real applications (≥3 mockups 2× PNG: IG profile / card / site header)
+6. DO and DON'T (≥3 DO + ≥3 DON'T, each with short explanation)
 
-## D3 — SVG gates finais (HARD — falha = STOP):
-- Cada SVG ≤ 128KB
-- Cada SVG: ZERO `<image>`, ZERO base64, ZERO `<foreignObject>`, ZERO links externos
-- viewBox (square: `0 0 1024 1024` ou proporção natural ex: `0 0 1536 512` para horizontal)
-- Monochrome preto e branco: 100% fill único (checar via grep fill= 1 única cor não transparente)
-- Todos SVGs parse XML válido (Python xml.etree.ElementTree)
+## D3 — Final SVG gates (HARD — failure = STOP):
+- Each SVG ≤ 128KB
+- Each SVG: ZERO `<image>`, ZERO base64, ZERO `<foreignObject>`, ZERO external links
+- viewBox (square: `0 0 1024 1024` or natural proportion e.g. `0 0 1536 512` for horizontal)
+- Monochrome black and white: 100% single fill (check via fill= grep 1 single non-transparent color)
+- All SVGs valid XML parse (Python xml.etree.ElementTree)
 
 ---
-## Assinatura
-**Aprovador (usuário):** _________________________  Data: ________
-Resposta esperada para continuar: "Sim, aprovo spec MODE D. Pode executar etapas D0 → D4."
+## Sign-off
+**Approver (user):** _________________________ Date: ________
+Expected response to continue: "I approve the MODE D spec. You may execute stages D0 → D4."
 ```
 
 ---
 
-## 🛠 10. SNIPPETS CANÔNICOS (colar direto)
-### 10.1 Validação unique colors Python (rodar POR PEÇA após export)
+## 🛠 10. CANONICAL SNIPPETS (copy directly)
+### 10.1 Python unique colors validation (run PER PIECE after export)
 ```python
 import struct,zlib,os,hashlib
 def validate_png(p:str, min_colors=25000, photo_expected=True)->tuple[bool,str]:
@@ -509,7 +499,7 @@ def validate_png(p:str, min_colors=25000, photo_expected=True)->tuple[bool,str]:
     return ok, f"{os.path.basename(p):42s} {w}x{h} {sz:>4d}KB uc={uc:>6d} md5={md5} {'OK' if ok else 'FAIL:'+','.join(reasons)}"
 ```
 
-### 10.2 Fallback offline composição Pillow (3.1.4 — colar foto sobre PNG base texto)
+### 10.2 Pillow composition offline fallback (3.1.4 — paste photo over text base PNG)
 ```python
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 def compose_photo_onto_base(base_png:str, foto_png:str, out_png:str, *,
@@ -518,20 +508,20 @@ def compose_photo_onto_base(base_png:str, foto_png:str, out_png:str, *,
                              dark_overlay_rgba:tuple[int,int,int,int]|None=None):
     base = Image.open(base_png).convert("RGBA")
     foto = ImageOps.fit(Image.open(foto_png).convert("RGBA"),(FW,FH),Image.LANCZOS,centering=(.5,.5))
-    # Foto clip radius
+    # Photo clip radius
     mask = Image.new("L",(FW,FH),0); ImageDraw.Draw(mask).rounded_rectangle((0,0,FW,FH),radius=radius,fill=255)
     foto.putalpha(mask)
-    # Moldura
+    # Frame
     MS = (FW+border_px*2, FH+border_px*2); MR = radius + border_px//2 + 2
-    moldura = Image.new("RGBA", MS, (0,0,0,0)); ImageDraw.Draw(moldura).rounded_rectangle((0,0,*MS),radius=MR,fill=(255,255,255,255))
+    frame = Image.new("RGBA", MS, (0,0,0,0)); ImageDraw.Draw(frame).rounded_rectangle((0,0,*MS),radius=MR,fill=(255,255,255,255))
     # Shadow
     SPAD=14*3; SZ=(MS[0]+SPAD*2, MS[1]+SPAD*2)
     shadow=Image.new("RGBA",SZ,(0,0,0,0)); ImageDraw.Draw(shadow).rounded_rectangle((SPAD,SPAD,SPAD+MS[0],SPAD+MS[1]),radius=MR,fill=(0,0,0,shadow_alpha))
     shadow = shadow.filter(ImageFilter.GaussianBlur(radius=14))
-    # Colar
+    # Paste
     out = base.copy()
     out.alpha_composite(shadow,(x-border_px-SPAD+4, y-border_px-SPAD+8))
-    out.alpha_composite(moldura,(x-border_px, y-border_px))
+    out.alpha_composite(frame,(x-border_px, y-border_px))
     out.alpha_composite(foto,(x,y))
     if dark_overlay_rgba:
         ov=Image.new("RGBA",(FW,FH),(0,0,0,0)); ImageDraw.Draw(ov).rounded_rectangle((0,0,FW,FH),radius=radius,fill=dark_overlay_rgba)
@@ -539,7 +529,7 @@ def compose_photo_onto_base(base_png:str, foto_png:str, out_png:str, *,
     out.save(out_png,"PNG",optimize=True)
 ```
 
-### 10.3 MODE D — Validação SVG vetor puro (rodar POR VARIANTE após export D3)
+### 10.3 MODE D — Pure vector SVG validation (run PER VARIANT after export D3)
 ```python
 import os,re,xml.etree.ElementTree as ET
 def validate_svg_logo(path:str,min_variants:int=6)->tuple[bool,str]:
@@ -549,7 +539,7 @@ def validate_svg_logo(path:str,min_variants:int=6)->tuple[bool,str]:
     try:
         root=ET.fromstring(raw)
         tag=lambda x: x.split('}')[-1] if '}' in x else x
-        # D1: sem image / foreignObject / base64 data URI
+        # D1: no image / foreignObject / base64 data URI
         forbidden_tags={'image','foreignObject','use'}
         bad_tags=[e.tag for e in root.iter() if tag(e.tag) in forbidden_tags]
         has_b64=b'data:image' in raw or b'base64' in raw
@@ -557,7 +547,7 @@ def validate_svg_logo(path:str,min_variants:int=6)->tuple[bool,str]:
         vb=root.attrib.get('viewBox','')
         # Monochrome check heuristic: count unique fill hex
         fills=set(re.findall(r'fill\s*=\s*["\'](#[0-9a-fA-F]{3,8})["\']',raw.decode('utf-8','ignore')))
-        mono_ok = len(fills)<=2  # ≤2 cores não transparente (1 fill + maybe stroke same)
+        mono_ok = len(fills)<=2  # ≤2 non-transparent colors (1 fill + maybe same stroke)
         xml_ok = True
     except ET.ParseError as e:
         return False,f"{os.path.basename(path):48s} sz={sz:>3d}KB XML_INVALID: {str(e)[:40]}"
@@ -569,7 +559,7 @@ def validate_svg_logo(path:str,min_variants:int=6)->tuple[bool,str]:
     return ok,f"{os.path.basename(path):48s} sz={sz:>3d}KB fills={len(fills)} vb={bool(vb)} mono~{mono_ok} {'OK' if ok else 'FAIL:'+','.join(r)}"
 ```
 
-### 10.4 MODE D — Export PNG 2× de todos SVG (via cairosvg OU Pillow fallback)
+### 10.4 MODE D — 2× PNG Export of all SVGs (via cairosvg OR Pillow fallback)
 ```python
 def rasterize_svgs_to_png2x(vectors_dir:str, exports_dir:str, scale:int=2):
     import subprocess, pathlib
@@ -588,30 +578,25 @@ def rasterize_svgs_to_png2x(vectors_dir:str, exports_dir:str, scale:int=2):
 ---
 
 ## 🧩 11. DESIGN BACKEND SELECTION
-
 Canonical contract: `references/DESIGN_BACKEND_CONTRACT.md`.
-
 Available drivers:
-
 - `openpencil` → `references/backends/OPENPENCIL.md`
 - `figma` → `references/backends/FIGMA.md`
 - `spec-only` → SPEC/dev-spec only; STOP before pixel execution
 
 Selection is capability-based, not IDE-based.
-
 User explicit backend choice has precedence when that capability exists.
-
 If the requested backend capability is unavailable, FAIL CLOSED instead of silently switching design engines.
 
 ---
 
-## 🧰 12. MODE D — SVG Logo Reference (vetor booleano & clean-up)
-### 12.1 Vetor puro & booleans (HARD para logo)
-1. **WORDMARK**: se display/script, ideal converter outlines em paths via OpenPencil `boolean_union` ANTES de exportar SVG (garante render sem depender de fonte instalada).
-2. **SÍMBOLO/MONOGRAMA**: construir SEMPRE com primitivos (rect / circle / path bezier) → depois `boolean_union/subtract/intersect` para único contorno. Evitar 12 camadas sobrepostas que geram artefatos.
-3. **CLEAN-UP OBRIGATÓRIO ANTES EXPORT SVG**: remove layers vazias / invisíveis / duplicates; flatten groups desnecessários. Nomes camadas finais: `wordmark` / `icon` / `monogram` / `bg`.
+## 🧰 12. MODE D — SVG Logo Reference (boolean vector & clean-up)
+### 12.1 Pure vector & booleans (HARD for logo)
+1. **WORDMARK**: if display/script, ideally convert outlines to paths via OpenPencil `boolean_union` BEFORE SVG export (ensures render without installed font dependency).
+2. **SYMBOL/MONOGRAM**: ALWAYS build with primitives (rect / circle / bezier path) → then `boolean_union/subtract/intersect` for single contour. Avoid 12 overlapping layers generating artifacts.
+3. **MANDATORY CLEAN-UP BEFORE SVG EXPORT**: remove empty / invisible / duplicate layers; flatten unnecessary groups. Final layer names: `wordmark` / `icon` / `monogram` / `bg`.
 
-### 12.2 Regras WCAG & contraste no logo
-- Variante primary: contraste logo contra fundo claro (branco / bg spec) ≥ 3:1 para legível em header 48px+.
-- Variante monochrome branca: testar SEMPRE contra fundo #111827 escuro da própria paleta.
-- Clear-space mínimo documentado no brandbook 02-logos-e-variantes: **0.5× a altura do X do wordmark em TODOS os lados do bounding box do logo.**
+### 12.2 WCAG & contrast rules in logo
+- Primary variant: logo contrast against light background (white / spec bg) ≥ 3:1 for readability in 48px+ header.
+- Monochrome white variant: ALWAYS test against palette dark #111827.
+- Minimum clear-space documented in 02-logos-variants brandbook: **0.5× wordmark X-height on ALL sides of logo bounding box.**
