@@ -195,3 +195,31 @@ Your `PATH` lacks `~/.local/bin`. Run `pipx ensurepath`, then open a new shell.
 2. Core logic (≥ 15 lines) lives in `che_core/` as Python ≥ 3.9 stdlib code. Skills live in `skills/*/SKILL.md` as **declarative Markdown**. Python code blocks inside skills must not exceed 15 lines — refactor the rest into the CLI.
 3. CI: `ruff check .` (lint/format) and `python3 -m pytest tests/ -q` (unit). Both must pass. Public functions ship with DbC pre/post-condition docstrings or assertions.
 4. Duplicating a rule body anywhere instead of linking? That is a blocking review finding. SSoT (DRY from The Pragmatic Programmer) is not a style nit — it is the whole point.
+
+### Local Git hooks (pre-commit + pre-push) — CI in < 5 s + < 30 s
+
+Stop waiting for CI to come back red. Install the local hooks **once** after cloning this repo:
+
+```bash
+# Option 1 — already ran scripts/install-che.sh with --apply on THIS repo?
+#            Done. The installer invokes install-git-hooks.sh automatically
+#            when the target contains .git/.
+
+# Option 2 — standalone install:
+bash scripts/install-git-hooks.sh
+```
+
+**Hook behaviour:**
+
+| Hook       | Budget | What it gates (exactly mirrors GitHub Actions CI) | Bypass once (real emergencies only) |
+| :--------- | :----: | :------------------------------------------------ | :---------------------------------- |
+| pre-commit | ~ 3 s  | `ruff check` + `ruff format --check` on staged `.py` only → offline regex secret scan (GitHub PAT, AWS key, PEM, JWT) → markdownlint on the 4 canonical docs if touched → smoke pytest (only when `che_core/` or `tests/` changed). | `git commit --no-verify` or `CHE_SKIP_PRE_COMMIT=1` |
+| pre-push   | ~ 30 s | **Full repo** `ruff check .` + `ruff format --check .` + `pytest tests/` (39) + `markdownlint-cli2` with exact CI globs + push-diff offline regex secret scan. | `git push --no-verify` or `CHE_SKIP_PRE_PUSH=1` |
+
+The `pre-push` hook is calibrated so that **if it passes, GitHub Actions CI will pass too** (99 % of cases) — no more "30 s wait, click red X, fix typo" loops.
+
+Uninstall / revert backup hooks:
+
+```bash
+bash scripts/install-git-hooks.sh --remove
+```

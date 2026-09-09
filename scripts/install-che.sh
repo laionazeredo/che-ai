@@ -673,4 +673,13 @@ else
   if [ -f "$TARGET/scripts/setup-adapters.sh" ]; then
     bash "$TARGET/scripts/setup-adapters.sh"
   fi
+
+  # FINAL FINAL STEP: Install local Git hooks if the TARGET is THIS Che repo itself
+  # (i.e. an agent/dev bootstrapping the Che repo — not a downstream user installing
+  # Che into their own .trae folder). Hooks live in .git/hooks/ of the TARGET.
+  if [ -d "$TARGET/.git" ] && [ -f "$TARGET/scripts/install-git-hooks.sh" ]; then
+    echo ""
+    echo "  7. Git hooks (pre-commit / pre-push): installing into $TARGET/.git/hooks/"
+    bash "$TARGET/scripts/install-git-hooks.sh" || true
+  fi
 fi

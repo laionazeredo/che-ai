@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+#
+# Che — pre-commit hook (fast, ~3 s).
+#
+# Runs BEFORE a commit is created. Designed to be CHEAP (fail in <5 s).
+# Heavier checks (full pytest, markdownlint on 400 files, secret scan)
+# live in the pre-push hook.
+#
+# Installed by `scripts/install-git-hooks.sh` or `scripts/install-che.sh`.
+#
+# CAN BE BYPASSED with `git commit --no-verify` — reserved for real
+# emergencies (e.g. midnight hotfix on a plane).
+
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+RED=$'\033[0;31m'; YEL=$'\033[1;33m'; GRN=$'\033[0;32m'; DIM=$'\033[2m'; RST=$'\033[0m'
+
+info()   { printf '%s[hooks/pre-commit]%s %s\n'    "${DIM}"  "${RST}" "$*"; }
+ok()     { printf '%s[hooks/pre-commit] %sOK%s  %s\n' "${DIM}"  "${GRN}" "${RST}" "$*"; }
+warn()   { printf '%s[hooks/pre-commit] %sWARN%s %s\n' "${DIM}"  "${YEL}" "${RST}" "$*"; }
+fail()   { printf '%s[hooks/pre-commit] %sFAIL%s %s\n' "${DIM}"  "${RED}" "${RST}" "$*" >&2; }
+
+# Only look at STAGED files (not the whole working tree).
+staged_files() {
+  # `--diff-filter=ACM` = Added, Copied, Modified (skip deleted/renamed pure moves).
+  git diff --cached --name-only --diff-filter=ACM
+}
+
+has_python_changes() {
+  staged_files | grep -qE '\.py$'
+}
+
+has_markdown_changes() {
+  staged_files | grep -qE '\.md$'
+}
+
+# ---------------------------------------------------------------------------
+# 0. Optional skip (env var for rebase chains / midnight hotfix).
+# ---------------------------------------------------------------------------
+
+if [[ -n "${CHE_SKIP_PRE_COMMIT:-}" ]]; then
+  warn "CHE_SKIP_PRE_COMMIT is set — skipping all pre-commit checks."
+  exit 0
+fi
+
+info "Running fast gates on staged files (ruff + md-lint selective)…"
+
+# ---------------------------------------------------------------------------
+# 1. Ruff lint — only on staged Python files, cheap.
+# ---------------------------------------------------------------------------
+
+if has_python_changes; then
+  # shellcheck disable=SC2046
+  PY_FILES=($(staged_files | grep -E '\.py$' || true))
+  if (( ${#PY_FILES[@]} > 0 )); then
+    info "ruff check  (${#PY_FILES[@]} staged .py files)"
+    if ! command -v ruff >/dev/null 2>&1; then
+      warn "ruff not found on PATH — install: pipx install ruff  or  pip install ruff"
+    else
+      if ! ruff check "${PY_FILES[@]}"; then
+        fail "ruff check failed. Run: ruff check --fix ${PY_FILES[*]}"
+        exit 1
+      fi
+      ok "ruff check"
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Ruff formatter — only on staged Python files.
+#    We use --check (not --diff-in-place) because the hook must not mutate
+#    the index behind the user's back. User sees the diff and can stage it.
+# ---------------------------------------------------------------------------
+
+if has_python_changes; then
+  # shellcheck disable=SC2046
+  PY_FILES=($(staged_files | grep -E '\.py$' || true))
+  if (( ${#PY_FILES[@]} > 0 )); then
+    info "ruff format check  (${#PY_FILES[@]} staged .py files)"
+    if command -v ruff >/dev/null 2>&1; then
+      if ! ruff format --check "${PY_FILES[@]}" 2>&1; then
+        fail "ruff format: files need reformatting. Run:  ruff format ${PY_FILES[*]}  then re-stage."
+        exit 1
+      fi
+      ok "ruff format check"
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Lightweight secret scan — regex, no network, no trufflehog dep.
+#    Prevents the classic "oops I committed a 40-char GitHub PAT / AWS key".
+# ---------------------------------------------------------------------------
+
+STAGED=$(staged_files)
+if [[ -n "${STAGED}" ]]; then
+  info "secret scan (regex, offline)"
+  # Patterns chosen to match what TruffleHog / gitleaks flag as high-confidence.
+  FOUND=$(
+    git diff --cached --no-color -U0 \
+      | grep -E '^\+[^+]' \
+      | grep -E '(\bghp_[A-Za-z0-9]{36,}|\bgho_[A-Za-z0-9]{36,}|\bghs_[A-Za-z0-9]{36,}|\bAKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,})' \
+      || true
+  )
+  if [[ -n "${FOUND}" ]]; then
+    fail "Possible secret detected in staged diff (GitHub PAT, AWS key, PEM key, JWT, OpenAI key)."
+    echo ""
+    echo "Matching hunks (review before committing):"
+    echo "${FOUND}" | head -40
+    echo ""
+    echo "If this is a FAKE / TEST key, bypass once with:   git commit --no-verify"
+    exit 1
+  fi
+  ok "secret scan (regex, offline)"
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Markdown lint — only the CANONICAL surface files of THIS repo,
+#    never the 400+ skills/memory files that are someone else's problem.
+#    (Full scan lives in pre-push / CI.)
+# ---------------------------------------------------------------------------
+
+CANONICAL_MD=(
+  "README.md"
+  "AGENTS.md"
+  "docs/cli-reference.md"
+  "docs/architecture-and-principles.md"
+)
+
+CHECK_THESE=()
+for f in "${CANONICAL_MD[@]}"; do
+  if staged_files | grep -qx "${f}"; then
+    CHECK_THESE+=("${f}")
+  fi
+done
+
+if (( ${#CHECK_THESE[@]} > 0 )); then
+  info "markdownlint-cli2  (${#CHECK_THESE[@]} canonical docs)"
+  if ! command -v npx >/dev/null 2>&1; then
+    warn "npx not found on PATH — install Node 20+; skipping markdown lint."
+  else
+    if ! npx --yes markdownlint-cli2 "${CHECK_THESE[@]}" 2>&1; then
+      fail "markdownlint failed on canonical docs. Fix and re-stage."
+      exit 1
+    fi
+    ok "markdownlint-cli2"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Fast smoke pytest ONLY if che_core/*.py or tests/*.py were STAGED.
+#    Skip for docs-only commits (why run 2 s of pytest for a typo fix?).
+# ---------------------------------------------------------------------------
+
+TOUCHED_CORE_OR_TESTS=$(staged_files | grep -qE '(^che_core/|\.py$|^tests/)' && echo yes || echo no)
+if [[ "${TOUCHED_CORE_OR_TESTS}" == "yes" ]]; then
+  info "pytest quick (10 files, ~2 s) — core/tests touched"
+  if command -v pytest >/dev/null 2>&1; then
+    if ! python3 -m pytest tests/ -q -x --tb=short 2>&1 | tail -20; then
+      fail "pytest failed. Full suite lives in pre-push; this is a smoke gate."
+      exit 1
+    fi
+    ok "pytest quick smoke"
+  fi
+fi
+
+ok "all fast gates passed  (skip once: git commit --no-verify)"
+exit 0
