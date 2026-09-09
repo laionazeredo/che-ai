@@ -27,20 +27,20 @@ def _setup_wt_with_content(tmp_path: Path):
 # Tasks
 | ID | Title | Depends on | Status | Domain | DONE |
 |---|---|---|---|---|---|
-| T1 | Criar UI |  | TODO | ux | mockup pronto |
-| T2 | Implementar | T1 | TODO | engineering | testes passando |
+| T1 | Create UI |  | TODO | ux | mockup ready |
+| T2 | Implement | T1 | TODO | engineering | tests passing |
 """.strip(),
         encoding="utf-8",
     )
     tasks = shared / "tasks"
     (tasks / "T1").mkdir(parents=True, exist_ok=True)
     (tasks / "T1" / "envelope.md").write_text(
-        "domain: ux\ntitle: Criar UI\nexpert_skills: penpot\nhandoff_output: designs/ui.fig\ndone_criteria: mockup pronto\n\nBody task one.",
+        "domain: ux\ntitle: Create UI\nexpert_skills: penpot\nhandoff_output: designs/ui.fig\ndone_criteria: mockup ready\n\nBody task one.",
         encoding="utf-8",
     )
     (tasks / "T2").mkdir(parents=True, exist_ok=True)
     (tasks / "T2" / "envelope.md").write_text(
-        "domain: engineering\ntitle: Implementar\nexpert_skills: typescript\nhandoff_output: src/\ndone_criteria: testes\n\nBody task two.",
+        "domain: engineering\ntitle: Implement\nexpert_skills: typescript\nhandoff_output: src/\ndone_criteria: tests\n\nBody task two.",
         encoding="utf-8",
     )
 
@@ -56,7 +56,7 @@ def _setup_wt_with_content(tmp_path: Path):
                     "event": f"TEST_{i}",
                     "worktree_root": str(wt),
                     "task_id": f"T{i % 2 + 1}",
-                    "payload": {"dec_num": i, "note": f"decisao antiga {i}"},
+                    "payload": {"dec_num": i, "note": f"old decision {i}"},
                 }
             )
         )
@@ -64,7 +64,7 @@ def _setup_wt_with_content(tmp_path: Path):
 
     specs_dir = shared / "specs"
     (specs_dir / "spec-ui.md").write_text(
-        "---\ntitle: UI Spec\nstatus: Approved\ndomain: ux\n---\n\nEsta é a spec de interface contendo UX flows e detalhes de pagamento.",
+        "---\ntitle: UI Spec\nstatus: Approved\ndomain: ux\n---\n\nThis is the interface spec containing UX flows and payment details.",
         encoding="utf-8",
     )
     return wt
@@ -109,18 +109,18 @@ def test_sanitize_dry_run_then_apply(tmp_path: Path):
     rebuild_state_index(str(wt))
     res_dry = sanitize_state(str(wt), max_age_days=180, max_decisions=5, dry_run=True)
     assert res_dry["dry_run"] is True
-    # decisions_old: decisions with ts > 180 dias no passado
+    # decisions_old: decisions with ts > 180 days in the past
     assert res_dry["deleted"]["decisions_old"] >= 1
-    # decisions_over_cap se 20 - 5 = 15
+    # decisions_over_cap if 20 - 5 = 15
     assert res_dry["deleted"]["decisions_over_cap"] >= 10
-    # Aplicar
+    # Apply
     res = sanitize_state(str(wt), max_age_days=180, max_decisions=5, dry_run=False)
     assert res["dry_run"] is False
-    # VACUUM pode dar "database is locked" em ambientes pytest com conexões remanescentes;
-    # esse não é um erro funcional do sanitize, só de corrida de conexão no VACUUM final.
+    # VACUUM might throw "database is locked" in pytest environments with remaining connections;
+    # this is not a functional error of sanitize, just a connection race on the final VACUUM.
     err = res.get("error") or ""
     assert (err == "") or ("locked" in err.lower()) or ("vacuum" in err.lower())
-    # Contagem de deletados aplica de verdade (sempre >= que no dry-run pois nada foi removido antes)
+    # Deleted count applies for real (always >= than in dry-run since nothing was removed before)
     assert res["deleted"]["decisions_old"] >= 1
     assert res["deleted"]["decisions_over_cap"] >= 10
 
@@ -133,5 +133,5 @@ def test_search_state_returns_serializable_and_has_matches(tmp_path: Path):
     assert isinstance(r, dict)
     json.dumps(r)
     assert "results" in r
-    # Pode ter 0 matches se FTS5 não suportado, mas search_state funciona.
+    # Might have 0 matches if FTS5 is not supported, but search_state works.
     assert isinstance(r["results"], list)
