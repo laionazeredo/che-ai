@@ -246,23 +246,23 @@ This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and 
    ```bash
    che_append_decision_jsonl "EXPLICIT_OVERRIDE_HORIZONTAL_PLAN" "scope capture with explicit horizontal plan. justification=<1-linha from SPEC §2 verbatim, safe JSON escaped>"
    ```
-6. **Gate enforcement — CANONICAL #1 REVERSIBILITY (G-REV-1 pass-through):**
+6. **Gate enforcement — CANONICAL #1 REVERSIBILITY (G-REV-1 pass-through, per S08 CHE_RULES §X V19 trigger):**
    - If `SPEC_STATUS=Approved`:
      1. Parse YAML frontmatter + scan SPEC §4.6.1 Wrapper Boundary table (if exists). Count rows `WRAPPER_COUNT = rows in §4.6.1 table`.
-     2. Compute V19 trigger fired: `V19_FIRED = (estimated_files_max≥5 from frontmatter OR external_deps_count≥1 from frontmatter)`.
+     2. Compute V19 trigger fired (per S08 CHE_RULES §X): `V19_FIRED = (estimated_files_max≥5 from frontmatter OR external_deps_count≥1 from frontmatter)`. (S08 threshold ≥5 files OR ≥1 external dep)
      3. Search SPEC §2 SCOPE for literal `EXPLICIT_OVERRIDE_REVERSIBILITY:` (case-sensitive, verbatim). Set `R_OVERRIDE_EXISTS = true` if found + justification is ≤120 chars.
-     4. **If V19_FIRED === true AND WRAPPER_COUNT === 0 AND R_OVERRIDE_EXISTS === false → BLOCK (G-REV-1).** DO NOT unlock §1.1. Present user 2 options verbatim:
+     4. **If V19_FIRED === true AND WRAPPER_COUNT === 0 AND R_OVERRIDE_EXISTS === false → BLOCK (G-REV-1, per S08).** DO NOT unlock §1.1. Present user 2 options verbatim:
         > "(A) Re-run che-spec and ADD WRAPPER BOUNDARY TABLE §4.6.1 (1 row per external SDK dep — single glob / folder each) AND §4.6.2 rollback flags IF critical path B-IDs exist AND §4.6.3 forking road test IF wrappers ≥2.  (B) Type 1-line justification ≤120 chars → I will write literal `EXPLICIT_OVERRIDE_REVERSIBILITY: <your text>` into SPEC §2 SCOPE + log decision."
      5. If WRAPPER_COUNT > 0 OR R_OVERRIDE_EXISTS === true → proceed. If R_OVERRIDE_EXISTS was used, run helper BEFORE §1:
         ```bash
         che_append_decision_jsonl "EXPLICIT_OVERRIDE_REVERSIBILITY" "scope capture with explicit reversibility override. justification=<1-line from SPEC §2 verbatim, safe JSON escaped>"
         ```
-7. **Gate enforcement — CANONICAL #3 DBC ASSERTIVE PROGRAMMING (G-DBC-1 pass-through):**
+7. **Gate enforcement — CANONICAL #3 DBC ASSERTIVE PROGRAMMING (G-DBC-1 pass-through, per S09 CHE_RULES §X V20 trigger + S02 min-rows):**
    - If `SPEC_STATUS=Approved`:
-     1. Parse YAML frontmatter `B_COUNT`. Compute V20 trigger fired: `V20_FIRED = (B_COUNT >= 3)`.
-     2. Scan SPEC §4.7 Assertive Invariants table (if exists). Count rows with col-4 === literal word "CRASH" (case-sensitive). Set `ASSERTION_ROWS_OK = count of those rows >= ceil(B_COUNT / 3)`.
+     1. Parse YAML frontmatter `B_COUNT`. Compute V20 trigger fired (per S09 CHE_RULES §X): `V20_FIRED = (B_COUNT >= 3)`. (S09 threshold B≥3)
+     2. Scan SPEC §4.7 Assertive Invariants table (if exists). Count rows with col-4 === literal word "CRASH" (case-sensitive). Set `ASSERTION_ROWS_OK = count of those rows >= ceil(B_COUNT / 3)` (density per S09 CHE_RULES §X, min rows per S02 CHE_RULES §X).
      3. Search SPEC §2 SCOPE for literal `EXPLICIT_OVERRIDE_DBC_ASSERTIONS:` (case-sensitive, verbatim). Set `D_OVERRIDE_EXISTS = true` if found + justification ≤120 chars.
-     4. **If V20_FIRED === true AND ASSERTION_ROWS_OK === false AND D_OVERRIDE_EXISTS === false → BLOCK (G-DBC-1).** DO NOT unlock §1.1. Present user 2 options verbatim:
+     4. **If V20_FIRED === true AND ASSERTION_ROWS_OK === false AND D_OVERRIDE_EXISTS === false → BLOCK (G-DBC-1, per S09).** DO NOT unlock §1.1. Present user 2 options verbatim:
         > "(A) Re-run che-spec and ADD ASSERTIVE INVARIANTS TABLE §4.7 with >= ceil(B/3) rows. Each invariant that is IMPOSSIBLE in correct code MUST have column 4 === literal 'CRASH'.  (B) Type 1-line justification ≤120 chars → I will write literal `EXPLICIT_OVERRIDE_DBC_ASSERTIONS: <your text>` into SPEC §2 SCOPE + log decision."
      5. If ASSERTION_ROWS_OK === true OR D_OVERRIDE_EXISTS === true → proceed. If D_OVERRIDE_EXISTS was used, run helper BEFORE §1:
         ```bash

@@ -23,7 +23,7 @@ cross_skills:
 
 ---
 
-## Phase 0 — Preconditions & Brief / Discovery (JTBD, NOT visual design yet)
+## 0. Preconditions & Brief / Discovery (JTBD, NOT visual design yet)
 
 ### Goal
 Understand the PROBLEM before opening Figma/PenPot. "Design is problem solving. Without a defined problem, every wireframe is beautiful and useless."
@@ -31,6 +31,10 @@ Understand the PROBLEM before opening Figma/PenPot. "Design is problem solving. 
 ### Mandatory inputs to start
 - ✅ Approved Ticket / SPEC with: `user_story`, `persona_primary`, `success_metric` (1 number, not prose).
 - ✅ Raw research (if any): user-interview notes, heatmaps, GA4/Hotjar analytics (DO NOT invent data).
+- ✅ **Provider Pointer Pattern (G vs E NON-NEGOTIABLE)**: Playbook HERE = structural stages (mobile-first, 7 component states, WCAG). Visual/implementation specifics → delegate to:
+  - (a) **Skills**: `skills/accessibility-expert/SKILL.md` (WCAG 2.2 AA rules + ARIA), `skills/core-web-vitals/SKILL.md` (LCP/INP/CLS thresholds), `skills/tailwind-design-system/SKILL.md` (token system).
+  - (b) **Connectors**: `domains/ux/connectors/figma.config.md` or `penpot.config.md`.
+  - NEVER repeat WCAG numeric thresholds here → consume from the skills via pointer. Scoring quality: "per CHE_RULES §X S01-S15" — NO numbers duplicated.
 
 ### Stages 0.0 → 0.4 (no skipping)
 **0.0 F0 Tracer Ping (UX — CANONICAL #0 VERTICAL SLICING, runs BEFORE 0.1):**
@@ -108,7 +112,7 @@ Apply Design System tokens from `domains/ux/profile.md` (spacing/radius/color/ty
 
 ## Phase 3 — Mandatory Quality Gates (NUMERICAL thresholds, no subjective evaluation)
 
-> **Executed by `/che-ship §0.9.5 DOMAIN GATES` automatically when shipping a feature with `domain: ux`.** Same fail-fast engine as core (threshold + 1 free retry + human required after 2nd failure).
+> **Executed by `/che-ship §0.9.5 DOMAIN GATES` automatically when shipping a feature with `domain: ux`.** Same fail-fast engine as core (threshold + 1 free retry + human required after 2nd failure). Scoring companion: quality gate a11y/pixel = per S14 CHE_RULES §X (LEAN quality + delivery structure). Do not duplicate pixel tolerance here — SSoT = CHE_RULES §X Sxx.
 
 ### Execution order (alphabetical by filename)
 

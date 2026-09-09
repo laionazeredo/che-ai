@@ -157,8 +157,8 @@ domain: engineering                  # accepted values: engineering | product | 
 risk_level: low|medium|high           # NEW SbE. default = low. If medium/high → mandatory §4.4 Mermaid trigger.
 source_merge_order: [user_prompt, prd_file, linear_ticket, implementer_hints]   # NEW CANONICAL SbE. DO NOT reorder without EXPLICIT_OVERRIDE + decision log.
 status: Draft
-estimated_files_max: <integer; default 15; hard stop per §15>
-estimated_max_lines_add: <integer; default 400; trigger for gh-stack>
+estimated_files_max: <integer; default 15 per S03 CHE_RULES §X; hard stop if ceiling exceeded>
+estimated_max_lines_add: <integer; default 400 per S04 CHE_RULES §X; advisory ≥400 yellow, MUST gh-stack ≥800 red>
 new_dependencies: [ ]
 pii_touch: none|read-only|write
 supabase_rls_touch: true|false
@@ -170,8 +170,8 @@ approved_at: ""
 # Auto-calculated SbE counters (VAL09-V10 validation cross-check) — optional, fill at the end of draft:
 b_count: 0                            # NEW: quantity of B-IDs in §4.2 Behavior Table (auto-count)
 ab_count: 0                           # NEW: quantity of AB-IDs in §4.3 Anti-Behavior Table (auto-count)
-erd_required: false                   # NEW: ERD trigger. true IF AND ONLY IF: (a) creates NEW DB entity; (b) alters FK ON DELETE/UPDATE cardinality; (c) adds ≥3 fields with UNIQUE/UK/CHECK constraints.
-mermaid_required: false               # NEW: diagrams trigger. true IF AND ONLY IF: b_count>=8 OR distinct_public_actors>=3 OR risk_level in {medium, high}.
+erd_required: false                   # per S05 CHE_RULES §X. true IF AND ONLY IF: (a) creates NEW DB entity; (b) alters FK ON DELETE/UPDATE cardinality; (c) adds ≥3 fields with UNIQUE/UK/CHECK constraints.
+mermaid_required: false               # per S06 CHE_RULES §X. true IF AND ONLY IF: b_count>=8 OR distinct_public_actors>=3 OR risk_level in {medium, high}.
 vertical_slice_required: true         # CANONICAL #0 (CHE_RULES.md). Default true. ONLY false if EXPLICIT_OVERRIDE_HORIZONTAL_PLAN literal appears in §2 SCOPE with 1-line justification + decision.log entry.
 tracer_f0_defined: false              # CANONICAL #0 (CHE_RULES.md F0 rule). Auto-calculated: flips to true when §4.5 VERTICAL SLICES table has 1+ row with ID=F0 · Layers Touched count>=2 · B-IDs >= 1 · DONE != empty. Auto-validated by V16.
 ---
@@ -245,8 +245,8 @@ Rules enforcement for this table:
 5. **UI Selector Contract column:** If Playwright=✅ → MANDATORY at least 2 ids per behaviour (trigger action + result verify). **G8 Category 8 code-review enforcement trigger against XPath/classes fragility.**
 6. **Mapping Ticket AC → B-ID:** Each Linear ticket Acceptance Criteria → 1 positive B-ID + 1 anti-AB (below §4.3). At the end of draft, show list: `AC-T1 → B-3 + AB-2`.
 
-#### §4.3 ANTI-BEHAVIOUR EXAMPLE TABLE (Negative AB-IDs — MINIMUM 33% OF B-IDs)
-Header: `### §4.3 ANTI-BEHAVIOUR EXAMPLES (AB-ID 1..≥ceil(B_COUNT/3))`
+#### §4.3 ANTI-BEHAVIOUR EXAMPLE TABLE (Negative AB-IDs — MINIMUM 33% OF B-IDs per S07 CHE_RULES §X)
+Header: `### §4.3 ANTI-BEHAVIOUR EXAMPLES (AB-ID 1..≥ceil(B_COUNT/3) per S07)`
 
 Table identical to §4.2, but **Then = prohibited behaviour that MUST NEVER happen.**
 | AB-ID | Given (Setup IDENTICAL to corresponding B-ID — SAME Given) | When (DANGEROUS / invalid / duplicate / race action) | Then PROHIBITED (public observable — what DOES NOT HAPPEN, with literal values) | Mandatory Test Layers (≥1 layer ✅ per AB) | UI Selector (if Playwright) | Confidence target % | Risks if OMITTING AB test |
@@ -255,7 +255,7 @@ Table identical to §4.2, but **Then = prohibited behaviour that MUST NEVER happ
 | AB-2 | ... | ... | Then DOES NOT... | [...✅] | ... | ... | ... |
 
 Rules enforcement for this table:
-1. **MINIMUM 33% RATIO: `AB_COUNT ≥ ceil( B_COUNT / 3 )`** (V10 validation). E.g. B=9→AB≥3; B=1→AB≥1; B=4→AB≥2.
+1. **MINIMUM 33% RATIO: `AB_COUNT ≥ ceil( B_COUNT / 3 )` (V10 validation, per S07 CHE_RULES §X)**. E.g. B=9→AB≥3; B=1→AB≥1; B=4→AB≥2.
 2. **Given MUST be the SAME setup as a corresponding positive B-ID** (same Given line). Proves the system resists the bad side of the happy path.
 3. **When = action user would do WRONG or attacker would exploit.** Double click, race condition, auth bypass, negative field, already processed id, etc.
 4. **Then cannot be vague.** Literal values. Then column ALWAYS starts with the word "Then DOES NOT" or "Then (HTTP 4xx ... DOES NOT alter booking.status)".
@@ -263,11 +263,11 @@ Rules enforcement for this table:
 #### §4.4 MERMAID DIAGRAMS (CONDICIONAL MANDATORY — if trigger fired)
 Header: `### §4.4 MERMAID DIAGRAMS (skip or mandatory — based on triggers)`
 
-**§4.4.1 + §4.4.2 MANDATORY Triggers IF AND ONLY IF:**
+**§4.4.1 + §4.4.2 MANDATORY Triggers IF AND ONLY IF (per S06 CHE_RULES §X):**
 `(B_COUNT >= 8) OR (COUNT(distinct_public_actors) >= 3) OR (risk_level in ["medium", "high"]) OR (frontmatter.mermaid_required = true)`
 → If NONE: write exactly `> ⚠️ Skipped (low complexity): B_COUNT=X<8 · public_actors=Y<3 · risk=low`.
 
-**§4.4.3 ERDiagram MANDATORY Trigger IF AND ONLY IF:**
+**§4.4.3 ERDiagram MANDATORY Trigger IF AND ONLY IF (per S05 CHE_RULES §X):**
 `(new_DB_entity = true) OR (alters_FK_ON_DELETE_cardinality = true) OR (new_fields_with_UNIQUE_CHECK_constraint >= 3) OR (frontmatter.erd_required = true)`
 
 HARD Mermaid rules (parser crash if violated — V13 validation):
