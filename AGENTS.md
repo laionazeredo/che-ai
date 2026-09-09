@@ -1,65 +1,49 @@
-# Che AI — Agent Context & Rules
+# Che AI — Agent Technical Contracts
 
-This file is intended for **AI coding agents** (Trae, Cursor, Codex, Claude Code, OpenCode) contributing to the development and maintenance of the **Che** framework.
+This document defines the rules and architectural boundaries for **AI coding agents** contributing to or using the **Che** framework.
 
-## What this repo is
+---
 
-**Che** is an IDE-agnostic, plugin-like framework that simulates an Agile team (Scrum Master, Developer, QA, UI Designer, Compliance, etc.) inside an AI coding assistant. It enforces Software Development Life Cycle (SDLC) best practices, automated quality gates, and deterministic project memory.
+## 1. Core Architecture (3-Layer Rule)
 
-- **Repository Name**: `che-ai` (formerly `trae-config`).
-- **Installation Path**: By default, it runs from `~/.trae` on the user's machine.
-- **Multi-Agent Adapters**: `adapters/` (links core logic to Codex, Claude Code, and Cursor).
+Che follows a strict 3-layer architecture. **NEVER** duplicate rule bodies across layers.
 
-## 1. Project Architecture (3-Layer Architecture)
+- **L1 (Domains)**: `domains/` — Domain-specific human context (UX, Engineering, etc.).
+- **L2 (Framework)**: `CHE_RULES.md` and `CHE_COMMANDS.md` — Routers containing **titles and links ONLY**.
+- **L3 (Skills)**: `skills/*/SKILL.md` — Declarative rules and task boundaries.
 
-Che follows a strict 3-layer architecture. **HARD STOP:** Never duplicate rule bodies across layers. **ALL new features MUST be implemented in compatibility with Codex, Claude Code, Cursor, and Trae.**
+## 2. Execution Logic (Python-Only)
 
-- **Layer 1 (User Profiles & Runbooks)**: `domains/` and user-level configs. Used for high-level domain specific instructions (e.g., UX, Product, Engineering).
-- **Layer 2 (Framework Rules)**: `CHE_RULES.md` and `CHE_COMMANDS.md`. These files ONLY contain titles and links to Layer 3 skills. They should **not** contain the logic/body of the rule.
-- **Layer 3 (Skills)**: `skills/*/SKILL.md`. This is where the actual declarative rules and boundaries of each skill live.
+**CRITICAL:** Python is the canonical language for Che's core logic.
+- Procedural logic must reside in `che_core/`.
+- Skills (`.md`) must be declarative. Complex logic (> 15 lines) **MUST** be extracted to Python and invoked via CLI.
+- No `package.json` or Node.js dependencies are allowed for core execution.
 
-## 2. Execution Logic (Python Core)
+## 3. Workspaces Hierarchy (Path Canonicity)
 
-**CRITICAL RULE:** Do NOT use Bash, Shell Scripts, or Node.js for new internal executables. **Python is the canonical language for Che's core logic.**
+Che organizes project data into a 4-level hierarchy. **Do not create `.trae/` folders inside user projects.**
 
-- The core engine lives in `che_core/` (Python package).
-- It handles paths resolution, the Level 1/1.5 registries, decision logs (`.jsonl`), and preflight checks.
-- **Skills (`.md`) MUST be purely declarative.** If a skill requires complex procedural logic (e.g., parsing a diff, reading multiple files, running external tools), that logic MUST be extracted into a Python script in `che_core/` and invoked via the CLI module (e.g., `python3 -m che_core.ship`).
-- There is NO `package.json` and NO Node.js dependency. Keep Che zero-build.
-- Python caches (`__pycache__/`) are gitignored and must **never** be committed.
+1.  **L1 (Workspace Root)**: `~/.che-workspaces/workspaces/<workspace-slug>/`
+2.  **L2 (Project Level)**: `<L1>/<project-slug>/project/` (Durable info: `architecture.md`, `project_profile.md`).
+3.  **L3 (Worktree Level)**: `<L1>/<project-slug>/worktrees/<wt-slug>/` (Shared info: `decisions.log.jsonl`, `qa/`, `designs/`).
+4.  **L4 (Session Level)**: `<L3>/sessions/<SESSION_ID>/` (Ephemeral info: logs, isolated state).
 
-## 3. **Workspaces Hierarchy (Path Canonicity)**
+### Agent Guidance:
+- **L1 Creation**: `che-workspace create <name>`
+- **L2 Registration**: `che-project create <worktree-path> --workspace <name>`
+- **L3 Execution**: `che-spec` and `che-act` **REQUIRE** `--project` and `--worktree` parameters.
 
-Che organizes the user's projects into a strict 4-level hierarchy. Do not create `.trae/` folders inside user projects. **Portability between machines is supported via `/che-export` and `/che-import` of durable info (L2 and L3).**
+## 4. Development Principles
 
-1. **L1 (Workspace Root)**: `~/.che-workspaces/workspaces/<workspace-slug>/`
-2. **L2 (Project Level)**: `<L1>/<project-slug>/project/` (Durable info: `architecture.md`, `project_profile.md`, roles)
-3. **L3 (Worktree Level)**: `<L1>/<project-slug>/worktrees/<wt-slug>/` (Shared info across sessions in the same branch: `gh_stack/`, `qa/`, `designs/`, `decisions.log.jsonl`)
-4. **L4 (Session Level)**: `<L3>/sessions/<CHE_SESSION_ID>/` (Ephemeral info: execution logs, diff context, isolated debugger state)
+- **KISS & YAGNI**: Minimize dependencies and avoid over-engineering.
+- **Design by Contract (DbC)**: Apply preconditions and postconditions on core functions.
+- **Storytelling Commits**: Use conventional commits with a CDJ body (Context, Decision, Justification).
+- **Worktree Hygiene**: Never leave temporary files or logs in the repository root. Ephemeral data belongs in L4.
+- **Language Policy**: Code and internal docs in strict English (British spelling for public UI/strings).
+- **Blast Radius**: Keep changes focused. Large refactors require explicit justification in `decisions.log.jsonl`.
 
-**Agent Guidance — Hierarchy Management:**
-- **L1 Creation**: Use `che-workspace create <name>`.
-- **L2 Registration**: Use `che-project create <worktree-path> --workspace <name>`. Fallback name is `<workspace>--<folder>`.
-- **L3 Execution**: Commands like `che-spec` and `che-act` **MUST** receive both `worktree` and `project` parameters. If missing, ASK the user.
+## 5. Quality & Security
 
-## 4. Hook Architecture
-
-Hooks (triggered by the IDE before or after tool usage) live in `hooks/`.
-- They are written in **Python** (`pretooluse-worktree-binding.py`, `posttooluse-3layer-dedup.py`).
-- The `hooks.json` configuration file points to these Python files.
-
-## 5. Development Principles
-
-When modifying this repository, apply the **KISS** (Keep It Simple, Stupid) and **YAGNI** (You Aren't Gonna Need It) principles.
-- Minimize dependencies. Use Python's standard library whenever possible.
-- Focus on reducing the blast radius of changes.
-- Apply Design by Contract (DbC) on core functions (preconditions, postconditions).
-- **Worktree Hygiene**: Do not leave temporary scripts, untracked files, or logs in the root. Ephemeral data goes to the Session Level (L4).
-
-## 6. Quality, Security & Contribution Workflow
-
-Che enforces a strict CI and contribution workflow to prevent regressions and security vulnerabilities:
-- **CI Pipeline**: GitHub Actions runs `ruff` (Python linting/formatting), `pytest` (unit and security tests), and `markdownlint-cli2`.
-- **Skill Security**: Markdown files (`SKILL.md`) are statically analyzed by `tests/test_skill_security.py`. Destructive bash commands (`rm -r`, `curl`, `eval`, etc.) are prohibited. Python blocks inside Markdown must not exceed 15 lines. All complex logic must reside in `che_core`.
-- **Secret Scanning**: TruffleHog runs on all PRs and pushes to ensure no secrets or API keys are accidentally committed.
-- **Approval Workflow**: Direct pushes to `main` are blocked. All changes must be submitted via PRs and require explicit approval from `@laionazeredo` (enforced via `.github/CODEOWNERS`).
+- **CI Pipeline**: All changes must pass `ruff` (lint/format) and `pytest` (unit/security).
+- **PII & Secrets**: **NEVER** log or persist raw emails, JWTs, or API keys. Use `NOTIFICATION_PII_HASH_SECRET` for correlation.
+- **Skill Security**: Markdown files are analyzed for destructive bash commands. Python blocks in Markdown must not exceed 15 lines.
