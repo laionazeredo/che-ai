@@ -29,6 +29,19 @@ if [[ -n "${CHE_SKIP_PRE_PUSH:-}" ]]; then
   exit 0
 fi
 
+# ---------------------------------------------------------------------------
+# Resolve repo root + fail-fast dev-dependency check.
+# We run from .git/hooks/pre-push; repo root is ../.. from there.
+# ---------------------------------------------------------------------------
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${HOOK_DIR}/../.." && pwd)"
+DEPS_CHECK="${REPO_ROOT}/scripts/check-dev-dependencies.sh"
+
+if [[ -f "${DEPS_CHECK}" ]]; then
+  bash "${DEPS_CHECK}"   # STRICT mode — missing REQUIRED = block push now.
+fi
+
 info "Running CI-mirror gates (ruff lint+format, full pytest, markdownlint, secret regex)…"
 info "Expected ~30 s on a warm cache.  Bypass once:  git push --no-verify"
 

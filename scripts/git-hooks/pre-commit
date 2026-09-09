@@ -47,6 +47,21 @@ if [[ -n "${CHE_SKIP_PRE_COMMIT:-}" ]]; then
   exit 0
 fi
 
+# ---------------------------------------------------------------------------
+# 0.5 Resolve repo root + fail-fast dev-dependency check.
+#     Guard: we run from .git/hooks/pre-commit; repo root is ../.. from there.
+#     If the guard script is missing (older install), just proceed silently —
+#     no need to break mid-commit for a missing meta-script.
+# ---------------------------------------------------------------------------
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${HOOK_DIR}/../.." && pwd)"
+DEPS_CHECK="${REPO_ROOT}/scripts/check-dev-dependencies.sh"
+
+if [[ -f "${DEPS_CHECK}" ]]; then
+  bash "${DEPS_CHECK}"   # STRICT mode — missing REQUIRED = block commit now.
+fi
+
 info "Running fast gates on staged files (ruff + md-lint selective)…"
 
 # ---------------------------------------------------------------------------

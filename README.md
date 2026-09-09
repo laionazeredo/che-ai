@@ -196,6 +196,36 @@ Your `PATH` lacks `~/.local/bin`. Run `pipx ensurepath`, then open a new shell.
 3. CI: `ruff check .` (lint/format) and `python3 -m pytest tests/ -q` (unit). Both must pass. Public functions ship with DbC pre/post-condition docstrings or assertions.
 4. Duplicating a rule body anywhere instead of linking? That is a blocking review finding. SSoT (DRY from The Pragmatic Programmer) is not a style nit — it is the whole point.
 
+### One-time setup — install the development dependencies
+
+The Git hooks below and the GitHub Actions CI depend on four tools. Run the **fail-fast checker** once after cloning:
+
+```bash
+bash scripts/check-dev-dependencies.sh
+```
+
+It will print copy-pasteable install commands for **exactly what's missing on your machine**. Summary of what it checks:
+
+| Tool | Kind | Why Che needs it | Quick install (pick one method) |
+| :--- | :---: | :--------------- | :------------------------------ |
+| `python3` (≥ 3.9) | **Required** | Che's core language (`pyproject.toml` requires-python). | System package manager: `sudo apt install -y python3 python3-venv python3-pip` (Ubuntu) / `brew install python` (macOS) |
+| `pytest` (Python module) | **Required** | 39 unit tests. CI step `python-ci` step 5 runs it. | Venv (isolated): `python3 -m venv .venv && . .venv/bin/activate && pip install pytest ruff`<br>— or user-level: `python3 -m pip install --user pytest ruff` |
+| `ruff` | **Required** | Linter + formatter in a single binary. Replaces flake8 + isort + black. CI step `python-ci` steps 3+4. | Pipx: `pipx install ruff`<br>— or inside a venv: `pip install ruff` |
+| `npx` / Node.js (LTS) | *Optional* | Runs `markdownlint-cli2` (CI job `markdown-ci`). Without it the **markdown lint gates are SKIPPED locally** (CI still catches them — you just waste one CI roundtrip). | NodeSource (Ubuntu): `curl -fsSL https://deb.nodesource.com/setup_lts.x \| sudo -E bash - && sudo apt install -y nodejs`<br>— or `brew install node` (macOS). |
+
+**Hot tip for a zero-config dev box** (combines every install method above into a single 20 s copy-paste on any Ubuntu/macOS POSIX machine):
+
+```bash
+# 1. Python + venv + pytest + ruff
+python3 -m venv .venv && . .venv/bin/activate && pip install pytest ruff
+# 2. Optional: global ruff (so it's on PATH even outside the venv)
+pipx install ruff
+# 3. Optional: Node LTS for markdownlint
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt install -y nodejs   # Ubuntu/Debian
+# brew install node                                                                                   # macOS
+# 4. If `pipx ensurepath` tells you to re-login — do it.
+```
+
 ### Local Git hooks (pre-commit + pre-push) — CI in < 5 s + < 30 s
 
 Stop waiting for CI to come back red. Install the local hooks **once** after cloning this repo:
