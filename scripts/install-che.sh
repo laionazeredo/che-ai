@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 #
-# install-che.sh — Installs OR updates Che Flockr (this .trae).
+# install-che.sh — Installs OR updates Che (this .trae) PLUS the
+#                  standalone `che-ai` / `che` CLI binaries via pipx.
+#
+# ###########################################################################
+# # PLATFORM COMPATIBILITY (fail-fast check, line 144):                      #
+# #   ✅ Linux  (any distro with GNU coreutils + bash ≥ 4.4 + python3 ≥ 3.11)#
+# #   ✅ macOS  (Monterey / 12+, homebrew strongly recommended for pipx/git) #
+# #   ❌ Windows PowerShell / CMD: NOT SUPPORTED natively.                   #
+# #      Use WSL2 (Ubuntu 22.04 LTS recommended) inside Windows instead.    #
+# ###########################################################################
 #
 # TWO MAIN MODES:
 #   1) --apply      (fresh install / controlled destructive):
@@ -8,6 +17,8 @@
 #        - Copies complete whitelist from source to clean empty target.
 #        - Blacklist (user_rules, bindings/registry.jsonl, memory) is NOT copied
 #          from source; only empty folder structure is recreated in target.
+#        - Installs `che-ai` + `che` CLI globally via `pipx install -e <target>`
+#          (fallback `pip3 install --user -e <target>` if pipx missing, with warning).
 #        - Use this mode for first installation OR if you want a 100% clean reset.
 #
 #   2) --update --apply (NON-DESTRUCTIVE update. Recommended for new versions):
@@ -20,6 +31,7 @@
 #            · source has, target has and EQUAL → skip (zero noise).
 #            · source DOES NOT have, target has → NEVER TOUCHES (preserves user's custom skills,
 #              new commands added, local references, etc).
+#        - Re-installs / upgrades CLI binaries in place (`pipx install -e <target> --force`).
 #        - Ideal for: "got a new version from laionazeredo/che-ai repo, want to update
 #          skills/commands/rules without losing my personal rules".
 #
@@ -28,21 +40,32 @@
 #   ./scripts/install-che.sh --apply                         # REAL fresh install.
 #   ./scripts/install-che.sh --update                        # DRY-RUN NON-DESTRUCTIVE update mode.
 #   ./scripts/install-che.sh --update --apply                # REAL NON-DESTRUCTIVE update.
+#   ./scripts/install-che.sh --apply --no-cli                # Skip the pipx CLI install step.
 #   ./scripts/install-che.sh --target ~/.trae
 #   ./scripts/install-che.sh --source ~/Downloads/dot-trae-exported --apply
 #   ./scripts/install-che.sh -h
 #
+# WHAT ABOUT THE IDE SLASH COMMANDS (/che-workspace, /che-spec, /che-act, /che-ship, ...)?
+#   THEY CONTINUE TO EXIST AND ARE THE RECOMMENDED ENTRY POINT FOR AGENTIC / CREATIVE WORK.
+#   The `che-ai` CLI is the structural ADMINISTRATIVE SIDECAR for team bootstrap, workspace setup,
+#   trash-safe removal, structural ops (workspace/project/config/state/task/rag/export/eject), CI
+#   wiring, and offline work.
+#   You use IDE slash-commands inside Claude Code for agent-driven creative tasks (LLM calls, spec
+#   writing, code review, PR bodies) and the terminal `che-ai` CLI for team admin, workspace setup,
+#   listings/exports, and structural operations (deterministic, works offline).
+#
 # WHITELIST (what is synchronised from source → target):
 #   Root files: README.md, CHE_RULES.md, CHE_COMMANDS.md,
 #               REFERENCE_USER_RULES_MINIFIED.md, package.json, pnpm-lock.yaml,
-#               tsconfig.json, hooks.json.
-#   Directories: commands/, contracts/, skills/, hooks/, scripts/, permission/.
+#               tsconfig.json, hooks.json, pyproject.toml, .gitignore.
+#   Directories: che_core/, commands/, contracts/, skills/, hooks/, scripts/,
+#                permission/, tests/, docs/.
 #
 # ABSOLUTE BLACKLIST (what the script NEVER copies, NEVER deletes, NEVER touches):
 #   user_rules/* (except .gitkeep if folder is empty and needs placeholder)
 #   bindings/registry.jsonl
 #   memory/
-#   node_modules/, pnpm-debug.log, *.bak-*, .git/
+#   node_modules/, pnpm-debug.log, *.bak-*, .git/, __pycache__/, *.egg-info/
 #   Any file/folder in target that DOES NOT exist in source is NEVER touched.
 #
 # SECURITY GUARANTEES (fail-closed):
@@ -52,11 +75,14 @@
 #     and renaming .bak-* back.
 #   * No `rm -rf` or `rm` in this script. Everything is copy + individual backup mv.
 #   * Default ALWAYS dry-run. --apply is mandatory to write.
+#   * CLI install step never runs unless you pass --apply. If pipx is missing,
+#     the fallback pip3 step prints a L-OUD yellow warning telling you to install pipx.
 
 set -euo pipefail
 
 APPLY=0
 UPDATE=0
+NO_CLI=0
 SOURCE=""
 TARGET="${HOME}/.trae"
 
@@ -68,6 +94,10 @@ while [ $# -gt 0 ]; do
       ;;
     --update)
       UPDATE=1
+      shift
+      ;;
+    --no-cli)
+      NO_CLI=1
       shift
       ;;
     --source)
@@ -87,7 +117,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     -h|--help)
-      sed -n '2,90p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,130p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -96,6 +126,38 @@ while [ $# -gt 0 ]; do
       ;;
   esac
 done
+
+# ==========================================================================
+# PLATFORM COMPATIBILITY — FAIL-FAST check (only Linux + macOS POSIX shells).
+# ==========================================================================
+OS_NAME="$(uname -s 2>/dev/null || true)"
+case "${OS_NAME}" in
+  Linux|Darwin)
+    ;;
+  MINGW*|MSYS*|CYGWIN*)
+    echo "" >&2
+    echo "=================================================================" >&2
+    echo "  ❌ Windows PowerShell / CMD is NOT SUPPORTED natively." >&2
+    echo "" >&2
+    echo "  install-che.sh requires a POSIX bash environment." >&2
+    echo "  On Windows you MUST use WSL2 with a Linux userland" >&2
+    echo "  (Ubuntu 22.04 LTS recommended, bash/zsh)." >&2
+    echo "" >&2
+    echo "  Steps for Windows users:" >&2
+    echo "    1. Open an Admin PowerShell and run:" >&2
+    echo "         wsl --install -d Ubuntu-22.04" >&2
+    echo "    2. Reboot, open Ubuntu 22.04 app, create user." >&2
+    echo "    3. Inside Ubuntu: sudo apt-get update && sudo apt-get install -y python3-pip pipx git curl" >&2
+    echo "    4. Run this installer FROM INSIDE the Ubuntu shell." >&2
+    echo "=================================================================" >&2
+    echo "" >&2
+    exit 5
+    ;;
+  *)
+    echo "⚠  Unknown OS '${OS_NAME}'. Continuing anyway — this script expects" >&2
+    echo "   a POSIX-like environment with bash, python3 ≥ 3.11 and GNU coreutils." >&2
+    ;;
+esac
 
 # Cleanup logic
 CLEANUP_PATHS=""
@@ -177,14 +239,19 @@ WHITELIST_ROOT_FILES=(
   pnpm-lock.yaml
   tsconfig.json
   hooks.json
+  pyproject.toml
+  .gitignore
 )
 WHITELIST_DIRS=(
+  che_core
   commands
   contracts
   skills
   hooks
   scripts
   permission
+  tests
+  docs
 )
 
 # ============================================================
@@ -504,21 +571,104 @@ if [ "$UPDATE" -eq 1 ]; then
   echo "   · YOUR folders/files that don't exist in source → 100% preserved (never touched)."
 fi
 
+# ==========================================================================
+# Step 7: Install standalone `che-ai` / `che` CLI binaries via pipx (or pip --user fallback).
+#         Only runs on --apply. Skip if user passed --no-cli.
+# ==========================================================================
+install_cli_if_requested() {
+  if [ "$APPLY" -eq 0 ]; then
+    if [ "$NO_CLI" -eq 1 ]; then
+      echo "    [dry-run] --no-cli: CLI install step SKIPPED by user."
+    else
+      echo "    [dry-run] Would install che-ai CLI (binaries: che-ai, che) globally via:"
+      echo "              pipx install -e $TARGET --force"
+      echo "              (fallback pip3 install --user -e $TARGET if pipx missing)"
+    fi
+    return 0
+  fi
+
+  if [ "$NO_CLI" -eq 1 ]; then
+    echo "    ℹ --no-cli passed. Skipping CLI install step (IDE slash-commands still work inside Claude Code)."
+    return 0
+  fi
+
+  echo ""
+  echo "==> Installing standalone CLI binaries: che-ai, che"
+
+  if command -v pipx >/dev/null 2>&1; then
+    # Preferred path: pipx (isolated, PEP 668 compliant, never touches system python)
+    echo "    pipx detected — installing CLI via: pipx install -e \"${TARGET}\" --force"
+    local pipx_rc=0
+    pipx install -e "${TARGET}" --force 2>&1 | tail -6 || pipx_rc=$?
+    if [ "${pipx_rc}" -ne 0 ]; then
+      echo ""
+      echo "    ⚠ pipx install failed. Trying fallback (pip3 --user) instead."
+      _install_cli_pip_fallback "$TARGET"
+    else
+      echo "    ✔ CLI installed globally. Run:  che --help   or   che-ai --help"
+    fi
+  else
+    echo "    ⚠ pipx not found on PATH. pipx is RECOMMENDED for CLI Python apps."
+    echo "      To install pipx (retry after this command completes):"
+    echo "        Debian/Ubuntu:  sudo apt-get install -y pipx  &&  pipx ensurepath"
+    echo "        macOS/Homebrew: brew install pipx  &&  pipx ensurepath"
+    echo "      Falling back to pip3 install --user ..."
+    _install_cli_pip_fallback "$TARGET"
+  fi
+}
+
+_install_cli_pip_fallback() {
+  local tgt="$1"
+  local py
+  py="$(command -v python3 2>/dev/null || true)"
+  if [ -z "$py" ]; then
+    echo "    ❌ python3 not on PATH. CLI NOT installed."
+    echo "       Install python3 ≥ 3.11, then re-run:  pipx install -e \"${tgt}\" --force"
+    return 4
+  fi
+  local pip_rc=0
+  "$py" -m pip install --user -e "${tgt}" 2>&1 | tail -4 || pip_rc=$?
+  if [ "${pip_rc}" -ne 0 ]; then
+    # PEP 668 externally-managed environment? Retry with --break-system-packages.
+    "$py" -m pip install --user -e "${tgt}" --break-system-packages 2>&1 | tail -4 || pip_rc=$?
+  fi
+  if [ "${pip_rc}" -eq 0 ]; then
+    local user_bin
+    user_bin="$("$py" -c 'import site, os; print(os.path.join(site.getuserbase(), "bin"))' 2>/dev/null || true)"
+    echo "    ⚠ Installed via pip --user. If \$PATH doesn't include '${user_bin}', run:"
+    echo "         export PATH=\"\${PATH}:${user_bin}\"    # (add to ~/.bashrc or ~/.zshrc to persist)"
+    echo "    Then run:  che --help"
+    echo ""
+    echo "    Strongly recommend installing pipx and re-running this script for a clean install."
+  else
+    echo ""
+    echo "    ❌ CLI install FAILED. You can manually install later:"
+    echo "         pipx install -e \"${tgt}\" --force"
+  fi
+}
+
 if [ "$APPLY" -eq 0 ]; then
   echo "⚠ dry-run. To APPLY for real, use the --apply flag."
   echo "Example: curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.sh | bash -s -- --apply"
+  install_cli_if_requested
 else
   echo "✔ target ready at $TARGET"
+  install_cli_if_requested
   echo ""
   echo " Post-check checklist:"
-  echo "  1. Open Trae again (or reload)."
+  echo "  1. Open Claude Code again (or reload)."
   echo "  2. Confirm ~/.trae/README.md exists."
   echo "  3. Smoke : bash $TARGET/scripts/install-che.sh -h"
-  echo "  4. Decisions: python3 -m che_core.cli --help"
+  echo "  4. CLI   : che --help   (or che-ai --help)"
+  echo "  5. IDE slash-commands (/che-workspace, /che-project, /che-spec, /che-act,"
+  echo "     /che-ship, /che-review, [examples of community custom skills:"
+  echo "     /figma-pixel-check, /flockr-*, /my-company-*, etc.])"
+  echo "     → CONTINUE TO EXIST inside Claude Code IDE as the primary path for agentic/creative work."
+  echo "     They are NOT removed or deprecated — the terminal CLI is the structural administrative sidecar."
   if [ "$UPDATE" -eq 1 ]; then
-    echo "  5. Manual rollback: to undo a file, mv <file>.bak-${TIMESTAMP} <file>"
+    echo "  6. Manual rollback: to undo a file, mv <file>.bak-${TIMESTAMP} <file>"
   fi
-  
+
   # FINAL STEP: Install adapters for other agents (Codex, Claude Code)
   if [ -f "$TARGET/scripts/setup-adapters.sh" ]; then
     bash "$TARGET/scripts/setup-adapters.sh"

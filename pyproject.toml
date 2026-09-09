@@ -5,6 +5,17 @@ description = "IDE-agnostic Agentic Engineering Harness"
 requires-python = ">=3.9"
 dependencies = []
 
+[project.scripts]
+che-ai = "che_core.cli:main"
+che = "che_core.cli:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["che_core"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py39"
