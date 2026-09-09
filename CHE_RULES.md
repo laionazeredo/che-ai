@@ -208,6 +208,137 @@ In ANY loop/iterations between agents, the rule is:
 
 ---
 
+## 🔴 PRINCIPLE #0 — VERTICAL SLICING / TRACER BULLETS (Non-negotiable, unless EXPLICIT_OVERRIDE logged)
+
+> Full DbC body (PRE / POST / INV) lives ONLY in `engineering-contracts` SKILL §0 VERTICAL_SLICING. Canonical enforcement below applies to ALL skills, domains, and plans, no exceptions.
+> Source: Hunt & Thomas, *The Pragmatic Programmer* (20th Anniversary Ed.), "Tracer Bullets and Prototypes" chapter, plus `pragmatic-programmer` SKILL canonical reference.
+
+### 0.1 Core Definition (What it is)
+A **Vertical Slice (Fatian Vertical) / Tracer Bullet** is a MINIMAL, COMPLETE, END-TO-END implementation of ONE behaviour that traverses **at least TWO distinct architectural layers** (UI ↔ API ↔ DB ↔ External Service) and delivers a PUBLICLY OBSERVABLE outcome. It is NOT throwaway prototype code — it stays in the repository forever.
+
+Default slicing strategy for ANY scope, plan, task graph, or specification: **VERTICAL**. Horizontal slicing ("build ALL models first, then ALL routes, then ALL pages") is PROHIBITED by default.
+
+### 0.2 F0 Mandatory First Slice (Tracer Bullet)
+For ANY project, feature, epic, bugfix, or refactor with scope ≥ 2 files OR ≥ 2 layers:
+1. The **FIRST slice (F0)** MUST be a Tracer Bullet.
+2. **F0 definition**: The SMALLEST POSSIBLE end-to-end path that proves the plumbing works. Example: "Click button → API route → write to DB → redirect → item visible on list". F0 MUST cover EXACTLY 1 B-ID (SbE Behaviour ID), minimum.
+3. F0 MUST be marked COMPLETE (all tests green, observable in UI/API) BEFORE any F1, F2, ... FN slices begin.
+4. F0 is NEVER deleted, mocked, or rewritten later — it remains the live regression guard for the vertical path.
+
+### 0.3 Override Mechanism (Horizontal Exception)
+Horizontal planning (layer-by-layer) is permitted ONLY if ALL of the following are simultaneously true:
+1. User writes the **VERBATIM literal** `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN` in a single chat message, immediately followed by a 1-line justification (≤ 120 chars).
+2. The Scrum Master / execution skill appends an entry to `decisions.log.jsonl` with:
+   ```json
+   {"type":"EXPLICIT_OVERRIDE_HORIZONTAL_PLAN","spec_slug":"...","justification":"...","author_override":"user","logged_at":"ISO-8601"}
+   ```
+3. The override applies **to one spec / one task graph only**. A new scope requires a NEW override.
+
+If ANY of the 3 items above are missing → horizontal plan / task graph / spec is AUTOMATICALLY REJECTED by the enforcement gates below.
+
+### 0.4 Cross-Skill Enforcement Gates (ALL MUST run, order below)
+| Gate Order | Skill / Executor | What it Validates | FAIL Action |
+|---|---|---|---|
+| G-VS-1 | `che-spec` §4.5 VALIDATION PASS V16 + V17 | Approved SPEC contains §4.5 VERTICAL SLICES table with AT LEAST F0 defined (≥2 layers, ≥1 B-ID, DONE criterion testable) and NO pure-horizontal Can-Touch groupings without override literal in SPEC source §2 | Reject spec with structured error; offer: (A) Insert F0 template (B) Ask user for EXPLICIT_OVERRIDE_HORIZONTAL_PLAN |
+| G-VS-2 | `che-plan` Step 3 + Quality Gate #3 | Ticket decomposition (Linear/ClickUp/Jira) groups B-IDs into F0/F1/...FN slices — NEVER groups by "Data Layer / API Layer / UI Layer". Sub-task file scope MUST always touch ≥2 layers | Reject ticket plan, log attempt to decisions.log as [HORIZONTAL_TICKET_BLOCKED], require user confirmation or override |
+| G-VS-3 | `che-act` §0.5 SPEC GATE + §1.3 TASK GRAPH build | (a) SPEC frontmatter `tracer_f0_defined === true`; (b) EVERY row in TASK TABLE has column `Layers Touched` with count ≥ 2 (different top-level folders) | (a) Block SPEC gate; (b) Reject individual task row → prompt: "Task Tn only touches {X} layer — add the missing layer(s) OR declare EXPLICIT_OVERRIDE_HORIZONTAL_PLAN" |
+| G-VS-4 | `che-scope-checker` §0 CHECK #0 (runs BEFORE 6-check standard) | **Horizontal Pattern Detector**: Parse task graph files. If ≥2 consecutive tasks each have ≥80% of files inside ONE single top-level folder (e.g. only `packages/db/**`, only `pages/**`, only `routes/**`) — pattern is HORIZONTAL. Without override → LEAN score PENALTY = -5, Scope audit auto-fails. Also validates that F0 files are present in the actual diff (git status). | If no override logged → 🔴 BLOCK ship flow; insert check item: "[ ] Add EXPLICIT_OVERRIDE_HORIZONTAL_PLAN justification" to ship checklist |
+| G-VS-5 | Domain Playbooks (engineering + ux) Stage/Phase 0.0 | Execution pipeline starts with a TRACER F0 definition step before ANY other work proceeds. F0 completion is stamped COMPLETE in decisions.log BEFORE moving to Stage/Phase 1. | No F0 stamped → return to stage 0.0 and block later steps |
+
+### 0.5 Anti-patterns (Auto-reject by any gate)
+- Task descriptions / plan items that read: "Create all models", "Build all CRUD endpoints", "Design all pages first", "Refactor entire DB schema" without a corresponding F0 end-to-end path.
+- Can-Touch / File Lock lists that list only 1 top-level domain folder for 3+ consecutive tasks.
+- SPEC sections titled "Database Layer / API Layer / UI Layer" as sub-sections instead of "F0 / F1 / F2 Vertical Slices".
+- Task graphs where the "B-IDs Covered" column is empty or lists B-IDs from ≥3 unrelated behaviours in a single task (signals grouping by layer instead of by slice).
+
+---
+
+## 🔴 PRINCIPLE #1 — REVERSIBILITY / NO VENDOR LOCK-IN (Non-negotiable, declared per SPEC)
+
+> Full DbC body: `pragmatic-programmer` SKILL §6 "Reversibility and Flexibility" chapter. No final decisions. Cost of change proportional to scope.
+> Source: Hunt & Thomas, 20th Anniversary Ed. "There are no final decisions."
+
+### 1.1 Core Definition
+Every external dependency (SDK, cloud vendor, DB driver, payment provider, email service, storage backend, deploy target, ORM, UI component framework) used in the project MUST be declared with its **Authoritative Wrapper Boundary** — a single, explicitly listed folder/package in the codebase that is the ONLY place permitted to import that dependency. Business logic, UI, and pipeline code outside the wrapper boundary MUST NOT reference the dependency directly.
+
+Default: **Reversibility declared per SPEC**. No exception. Declarations are project-agnostic (does not know "Stripe" or "Resend" — only "External Dependency Name X, Wrapper Package Path Y").
+
+### 1.2 Three Mandatory Declarations Per SPEC (che-spec V19)
+For every SPEC with `estimated_files_max ≥ 5` OR with ≥ 1 external dependency listed in §2:
+1. **V19a Wrapper Boundary Table**: For EACH external dependency used, list 3 columns: `External Dependency Name` (import alias / SDK name), `Authoritative Wrapper Path` (single folder/package glob), `Touch-Count if Swapped` (estimated files touched to replace this dependency with a competitor).
+2. **V19b Critical Rollback Flags**: Every critical-path B-ID (checkout, payment, refund, auth, publish, deploy) MUST sit behind a runtime feature flag with rollback ≤ 5 minutes. Declare: `B-ID(s) Affected · Flag Name · Where Evaluated (absolute path)`.
+3. **V19c Forking Road Test**: For EACH unique wrapper boundary declared in V19a, output 1 sentence answer to: "If we swapped this dependency for its top competitor, how many files outside the wrapper boundary would we touch?"
+   - If answer > 10 files OR > 2 packages → annotate as **TECHNICAL COUPLING** in §2 SCOPE with 1-line mitigation plan before SPEC approval.
+
+### 1.3 Enforcement (Generic, Project-Agnostic)
+| Gate Order | Skill | What it Validates (Project-Agnostic) | Fail Action |
+|---|---|---|---|
+| G-R-1 | che-spec V19a,b,c | Approved SPEC contains §4.6 REVERSIBILITY DECLARATIONS tables (3 sub-tables above). ALL entries in V19a have Wrapper Path = 1 single glob (no semicolons, no comma multiple paths). | Reject SPEC; offer: (A) Auto-insert empty Wrapper Boundary template (B) Confirm N/A with literal `EXPLICIT_OVERRIDE_REVERSIBILITY: <1-line justification>` in §2 SCOPE. |
+| G-R-2 | che-scope-checker §0.7 CHECK #2 | Parse SPEC V19a table. For EACH row, run generic grep search in BOUND WORKTREE for `import <SDK_NAME>` or `from '<SDK_NAME>'` in ANY file NOT matching the `Authoritative Wrapper Path` glob. If ANY hit found outside wrapper → **WRAPPER LEAK**. | Block ship with list of offending files. Offer: (A) Move SDK usage inside wrapper path (B) Annotate as TECHNICAL COUPLING in §2 and add TODO + ticket id. |
+| G-R-3 | che-act §1.3 TASK GRAPH build | Any task tagged "Swap vendor / Replace DB / Migrate dependency" must include row `Wrapper Boundary Touched` column with path from V19a; blast radius of the task must not exceed wrapper glob + ≤ 5 adapter files outside. | Reject task scope if files outside wrapper boundary + 5 adapter count > Touch-Count declared in V19a. |
+
+### 1.4 Override (Same Literal Pattern as #0)
+If the scope is 100% internal tooling with zero external network dependencies, project author may write VERBATIM literal:
+`EXPLICIT_OVERRIDE_REVERSIBILITY: <1-line justification (≤120 chars)>` in §2 SCOPE → logged to decisions.log by che-act §0.5. Without this literal, G-R-1 REJECTs any SPEC ≥ 5 files.
+
+---
+
+## 🔴 PRINCIPLE #2 — BROKEN WINDOWS / ENTROPY MONITORING (Non-negotiable, per-SHIP metric)
+
+> Full body: `pragmatic-programmer` SKILL §5 "Broken Window Theory". First broken window = most expensive. Dead programs tell no lies. Board up windows you can't fix now (TODO + ticket id).
+
+### 2.1 Core Definition
+EVERY ship / PR / scope-checked batch MUST compute and output an **ENTROPY_DELTA** metric (integer, units of "broken windows added") comparing BEFORE (base branch / default HEAD) vs AFTER (current diff / candidate files).
+
+Definition (Project-Agnostic, Stack-Detectable):
+```
+ENTROPY_DELTA =
+  + 1 * (lint_warnings_diff_after_vs_before)    # new warnings count (not fixed)
+  + 2 * (uncovered_new_code_lines_count)        # new lines not covered by tests (if coverage available)
+  + 0.5 * (new_todos_without_valid_ticket_id)   # TODO comments that don't follow pattern TODO(<LINEAR-42> / <FLO-123> / <JIRA-987>)
+  + 3 * (pii_secrets_new_findings)              # new PII/secrets from compliance scan
+```
+
+### 2.2 Gate — Zero Positive Entropy Default
+- **ENTROPY_DELTA ≤ 0 → PASS**: Windows fixed ≥ windows added.
+- **ENTROPY_DELTA > 0 AND ≤ 2 → WARNING (non-blocking)**: Output structured warning with exact counts, 1 suggestion per line.
+- **ENTROPY_DELTA > 2 → BLOCK** (§8.1 scope-checker triggers block). Only permittible with VERBATIM literal override: `EXPLICIT_OVERRIDE_ENTROPY_DELTA: <1-line justification (≤120 chars)>` logged to decisions.log.
+
+### 2.3 Broken Window Boarding-Up Contract (DbC Assertive)
+Every TODO / FIXME / XXX comment in the diff MUST follow syntax: `TODO(<TICKET_ID>): <body>` where `<TICKET_ID>` matches regex `^[A-Z]{2,20}-[0-9]{1,8}$` (Linear FLO-123, JIRA PROJ-4, ClickUp CSTM-9 all match).
+- TODO without ticket id pattern → counts as +0.5 to ENTROPY_DELTA.
+- No raw `TODO:` / `FIXME:` allowed without ticket id.
+
+---
+
+## 🔴 PRINCIPLE #3 — ASSERTIVE PROGRAMMING / DESIGN BY CONTRACT (DbC, per-SPEC)
+
+> Full body: `pragmatic-programmer` SKILL §4. Crash Early = Dead Programs Tell No Lies. Assertions for things that should NEVER happen; error-returns for things that MIGHT happen.
+> Source complement: `engineering-contracts` SKILL §DbC / §SbE contracts for B-IDs. Already exists; this principle formalises runtime assertions.
+
+### 3.1 Assertions vs Errors Distinction (MANDATORY)
+| Category | For things that... | Implementation Pattern |
+|---|---|---|
+| **ASSERTION (INVARIANT / IMPOSSIBLE)** | **Should NEVER happen in correct code.** If it happens = programming error, not runtime condition. E.g. "user_id is empty on authenticated route", "non-negative enum was cast to -1", "ordered list returned from function has length 0 when contract says ≥1". | `ASSERT(<condition>, <msg>)` / `assert!` / `invariant()` helpers. CRASH process / request immediately. **NEVER swallow, never retry, never log-and-continue.** |
+| **ERROR (RUNTIME CONTINGENCY)** | **Might happen in production** (network down, bad user input, DB constraint violation, timeout, quota exhausted). | Return Result/Either type, throw typed catchable exception, non-2xx HTTP response. Expected flow, has handler, tested via AB-IDs. |
+
+### 3.2 Per-SPEC Assertion Table (che-spec V20)
+For every SPEC with ≥ 3 B-IDs, a new §4.7 table `ASSERTIVE PROGRAMMING: INVARIANTS AND IMPOSSIBLE STATES` with 4 columns:
+1. **Assertion ID** (A-1, A-2... A-N)
+2. **Impossible Condition** (sentence, technical)
+3. **Where Enforced (absolute path, symbol name)**
+4. **Crash vs Error** (must say CRASH, never Error; if Error, move out of this table)
+
+Minimum rows: `ceil(B_COUNT / 3)` assertions per SPEC.
+
+### 3.3 Enforcements
+| Gate | Skill | Action |
+|---|---|---|
+| G-DbC-1 | che-spec V20 | Table exists, rows ≥ ceil(B/3), column 4 = literal CRASH for every row | Reject SPEC with count of missing rows. |
+| G-DbC-2 | che-code-review Mode B | Auto-scan diff for patterns: `log.error("impossible!") followed by return` without process.exit / throw. If found → HIGH issue tagged "Silent invariant broken = dead program would have told truth, crash it". | Fix before commit. |
+
+---
+
 ## 🔴 LEAN RESPONSES + DEEP-DIVE GATE (Non-negotiable)
 
 > Full body of this rule (word budget, permitted sections, ≤2 options rule) lives ONLY in `engineering-contracts` SKILL §18. Only the che process/gate here.
