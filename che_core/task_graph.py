@@ -25,7 +25,7 @@ def _split_row(line: str) -> List[str]:
     return [p.strip() for p in parts]
 
 
-def _normalize_depends(raw: str) -> List[str]:
+def _normalise_depends(raw: str) -> List[str]:
     if raw is None or raw == "" or raw == "-" or raw.lower() == "none":
         return []
     deps = re.split(r"[,\s;]+", raw.strip())
@@ -37,7 +37,7 @@ def _normalize_depends(raw: str) -> List[str]:
     return out
 
 
-def _normalize_domain(raw: str) -> str:
+def _normalise_domain(raw: str) -> str:
     if not raw:
         return "engineering"
     raw = raw.strip().lower()
@@ -46,7 +46,7 @@ def _normalize_domain(raw: str) -> str:
     return "engineering"
 
 
-def _normalize_expert_skills(raw: str) -> List[str]:
+def _normalise_expert_skills(raw: str) -> List[str]:
     if not raw:
         return []
     raw = raw.strip()
@@ -58,7 +58,7 @@ def _normalize_expert_skills(raw: str) -> List[str]:
     return [x for x in items if x]
 
 
-def _normalize_handoff_output(raw: str) -> List[str]:
+def _normalise_handoff_output(raw: str) -> List[str]:
     if not raw:
         return []
     raw = raw.strip()
@@ -117,10 +117,10 @@ def parse_task_graph(worktree_root: str, session_id: str = "task-graph-session")
         if not re.match(r"^T\d+$", tid):
             continue
         title = row[1].strip() if len(row) > 1 else ""
-        depends = _normalize_depends(row[2] if len(row) > 2 else "")
+        depends = _normalise_depends(row[2] if len(row) > 2 else "")
         status_raw = (row[3] if len(row) > 3 else "TODO").upper()
         status = status_raw if status_raw in VALID_STATUSES else "TODO"
-        domain = _normalize_domain(row[4] if len(row) > 4 else "")
+        domain = _normalise_domain(row[4] if len(row) > 4 else "")
         done_criteria = row[5] if len(row) > 5 else ""
 
         envelope_path = tasks_root / tid / "envelope.md"
@@ -185,17 +185,17 @@ def _parse_frontmatter_table(md_text: str, task_id: str = "", title: str = "") -
         elif key == "title":
             env["title"] = val
         elif key == "domain:":
-            env["domain"] = _normalize_domain(val)
+            env["domain"] = _normalise_domain(val)
         elif key == "domain":
-            env["domain"] = _normalize_domain(val)
+            env["domain"] = _normalise_domain(val)
         elif key == "depends on tasks":
-            env["depends_on"] = _normalize_depends(val)
+            env["depends_on"] = _normalise_depends(val)
         elif key == "worktree":
             env["worktree"] = val
         elif key == "expert_skills:":
-            env["expert_skills"] = _normalize_expert_skills(val)
+            env["expert_skills"] = _normalise_expert_skills(val)
         elif key == "handoff_output" or key.startswith("handoff_output"):
-            env["handoff_output"] = _normalize_handoff_output(val)
+            env["handoff_output"] = _normalise_handoff_output(val)
         elif key == "part of session (task-id slug)":
             env["part_of_session"] = val
         elif key == "sm created on":

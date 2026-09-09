@@ -1,11 +1,11 @@
 ---
 name: "che-ship"
-description: "End-of-task ship command. EXECUTES 4 EXECUTABLE GATES in non-negotiable order BEFORE any git ops (fail-fast): §0.9.1 che-scope-checker (entrega+LEAN 6-checks, APPROVED≥7.0) → §0.9.2 che-code-review Mode B (0C + ≤2H auto-fix-and-commit SEM perguntar user; else block) → §0.9.3 che-compliance HEAVY full scan (0C 0H) → §0.9.4 QA gate opcional flag --run-qa. Depois: atomic conventional commits on worktree, git push, opens DRAFT PR against default branch with structured description, assigns PR to user. Invoke ONLY after all che tasks DONE, or when user explicitly runs /che-ship."
+description: "End-of-task ship command. EXECUTES 4 EXECUTABLE GATES in non-negotiable order BEFORE any git ops (fail-fast): §0.9.1 che-scope-checker (delivery+LEAN 6-checks, APPROVED≥7.0) → §0.9.2 che-code-review Mode B (0C + ≤2H auto-fix-and-commit WITHOUT asking user; else block) → §0.9.3 che-compliance HEAVY full scan (0C 0H) → §0.9.4 QA gate optional flag --run-qa. After: atomic conventional commits on worktree, git push, opens DRAFT PR against default branch with structured description, assigns PR to user. Invoke ONLY after all che tasks DONE, or when user explicitly runs /che-ship."
 ---
 
 # Che — Ship (commit + push + open PR)
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - Conventional Commits full types + regex + examples: engineering-contracts skill Appendix B
 > - GitHub CLI gh auth + push + create PR commands: `_shared_checklists/GITHUB_CLI_COMMON.md`
 > - gh-stack hierarchical PR workflow (multi-PR partial deliveries): engineering-contracts Appendix C
@@ -57,15 +57,15 @@ Run BEFORE any `git status / git add / git commit / git push`. PREVENTS wrong-wo
 
 ---
 
-### 0.7.1 STORAGE PREFLIGHT OBRIGATÓRIO (run IMEDIATAMENTE após §0.7, ANTES de §0.8 ou QUALQUER write de report/decision)
+### 0.7.1 MANDATORY STORAGE PREFLIGHT (run IMMEDIATELY after §0.7, BEFORE §0.8 or ANY report/decision write)
 
-ANTES de gerar QUALQUER arquivo de report (gates 0.9.1→0.9.5), decision log, backup artifact: execute EXATAMENTE este comando UMA VEZ por execução de /che-ship. **Garante que todos paths resolvam FORA da worktree:**
+BEFORE generating ANY report file (gates 0.9.1→0.9.5), decision log, backup artifact: execute EXACTLY this command ONCE per /che-ship execution. **Ensures all paths resolve OUTSIDE the worktree:**
 
 ```bash
 python3 -m che_core.ship preflight "$WORKTREE_ROOT" "$SESSION_ID"
 ```
 
-Exporte as variáveis impressas pelo script para usá-las nos próximos gates.
+Export the variables printed by the script to use them in the next gates.
 
 ---
 
@@ -73,125 +73,125 @@ Exporte as variáveis impressas pelo script para usá-las nos próximos gates.
 
 **Purpose:** NEVER allow che internal planning/decision files to end up in user-code PRs. If any bug/legacy skill accidentally creates them inside the user worktree, detect, unstage, and DELETE them before any `git add` runs.
 
-Execute o script de verificação de blacklist:
+Execute the blacklist verification script:
 
 ```bash
 python3 -m che_core.ship blacklist_check "$WORKTREE_ROOT" "$SESSION_ID"
 ```
 
-Se o script reportar arquivos trackeados (código de saída 2), apresente as opções (A ou B) para o usuário conforme sugerido no output.
+If the script reports tracked files (exit code 2), present options (A or B) to the user as suggested in the output.
 
 ---
 
 ## 0.9 EXECUTABLE QUALITY GATES (RUN BEFORE ANY GIT OPERATION — FAIL FAST ORDER)
 
 > **CANONICAL 4-PASS ORDER (non-negotiable — fail-fast by blast radius):**
-> 1. **§0.9.1 Scope + Lean delivery** (lowest compute cost, highest blast radius if wrong — ship de coisa errada é o pior cenário)
-> 2. **§0.9.2 Code Review bugs** (depende de scope estar correto; ≤2 HIGH = auto-remediate SEM ask)
-> 3. **§0.9.3 Compliance security/PII** (já que review e scope passaram, garantimos 0C 0H)
-> 4. **§0.9.4 QA — DEFAULT ON, 3 profiles: minimal / normal / full** (sem flag = profile `minimal`; flag `--qa=<profile>` seleciona; único bypass = EXPLICIT_OVERRIDE user logado em decision.log)
+> 1. **§0.9.1 Scope + Lean delivery** (lowest compute cost, highest blast radius if wrong — shipping the wrong thing is the worst scenario)
+> 2. **§0.9.2 Code Review bugs** (depends on scope being correct; ≤2 HIGH = auto-remediate WITHOUT asking)
+> 3. **§0.9.3 Compliance security/PII** (since review and scope passed, we guarantee 0C 0H)
+> 4. **§0.9.4 QA — DEFAULT ON, 3 profiles: minimal / normal / full** (no flag = `minimal` profile; `--qa=<profile>` flag selects; unique bypass = user EXPLICIT_OVERRIDE logged in decision.log)
 >
-> Qualquer GATE com status 🔴 BLOQUEIA o ship. Gates 0.9.1 e 0.9.3 NUNCA têm auto-fix. Apenas Gate 0.9.2 tem ramo auto-fix quando threshold ≤ 2 HIGH findings. Gate 0.9.4 NÃO tem flag `--no-run-qa`. A única forma de bypassar é EXPLICIT_OVERRIDE user.
+> Any GATE with 🔴 status BLOCKS the ship. Gates 0.9.1 and 0.9.3 NEVER have auto-fix. Only Gate 0.9.2 has an auto-fix branch when threshold ≤ 2 HIGH findings. Gate 0.9.4 DOES NOT have a `--no-run-qa` flag. The only way to bypass is user EXPLICIT_OVERRIDE.
 
-### 0.9.1 GATE 1 — che-scope-checker 6-checks (Modo B: Worktree local)
+### 0.9.1 GATE 1 — che-scope-checker 6-checks (Mode B: Local Worktree)
 
-**Purpose:** Garantir que o que vai ser commitado (1) entrega TUDO que foi prometido no escopo e (2) não tem overengineering / gordura / YAGNI violations. Executa o skill `che-scope-checker` em Modo B.
+**Purpose:** Ensure that what is about to be committed (1) delivers EVERYTHING promised in the scope and (2) has no overengineering / bloat / YAGNI violations. Executes the `che-scope-checker` skill in Mode B.
 
-**Pré-condição interna deste gate:**
-- `$CHE_WORKSPACE_SHARED` resolvido via `source "${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che_sessions_contract.sh"`.
+**Internal precondition of this gate:**
+- `$CHE_WORKSPACE_SHARED` resolved via `source "${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che_sessions_contract.sh"`.
 
-**Scope source auto-discover ordem (primeiro match ganha — NÃO cascateia múltiplos sources):**
-1. **Envelope explícito** → existe `$CHE_WORKSPACE_SHARED/tasks/*/envelope.md`? (último task DONE no task_graph, pega seu envelope) → SCOPE_SOURCE=ENVELOPE.
-2. **Task graph local** → existe `<WORKTREE_ROOT>/task_graph.md`? → SCOPE_SOURCE=TASK_GRAPH. Lê lista de Acceptance Criteria + Tasks marcadas DONE.
-3. **Spec che local/global** → existe `spec_*.md` em `$CHE_WORKSPACE_SHARED/spec_*.md` OR `<WORKTREE_ROOT>/spec_*.md`? → SCOPE_SOURCE=SPEC. Extrai Acceptance Criteria section §5.
-4. **PR body GitHub (se PR URL fornecido via flag `--pr-url`)** → usa `gh pr view <URL> --json body,title` → parseia bullet points de Acceptance Criteria. SCOPE_SOURCE=PR_BODY.
-5. **Nenhum source encontrado** → ⚠️ WARN + PERGUNTA user: "Nenhum scope source localizado. (A) Informar path spec/envelope manualmente; (B) Prosseguir SEM scope validation (risco: ship fora do escopo); (C) Cancelar ship." Se usuário escolher B → log EXPLICIT_OVERRIDE no decision.log, SKIP este gate, vai para 0.9.2.
+**Scope source auto-discover order (first match wins — DOES NOT cascade multiple sources):**
+1. **Explicit envelope** → does `$CHE_WORKSPACE_SHARED/tasks/*/envelope.md` exist? (last DONE task in task_graph, take its envelope) → SCOPE_SOURCE=ENVELOPE.
+2. **Local task graph** → does `<WORKTREE_ROOT>/task_graph.md` exist? → SCOPE_SOURCE=TASK_GRAPH. Reads list of Acceptance Criteria + Tasks marked DONE.
+3. **Local/global che spec** → does `spec_*.md` exist in `$CHE_WORKSPACE_SHARED/spec_*.md` OR `<WORKTREE_ROOT>/spec_*.md`? → SCOPE_SOURCE=SPEC. Extracts §5 Acceptance Criteria section.
+4. **GitHub PR body (if PR URL provided via `--pr-url` flag)** → use `gh pr view <URL> --json body,title` → parse Acceptance Criteria bullet points. SCOPE_SOURCE=PR_BODY.
+5. **No source found** → ⚠️ WARN + ASK user: "No scope source located. (A) Inform spec/envelope path manually; (B) Proceed WITHOUT scope validation (risk: shipping out of scope); (C) Cancel ship." If user chooses B → log EXPLICIT_OVERRIDE in decision.log, SKIP this gate, go to 0.9.2.
 
-**Execução:**
-1. Invoca `che-scope-checker` skill passando:
+**Execution:**
+1. Invoke `che-scope-checker` skill passing:
    - `--worktree <WORKTREE_ROOT>`
    - `--mode B`
    - `--scope-source <SCOPE_SOURCE>`
-   - `--scope-path <path_do_arquivo>`
-   - `--report-out "$SHIP_SCOPE_CHECK_REPORT"`  (variável §0.7.1; prefixo timestamp UTC + report/ship-wt-<slug>/ estrutura fora worktree)
-2. Aguarda retorno com `verdict` field + `final_score` field + `findings[]` (CHECK 1-6).
+   - `--scope-path <file_path>`
+   - `--report-out "$SHIP_SCOPE_CHECK_REPORT"` (variable from §0.7.1; UTC timestamp prefix + report/ship-wt-<slug>/ structure outside worktree)
+2. Wait for return with `verdict` field + `final_score` field + `findings[]` (CHECK 1-6).
 
-**Verdict handling (regra EXATA do che-scope-checker §8):**
-| Verdict scope-checker | Ação gate 0.9.1 | Próximo passo |
+**Verdict handling (EXACT che-scope-checker §8 rule):**
+| scope-checker Verdict | Gate 0.9.1 Action | Next step |
 |---|---|---|
-| 🟢 APPROVED (score ≥7.0 AND 0 🔴 em CHECKS 1–6) | ✅ PASS GATE 1 | Segue imediatamente para §0.9.2 |
-| 🟡 CONDICOES (score ≥7.0 mas tem algum action item não-bloqueante OU score 5.0–6.9) | ⏸️ PAUSE + PERGUNTA user | Print findings e action items ao user. Opções EXATAS: **(A) = Aplicar fixes sugeridos e re-run gate 1; (B) = Aprovar condicionalmente (justificativa obrigatória → gravada via helper decision.log); (C) = Cancelar ship.** |
-| 🔴 REPROVADO (score <5.0 OU qualquer 🔴 em CHECK 1 Entrega / CHECK 4 Env / CHECK 3 Docs obrigatórios) | 🔴 BLOCK SHIP | Apresenta findings ao usuário. NÃO oferece opção de override direto (requer nova rodada). Sugere: corrigir → rodar /che-scope-checker standalone → depois re-rodar /che-ship. |
+| 🟢 APPROVED (score ≥7.0 AND 0 🔴 in CHECKS 1–6) | ✅ PASS GATE 1 | Proceed immediately to §0.9.2 |
+| 🟡 CONDITIONS (score ≥7.0 but has some non-blocking action item OR score 5.0–6.9) | ⏸️ PAUSE + ASK user | Print findings and action items to user. EXACT options: **(A) = Apply suggested fixes and re-run gate 1; (B) = Conditionally approve (mandatory justification → recorded via decision.log helper); (C) = Cancel ship.** |
+| 🔴 REJECTED (score <5.0 OR any 🔴 in CHECK 1 Delivery / CHECK 4 Env / CHECK 3 Mandatory Docs) | 🔴 BLOCK SHIP | Present findings to user. DOES NOT offer direct override option (requires new round). Suggest: fix → run standalone /che-scope-checker → then re-run /che-ship. |
 
 **Output artifacts:**
-- `$SHIP_SCOPE_CHECK_REPORT` — report completo 6-checks com SCOPE × LEAN final score. Estrutura final: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-scope-check.md` (ordenado por prefixo timestamp, agrupado por worktree relacionado).
-- Decision log entry via helper oficial: `che_append_decision_jsonl "SHIP_GATE_0_9_1" "verdict=${verdict} score=${final_score} source=${SCOPE_SOURCE} report=${SHIP_SCOPE_CHECK_REPORT}"`.
-- NENHUM artifact é criado dentro de `<WORKTREE_ROOT>` (helper assert outside já trava exit 99 se path cair lá; blacklist §0.8 garante limpeza redundante).
+- `$SHIP_SCOPE_CHECK_REPORT` — full 6-checks report with SCOPE × LEAN final score. Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-scope-check.md` (sorted by timestamp prefix, grouped by related worktree).
+- Decision log entry via official helper: `che_append_decision_jsonl "SHIP_GATE_0_9_1" "verdict=${verdict} score=${final_score} source=${SCOPE_SOURCE} report=${SHIP_SCOPE_CHECK_REPORT}"`.
+- NO artifact is created inside `<WORKTREE_ROOT>` (assert outside helper already locks exit 99 if path lands there; §0.8 blacklist ensures redundant cleanup).
 
 ---
 
-### 0.9.2 GATE 2 — che-code-review Mode B Local Worktree + **THRESHOLD ≤ 2 HIGH AUTO-FIX RULE (VERBATIM USER CONTRACT)**
+### 0.9.2 GATE 2 — che-code-review Mode B Local Worktree + **THRESHOLD ≤ 2 HIGH AUTO-FIX RULE (USER VERBATIM CONTRACT)**
 
-> **REGRA NÃO NEGOCIÁVEL USER VERBATIM:**
-> _"no caso do code review, no caso de <= 2 high findings, ja corrija e commit e prossiga com o ship sem nem me preguntar. Mas de resto, perfeito."_
-> **Esta regra não tem exceções.** NÃO ASKE NADA ao user no ramo ≤ 2 HIGH. Auto-remedia, commita, segue. Se CRITICAL ≥1 ou HIGH ≥3 → bloqueia e apresenta.
+> **NON-NEGOTIABLE USER VERBATIM RULE:**
+> _"in the case of code review, in the case of <= 2 high findings, already fix and commit and proceed with ship without even asking me. But otherwise, perfect."_
+> **This rule has no exceptions.** ASK NOTHING to the user in the ≤ 2 HIGH branch. Auto-remediate, commit, proceed. If CRITICAL ≥1 or HIGH ≥3 → block and present.
 
-**Purpose:** Rodar o `che-code-review` skill em **Modo B — Local Worktree** (diff do worktree atual contra `<DEFAULT_BRANCH>` já determinado no preamble). Pos-processing do resultado com a regra do threshold ≤ 2 HIGH.
+**Purpose:** Run `che-code-review` skill in **Mode B — Local Worktree** (diff of current worktree against `<DEFAULT_BRANCH>` already determined in preamble). Post-processing of the result with the ≤ 2 HIGH threshold rule.
 
-**Execução Passo a Passo:**
+**Step-by-Step Execution:**
 
-**Step 2.0 — Preparação diff base:**
-1. Re-usa o `DEFAULT_BRANCH` que já será determinado em §1.2 (caso gate 2 rode antes do §1, executa só o `gh repo view --json defaultBranchRef` silenciosamente).
-2. Base diff = `origin/<DEFAULT_BRANCH>..HEAD` (commits já feitos nesta branch) PLUS unstaged + uncommitted changes atuais no worktree. **Ambos são reviewados.** Não é só o staged.
+**Step 2.0 — Base diff preparation:**
+1. Reuse `DEFAULT_BRANCH` which will already be determined in §1.2 (if gate 2 runs before §1, just execute `gh repo view --json defaultBranchRef` silently).
+2. Base diff = `origin/<DEFAULT_BRANCH>..HEAD` (commits already made in this branch) PLUS current unstaged + uncommitted changes in worktree. **Both are reviewed.** Not just staged.
 
-**Step 2.1 — Invocação che-code-review:**
-1. Invoca `che-code-review` skill com params:
+**Step 2.1 — che-code-review invocation:**
+1. Invoke `che-code-review` skill with params:
    - `--worktree <WORKTREE_ROOT>`
    - `--mode B`
    - `--base origin/<DEFAULT_BRANCH>`
-   - `--report-out "$SHIP_CODE_REVIEW_REPORT"`  (variável §0.7.1; helper garantiu outside worktree)
+   - `--report-out "$SHIP_CODE_REVIEW_REPORT"` (variable from §0.7.1; helper guaranteed outside worktree)
    - `--include-unstaged true`
-2. Espera resultado estruturado: `{ critical_count: N, high_count: N, medium_count: N, low_count: N, findings: [...] }`
-   - Cada finding tem: `{ severity: CRITICAL|HIGH|MEDIUM|LOW, file, line, title, suggested_fix_code_block (opcional), auto_fixable: boolean }`.
+2. Wait for structured result: `{ critical_count: N, high_count: N, medium_count: N, low_count: N, findings: [...] }`
+   - Each finding has: `{ severity: CRITICAL|HIGH|MEDIUM|LOW, file, line, title, suggested_fix_code_block (optional), auto_fixable: boolean }`.
 
-**Step 2.2 — THRESHOLD BRANCHING (core user rule — IMPLEMENTAR EXATAMENTE):**
+**Step 2.2 — THRESHOLD BRANCHING (core user rule — IMPLEMENT EXACTLY):**
 
 ```
-SE (critical_count === 0) AND (high_count <= 2):
-    → RAMO AUTO-REMEDIATE-AND-CONTINUE (SEM PERGUNTAR NADA AO USER — NUNCA ASK AQUI)
-SENÃO:
-    → RAMO BLOCK-SHIP (apresenta findings ao user)
+IF (critical_count === 0) AND (high_count <= 2):
+    → AUTO-REMEDIATE-AND-CONTINUE BRANCH (WITHOUT ASKING ANYTHING TO USER — NEVER ASK HERE)
+ELSE:
+    → BLOCK-SHIP BRANCH (present findings to user)
 ```
 
 ---
 
-#### RAMO A: AUTO-REMEDIATE-AND-CONTINUE (0 CRITICAL + ≤ 2 HIGH)
+#### BRANCH A: AUTO-REMEDIATE-AND-CONTINUE (0 CRITICAL + ≤ 2 HIGH)
 
-**Objetivo:** Corrigir automaticamente os HIGH findings que são `auto_fixable=true`, commitar com conventional commit, e prosseguir para gate 0.9.3 **sem qualquer interação com usuário.**
+**Goal:** Automatically fix HIGH findings that are `auto_fixable=true`, commit with conventional commit, and proceed to gate 0.9.3 **without any user interaction.**
 
-**2.A.1 — Filtrar findings HIGH auto-fixáveis:**
+**2.A.1 — Filter auto-fixable HIGH findings:**
 ```
 <FIXABLE_HIGHS> = findings.filter(f => f.severity === 'HIGH' AND f.auto_fixable === true)
 <UNFIXABLE_HIGHS> = findings.filter(f => f.severity === 'HIGH' AND f.auto_fixable === false)
 ```
-- `UNFIXABLE_HIGHS` (se existirem, ≤ 2 no total): **ainda assim prossegue sem ask user.** A regra é ≤2 HIGH totais, independente de serem fixáveis ou não. Loga WARNING no decision.log com cada finding unfixable listado. NÃO bloqueia.
+- `UNFIXABLE_HIGHS` (if any, ≤ 2 total): **still proceed without asking user.** The rule is ≤2 total HIGH, regardless of being fixable or not. Log WARNING in decision.log with each unfixable finding listed. DO NOT block.
 
-**2.A.2 — Aplicar fixes programaticamente:**
-Para cada `f` em `<FIXABLE_HIGHS>`:
-1. Lê o arquivo target (via Read tool, garantido latest content).
-2. Aplica `Edit` tool exatamente usando `f.suggested_fix_code_block` como `new_string`, substituindo o old_string correspondente.
-3. NÃO adiciona comentários nos edits. Mantém estilo do arquivo.
-4. Se algum Edit falhar (old_string não match): **aborta apenas este finding específico**, loga `AUTO_REMEDIATE_FAILED` no decision.log com file+line, continua com os outros. Não aborta ramo A.
+**2.A.2 — Apply fixes programmatically:**
+For each `f` in `<FIXABLE_HIGHS>`:
+1. Read target file (via Read tool, guaranteed latest content).
+2. Apply `Edit` tool exactly using `f.suggested_fix_code_block` as `new_string`, replacing corresponding old_string.
+3. DO NOT add comments in edits. Maintain file style.
+4. If any Edit fails (old_string mismatch): **abort only this specific finding**, log `AUTO_REMEDIATE_FAILED` in decision.log with file+line, continue with others. Do not abort Branch A.
 
-**2.A.3 — Commitar o remediation com conventional commit (SEM passar pelo §1 normal — commit especial):**
+**2.A.3 — Commit remediation with conventional commit (WITHOUT going through normal §1 — special commit):**
 ```bash
 cd "$WORKTREE_ROOT"
-# 1. Re-roda o blacklist §0.8 stages 1-2 só por segurança (garante nenhum artifact entrou no diff):
-#    (roda os mesmos comandos do §0.8 stage 1 + 2 para unstaged)
-# 2. Staga só os arquivos modificados pelos auto-fixes:
-git add -- <arquivos_alterados_pelos_fixes>
-# 3. Conventional commit EXATO:
-N_FIXED=<total_high_fixes_applicados>
+# 1. Re-run §0.8 blacklist stages 1-2 just for safety (ensure no artifact entered diff):
+#    (run same §0.8 stage 1 + 2 commands for unstaged)
+# 2. Stage only files modified by auto-fixes:
+git add -- <files_changed_by_fixes>
+# 3. EXACT conventional commit:
+N_FIXED=<total_high_fixes_applied>
 N_TOTAL_HIGH=<high_count>
 git commit -m "fix(review): auto-remediate code review HIGH findings ($N_FIXED/$N_TOTAL_HIGH)
 
@@ -200,195 +200,195 @@ git commit -m "fix(review): auto-remediate code review HIGH findings ($N_FIXED/$
 - Unfixed HIGH (<= count) logged to decision.log as AUTO_REMEDIATE_UNFIXABLE"
 ```
 
-**2.A.4 — Pós-commit:**
-- Decision log entry via helper oficial:
+**2.A.4 — Post-commit:**
+- Decision log entry via official helper:
   ```bash
   che_append_decision_jsonl "SHIP_GATE_0_9_2" "verdict=AUTO_REMEDIATED_PASSED critical=0 high=${N_TOTAL_HIGH} auto_applied=${N_FIXED} auto_failed=${Y} report=${SHIP_CODE_REVIEW_REPORT}"
   ```
-- **SEGUIR IMEDIATAMENTE PARA GATE §0.9.3.** NÃO VOLTA para §1 Git Housekeeping normal. O commit especial já foi feito. O §1 normal irá rodar e contabilizar apenas os changes que sobraram (se houver).
+- **PROCEED IMMEDIATELY TO GATE §0.9.3.** DO NOT RETURN to normal §1 Git Housekeeping. Special commit already done. Normal §1 will run and account only for remaining changes (if any).
 
 ---
 
-#### RAMO B: BLOCK SHIP (CRITICAL ≥ 1 OU HIGH ≥ 3)
+#### BRANCH B: BLOCK SHIP (CRITICAL ≥ 1 OR HIGH ≥ 3)
 
-**Regra:** Apresenta findings detalhados ao user e pede input. NÃO há auto-fix neste ramo.
+**Rule:** Present detailed findings to user and ask for input. NO auto-fix in this branch.
 
-Opções EXATAS ao user:
+EXACT options to user:
 ```
 🔴 SHIP GATE 0.9.2 CODE REVIEW BLOCKED
   Summary: <critical_count> CRITICAL · <high_count> HIGH · <medium_count> MEDIUM · <low_count> LOW
 
-  (Top findings first — print só CRITICAL + HIGH ao user; medium/low vão pro report só)
+  (Top findings first — print only CRITICAL + HIGH to user; medium/low go to report only)
 
 Options:
-  A = Quero aplicar os fixes MANUALMENTE agora. Pausa o ship, volta interactive shell.
-      (Depois de user arrumar, ele roda /che-ship de novo)
-  B = Rejeitar findings específicos + override. Preciso: justificativa obrigatória por cada
-      finding a ser overrideado (grava decision.log).
-  C = Cancelar ship.
+  A = I want to apply fixes MANUALLY now. Pause ship, back to interactive shell.
+      (After user fixes, they run /che-ship again)
+  B = Reject specific findings + override. Need: mandatory justification per
+      finding to be overridden (save to decision.log).
+  C = Cancel ship.
 ```
 
-Se user escolher B (override):
-- Cada finding overrideado requer justificativa texto livre.
-- Todas salvas no decision.log como entries `REVIEW_OVERRIDE {finding_id, justification}`.
-- Muda gate verdict para PASSED_WITH_OVERRIDES.
-- **SÓ PODE FAZER OVERRIDE ATÉ 2 HIGH no total.** Se HIGH ≥3 → opção B fica desabilitada.
-- **NUNCA PERMITE OVERRIDE DE CRITICAL — opção B desabilitada se critical_count > 0.**
+If user chooses B (override):
+- Each overridden finding requires free-text justification.
+- All saved in decision.log as `REVIEW_OVERRIDE {finding_id, justification}` entries.
+- Change gate verdict to PASSED_WITH_OVERRIDES.
+- **ONLY ALLOW OVERRIDE UP TO 2 HIGH total.** If HIGH ≥3 → option B is disabled.
+- **NEVER PERMIT CRITICAL OVERRIDE — option B disabled if critical_count > 0.**
 
 ---
 
 **Output artifacts gate 0.9.2:**
-- `$SHIP_CODE_REVIEW_REPORT` — report completo findings. Estrutura final: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-code-review.md` (ordenado, agrupado).
-- Decision log entries via `che_append_decision_jsonl` helper conforme ramo A ou B.
-- Ramo B: Se OVERRIDE, cada finding overrideado usa: `che_append_decision_jsonl "REVIEW_OVERRIDE" "finding_id=${id} justification=${text}"`.
-- NO ramo A tem 1 commit novo no worktree prefixado `fix(review): auto-remediate...`.
+- `$SHIP_CODE_REVIEW_REPORT` — full findings report. Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-code-review.md` (sorted, grouped).
+- Decision log entries via `che_append_decision_jsonl` helper according to Branch A or B.
+- Branch B: If OVERRIDE, each overridden finding uses: `che_append_decision_jsonl "REVIEW_OVERRIDE" "finding_id=${id} justification=${text}"`.
+- Branch A has 1 new commit in worktree prefixed `fix(review): auto-remediate...`.
 
 ---
 
-### 0.9.3 GATE 3 — che-compliance HEAVY FULL SCAN (Step 2 Pesado, não só diff)
+### 0.9.3 GATE 3 — che-compliance HEAVY FULL SCAN (Heavy Step 2, not just diff)
 
-**Purpose:** Garantir 0 CRITICAL + 0 HIGH findings no **REPO INTEIRO**, não só no diff. Executa o skill `che-compliance` em sua versão PESADA Step 2 (full-session scan, não diff-only). Esta é a regra de compliance antiga §0.5, agora virada código executável.
+**Purpose:** Ensure 0 CRITICAL + 0 HIGH findings in the **ENTIRE REPO**, not just the diff. Executes the `che-compliance` skill in its HEAVY Step 2 version (full-session scan, not diff-only). This is the old §0.5 compliance rule, now turned into executable code.
 
-**Execução:**
-1. Invoca `che-compliance` skill com params:
+**Execution:**
+1. Invoke `che-compliance` skill with params:
    - `--worktree <WORKTREE_ROOT>`
    - `--mode HEAVY_STEP_2_FULL_SCAN`
-   - `--report-out "$SHIP_COMPLIANCE_HEAVY_REPORT"`  (variável §0.7.1; helper garantiu outside worktree)
+   - `--report-out "$SHIP_COMPLIANCE_HEAVY_REPORT"` (variable from §0.7.1; helper guaranteed outside worktree)
    - `--required 0_CRITICAL_AND_0_HIGH`
-2. Espera resultado: `{ critical_count: N, high_count: N, scan_categories_ran: [1..15] }`
+2. Wait for result: `{ critical_count: N, high_count: N, scan_categories_ran: [1..15] }`
 
 **Verdict handling:**
-| Cenário | Ação |
+| Scenario | Action |
 |---|---|
-| `critical_count === 0 AND high_count === 0` | ✅ PASS GATE 3. Segue para 0.9.4. |
-| Qualquer `critical_count > 0` OU `high_count > 0` | 🔴 **BLOCK SHIP — NÃO HÁ OPÇÃO DE OVERRIDE DIRETO.** Apresenta lista CRITICAL + HIGH ao user com paths e linhas. Opções: (A) Corrigir manualmente e re-run /che-ship; (B) Rodar `che-compliance` standalone primeiro para ter output verbose, depois voltar. |
+| `critical_count === 0 AND high_count === 0` | ✅ PASS GATE 3. Proceed to 0.9.4. |
+| Any `critical_count > 0` OR `high_count > 0` | 🔴 **BLOCK SHIP — NO DIRECT OVERRIDE OPTION.** Present CRITICAL + HIGH list to user with paths and lines. Options: (A) Fix manually and re-run /che-ship; (B) Run standalone `che-compliance` first for verbose output, then return. |
 
-**Compliance categories guaranteed to run (canônicas do skill che-compliance Step 2 Pesado):**
-- Categoria 1: Secrets leak (hardcoded API keys sk-*, AWS, JWT em texto)
-- Categoria 2: PII exposure (log/return de email bruto, CPF, dados sensíveis)
-- Categoria 3: SQL injection patterns (string concat em SQL, sem parametrização)
-- Categoria 4: Auth / RLS bypass patterns
-- Categoria 5: Dangerous URLs (SSRF, open redirect)
-- Categorias 6-15: restantes do che-compliance skill.
+**Compliance categories guaranteed to run (canonical from che-compliance skill Step 2 Heavy):**
+- Category 1: Secrets leak (hardcoded API keys sk-*, AWS, JWT in text)
+- Category 2: PII exposure (raw email log/return, SSN, sensitive data)
+- Category 3: SQL injection patterns (string concat in SQL, no parameterisation)
+- Category 4: Auth / RLS bypass patterns
+- Category 5: Dangerous URLs (SSRF, open redirect)
+- Categories 6-15: remaining from che-compliance skill.
 
 **Output artifacts:**
-- `$SHIP_COMPLIANCE_HEAVY_REPORT` — full scan report. Estrutura final: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-compliance-heavy.md` (ordenado, agrupado).
-- Decision log entry via helper oficial: `che_append_decision_jsonl "SHIP_GATE_0_9_3" "verdict=${verdict} critical=${critical_count} high=${high_count} categories=${#scan_categories_ran} report=${SHIP_COMPLIANCE_HEAVY_REPORT}"`.
+- `$SHIP_COMPLIANCE_HEAVY_REPORT` — full scan report. Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-compliance-heavy.md` (sorted, grouped).
+- Decision log entry via official helper: `che_append_decision_jsonl "SHIP_GATE_0_9_3" "verdict=${verdict} critical=${critical_count} high=${high_count} categories=${#scan_categories_ran} report=${SHIP_COMPLIANCE_HEAVY_REPORT}"`.
 
 ---
 
-### 0.9.4 GATE 4 — QA Gate (DEFAULT ON — profile `minimal` se nenhuma flag passada)
+### 0.9.4 GATE 4 — QA Gate (DEFAULT ON — `minimal` profile if no flag passed)
 
-**Purpose:** Última linha de defesa antes do commit real. **LIGADO POR DEFAULT — SEMPRE roda, a menos que user passe EXPLICIT_OVERRIDE justificado.** 3 profiles de velocidade/abrangência. NÃO existe mais flag `--no-run-qa`.
+**Purpose:** Last line of defence before real commit. **ON BY DEFAULT — ALWAYS runs, unless user passes justified EXPLICIT_OVERRIDE.** 3 speed/comprehensiveness profiles. NO more `--no-run-qa` flag.
 
 **Profile resolution (non-negotiable precedence):**
-1. User passou `--skip-qa` no comando → **REQUIRE EXPLICIT_OVERRIDE verbatim do user** gravado em decisions.log. Sem override escrito → **BLOCK SHIP NOW, pergunte user justificativa.**
-2. User passou `--qa=full` → **PROFILE_FULL** (tudo, ~5-15min)
-3. User passou `--qa=normal` → **PROFILE_NORMAL** (affected typecheck+lint+test, ~1-3min)
-4. **DEFAULT** (nenhuma flag QA) → **PROFILE_MINIMAL** (só testes unit/integ afetados, ~30s-2min)
+1. User passed `--skip-qa` in command → **REQUIRE user verbatim EXPLICIT_OVERRIDE** recorded in decisions.log. Without written override → **BLOCK SHIP NOW, ask user justification.**
+2. User passed `--qa=full` → **PROFILE_FULL** (everything, ~5-15min)
+3. User passed `--qa=normal` → **PROFILE_NORMAL** (affected typecheck+lint+test, ~1-3min)
+4. **DEFAULT** (no QA flag) → **PROFILE_MINIMAL** (only affected unit/integ tests, ~30s-2min)
 
-**Quando skipado (SÓ caminho 1):**
-- Se `--skip-qa` presente AND EXPLICIT_OVERRIDE `QA_SKIP` gravado via `che_append_decision_jsonl "SHIP_GATE_0_9_4_OVERRIDE" "verbatim=<user justification>"` → SKIP, segue §1.
-- **QUALQUER OUTRO caminho de skip (sem override logado) → BLOQUEIA SHIP.**
+**When skipped (ONLY path 1):**
+- If `--skip-qa` present AND EXPLICIT_OVERRIDE `QA_SKIP` recorded via `che_append_decision_jsonl "SHIP_GATE_0_9_4_OVERRIDE" "verbatim=<user justification>"` → SKIP, proceed to §1.
+- **ANY OTHER skip path (without logged override) → BLOCKS SHIP.**
 
-**Profile specs (execução stack-detect):**
+**Profile specs (stack-detect execution):**
 
-Detecta stack do monorepo automaticamente (ordem de tentativa):
-1. **Nx workspace (pnpm + nx)** → existe `nx.json` + `pnpm-workspace.yaml`:
+Automatically detects monorepo stack (attempt order):
+1. **Nx workspace (pnpm + nx)** → `nx.json` + `pnpm-workspace.yaml` exist:
    | Profile | Command chain | Target duration |
    |---|---|---|
-   | 🟢 **MINIMAL (default)** | `cd "$WORKTREE_ROOT" && corepack pnpm nx affected:test --tui false --exclude=e2e 2>&1` (só testes unit/integ AFETADOS pelos arquivos dirty — SEM typecheck, SEM lint, SEM playwright/e2e) | ~30s-2min monorepo |
+   | 🟢 **MINIMAL (default)** | `cd "$WORKTREE_ROOT" && corepack pnpm nx affected:test --tui false --exclude=e2e 2>&1` (only unit/integ tests AFFECTED by dirty files — NO typecheck, NO lint, NO playwright/e2e) | ~30s-2min monorepo |
    | 🟡 **NORMAL (--qa=normal)** | `cd "$WORKTREE_ROOT" && { echo "===== QA GATE NORMAL: typecheck $(date -Iseconds) ====="; corepack pnpm nx affected:typecheck --tui false 2>&1; echo "===== QA GATE NORMAL: lint $(date -Iseconds) ====="; corepack pnpm nx affected:lint --tui false 2>&1; echo "===== QA GATE NORMAL: test $(date -Iseconds) ====="; corepack pnpm nx affected:test --tui false --exclude=e2e 2>&1; }` — affected: typecheck + lint + unit/integ tests | ~1-3min monorepo |
    | 🔴 **FULL (--qa=full)** | `cd "$WORKTREE_ROOT" && { echo "===== QA GATE FULL: typecheck $(date -Iseconds) ====="; corepack pnpm nx run-many --target=typecheck --tui false 2>&1; echo "===== QA GATE FULL: lint $(date -Iseconds) ====="; corepack pnpm nx run-many --target=lint --tui false 2>&1; echo "===== QA GATE FULL: unit+integ tests $(date -Iseconds) ====="; corepack pnpm nx run-many --target=test --tui false 2>&1; echo "===== QA GATE FULL: E2E tests $(date -Iseconds) ====="; corepack pnpm nx run-many --target=e2e --tui false 2>&1; }` — all: typecheck+lint+unit+integ+e2e+playwright | ~5-15min monorepo |
-   Toda output de qualquer profile é gravada via pipe: `| che_write_file_atomic "$SHIP_QA_GATE_LOG"`
+   Every output from any profile is recorded via pipe: `| che_write_file_atomic "$SHIP_QA_GATE_LOG"`
 
-2. **Generic pnpm/npm/yarn (sem Nx)** → existe `package.json`:
-   - MINIMAL: heuristic find matching test files: `grep` diff paths → run only `*.test.*` / `*.spec.*` files matching changed file dirs via `corepack pnpm vitest run <matched_paths>` (sem typecheck, sem lint)
+2. **Generic pnpm/npm/yarn (no Nx)** → `package.json` exists:
+   - MINIMAL: heuristic find matching test files: `grep` diff paths → run only `*.test.*` / `*.spec.*` files matching changed file dirs via `corepack pnpm vitest run <matched_paths>` (no typecheck, no lint)
    - NORMAL: `{ echo typecheck; corepack pnpm typecheck 2>&1; echo lint; corepack pnpm lint 2>&1; echo test; corepack pnpm test 2>&1; }`
-   - FULL: tudo NORMAL + `corepack pnpm test:e2e 2>&1` (se script existir; senão WARN e pula)
+   - FULL: all NORMAL + `corepack pnpm test:e2e 2>&1` (if script exists; otherwise WARN and skip)
 
-3. **Nenhuma detecção** → WARN "Não foi possível detectar stack QA. MINIMAL fallback: tenta rodar comando de teste documentado em AGENTS.md. Se não houver → WARN + SKIP gate com decision.log entry SKIPPED_STACK_NOT_DETECTED".
+3. **No detection** → WARN "Could not detect QA stack. MINIMAL fallback: attempts to run test command documented in AGENTS.md. If none → WARN + SKIP gate with decision.log entry SKIPPED_STACK_NOT_DETECTED".
 
-**Verdict handling QA:**
+**QA Verdict handling:**
 - **MINIMAL profile:** only test command — exit code 0 → ✅ PASS. exit code != 0 → 🔴 BLOCK SHIP.
-- **NORMAL profile:** exit code 0 EM TODOS os 3 (typecheck + lint + test) → ✅ PASS. Qualquer falha → 🔴 BLOCK.
-- **FULL profile:** exit code 0 EM TODOS → ✅ PASS. Qualquer falha → 🔴 BLOCK.
-- **Em qualquer BLOCK (0.9.4):** Print tail -80 da saída com erro ao user. Opções EXATAS:
-  - (A) Quero corrigir manualmente agora → pausa ship, volta interactive shell (depois user re-roda /che-ship).
-  - (B) Override (REQUIRE EXPLICIT_OVERRIDE user texto literal justificando POR QUE typecheck/lint/teste com falha DEVE SHIPAR agora — gravado em decision.log; override só permitido se (i) o count de failures for ≤2 testes FLAKY conhecidos E (ii) a justificativa cita uma issue/ticket).
+- **NORMAL profile:** exit code 0 in ALL 3 (typecheck + lint + test) → ✅ PASS. Any failure → 🔴 BLOCK.
+- **FULL profile:** exit code 0 in ALL → ✅ PASS. Any failure → 🔴 BLOCK.
+- **In any BLOCK (0.9.4):** Print tail -80 of error output to user. EXACT options:
+  - (A) I want to fix manually now → pause ship, back to interactive shell (then user re-runs /che-ship).
+  - (B) Override (REQUIRE user verbatim EXPLICIT_OVERRIDE text justifying WHY failing typecheck/lint/test MUST SHIP now — recorded in decision.log; override only allowed if (i) failure count is ≤2 known FLAKY tests AND (ii) justification cites an issue/ticket).
 
 **Output artifacts:**
-- `$SHIP_QA_GATE_LOG` — stdout concatenado do profile selecionado. Estrutura final: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-qa-gate.log` (timestamp ordenável, agrupado). Write atômico via `che_write_file_atomic` stdin pipe.
+- `$SHIP_QA_GATE_LOG` — concatenated stdout of selected profile. Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-qa-gate.log` (sortable timestamp, grouped). Atomic write via `che_write_file_atomic` stdin pipe.
 - Decision log entry via helper: `che_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=${verdict} profile=${MINIMAL|NORMAL|FULL} tc_status=${status} lint_status=${status} test_status=${status} e2e_status=${status|N/A} override_logged=${yes|no} log=${SHIP_QA_GATE_LOG} evidence_manifest_sha256=${QA_EVIDENCE_MANIFEST_SHA:-N/A} evidence_workspace_path=${QA_EVIDENCE_MANIFEST_PATH:-N/A}"`.
 
 ---
 
-### 0.9.5 GATE 5 (NOVO Three-Layer Domains v2) — DOMAIN GATES Obrigatórios por Domínio Não-Engineering
+### 0.9.5 GATE 5 (NEW Three-Layer Domains v2) — Mandatory DOMAIN GATES for Non-Engineering Domains
 
-> **Ordem de precedência resolve effective_domain (STOP at first non-null match):** (1) SPEC frontmatter `domain:` field → (2) Project Level 1.5 registry `domains[0]` array first entry → (3) DEFAULT FALLBACK `engineering`.
+> **Precedence order resolve effective_domain (STOP at first non-null match):** (1) SPEC frontmatter `domain:` field → (2) Project Level 1.5 registry `domains[0]` array first entry → (3) DEFAULT FALLBACK `engineering`.
 
-Purpose: Mesmo fail-fast engine G1-G4 generalizado para QUALQUER domínio (ux/product/devops/copywriting/social/seo-analytics) usando thresholds numéricos, retry 1 grátis automático, e HUMAN REQUIRED após 2nd falha. Igual padrão engineering-contracts §6 DbC + §15 BDD incremental. Nenhum "gosto" ou avaliação subjetiva permitida — tudo threshold NUMÉRICO.
+Purpose: Same fail-fast engine G1-G4 generalised for ANY domain (ux/product/devops/copywriting/social/seo-analytics) using numerical thresholds, 1 automatic free retry, and HUMAN REQUIRED after 2nd failure. Same as engineering-contracts §6 DbC + §15 incremental BDD pattern. No "taste" or subjective evaluation allowed — all NUMERICAL threshold.
 
-Execution steps (ordem fixa):
+Execution steps (fixed order):
 
-1. **Resolve `effective_domain`:** Ler SPEC (mesmo path do gate 0.9.1 scope) YAML `domain:` + fallback project registry `domains[]`. Se ambos null/ausentes → `effective_domain = engineering`.
-2. **IF `effective_domain === 'engineering'` → **SKIP GATE 5 COMPLETAMENTE E SILENCIOSAMENTE (0 linhas log, 0 output extra).** Sessões/specs antigas SEM o campo `domain:` têm comportamento IDÊNTICO ao v2 original. Backward compat 100% garantida.
+1. **Resolve `effective_domain`:** Read SPEC (same path as gate 0.9.1 scope) YAML `domain:` + fallback project registry `domains[]`. If both null/missing → `effective_domain = engineering`.
+2. **IF `effective_domain === 'engineering'` → **SKIP GATE 5 COMPLETELY AND SILENTLY (0 log lines, 0 extra output).** Old sessions/specs WITHOUT `domain:` field have IDENTICAL behaviour to original v2. 100% backward compat guaranteed.
 3. **IF `effective_domain !== 'engineering':`**
-   a. **Check pasta existe:** `${CHE_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/` → MUST existir. Não existe → **WARN "Domínio <slug> não tem gates implementados ainda (fase 2 rollout). Skip §0.9.5."** Log decision entry helper:
+   a. **Check folder exists:** `${CHE_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/` → MUST exist. Does not exist → **WARN "Domain <slug> has no gates implemented yet (phase 2 rollout). Skip §0.9.5."** Log decision entry helper:
       ```bash
       che_append_decision_jsonl "DOMAIN-GATES-WARN" "domain=${effective_domain} reason=no-gates-folder phase-2-rollout skip=TRUE"
       ```
-      Prossegue §0.9.6 ALL GATES PASSED normalmente.
-   b. **Glob + sort alphabetical gate files:** `${CHE_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/*.md`. Ordem de execução = ordem alfabética nome arquivo (igual convenção G1→G2→G3→G4). Exemplo UX: `accessibility-gate.md` executa ANTES `pixel-check-gate.md`.
-   c. **Para CADA arquivo gate (0.9.5.1, 0.9.5.2, ...):**
-      - Parse YAML frontmatter do arquivo: `threshold_pass`, `retry_policy`, `log_format_decisions`, `tool_official`.
-      - Se frontmatter ausente → FAIL gate imediatamente: "Gate <filename> não tem frontmatter YAML threshold declarado. Domínio inválido."
-      - **Construir path report POR gate usando helper (um arquivo JSON por gate, ordenado, agrupado):**
+      Proceed §0.9.6 ALL GATES PASSED normally.
+   b. **Glob + sort alphabetical gate files:** `${CHE_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/*.md`. Execution order = filename alphabetical order (same as G1→G2→G3→G4 convention). UX example: `accessibility-gate.md` executes BEFORE `pixel-check-gate.md`.
+   c. **For EACH gate file (0.9.5.1, 0.9.5.2, ...):**
+      - Parse file YAML frontmatter: `threshold_pass`, `retry_policy`, `log_format_decisions`, `tool_official`.
+      - If frontmatter missing → FAIL gate immediately: "Gate <filename> has no declared YAML threshold frontmatter. Invalid domain."
+      - **Build report path PER gate using helper (one JSON file per gate, sorted, grouped):**
         ```bash
         GATE_BASENAME="$(basename "$gate_file" .md)"
         DOMAIN_GATE_REPORT="$(che_output_path "${SHIP_DOMAIN_GATE_REPORT_TEMPLATE_TYPE}" "domain-gate-${effective_domain}-${GATE_BASENAME}" "${RELATED_ID}" "${SHIP_DOMAIN_GATE_REPORT_TEMPLATE_SCOPE}" "json")"
         ```
-      - **Run gate evaluation (automático):** Siga EXATAMENTE os passos listados no arquivo `domains/<slug>/gates/<name>.md` seção "Execução". Grave todo output do gate no report JSON via `che_write_file_atomic "$DOMAIN_GATE_REPORT"` (write atômico, outside worktree garantido). Se o gate usar uma ferramenta oficial via §21 External Connectors (P1 MCP ou P2 CLI): SEMPRE use os canais P1→P2 ordem; NUNCA raw curl/fetch.
-      - `PASS condition`: frontmatter `threshold_pass` satisfeito NUMERICAMENTE (ex: `score >= 8.0`, `critical_count === 0`). Se string → FAIL.
+      - **Run gate evaluation (automatic):** Follow EXACTLY the steps listed in `domains/<slug>/gates/<name>.md` "Execution" section. Record all gate output in JSON report via `che_write_file_atomic "$DOMAIN_GATE_REPORT"` (atomic write, guaranteed outside worktree). If gate uses an official tool via §21 External Connectors (P1 MCP or P2 CLI): ALWAYS use P1→P2 order channels; NEVER raw curl/fetch.
+      - `PASS condition`: `threshold_pass` frontmatter satisfied NUMERICALLY (e.g. `score >= 8.0`, `critical_count === 0`). If string → FAIL.
       - Verdict:
-        | Resultado gate 1ª rodada | Ação |
+        | 1st round gate result | Action |
         |---|---|
-        | 🟢 PASS threshold | ✅ Passa este gate. Decision log helper: `che_append_decision_jsonl "DOMAIN-GATE-EXECUTED" "domain=${effective_domain} gate=${GATE_BASENAME} status=PASS score=${score} duration_ms=${ms} report=${DOMAIN_GATE_REPORT}"`. Próximo gate. |
-        | 🔴 FAIL threshold (1ª vez) | **Retry GRÁTIS AUTOMÁTICO = 1 única rodada:** Aplicar os passos recomendados no arquivo gate seção "Retry Policy" (ex: "corrigir top-3 desvios >4px", "corrigir alt ausentes"). Re-rodar gate 1 NOVA vez. Decision log helper para retry: `che_append_decision_jsonl "DOMAIN-GATE-RETRY" "domain=${effective_domain} gate=${GATE_BASENAME} score_before=${sb} retry=1"`. |
-        | 🔴 FAIL threshold APÓS retry automático = 2ª falha | **HARD STOP §0.9.5 DOMAIN GATES.** Não abre PR. Não commita. Não prossegue para §0.9.6. Decision log HELPER com details: `che_append_decision_jsonl "DOMAIN-GATE-HARD-FAIL" "domain=${effective_domain} gate=${GATE_BASENAME} threshold=${orig} score_now=${sn} report=${DOMAIN_GATE_REPORT}"`. Mostre mensagem padronizada ao usuário. |
-   d. **Após todos gates PASS ou explicit override logged:** Todos gates passaram OU user deu EXPLICIT_OVERRIDE VERBATIM logado em decisions → Log FINAL gate 5 entry HELPER: `che_append_decision_jsonl "DOMAIN-GATES-ALL-PASSED" "domain=${effective_domain} n_gates=${N} overrides=${QTD} duration_total_ms=${ms}"`. Prossegue §0.9.6.
-4. **EXPLICIT_OVERRIDE rules (igual G2 code-review today):** Threshold NUNCA é abaixado automaticamente pelo agente. SÓ é permitido se user digitou EXPLICITAMENTE "EXPLICIT_OVERRIDE domain=<slug> gate=<X> old=<threshold> new=<n> reason=<TEXT>" LITERALMENTE no chat. Nesta condição: logar entry HELPER `che_append_decision_jsonl "EXPLICIT_OVERRIDE" "domain=${effective_domain} gate=${GATE_BASENAME} old=${OLD} new=${NEW} reason=${TEXT} trace_id=${TRACE_ID}"` e marcar gate como "PASS (COM OVERRIDE)". Nenhuma outra forma de bypass existe. Não confie em "parece OK".
+        | 🟢 PASS threshold | ✅ Passes this gate. Decision log helper: `che_append_decision_jsonl "DOMAIN-GATE-EXECUTED" "domain=${effective_domain} gate=${GATE_BASENAME} status=PASS score=${score} duration_ms=${ms} report=${DOMAIN_GATE_REPORT}"`. Next gate. |
+        | 🔴 FAIL threshold (1st time) | **AUTOMATIC FREE Retry = 1 single round:** Apply recommended steps in gate file "Retry Policy" section (e.g. "fix top-3 deviations >4px", "fix missing alt"). Re-run gate 1 NEW time. Decision log helper for retry: `che_append_decision_jsonl "DOMAIN-GATE-RETRY" "domain=${effective_domain} gate=${GATE_BASENAME} score_before=${sb} retry=1"`. |
+        | 🔴 FAIL threshold AFTER automatic retry = 2nd failure | **HARD STOP §0.9.5 DOMAIN GATES.** Does not open PR. Does not commit. Does not proceed to §0.9.6. Decision log HELPER with details: `che_append_decision_jsonl "DOMAIN-GATE-HARD-FAIL" "domain=${effective_domain} gate=${GATE_BASENAME} threshold=${orig} score_now=${sn} report=${DOMAIN_GATE_REPORT}"`. Show standardised message to user. |
+   d. **After all gates PASS or explicit override logged:** All gates passed OR user gave verbatim EXPLICIT_OVERRIDE logged in decisions → Log FINAL gate 5 entry HELPER: `che_append_decision_jsonl "DOMAIN-GATES-ALL-PASSED" "domain=${effective_domain} n_gates=${N} overrides=${COUNT} duration_total_ms=${ms}"`. Proceed §0.9.6.
+4. **EXPLICIT_OVERRIDE rules (same as G2 code-review today):** Threshold is NEVER lowered automatically by agent. ONLY allowed if user LITERALLY typed "EXPLICIT_OVERRIDE domain=<slug> gate=<X> old=<threshold> new=<n> reason=<TEXT>" in chat. In this condition: log HELPER entry `che_append_decision_jsonl "EXPLICIT_OVERRIDE" "domain=${effective_domain} gate=${GATE_BASENAME} old=${OLD} new=${NEW} reason=${TEXT} trace_id=${TRACE_ID}"` and mark gate as "PASS (WITH OVERRIDE)". No other bypass form exists. Do not trust "seems OK".
 
 **Output artifacts gate 0.9.5:**
-- 1 decision.log entry PER gate executado (PASS/FAIL/RETRY/OVERRIDE), **todos via `che_append_decision_jsonl` helper oficial.**
-- Report por gate: `$DOMAIN_GATE_REPORT` (1 arquivo JSON por gate, construído dinamicamente via `che_output_path` dentro loop). Estrutura final: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-domain-gate-<dom>-<nome>.json` (prefixo timestamp = ordenado; todos arquivos do mesmo ship ficam na MESMA subpasta `report/ship-<wt-slug>/` → fácil buscar glob `**/ship-<slug>/*`).
+- 1 decision.log entry PER executed gate (PASS/FAIL/RETRY/OVERRIDE), **all via official `che_append_decision_jsonl` helper.**
+- Report per gate: `$DOMAIN_GATE_REPORT` (1 JSON file per gate, dynamically built via `che_output_path` inside loop). Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-domain-gate-<dom>-<name>.json` (timestamp prefix = sorted; all files of same ship stay in SAME `report/ship-<wt-slug>/` subfolder → easy to search glob `**/ship-<slug>/*`).
 
-**Blacklist check:** Reports ficam 100% em `$CHE_WORKSPACE_SHARED/report/<related_id>/` (helper garantiu outside assert). §0.8 + §2.2 continuam garantindo que nenhum relatório/diff artifact/decisions log entra no diff do commit do usuário.
+**Blacklist check:** Reports are 100% in `$CHE_WORKSPACE_SHARED/report/<related_id>/` (helper guaranteed outside assert). §0.8 + §2.2 continue to ensure no report/diff artifact/decisions log enters user commit diff.
 
 ---
 
 ### 0.9.6 ALL GATES PASSED — Transition guard
 
-**Aparece somente se 0.9.1 ✅ + 0.9.2 ✅ (qualquer ramo que passou) + 0.9.3 ✅ + 0.9.4 ✅ OU SKIPPED + 0.9.5 DOMAIN ✅ OU SKIPPED (engineering default).**
+**Appears only if 0.9.1 ✅ + 0.9.2 ✅ (any branch that passed) + 0.9.3 ✅ + 0.9.4 ✅ OR SKIPPED + 0.9.5 DOMAIN ✅ OR SKIPPED (engineering default).**
 
-Print one-liner ANTES de iniciar §1 Git Housekeeping:
+Print one-liner BEFORE starting §1 Git Housekeeping:
 ```
 🟢 ALL 5 EXECUTABLE SHIP GATES PASSED (scope-checker 6-checks · code-review · compliance-heavy · qa[minimal|normal|full] · domain-gates[<slug or skipped>])
 Proceeding to Git Housekeeping §1 → atomic conventional commit → push → open DRAFT PR.
 ```
 
-Append entry FINAL via decision log helper oficial:
+Append FINAL entry via official decision log helper:
 ```bash
 che_append_decision_jsonl "ALL_SHIP_GATES_PASSED" "gates=[0.9.1,0.9.2,0.9.3,0.9.4,0.9.5] scores_scope=${score} effective_domain=${effective_domain} related_id=${RELATED_ID}"
 ```
 
-**Pós-gates reminder de blacklist:** Todos reports acima foram escritos EXCLUSIVAMENTE em `$CHE_WORKSPACE_SHARED/report/${RELATED_ID}/YYYYMMDD-HHMMSS-*.{md,log,json}` (helper centralizado construiu todos paths). O §0.8 blacklist stage 1-2 já rodou e continuará rodando em §2.2 antes de cada commit para garantir que NENHUM desses reports ou decision artifacts entram acidentalmente no diff do usuário.
+**Post-gates blacklist reminder:** All reports above were written EXCLUSIVELY in `$CHE_WORKSPACE_SHARED/report/${RELATED_ID}/YYYYMMDD-HHMMSS-*.{md,log,json}` (centralised helper built all paths). §0.8 blacklist stage 1-2 already ran and will continue to run in §2.2 before each commit to ensure NONE of these reports or decision artifacts accidentally enter user diff.
 
 ---
 
 ## 1. STEP 1 — Git Housekeeping (inside WORKTREE_ROOT)
 
-### 1.1 Git sanitization check (secret scan pre-commit, extra)
+### 1.1 Git sanitisation check (secret scan pre-commit, extra)
 
 Run a quick grep BEFORE staging anything (use che-compliance skill Category 1 + 2 patterns on the DIFF against default branch).
 If any matches → block, report, offer to unstage / remove the problematic file, do NOT proceed.
@@ -464,7 +464,7 @@ git commit -m "type(scope): imperative description in English, lowercase, max 72
 Rules:
 - NEVER run `git add .` — always add per-file or per-directory explicitly.
 - Before EVERY `git add`, run the `git reset HEAD -- <blacklist patterns>` line above. (Fail-closed — cost 1 ms per commit, prevents a whole class of PR-pollution bugs.)
-- Every commit message in **ENGLISH** by default (Header and Body), following the **Storytelling Conventional Commit** rule. Only use pt-BR if explicitly requested.
+- Every commit message in **ENGLISH** (Header and Body), following the **Storytelling Conventional Commit** rule.
 - After last commit → run `git log --oneline -20` to present final chain to user.
 - **POST-COMMIT ASSERT (after all commits applied):** `git show --name-only --pretty=format: HEAD~10..HEAD` → scan file names for §0.8 blacklist patterns. If any commit contains a blacklisted file → **STOP, DO NOT PUSH.** Report to user, offer `git reset HEAD~N` + re-apply cleanly, then continue.
 
@@ -544,13 +544,13 @@ If found ticket: extract `<TICKET-ID>` (full URL or just ID). Append `Refs: <TIC
 
 #### A-4.2 Build PR Description — READABLE 5 BLOCKS (ENGLISH by default, ≤50 lines TOTAL target)
 
-> **Canonical body + FILLED real EXAMPLE (refund feature from screenshot, low-context readable version):** `references/PR_DESCRIPTION_TEMPLATE.md` (Layer 3 SOLE owner of structure/content + readability rules). Below only process gates + budget.
+> **Canonical body + FILLED real EXAMPLE (refund feature from screenshot, low-context readable version):** `references/PR_DESCRIPTION_TEMPLATE.md` (Layer 3 SOLE owner of structure/content + readability rules). Below only process budgets.
 > **Copy the STYLE of the filled example in PR_DESCRIPTION_TEMPLATE.md, not only the section names.** The filled example shows exactly how to phrase bullets, acronym expansion, user impact, and risk consequence.
 
 **LANGUAGE GATE (non-negotiable — #1 rule, before any writing):**
-- **DEFAULT = ENGLISH (EN-US / EN-UK).** Write the ENTIRE PR body, headings, bullets, ticket refs, commands — EVERYTHING — in English.
-- **Other language ONLY IF:** the user's message that invoked `/che-ship` (or the explicit instruction) contains an EXPLICIT request for another language (e.g., "write PR body in Portuguese", "corpo PR em PT-BR").
-- **Never guess / NEVER assume** "user speaks Portuguese so PR in Portuguese". Portuguese is for chat ONLY. Absent an explicit mention → PR body is ALWAYS English.
+- **DEFAULT = ENGLISH (EN-US / EN-GB).** Write the ENTIRE PR body, headings, bullets, ticket refs, commands — EVERYTHING — in English.
+- **Other language ONLY IF:** the user explicitly requests another language.
+- **Never guess / NEVER assume.** Absent an explicit mention → PR body is ALWAYS English.
 
 **PROCESS GATES (non-negotiable — readable for low-context reviewers, trim only the useless, never the clear context):**
 
@@ -650,40 +650,40 @@ If mismatch → report to user; offer to fix via `gh pr edit --base` or body edi
 
 ---
 
-## 5. STEP 5 — Report to user (in Portuguese)
+## 5. STEP 5 — Report to user (in English)
 
 ### Path A: GH_STACK_MODE=false (single PR report)
 
-Final output to user chat:
+Final output to user chat in English:
 
 ```
-✅ /che-ship concluído com sucesso.
+✅ /che-ship successfully completed.
 
-Resumo:
+Summary:
   • Worktree: <worktree path>
-  • Branch remota: <branch> (criada se não existia)
-  • Commits aplicados: N (lista resumida)
-    - <sha1 curto> type(scope): message
+  • Remote branch: <branch> (created if missing)
+  • Applied commits: N (summary list)
+    - <short sha1> type(scope): message
     - ...
-  • PR criada (DRAFT): <PR_URL>  [atribuída a você]
-  • Assumptions, review points, breaking changes: veja corpo da PR
+  • Created PR (DRAFT): <PR_URL>  [assigned to you]
+  • Assumptions, review points, breaking changes: see PR body
 
-Ship gates reports (todos em che-sessions, ordenados por timestamp UTC):
+Ship gates reports (all in che-sessions, sorted by UTC timestamp):
   • Scope check (§0.9.1): $SHIP_SCOPE_CHECK_REPORT
   • Code review (§0.9.2): $SHIP_CODE_REVIEW_REPORT
   • Compliance heavy (§0.9.3): $SHIP_COMPLIANCE_HEAVY_REPORT
   • QA gate log (§0.9.4): $SHIP_QA_GATE_LOG
 
-Artefatos relacionados (mesmo workspace):
-  • Manual test plan: referenciado no corpo e disponível em:
+Related artifacts (same workspace):
+  • Manual test plan: referenced in body and available at:
     $MANUAL_TEST_PLAN_PATH
-  • Decision log (todas decisions append-safe JSONL, via che_append_decision_jsonl):
+  • Decision log (all decisions append-safe JSONL, via che_append_decision_jsonl):
     $CHE_DECISIONS_PATH
 
-Próximos passos:
-  1. Rode um smoke test manual usando o plano acima.
-  2. Revise o diff da PR para garantir que nenhum arquivo não intencional entrou.
-  3. Quando tudo ok: abra a PR <PR_URL>, clique em "Ready for review" e atribua reviewers.
+Next steps:
+  1. Run a manual smoke test using the plan above.
+  2. Review the PR diff to ensure no unintended files entered.
+  3. When all ok: open PR <PR_URL>, click "Ready for review" and assign reviewers.
 ```
 
 ### Path B: GH_STACK_MODE=true (hierarchical PR stack report)
@@ -691,26 +691,26 @@ Próximos passos:
 Final output to user chat:
 
 ```
-✅ /che-ship concluído com sucesso — MODO gh-stack HIERÁRQUICO.
+✅ /che-ship successfully completed — HIERARCHICAL gh-stack MODE.
 
-Resumo Geral:
+General Summary:
   • Worktree: <worktree path>
-  • Número de PRs na stack (bottom-up): <N layers>
-  • gh-stack chain criada. Todas as PRs DRAFT + atribuídas a você.
+  • Number of PRs in stack (bottom-up): <N layers>
+  • gh-stack chain created. All PRs DRAFT + assigned to you.
 
-Ship gates reports (todos em che-sessions, ordenados por timestamp UTC):
+Ship gates reports (all in che-sessions, sorted by UTC timestamp):
   • Scope check (§0.9.1): $SHIP_SCOPE_CHECK_REPORT
   • Code review (§0.9.2): $SHIP_CODE_REVIEW_REPORT
   • Compliance heavy (§0.9.3): $SHIP_COMPLIANCE_HEAVY_REPORT
   • QA gate log (§0.9.4): $SHIP_QA_GATE_LOG
 
-Artefatos relacionados (mesmo workspace):
-  • Plano gh-stack original: $GH_STACK_PLAN_PATH
-  • Manual test plan global: $MANUAL_TEST_PLAN_PATH
-  • Decision log (todas decisions append-safe JSONL, via che_append_decision_jsonl):
+Related artifacts (same workspace):
+  • Original gh-stack plan: $GH_STACK_PLAN_PATH
+  • Global manual test plan: $MANUAL_TEST_PLAN_PATH
+  • Decision log (all decisions append-safe JSONL, via che_append_decision_jsonl):
     $CHE_DECISIONS_PATH
 
-Stack de PRs (ordem de merge = base primeiro para o topo):
+PR Stack (merge order = base first to top):
 ───────────────────────────────────────────────
 L1 (base, merged first) →
    branch: <L1.BranchName>
@@ -727,19 +727,19 @@ L2 → depends on #<L1.PR_NUMBER>
 ───────────────────────────────────────────────
 ...
 ───────────────────────────────────────────────
-LN (topo, merged last) → depends on #<L[N-1].PR_NUMBER>
+LN (top, merged last) → depends on #<L[N-1].PR_NUMBER>
    branch: <LN.BranchName>
    commits: KN
    PR DRAFT: <LN.PR_URL>   [base: L[N-1].BranchName]
 ───────────────────────────────────────────────
 
-(Valide o comportamento de cada layer individualmente antes de marcar a stack como pronta.)
+(Validate each layer's behaviour individually before marking the stack as ready.)
 
-Próximos passos (ordem de review = mesma ordem de merge bottom-up):
-  1. Rode smoke test individual em cada layer começando por L1 (base).
-  2. Revise diffs uma PR de cada vez — sempre L[i] PR review ANTES de L[i+1].
-  3. Quando L[i] aprovada + merged: gh-stack atualiza automaticamente a base de L[i+1] → repita até LN.
-  4. Só depois que LN merged: clique em "Ready for review" da top-level, ou siga o fluxo normal por layer.
+Next steps (review order = same bottom-up merge order):
+  1. Run individual smoke tests in each layer starting from L1 (base).
+  2. Review diffs one PR at a time — always L[i] PR review BEFORE L[i+1].
+  3. When L[i] approved + merged: gh-stack automatically updates L[i+1] base → repeat until LN.
+  4. Only after LN merged: click "Ready for review" on the top-level, or follow normal flow per layer.
 ```
 
 ---

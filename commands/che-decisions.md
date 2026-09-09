@@ -1,5 +1,5 @@
 ---
-description: "Read and summarize entries from worktree decisions.log.jsonl (Portuguese summary). Use Skill che-decisions-query for filters/export."
+description: "Read and summarize entries from worktree decisions.log.jsonl (English summary). Use Skill che-decisions-query for filters/export."
 arguments:
   - name: worktree
     description: "Worktree absolute path. If missing → ASK."
@@ -28,10 +28,10 @@ Flow:
    source ~/.trae/contracts/che_sessions_contract.sh
    JSONL=$(che_decisions_path "<WORKTREE_ROOT>")
    ```
-3. **File not exists?** "Nenhuma decisão registrada nesta worktree ainda." → STOP.
-4. Default mode = summary. Run CLI helper TypeScript:
+3. **File not exists?** "No decisions registered in this worktree yet." → STOP.
+4. Default mode = summary. Run CLI helper python module:
    ```bash
-   corepack pnpm --dir ~/.trae exec tsx ~/.trae/contracts/decisions-query.cli.ts "$JSONL" summary --last "${LAST:-20}" --lang pt
+   python3 -m che_core.decisions_query "$JSONL" summary --last "${LAST:-20}"
    ```
 5. If mode=filter/event/spec → invoke Skill `che-decisions-query` to do the filtering.
 6. If mode=export-csv → run `export --format csv --out ~/Desktop/decisions_<slug>.csv` and tell user file path.

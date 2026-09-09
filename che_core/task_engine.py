@@ -234,42 +234,42 @@ def _recommended_action(domain: str, task: Dict[str, Any]) -> Dict[str, Any]:
                 "slash": "/che-design",
                 "alt": "/che-figma",
                 "description": "Design specialized workflow. Use PenPot MCP or Figma bridge.",
-                "gate_after": "pixel-check + a11y gates obrigatórios antes de handoff dev.",
+                "gate_after": "pixel-check + a11y gates mandatory before dev handoff.",
             }
         else:
             cmd = {
                 "slash": "/che-design",
                 "alt": None,
                 "description": "UX domain workflow.",
-                "gate_after": "ux gates obrigatórios no ship.",
+                "gate_after": "ux gates mandatory on ship.",
             }
     elif domain == "product":
         cmd = {
             "slash": "/che-prd",
             "alt": None,
-            "description": "Gerar PRD aprovável no product domain.",
-            "gate_after": "product gates se existirem.",
+            "description": "Generate approvable PRD in product domain.",
+            "gate_after": "product gates if they exist.",
         }
     elif domain == "devops":
         cmd = {
             "slash": "/che-act",
             "alt": "/che-review",
-            "description": "Devops: usar che-act com focus de infra/deploy. Se for deploy, rodar antes che-review vs dev.",
-            "gate_after": "devops gates existentes no ship.",
+            "description": "Devops: use che-act with infra/deploy focus. If deploying, run che-review vs dev first.",
+            "gate_after": "devops gates existing on ship.",
         }
     elif domain == "copywriting" or domain == "social" or domain == "seo-analytics":
         cmd = {
             "slash": "/che-act",
             "alt": None,
-            "description": f"Domínio {domain}. Fluxo SM → Developer (content task) → QA → Ship.",
-            "gate_after": f"gates {domain} se definidos.",
+            "description": f"{domain} domain. Flow: SM → Developer (content task) → QA → Ship.",
+            "gate_after": f"{domain} gates if defined.",
         }
     else:
         if any(x in title_lower for x in ["test", "qa", "e2e"]):
             cmd = {
                 "slash": "/che-manual-test",
                 "alt": "/che-ui-testing",
-                "description": "Task de testes. Iniciar por qa-manual ou ui-testing antes de implementação.",
+                "description": "Testing task. Start with qa-manual or ui-testing before implementation.",
                 "gate_after": "qa gates + lint/typecheck/test threshold = 0 failing.",
             }
         else:

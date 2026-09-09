@@ -13,133 +13,133 @@ connectors_optional:
   - "domains/ux/connectors/penpot.config.md"
 cross_skills:
   - "/che-figma (build + implement)"
-  - "/figma-pixel-check (validação pixel-perfect)"
-  - "/che-ship §0.9.5 DOMAIN GATES (execução gates no ship)"
+  - "/figma-pixel-check (pixel-perfect validation)"
+  - "/che-ship §0.9.5 DOMAIN GATES (ship gate execution)"
 ---
 
-# Playbook — UI/UX DesignOps (`ux`) · 5 Etapas Obrigatórias (NÃO PULA)
+# Playbook — UI/UX DesignOps (`ux`) · 5 Mandatory Stages (NO SKIPPING)
 
-> **Garantia de qualidade:** Este playbook NÃO tem etapas opcionais. Pular etapa = Fail prévio no Gate de Quality (etapa 3). Todas etapas produzem artifacts persistentes no workspace. Reuso 100% §19 Logging Standard core: scripts de export tokens Figma → JSON usam echo `[STEP N/M]` numerado anti-flood.
+> **Quality Assurance:** This playbook has no optional stages. Skipping a stage = prior failure at Quality Gate (stage 3). All stages produce persistent workspace artifacts. 100% reuse of core §19 Logging Standard: Figma → JSON token export scripts use `[STEP N/M]` numbered anti-flood echo.
 
 ---
 
-## Fase 0 — Preconditions & Brief / Discovery (JTBD, NÃO design visual ainda)
+## Phase 0 — Preconditions & Brief / Discovery (JTBD, NOT visual design yet)
 
-### Objetivo
-Entender o PROBLEMA antes de abrir o Figma/PenPot. "Design é solução de problema. Sem problema definido, todo wireframe é belo e inútil."
+### Goal
+Understand the PROBLEM before opening Figma/PenPot. "Design is problem solving. Without a defined problem, every wireframe is beautiful and useless."
 
-### Input obrigatórios para começar
-- ✅ Ticket / SPEC aprovado com: `user_story`, `persona_primary`, `success_metric` (1 número, não prose).
-- ✅ Research bruta (se houver): notes de user-interview, heatmaps, analytics GA4/Hotjar (NÃO inventamos dados).
+### Mandatory inputs to start
+- ✅ Approved Ticket / SPEC with: `user_story`, `persona_primary`, `success_metric` (1 number, not prose).
+- ✅ Raw research (if any): user-interview notes, heatmaps, GA4/Hotjar analytics (DO NOT invent data).
 
-### Etapas 0.1 → 0.4 (não pula)
-0.1 **Framework JTBD:** Escrever literalmente:
+### Stages 0.1 → 0.4 (no skipping)
+0.1 **JTBD Framework:** Write literally:
    ```
-   When <SITUACAO>, I want to <ACAO_USUARIO>, so I can <RESULTADO_ESPERADO>.
+   When <SITUATION>, I want to <USER_ACTION>, so I can <EXPECTED_OUTCOME>.
    ```
-   Máximo 1 linha por JTBD. Mínimo 3 JTBDs únicos por feature. Sem "melhorar UX" (vazio).
-0.2 **User Persona canônica:** Linkar `domains/ux/profile.md` persona + acrescentar 1 parágrafo contexto específico dessa tela. Se não existir persona no registry level 1.5 → criar via `/che-onboarding --edit` (não só inline).
-0.3 **User flow canônico Mermaid:** Diagrama `flowchart TD` mínimo 3 nodes (Entry → Action A → Success State + Error State). NÃO stadium shapes. Quebras com `<br/>` HTML.
-0.4 **Approved Gate humano:** Brief + JTBD + flow Mermaid enviados para usuário. **Aprovação EXPLÍCITA (reply "Approved" literal) é obrigatória.** Sem aprovação → NÃO AVANÇA etapa 1.
+   Maximum 1 line per JTBD. Minimum 3 unique JTBDs per feature. No empty "improve UX".
+0.2 **Canonical User Persona:** Link `domains/ux/profile.md` persona + add 1 paragraph specific screen context. If no persona in level 1.5 registry → create via `/che-onboarding --edit`.
+0.3 **Canonical Mermaid User Flow:** `flowchart TD` diagram minimum 3 nodes (Entry → Action A → Success State + Error State). NO stadium shapes. `<br/>` HTML breaks.
+0.4 **Human Approved Gate:** Brief + JTBD + Mermaid flow sent to user. **EXPLICIT approval (literal "Approved" reply) is mandatory.** Without approval → DO NOT PROCEED to stage 1.
 
-### Artifacts gerados (persistir no workspace)
-- `docs/ux/<slug>-01-brief-jtbd.md` — Etapas 0.1 → 0.4 tudo consolidado.
-- Entry no `decisions.log.jsonl` tipo `[UX-BRIEF-APPROVED] <slug>` com hash do conteúdo.
-
----
-
-## Fase 1 — Wireframe baixa fidelidade (estrutura, NÃO estética)
-
-### Objetivo
-Validar ESTRUTURA informacional e hierarquia. Nenhuma cor, nenhum ícone, nenhum typography fancy. Só caixas + texto placeholder + setas.
-
-### Etapas 1.1 → 1.3 (não pula)
-1.1 **Mobile-first obrigatório:** Wireframe começa no viewport **SM (390px wide)**. NUNCA começa em desktop e reduz. Depois de mobile aprovado → MD (768), depois LG (1024).
-1.2 **Wireframe somente primitivas:** Retângulos = sections. Linhas = textos (3 comprimentos: curto/medio/longo). Círculos pequenos = ícones. NÃO usam a cor brand nesta fase. Nenhuma sombra. Nenhum radius.
-1.3 **Approved Gate humano:** Wire 3 breakpoints enviados para usuário. Aprovação EXPLÍCITA "Wireframe Approved" literal → avança etapa 2. Se ajustes estruturais → volta 1.1 / 1.2 refaz wire.
-
-### Regras Hard Fail nesta fase
-- ❌ Desktop-first wire (mobile-last) = Fail volta 0.
-- ❌ Contém ícones reais / imagens / radius / cor brand = Fail volta 1.
-- ❌ NÃO tem 3 breakpoints (SM / MD / LG) = Fail incompleta.
-
-### Artifacts gerados
-- `docs/ux/<slug>-02-wireframe-sm.md` + `md` + `lg` (3 arquivos)
-- Link PenPot/Figma "Wireframe Low-fi" page.
+### Generated Artifacts (persist in workspace)
+- `docs/ux/<slug>-01-brief-jtbd.md` — Consolidated stages 0.1 → 0.4.
+- `decisions.log.jsonl` entry type `[UX-BRIEF-APPROVED] <slug>` with content hash.
 
 ---
 
-## Fase 2 — Hi-fi Protótipo (Figma MCP oficial ou PenPot MCP oficial)
+## Phase 1 — Low-fidelity Wireframe (structure, NOT aesthetics)
 
-### Objetivo
-Aplicar Design System tokens do `domains/ux/profile.md` (spacing/radius/color/typography/shadow/motion) no wireframe aprovado. Produzir artefato hi-fi para stake-holders + handoff dev.
+### Goal
+Validate informational STRUCTURE and hierarchy. No colors, no icons, no fancy typography. Just boxes + placeholder text + arrows.
 
-### Etapas 2.1 → 2.5 (não pula)
-2.1 **Set official connector:** Escolher 1 (um) connector oficial (NÃO RAW REST):
-   - **Recomendado:** Figma via `domains/ux/connectors/figma.config.md` (MCP `mcp_open-pencil` oficial + npm `figma-cli`).
-   - **Alternativa open-source:** PenPot via `domains/ux/connectors/penpot.config.md` (MCP PenPot oficial).
-2.2 **Aplicar Design System tokens TODOS:** Todo valor vem de tabela do profile. Nenhum hex / px solto. Se falta um token → PRIMEIRO propõe novo token para o design system, DEPOIS usa.
-2.3 **Tabela 7 states obrigatórios por componente interativo:**
-   | State | Aparência obrigatória (ver profile tokens) |
+### Stages 1.1 → 1.3 (no skipping)
+1.1 **Mobile-first mandatory:** Wireframe starts at **SM (390px wide)** viewport. NEVER start on desktop and reduce. After mobile approved → MD (768), then LG (1024).
+1.2 **Primitives-only wireframe:** Rectangles = sections. Lines = texts (3 lengths: short/medium/long). Small circles = icons. DO NOT use brand color in this phase. No shadows. No radius.
+1.3 **Human Approved Gate:** 3-breakpoint wire sent to user. EXPLICIT "Wireframe Approved" literal approval → proceed to stage 2. If structural adjustments → back to 1.1 / 1.2 to redo wire.
+
+### Hard Fail Rules in this phase
+- ❌ Desktop-first wire (mobile-last) = Fail back to 0.
+- ❌ Contains real icons / images / radius / brand color = Fail back to 1.
+- ❌ Missing 3 breakpoints (SM / MD / LG) = Incomplete fail.
+
+### Generated Artifacts
+- `docs/ux/<slug>-02-wireframe-sm.md` + `md` + `lg` (3 files)
+- PenPot/Figma "Wireframe Low-fi" page link.
+
+---
+
+## Phase 2 — Hi-fi Prototype (official Figma or PenPot MCP)
+
+### Goal
+Apply Design System tokens from `domains/ux/profile.md` (spacing/radius/color/typography/shadow/motion) to approved wireframe. Produce hi-fi artifact for stakeholders + dev handoff.
+
+### Stages 2.1 → 2.5 (no skipping)
+2.1 **Set official connector:** Choose 1 (one) official connector (NO RAW REST):
+   - **Recommended:** Figma via `domains/ux/connectors/figma.config.md` (official `mcp_open-pencil` MCP + `figma-cli` npm).
+   - **Open-source alternative:** PenPot via `domains/ux/connectors/penpot.config.md` (official PenPot MCP).
+2.2 **Apply ALL Design System tokens:** Every value comes from profile table. No loose hex / px. If a token is missing → FIRST propose new token for design system, THEN use.
+2.3 **Mandatory 7 states table per interactive component:**
+   | State | Mandatory Appearance (see profile tokens) |
    |---|---|
-   | Default | Sem interação do usuário |
-   | Hover | `:hover` com elevation md (4dp) + pointer cursor |
-   | Focus | `:focus-visible` ring 2px primary-500 + offset 2px |
-   | Active | `:active` com escala 0.97~0.98 + elevation sm |
-   | Disabled | `aria-disabled="true"` + opacity 0.4 + cursor: not-allowed |
-   | Loading | `aria-busy="true"` + role="status" + spinner token motion 300ms standard |
-   | Error | Borda danger + ícone alert + texto helper + SR label |
-2.4 **Breakpoints 4 completos:** SM (640) · MD (768) · LG (1024) · XL (1280). Cada breakpoint = layout exato, não "parecido".
-2.5 **Link validado + comentários resolved:** Todas threads de comentário no Figma/PenPot = "Resolved". Link público/permissões concedidas.
+   | Default | No user interaction |
+   | Hover | `:hover` with elevation md (4dp) + pointer cursor |
+   | Focus | `:focus-visible` ring 2px primary-500 + 2px offset |
+   | Active | `:active` with 0.97~0.98 scale + elevation sm |
+   | Disabled | `aria-disabled="true"` + 0.4 opacity + cursor: not-allowed |
+   | Loading | `aria-busy="true"` + role="status" + standard 300ms motion token spinner |
+   | Error | Danger border + alert icon + helper text + SR label |
+2.4 **Complete 4 Breakpoints:** SM (640) · MD (768) · LG (1024) · XL (1280). Each breakpoint = exact layout.
+2.5 **Validated link + resolved comments:** All Figma/PenPot comment threads = "Resolved". Public link/permissions granted.
 
-### Artifacts gerados
-- Figma File / PenPot Project link + page hi-fi.
-- `docs/ux/<slug>-03-hifi-notes.md` (tokens usados, decisões não-triviais, alternativas consideradas).
+### Generated Artifacts
+- Figma File / PenPot Project link + hi-fi page.
+- `docs/ux/<slug>-03-hifi-notes.md` (tokens used, non-trivial decisions, alternatives considered).
 
 ---
 
-## Fase 3 — Gates Quality Obrigatórios (Thresholds NUMÉRICOS, não avaliação subjetiva)
+## Phase 3 — Mandatory Quality Gates (NUMERICAL thresholds, no subjective evaluation)
 
-> **Executados por `/che-ship §0.9.5 DOMAIN GATES` automaticamente quando ship de uma feature com `domain: ux`.** Mesmo engine fail-fast do core (threshold + retry 1 grátis + human required após 2nd falha).
+> **Executed by `/che-ship §0.9.5 DOMAIN GATES` automatically when shipping a feature with `domain: ux`.** Same fail-fast engine as core (threshold + 1 free retry + human required after 2nd failure).
 
-### Ordem de execução (alphabetical por arquivo nome, igual ship §0.9 G1-G4)
+### Execution order (alphabetical by filename)
 
-| # | Gate | Arquivo físico | Threshold Obrigatório | Retry Policy | Hard Stop? |
+| # | Gate | Physical File | Mandatory Threshold | Retry Policy | Hard Stop? |
 |---|---|---|---|---|---|
-| G-UX-1 | **A11y WCAG 2.2 AA** | `domains/ux/gates/accessibility-gate.md` | `CRITICAL_count === 0` (0 erros críticos · qualquer número > 0 → FAIL). 10 checks automáticos via `@axe-core/cli` oficial. | 1ª falha: retry grátis aplicando recommendations do axe-core report. | ✅ Sim. 2ª falha → pede humano. Não abre PR. |
-| G-UX-2 | **Pixel Perfect** | `domains/ux/gates/pixel-check-gate.md` | `score_0_to_10 ≥ 8.0` AND `pct_elements_within_4px_tolerance ≥ 95%`. Desvio > 8px em 1 único elemento crítico → FAIL. | 1ª falha: retry grátis aplicando recommendations (fixa os top-3 maiores desvios primeiro). | ✅ Sim. 2ª falha → pede humano. Não abre PR. |
+| G-UX-1 | **A11y WCAG 2.2 AA** | `domains/ux/gates/accessibility-gate.md` | `CRITICAL_count === 0` (0 critical errors · any number > 0 → FAIL). 10 auto-checks via official `@axe-core/cli`. | 1st failure: free retry applying axe-core report recommendations. | ✅ Yes. 2nd failure → request human. Do not open PR. |
+| G-UX-2 | **Pixel Perfect** | `domains/ux/gates/pixel-check-gate.md` | `score_0_to_10 ≥ 8.0` AND `pct_elements_within_4px_tolerance ≥ 95%`. Deviation > 8px in 1 single critical element → FAIL. | 1st failure: free retry applying recommendations (fix top-3 largest deviations first). | ✅ Yes. 2nd failure → request human. Do not open PR. |
 
-### Log obrigatório por execução (decisions.log.jsonl)
+### Mandatory log per execution (decisions.log.jsonl)
 ```
 [DOMAIN-GATE-EXECUTED] domain=ux gate=accessibility-gate status=PASS score=9.3 critical_count=0 duration_ms=4217 traceId=...
 [DOMAIN-GATE-EXECUTED] domain=ux gate=pixel-check-gate status=FAIL score=6.7 within_4px_pct=0.82 duration_ms=12143 traceId=...
 ```
 
-### Override explícito proibido por padrão
-Abaixar threshold de um gate (ex: pixel de 8.0 → 7.0) SÓ é permitido via `EXPLICIT_OVERRIDE` user VERBATIM em resposta no chat, **logado em decisions.log** com `[EXPLICIT_OVERRIDE] domain=ux gate=... old=8.0 new=7.0 reason="..."`. NUNCA o agente abaixa threshold sozinho.
+### Explicit override prohibited by default
+Lowering a gate threshold (e.g. pixel 8.0 → 7.0) is ONLY allowed via user `EXPLICIT_OVERRIDE` verbatim in chat, **logged in decisions.log** with `[EXPLICIT_OVERRIDE] domain=ux gate=... old=8.0 new=7.0 reason="..."`. Agent NEVER lowers threshold alone.
 
 ---
 
-## Fase 4 — Dev Handoff (entrega final estruturada para dev)
+## Phase 4 — Dev Handoff (structured final delivery for dev)
 
-### Objetivo
-**NÃO é só mandar link Figma/PenPot e torcer.** Nenhuma medida "olha no Figma". Tudo absolutamente tudo estruturado em Markdown e JSON.
+### Goal
+**NOT just sending a Figma/PenPot link and hoping.** No "look in Figma" measures. Absolutely everything structured in Markdown and JSON.
 
-### Etapas 4.1 → 4.5 (não pula)
-4.1 **Preencher template `domains/ux/templates/dev-handoff-template.md` COMPLETO:** Campos obrigatórios = SPEC id + ticket id · medidas absolute px por breakpoint · browsers suportados lista · assets export SVG/PNG 2x path · animations duration/easing tokens · accessibility checklist final (15 itens do profile)
-4.2 **Export design tokens → JSON automático:** Rodar script de extração Figma Variables / PenPot Design Tokens → arquivo `tokens.json` estruturado por categoria. Nenhum valor hardcoded.
-4.3 **Rodar `/figma-pixel-check` (se usado skill implementação codegen `/che-figma`):** Report anexar no handoff.
-4.4 **Rodar `@axe-core/cli` axe-core accessibility final:** Report JSON + HTML anexar no handoff.
-4.5 **Approved humano final:** Dev (ou usuário) confirma "Handoff Completo e Entendido" literal.
+### Stages 4.1 → 4.5 (no skipping)
+4.1 **Fill `domains/ux/templates/dev-handoff-template.md` template COMPLETELY:** Mandatory fields = SPEC id + ticket id · absolute px measures per breakpoint · supported browsers list · assets export SVG/PNG 2x path · animations duration/easing tokens · final accessibility checklist (15 profile items).
+4.2 **Auto JSON design token export:** Run Figma Variables / PenPot Design Tokens extraction script → category-structured `tokens.json` file. No hardcoded values.
+4.3 **Run `/figma-pixel-check` (if `/che-figma` implementation used):** Attach report to handoff.
+4.4 **Run official `@axe-core/cli` axe-core final accessibility:** Attach JSON + HTML reports to handoff.
+4.5 **Final human Approved:** Dev (or user) confirms literal "Handoff Complete and Understood".
 
-### Checklist de entregáveis FINAL para encerrar playbook
-- [x] Etapa 0 JTBD Brief Approved ✅
-- [x] Etapa 1 Wireframe SM/MD/LG Approved ✅
-- [x] Etapa 2 Hi-fi 4 breakpoints + 7 states componentes ✅
-- [x] Etapa 3 Gate G-UX-1 (A11y) PASS critical_count=0 ✅
-- [x] Etapa 3 Gate G-UX-2 (Pixel) PASS score≥8.0 AND ≥95% ≤4px ✅
-- [x] Etapa 4 `dev-handoff-template.md` 100% preenchido ✅
-- [x] Etapa 4 `tokens.json` exportado ✅
-- [x] Entry final decisions.log: `[UX-PLAYBOOK-COMPLETE] slug=... gate_results={a11y:PASS,pixel:PASS} handoff_path=...` ✅
+### FINAL deliverables checklist to close playbook
+- [x] Phase 0 JTBD Brief Approved ✅
+- [x] Phase 1 SM/MD/LG Wireframe Approved ✅
+- [x] Phase 2 Hi-fi 4 breakpoints + 7 component states ✅
+- [x] Phase 3 Gate G-UX-1 (A11y) PASS critical_count=0 ✅
+- [x] Phase 3 Gate G-UX-2 (Pixel) PASS score≥8.0 AND ≥95% ≤4px ✅
+- [x] Phase 4 `dev-handoff-template.md` 100% filled ✅
+- [x] Phase 4 `tokens.json` exported ✅
+- [x] Final decisions.log entry: `[UX-PLAYBOOK-COMPLETE] slug=... gate_results={a11y:PASS,pixel:PASS} handoff_path=...` ✅
 
-> **Fim do playbook.** Agora o `/che-ship` executa §0.9 G1-G4 normalmente (scope / review / compliance / QA), depois §0.9.5 G5 Domain Gates confirma novamente G-UX-1 e G-UX-2 nos artifacts gerados, e abre Draft PR.
+> **End of playbook.** Now `/che-ship` executes §0.9 G1-G4 normally (scope / review / compliance / QA), then §0.9.5 G5 Domain Gates re-confirms G-UX-1 and G-UX-2 in generated artifacts, and opens Draft PR.

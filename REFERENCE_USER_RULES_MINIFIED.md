@@ -1,214 +1,171 @@
 # Che Global — Minified User Rules
-# COMO USAR: Substitua TODO o conteúdo do campo "User Rules" da IDE por este arquivo.
-# Ele é ~70% menor que a versão antiga. Todas as regras completas (corpo, detalhes, exemplos)
-# foram movidas para os locais canônicos abaixo. Leia-os quando precisar de detalhe.
+# HOW TO USE: Replace ALL content of the IDE "User Rules" field with this file.
+# It is ~70% smaller than the old version. All full rules (body, details, examples)
+# have been moved to the canonical locations below. Read them when you need detail.
 #
-# VERSÃO MINIFICADA = SÓ LEMBRETES E LINKS. NÃO DUPLICA CORPO DE REGRA.
+# MINIFIED VERSION = REMINDERS AND LINKS ONLY. DOES NOT DUPLICATE RULE BODY.
 
 ---
 
-## 🔝 PRINCÍPIO MAIS IMPORTANTE (hard stop, sem negociação)
+## 🔝 MOST IMPORTANT PRINCIPLE (Hard stop, no negotiation)
 > KISS + YAGNI + BLAST RADIUS REDUCTION.
-> Mais simples sempre. Menos arquivos sempre. Menos linhas sempre.
-> Em empate: opção de menor impacto no código existente.
+> Simpler always. Fewer files always. Fewer lines always.
+> In a tie: the option with the least impact on existing code.
 >
-> **Corpo completo e explícito (exemplos, thresholds):** `engineering-contracts` SKILL §1 (canônico)
+> **Full and explicit body (examples, thresholds):** `engineering-contracts` SKILL §1 (canonical)
 
 ---
 
-## 📁 TRÊS ARQUIVOS CANÔNICOS — CONSULTE-OS SEMPRE
-1. **`/home/laion/.trae/CHE_RULES.md`** → Fluxo do che, worktree-first, gates SPEC Approved, paralelismo, ship/gh rules.
-2. **`/home/laion/.trae/skills/engineering-contracts/SKILL.md`** → 18 regras de engenharia com precedência ordenada, DbC, TDD, SOLID, strong typing, security/PII, RLS, conventional commits, agilidade BDD, code review optimization, §19 Worktree Binding 2-LEVEL.
-3. **`/home/laion/.trae/CHE_COMMANDS.md`** → 14 comandos /che-* com sintaxe + arquitetura commands vs skills.
+## 📁 THREE CANONICAL FILES — ALWAYS CONSULT THEM
+1. **`/home/laion/.trae/CHE_RULES.md`** → Che flow, worktree-first, SPEC Approved gates, parallelism, ship/gh rules.
+2. **`/home/laion/.trae/skills/engineering-contracts/SKILL.md`** → 18 engineering rules with ordered precedence, DbC, TDD, SOLID, strong typing, security/PII, RLS, conventional commits, BDD agility, code review optimisation, §19 2-LEVEL Worktree Binding.
+3. **`/home/laion/.trae/CHE_COMMANDS.md`** → 14 /che-* commands with syntax + commands vs skills architecture.
 
 ---
 
-## 🟥 REGRA 0: WORKTREE-FIRST
-- NÃO escreva código NEM rode comandos sem saber o worktree exato.
-- Se worktree não foi fornecido: **PARE, PERGUNTE o caminho absoluto.**
-- Explícito "não usar worktree" só procede com confirmação dupla.
-- **Corpo completo:** `CHE_RULES.md` §🔴 WORKTREE-FIRST ENFORCEMENT
+## 🟥 RULE 0: WORKTREE-FIRST
+- DO NOT write code OR run commands without knowing the exact worktree.
+- If worktree was not provided: **STOP, ASK for the absolute path.**
+- Explicit "do not use worktree" only proceeds with double confirmation.
+- **Full body:** `CHE_RULES.md` §🔴 WORKTREE-FIRST ENFORCEMENT
 
 ---
 
-## 🟥 REGRA 1: DIRETÓRIO DE SAÍDA
-- **DURÁVEL (multi-sessão, compartilhado worktree):** task_graph, decisions, manual_test_plan, gh_stack_plan, tasks/<task-id>/envelope → **`$CHE_WORKSPACE_SHARED/`** (fora worktree user, resolvido via `che_compute_paths`).
-- **EFÊMERO (esta sessão só):** binding Level2, reports, qa/screenshots, final_summary → **`$CHE_SESSION_DIR/`**.
-- **MORATÓRIA HARD STOP:** NADA gerado vai em `<WORKTREE_ROOT>/.trae/*` (evita git sujo / commit acidental).
-- **NUNCA** em `docs/`, raiz do repo, ou pastas de packages a menos que usuário peça explicitamente.
-- **Corpo completo:** `CHE_RULES.md` §🔴 DIRETÓRIO DE SAÍDA DO CHE
+## 🟥 RULE 1: OUTPUT DIRECTORY
+- **DURABLE (multi-session, worktree shared):** task_graph, decisions, manual_test_plan, gh_stack_plan, tasks/<task-id>/envelope → **`$CHE_WORKSPACE_SHARED/`** (outside user worktree, resolved via `che_compute_paths`).
+- **EPHEMERAL (this session only):** Level 2 binding, reports, qa/screenshots, final_summary → **`$CHE_SESSION_DIR/`**.
+- **HARD STOP MORATORIUM:** NOTHING generated goes in `<WORKTREE_ROOT>/.trae/*` (avoids dirty git / accidental commit).
+- **NEVER** in `docs/`, repo root, or package folders unless the user explicitly asks.
+- **Full body:** `CHE_RULES.md` §🔴 CHE OUTPUT DIRECTORY
 
 ---
 
-## 🟠 REGRA 2: ENGENHARIA — 14 REGRAS COM PRECEDÊNCIA ORDENADA
-1. KISS / YAGNI / BLAST RADIUS  (hard stop)
-2. SEGURANÇA & PII COMPLIANCE    (hard stop)
+## 🟠 RULE 2: ENGINEERING — 14 RULES WITH ORDERED PRECEDENCE
+1. KISS / YAGNI / BLAST RADIUS (hard stop)
+2. SECURITY & PII COMPLIANCE (hard stop)
 3. REPO EXISTING STYLE + CONVENTIONS
 4. REUSE BEFORE CREATE
-5. STRICT STRONG TYPING  (qualquer linguagem)
-6. DESIGN BY CONTRACT  (públicas, pré/pós/invariantes)
+5. STRICT STRONG TYPING (any language)
+6. DESIGN BY CONTRACT (public, pre/post/invariants)
 7. FUNCTIONAL CORE / IMPERATIVE SHELL
 8. FUNCTIONAL STYLE PREFERRED (map/filter/reduce, early return, Result)
 9. RUST-STYLE ERROR MANAGEMENT (Result / Option / tagged union)
-10. ATDD + TDD (test-first antes de mudar comportamento)
-11. ACCEPTANCE CRITERIA + STOP CONDITION clara
-12. OBSERVABILITY & LOGGING inteligente + PII-safe
-13. IDIOMA: CÓDIGO/COMMIT/DOCS/CHE_FILES = EN; CHAT/RESPOSTAS = PT-BR
-14. CONVENTIONAL COMMITS atômicos
+10. ATDD + TDD (test-first before changing behaviour)
+11. ACCEPTANCE CRITERIA + clear STOP CONDITION
+12. Smart OBSERVABILITY & LOGGING + PII-safe
+13. LANGUAGE: CODE/COMMIT/DOCS/CHE_FILES = EN; CHAT/RESPONSES = PT-BR
+14. Atomic CONVENTIONAL COMMITS
 
-- **Corpo completo + Hard Conflict Resolution Table + Appendix B (commit types regex):** `engineering-contracts` SKILL §1–§14 + Appendices A/B.
-- **Novas regras agora adicionadas (solicitado):**
-  - §15 — DESENVOLVIMENTO ÁGIL BDD / INCREMENTOS PEQUENOS (só entrega solicitado; NÃO antecipa edge/futuro; easy-to-evolve structure com SOLID; múltiplos PRs parciais via gh-stack)
-  - §16 — CODE REVIEW OPTIMIZATION (código limpo, não verboso, max 2 linhas comentário bloco por arquivo a menos que realmente necessário; gh-stack hierarquia PRs)
-  - §17 — SUPABASE POSTGRES: ENABLE RLS DEFAULT (toda tabela nova tem RLS + policies; hard rule)
+- **Full body + Hard Conflict Resolution Table + Appendix B (commit types regex):** `engineering-contracts` SKILL §1–§14 + Appendices A/B.
+- **New rules now added:**
+  - §15 — AGILE BDD DEVELOPMENT / SMALL INCREMENTS (only deliver what's requested; DO NOT anticipate edge/future; easy-to-evolve structure with SOLID; multiple partial PRs via gh-stack)
+  - §16 — CODE REVIEW OPTIMISATION (clean code, not verbose, max 2 lines block comment per file unless really necessary; gh-stack PR hierarchy)
+  - §17 — SUPABASE POSTGRES: ENABLE RLS DEFAULT (every new table has RLS + policies; hard rule)
 
 ---
 
-## 🟠 REGRA 3: TIME ÁGIL SIMULADO — ORDEM OBRIGATÓRIA
+## 🟠 RULE 3: SIMULATED AGILE TEAM — MANDATORY ORDER
 1. SCRUM MASTER (`che-act`) → scope + task graph + envelopes.
-2. DEVELOPER (`che-developer`) → SÓ por SM com envelope formal. Primeiro invoca `engineering-contracts`.
-3. SCOPE VALIDATION (SM ↔ Dev). Máx 2 iterações → PERGUNTE ao user.
-4. QA (`che-qa`) → build/lint/typecheck/tests (terceira pessoa).
+2. DEVELOPER (`che-developer`) → ONLY by SM with formal envelope. First invokes `engineering-contracts`.
+3. SCOPE VALIDATION (SM ↔ Dev). Max 2 iterations → ASK the user.
+4. QA (`che-qa`) → build/lint/typecheck/tests (third person).
 5. COMPLIANCE LIGHT per-task + COMPLIANCE HEAVY final.
-6. REPETE por task.
+6. REPEAT per task.
 
-- **Corpo completo + handoff gates + timeouts:** `CHE_RULES.md` §🟠 TIME ÁGIL SIMULADO + §🟢 LOOP TIMEOUTS (2/5/3)
-
----
-
-## 🟠 REGRA 4: MAPEAMENTO DE COMANDOS (use o certo por fase)
-- **Início (especificação):** `/che-spec` → SPEC otimizado p/ agente + che (4 fontes: existente/ticket URL/PRD Flockr/inline). 7 seções + YAML frontmatter + gate Approved ANTES scope capture.
-- **Implementação feature/longa:** `/che-act` (auto serial vs parallel) OU `/che-parallel` (force parallel-or-bust). SM invoca `/che-spec` automaticamente no preflight §0.5 se não houver Approved.
-- **Bug fix:** `/che-fix` (loop científico; reproduz ANTES)
-- **Ship:** `/che-ship` (commits atômicos conventional, push --no-verify, PR DRAFT + gh-stack se múltiplos PRs). **PRÉ-REQUISITO GATE FAIL-CLOSED:** `/che-scope-check` com 4 verdicts. Qualquer 🔴 bloqueia abertura do Draft PR até resolver.
-- **Review/comments/CI/auditoria escopo/**merge conflito**:`/che-review` (BLOCKING runtime/PII/deps/scope), `/che-pr-comments`, `/che-ci-fix`, **`/che-scope-check` (4-checks audit: entrega+testes+docs+env vars a partir de PRD/ticket/task-graph)**, **`/che-merge` (resolve conflitos merge hunk-a-hunk default OURS, ask em ambiguidade, 0 blast-radius min)**.
-- **Operações leves:** `/che-status`, `/che-skip`, `/che-decisions`, `/che-summary`, `/che-abort` (inline, NÃO viram skill)
-
-- **Corpo completo, sintaxe e exemplos:** `CHE_COMMANDS.md` (canônico; 14 comandos total)
+- **Full body + handoff gates + timeouts:** `CHE_RULES.md` §🟠 SIMULATED AGILE TEAM + §🟢 LOOP TIMEOUTS (2/5/3)
 
 ---
 
-## 🔴 REGRA 5: GITHUB / SHIP REGRAS NÃO NEGOCIÁVEIS
-- Sempre `gh` CLI para API GitHub. Navegador só UI visual se pedido.
-- Plano de commits SEMPRE aprovado pelo usuário ANTES.
-- Push default `--no-verify`; `--force` só com 2 confirmações duplas.
-- PR default **DRAFT**; nunca mergeia automaticamente; base = default branch do repo.
-- NUNCA commita `.env*` com valores reais, secrets, PII.
-- NUNCA desabilita teste/job com `continue-on-error` para mascarar falha sem aprovação.
-- **Multi-PR hierárquico:** usar `gh-stack` CLI para links/ordem em PRs parciais.
-- **Corpo completo + gh-stack workflow:** `CHE_RULES.md` §🔴 GITHUB INTEGRATION / SHIP RULES + Appendix gh-stack
+## 🟠 RULE 4: COMMAND MAPPING (use the right one for the phase)
+- **Start (specification):** `/che-spec` → SPEC optimised for agent + che (4 sources: existing/ticket URL/PRD Flockr/inline). 7 sections + YAML frontmatter + Approved gate BEFORE scope capture.
+- **Feature/long implementation:** `/che-act` (auto serial vs parallel) OR `/che-parallel` (force parallel-or-bust). SM automatically invokes `/che-spec` in preflight §0.5 if none Approved.
+- **Bug fix:** `/che-fix` (scientific loop; reproduce BEFORE).
+- **Ship:** `/che-ship` (atomic conventional commits, push --no-verify, Draft PR + gh-stack if multiple PRs). **FAIL-CLOSED GATE PREREQUISITE:** `/che-scope-check` with 4 verdicts. Any 🔴 blocks Draft PR opening until resolved.
+- **Review/comments/CI/scope audit/merge conflict:** `/che-review` (BLOCKING runtime/PII/deps/scope), `/che-pr-comments`, `/che-ci-fix`, **`/che-scope-check` (4-checks audit: delivery+tests+docs+env vars from PRD/ticket/task-graph)**, **`/che-merge` (resolve merge conflicts hunk-by-hunk default OURS, ask on ambiguity, 0 min blast-radius)**.
+- **Light operations:** `/che-status`, `/che-skip`, `/che-decisions`, `/che-summary`, `/che-abort` (inline, NOT a skill).
+
+- **Full body, syntax, and examples:** `CHE_COMMANDS.md` (canonical; 14 commands total)
 
 ---
 
-## 🟢 REGRA 6: FERRAMENTAS PREFERENCIAIS (sistema/cli)
-| Sistema | Ferramenta |
+## 🔴 RULE 5: GITHUB / SHIP NON-NEGOTIABLE RULES
+- Always `gh` CLI for GitHub API. Browser only visual UI if requested.
+- Commit plan ALWAYS user-approved BEFORE.
+- Default push `--no-verify`; `--force` only with 2 double confirmations.
+- Default PR **DRAFT**; never auto-merge; base = repo default branch.
+- NEVER commit `.env*` with real values, secrets, PII.
+- NEVER disable test/job with `continue-on-error` to mask failure without approval.
+- **Hierarchical multi-PR:** use `gh-stack` CLI for links/order in partial PRs.
+- **Full body + gh-stack workflow:** `CHE_RULES.md` §🔴 GITHUB INTEGRATION / SHIP RULES + Appendix gh-stack
+
+---
+
+## 🟢 RULE 6: PREFERRED TOOLS (system/cli)
+| System | Tool |
 |---|---|
-| GitHub | `gh` CLI + `gh-stack` para multi-PR hierárquico |
-| Linear/Jira/Confluence | APIs GraphQL/REST via env vars (FLOCKR_LINEAR_API_KEY, DO_JIRA_*, DO_CONFLUENCE_*) |
+| GitHub | `gh` CLI + `gh-stack` for hierarchical multi-PR |
+| Linear/Jira/Confluence | GraphQL/REST APIs via env vars (FLOCKR_LINEAR_API_KEY, DO_JIRA_*, DO_CONFLUENCE_*) |
 | Figma | Figma REST API → LAION_FIGMA_PAT |
-| Railway / Vercel | seus CLIs; 1º uso confirma conta logada |
-| Nx | SEMPRE `--tui false` |
-| CLIs genéricas | flags `-y`, `--non-interactive`, `--tui false`, `--no-tty`. Evitar prompts interrompidos. |
-| Browser integrado | só sites genéricos. Produtos específicos usar API. |
+| Railway / Vercel | their CLIs; 1st use confirms logged-in account |
+| Nx | ALWAYS `--tui false` |
+| Generic CLIs | flags `-y`, `--non-interactive`, `--tui false`, `--no-tty`. Avoid interrupted prompts. |
+| Integrated browser | only generic sites. Specific products use API. |
 
-- **Corpo completo:** `CHE_RULES.md` §🟢 FERRAMENTAS PREFERENCIAIS
-
----
-
-## 🟡 REGRA 7: BLAST RADIUS 10 ARQUIVOS + DECISION LOG
-- Task tocar > 10 arquivos → justificar CADA um em decision.log.
-- Toda decisão não trivial (trade-off, exceção, arquivos não previstos, mutabilidade hot path) → `decisions.log.jsonl` com data/task-id/alternativas/razão.
-- **Corpo completo:** `CHE_RULES.md` §🟡 BLAST RADIUS + §🟡 DECISIONS LOG SEMPRE
+- **Full body:** `CHE_RULES.md` §🟢 PREFERRED TOOLS ACCORDING TO USER PREFERENCES
 
 ---
 
-## 🟢 REGRA 7.5: TOKEN REDUCTION (CAVEAN-STYLE 5 HEURÍSTICAS)
-**GOAL:** reduzir tokens sem perder semântica. Bypass global: `export CHE_FULL_OUTPUT=1`.
-| H# | Quando aplicar | Helper | Ação |
+## 🟡 RULE 7: 10-FILE BLAST RADIUS + DECISION LOG
+- Task touching > 10 files → justify EACH in decision.log.
+- Every non-trivial decision (trade-off, exception, unforeseen files, hot path mutability) → `decisions.log.jsonl` with date/task-id/alternatives/reason.
+- **Full body:** `CHE_RULES.md` §🟡 BLAST RADIUS + §🟡 ALWAYS LOG DECISIONS
+
+---
+
+## 🟢 RULE 7.5: TOKEN REDUCTION (CAVEAN-STYLE 5 HEURISTICS)
+**GOAL:** reduce tokens without losing semantics. Global bypass: `export CHE_FULL_OUTPUT=1`.
+| H# | When to apply | Helper | Action |
 |---|---|---|---|
-| H1 | `git diff` / `git show` output grande | `\| che_tr_diff` | Só linhas +/- changed (sem headers ---/+++/@@). Cap CHE_TR_DIFF_MAX_LINES=500. |
-| H2 | Read tool de arquivo >300 linhas | `cat arquivo \| che_tr_read TOTAL_LINES` | Trunca em 300 linhas + aviso `[...TRUNCADO lines X-Y]`. Bypass: passar offset/Limit no Read tool. |
-| H3 | Output com muitas blank lines / trailing ws | `\| che_tr_collapse_blank` | ≥2 blank lines → 1; strip trailing whitespace. |
-| H4 | RunCommand stdout/stderr MUITO longo (builds, logs) | `\| che_tr_stdout` | Cap chars CHE_TR_STDOUT_MAX_CHARS=4000 + footer aviso. |
-| H5 | Grep default metadata verbose | `che_tr_grep PATTERN PATH [type]` | lines-only match; default context=0. Ajustar via CHE_TR_GREP_CONTEXT. |
+| H1 | Large `git diff` / `git show` output | `\| che_tr_diff` | Only changed +/- lines (no ---/+++/@@ headers). Cap CHE_TR_DIFF_MAX_LINES=500. |
+| H2 | Read tool for file >300 lines | `cat file \| che_tr_read TOTAL_LINES` | Truncate at 300 lines + `[...TRUNCATED lines X-Y]` warning. Bypass: pass offset/Limit in Read tool. |
+| H3 | Output with many blank lines / trailing ws | `\| che_tr_collapse_blank` | ≥2 blank lines → 1; strip trailing whitespace. |
+| H4 | VERY long RunCommand stdout/stderr (builds, logs) | `\| che_tr_stdout` | Cap chars CHE_TR_STDOUT_MAX_CHARS=4000 + footer warning. |
+| H5 | Grep default verbose metadata | `che_tr_grep PATTERN PATH [type]` | match lines-only; default context=0. Adjust via CHE_TR_GREP_CONTEXT. |
 
-**Helpers definidos em:** `~/.trae/contracts/che_sessions_contract.sh` (sourcear antes de usar).
-
----
-
-## 🟢 REGRA 7.75: MVP SCRIPT MODE (DEEPSEEK-INSPIRED, SEM OVERENGENHARIA)
-
-**PROBLEMA:** Fluxo Read → Grep → Edit → Write demora N turnos chat-tool. Cada turno = 1 roundtrip LLM + 1 tool call = mais lento + mais caro.
-
-**REGRA MVP:** Quando o batch lógico for ≥3 tool calls QUE SÃO PURAMENTE LOCAIS (Read, cat, grep, sed, python, Write equivalente, git status/diff — tudo o que dá pra rodar em 1 RunCommand bash/node), escreva **1 script curto (≤20 linhas bash ou ≤40 linhas node)** e execute tudo em **1 ÚNICA tool call RunCommand**.
-
-### Quando usar Script Mode
-- Sim: Ler 3 arquivos, grep um pattern, fazer substituição em massa, gravar diff.
-- Sim: Criar 5 arquivos boilerplate de uma vez (com python heredoc).
-- Sim: Batch de pequenos ajustes + validação de sintaxe.
-- **NÃO usar:** Precisa de interação humana no meio, precisa de browser/UI, precisa de escrita em múltiplos worktrees.
-
-### Workflow padrão (3 passos)
-1. **Descreva o batch em 1 bullet PT-BR** antes de rodar: "Batch Script Mode: Ler A,B,C; grep pattern X; substituir old→new em A; write diff.txt report."
-2. **Escreva o script em 1 RunCommand com fail-fast:** `set -euo pipefail` + tudo atômico.
-3. **No final do script, imprima um relatório curto (≤15 linhas):** "Arquivos alterados: 3. Linhas modificadas: 12. Diff head-5: ...". Não imprima outputs gigantes.
-
-### Exemplo real (mesmo da task T1 route handler anterior)
-**ANTES (3 turnos, 3 tool calls separados):**
-- Turno1: Read `route.ts` → recebe 200 linhas
-- Turno2: Grep `fetch` no `route.ts` → recebe 5 matches
-- Turno3: Edit old_string/new_string no `route.ts`
-
-**DEPOIS (1 turno, SCRIPT MODE):**
-```bash
-# 1 RunCommand só. Todos os passos juntos. Fail-fast.
-set -euo pipefail
-WT=/home/laion/code/flockr/Lumos.worktrees/test-worktree
-FILE="$WT/apps/platform/app/api/health/route.ts"
-
-# Passo1: Ler e contar linhas (anterior = Read)
-LINES=$(wc -l < "$FILE")
-echo "INFO: route.ts tem $LINES linhas"
-
-# Passo2: Grep fetch + health pattern (anterior = Grep)
-echo "MATCHES fetch/gzip:"
-grep -nH "fetch\|gzip" "$FILE" || true
-
-# Passo3: Substituição atômica (anterior = Edit)
-python3 - "$FILE" <<'PY'
-import sys
-p = sys.argv[1]
-with open(p) as f: c = f.read()
-old = 'export const runtime = "nodejs"'
-new = 'export const runtime = "edge"\nexport const dynamic = "force-dynamic"'
-assert old in c, "old_string nao encontrado; abortando sem alterar"
-c2 = c.replace(old, new, 1)
-with open(p,"w") as f: f.write(c2)
-PY
-
-# Relatório curto (≤15 linhas)
-echo "=== BATCH OK: 1 arquivo alterado ==="
-git -C "$WT" diff --stat "$FILE"
-```
-
-### Limites MVP (NÃO implementar agora)
-- Sem worker thread isolado (isolated-vm): não precisa.
-- Sem gerar .d.ts de SDK dinâmico: não precisa.
-- Sem `run_code` transport único: reutiliza RunCommand normal.
-- Se script falhar → rollback manual ou volte para "1 tool call por vez" normal.
-
-### Anti-padrões a evitar
-- Não escreva scripts de >50 linhas: quebre em 2 batches.
-- Não imprima saídas de >2000 chars no stdout do script: aplique H4 `| che_tr_stdout`.
-- Não misture interação dentro do script.
+**Helpers defined in:** `~/.trae/contracts/che_sessions_contract.sh` (source before use).
 
 ---
 
-## 🟢 REGRA 7.8: REGISTRY DE BINDING GLOBAL É JSONL (ÚNICA FONTE: REGISTRY.JSONL)
+## 🟢 RULE 7.75: MVP SCRIPT MODE (DEEPSEEK-INSPIRED, NO OVERENGINEERING)
 
-**REGISTRY_PATH canônico:** `$HOME/.trae/bindings/registry.jsonl` (**NÃO existe mais registry.md**, deletado em 2026-08-30, sem dual-write, sem drift).
+**PROBLEM:** Read → Grep → Edit → Write flow takes N chat-tool turns. Each turn = 1 LLM roundtrip + 1 tool call = slower + more expensive.
 
-**1 entry = 1 linha JSONL schema v1:**
+**MVP RULE:** When the logical batch is ≥3 tool calls THAT ARE PURELY LOCAL (Read, cat, grep, sed, python, equivalent Write, git status/diff — everything that can run in 1 bash/node RunCommand), write **1 short script (≤20 bash lines or ≤40 node lines)** and execute everything in **ONE SINGLE RunCommand tool call**.
+
+### When to use Script Mode
+- Yes: Read 3 files, grep a pattern, mass substitution, record diff.
+- Yes: Create 5 boilerplate files at once (with python heredoc).
+- Yes: Batch of small adjustments + syntax validation.
+- **DO NOT use:** Needs human interaction in between, needs browser/UI, needs writing across multiple worktrees.
+
+### Standard Workflow (3 steps)
+1. **Describe the batch in 1 bullet (Portuguese)** before running: "Batch Script Mode: Read A,B,C; grep pattern X; replace old→new in A; write diff.txt report."
+2. **Write the script in 1 RunCommand with fail-fast:** `set -euo pipefail` + everything atomic.
+3. **At the end of the script, print a short report (≤15 lines):** "Files changed: 3. Lines modified: 12. Diff head-5: ...". Do not print giant outputs.
+
+### MVP Limits (DO NOT implement now)
+- No isolated worker thread (isolated-vm): not needed.
+- No dynamic SDK .d.ts generation: not needed.
+- No unique `run_code` transport: reuse normal RunCommand.
+- If script fails → manual rollback or return to normal "1 tool call at a time".
+
+---
+
+## 🟢 RULE 7.8: GLOBAL BINDING REGISTRY IS JSONL (SINGLE SOURCE: REGISTRY.JSONL)
+
+**Canonical REGISTRY_PATH:** `$HOME/.trae/bindings/registry.jsonl` (**registry.md NO longer exists**, deleted on 2026-08-30, no dual-write, no drift).
+
+**1 entry = 1 line JSONL schema v1:**
 ```
 {ts ISO8601, event:BIND_BOOTSTRAP|BIND_APPEND|BIND_FLAGS_UPDATE, session_id,
  status: BOUND|UNBOUND|FLAGS, worktree_root, workspace_name?, worktree_slug?,
@@ -216,58 +173,52 @@ git -C "$WT" diff --stat "$FILE"
  workspace_file?, reason?, flags:{LANG_PT_CHECK:ENABLED|DISABLED}, data:{extra...}, _v:1}
 ```
 
-**ESCRITA (única maneira permitida — NÃO use Edit/Write manual):**
+**WRITING (only allowed way — DO NOT use manual Edit/Write):**
 ```bash
 source $HOME/.trae/contracts/che_sessions_contract.sh
-che_registry_append_jsonl "<sess-id>" "BOUND" "/abs/wt" \
-  '{"workspace_name":"Flockr","worktree_slug":"Lumos__x","friendly_name":"feat-abc",
+che_registry_append_jsonl "<sess-id>" "BOUND" "/abs/wt"   '{"workspace_name":"Flockr","worktree_slug":"Lumos__x","friendly_name":"feat-abc",
     "che_session_dir":"/abs/sess","che_workspace_shared":"/abs/ws",
     "workspace_file":"/abs/Flockr.code-workspace","branch":"feat/x","reason":"sm explicit",
     "flags":{"LANG_PT_CHECK":"DISABLED"}}'
 ```
-- Dedup sha256 por linha (idempotente). JSON safe python3 heredoc.
+- sha256 dedup per line (idempotent). JSON safe python3 heredoc.
 
-**LEITURA (única maneira — não awk/grep manual):**
+**READING (only way — no manual awk/grep):**
 ```bash
 source che_sessions_contract.sh
-che_registry_lookup_last "sess-abc123"  # → full JSON entry indentado
-# extrair campo:
+che_registry_lookup_last "sess-abc123"  # → indented full JSON entry
+# extract field:
 che_registry_lookup_last "sess-abc123" | jq -r .worktree_root
 # flags.LANG_PT_CHECK:
 che_registry_lookup_last "sess-abc123" | jq -r '.flags.LANG_PT_CHECK // "ENABLED"'
 ```
 
-**Anti-padrões (nunca faça):**
-- ❌ `Edit $HOME/.trae/bindings/registry.jsonl old new`
-- ❌ `echo "SESSION_ID=x..." >> registry.jsonl` (sem schema)
-- ❌ awk/grep parse `WORKTREE_ROOT:` (formato legado extinto)
-
 ---
 
-## 🟢 REGRA 7.9: NOMES DE TESTES (describe / it / test) = COMPORTAMENTO OBSERVÁVEL. NÃO IDs INTERNOS.
+## 🟢 RULE 7.9: TEST NAMES (describe / it / test) = OBSERVABLE BEHAVIOUR. NO INTERNAL IDs.
 
-**PROBLEMA que esta regra resolve:** é comum agente escrever `it("T1.2 valida token")` ou `describe("FLO-745 — auth fail closed")`. Isso invalida dois objetivos: (a) quem lê o relatório de testes em CI não entende o comportamento sem abrir a spec; (b) ids internos mudam / tasks são re-organizadas e o nome do teste passa a mentir.
+**PROBLEM this rule solves:** agents often write `it("T1.2 validates token")` or `describe("FLO-745 — auth fail closed")`. This invalidates two goals: (a) someone reading the test report in CI doesn't understand the behaviour without opening the spec; (b) internal IDs change / tasks are reorganised and the test name becomes a lie.
 
-**🔴 HARD RULE — INVERSÃO PROIBIDA (LEIA 2x ANTES DE ESCREVER):**
-> ❌ **ERRADO 1:** colocar qualquer ID interno (FLO-xxx, T<N>, AC<N>, SPEC, §) NA STRING DO TÍTULO do teste.
-> ❌ **AINDA MAIS ERRADO 2 (o falso-positive de hoje):** reclamando que um título NÃO TEM FLO-xxx / T<N> / AC<N>. **ISTO É O COMPORTAMENTO DESEJADO, É BOM, É COMPLIANT.** Se você flaggear ausência de ID no título → gerou uma regressão da regra.
-> ✅ **CORRETO:** título = comportamento observável (comes with verb + condition + expected result). Traceabilidade de FLO/task/AC = comentário JSDoc ACIMA do bloco OU linha comentário DENTRO do bloco 1ª linha. **JAMAIS na string de título.**
-> **Regra de decisão 1-sentence:** `Título contém FLO-ID? → BAD = anti-padrão. Título NÃO contém FLO-ID? → GOOD = 100% compliant (nunca gere finding por isso).`
+**🔴 HARD RULE — PROHIBITED INVERSION (READ 2x BEFORE WRITING):**
+> ❌ **WRONG 1:** put any internal ID (FLO-xxx, T<N>, AC<N>, SPEC, §) IN THE TEST TITLE STRING.
+> ❌ **EVEN MORE WRONG 2:** complaining that a title DOES NOT HAVE FLO-xxx / T<N> / AC<N>. **THIS IS THE DESIRED BEHAVIOUR, IT IS GOOD, IT IS COMPLIANT.** If you flag missing ID in the title → you generated a rule regression.
+> ✅ **CORRECT:** title = observable behaviour (comes with verb + condition + expected result). FLO/task/AC traceability = JSDoc comment ABOVE the block OR 1st line comment INSIDE the block. **NEVER in the title string.**
+> **1-sentence decision rule:** `Title contains FLO-ID? → BAD = anti-pattern. Title DOES NOT contain FLO-ID? → GOOD = 100% compliant (never generate a finding for this).`
 
-### 7.9.1 Formato PRESCRITO describe() e it() / test()
+### 7.9.1 PRESCRIBED describe() and it() / test() format
 
-| Elemento | O que DEVE conter | Exemplo BOM |
+| Element | What it MUST contain | GOOD example |
 |---|---|---|
-| **`describe("...")`** | **MÓDULO / FUNCIONALIDADE / CONTEXTO** sob teste. Agrupa comportamentos afins. Nunca ids. | `describe("POST /api/auth/login")` / `describe("JWT middleware — role checks")` |
-| **`it("...")` / `test("...")`** | **UM comportamento observável único**, preferencialmente começa com verbo (retorna, permite, bloqueia, calcula, emite, salva…) + condição + resultado esperado. **UM assert POR it quando possível.** | `it("returns 401 Unauthorized when Authorization header is missing")` |
+| **`describe("...")`** | **MODULE / FUNCTIONALITY / CONTEXT** under test. Groups related behaviours. Never IDs. | `describe("POST /api/auth/login")` / `describe("JWT middleware — role checks")` |
+| **`it("...")` / `test("...")`** | **ONE single observable behaviour**, preferably starting with a verb (returns, allows, blocks, calculates, emits, saves...) + condition + expected result. **ONE assert PER it when possible.** | `it("returns 401 Unauthorized when Authorization header is missing")` |
 
-### 7.9.2 NÃO coloque no TÍTULO — coloque no COMENTÁRIO JSDoc ACIMA ou dentro do bloco como linha comment
+### 7.9.2 DO NOT put in TITLE — put in JSDoc COMMENT ABOVE or inside the block as line comment
 
-Anti padrões proibidos no TÍTULO (STRING de describe/it/test). Se precisar referenciar, use comentário:
+Prohibited anti-patterns in TITLE (describe/it/test STRING). If you need to reference, use a comment:
 
 ```
-✗ RUIM (TÍTULO):  it("Task T1.3 — REGRA 4.2 da SPEC api-fail-closed valida service role")
-✓ BOM:
+✗ BAD (TITLE):  it("Task T1.3 — SPEC rule 4.2 api-fail-closed validates service role")
+✓ GOOD:
 /**
  * @task T1.3
  * @spec spec_api-fail-closed
@@ -276,51 +227,17 @@ Anti padrões proibidos no TÍTULO (STRING de describe/it/test). Se precisar ref
 it("blocks non-service-role callers by returning 403 Forbidden when client uses anon key", () => { ... })
 ```
 
-Outros anti padrões de TÍTULO (se bater, revise antes de PR):
-- `FLO-\d+` (ticket ids Linear/Jira)
-- `Task\s*\w+`, `T\d+(\.\d+)?`, `Item\s*\d+`, `AC\s*\d+` (task/critério ids)
-- `SPEC[_-]?\w+`, `§\s*\d+(\.\d+)?`, `REGRA\s*\d+` (spec section / rule ids)
-- `Fase\s*\d+`, `Story#?\d+`, `PRD\s*§`
-- Qualquer frase que só faz sentido para QUEM escreveu a spec e não para QUEM lê o relatório CI de testes.
+---
 
-### 7.9.3 Como associar 1 test → 1 AC / task id SEM sujar o título
-
-3 maneiras permitidas (qualquer uma serve, não precisa das 3):
-
-1. **JSDoc comentário de bloco ACIMA** do `it()` / `describe()` (exemplo acima).
-2. **Linha comentário 1 linha DENTRO** do bloco na PRIMEIRA linha:
-   ```ts
-   it("rejects payment with amount below £0.50 minimum", () => {
-     // @ac 3.1 | @task T5 | @ticket FLO-513
-     ...
-   })
-   ```
-3. **it.todo() com descrição + comentário separado** quando for placeholder.
-
-### 7.9.4 Organização da SUITE
-
-- `describe()` agrupa POR DOMÍNIO / CONTEXTO. Ex: `describe("Checkout — 3DS2 redirect flow")`, não `describe("Fase3 refactor checkout")`.
-- Quando testar o mesmo endpoint com condições diferentes: `describe.only`/`describe` aninhados são permitidos (usar PARA CONTEXTO, não para agrupar tasks).
-- Nome do teste TEM QUE SER VERDADEIRO 6 meses depois. IDs de tasks não são. Comportamentos são.
-
-### 7.9.5 Validações automáticas no che
-
-- **che-compliance Stage 1 LIGHT**: scan new/edited `*.test.* / *.spec.* / __tests__/` → flag WARNING (HIGH ≥10 hits) por regexes anti padrões acima.
-- **che-code-review Cat 4.7**: revisor avisa e pede rename no blocking comment se >5 nomes ruins no diff.
-- **QA report Stage 2.4 extra**: lint nomes nos relatórios Vitest/Jest (exibe `TOTAL suites comportamentais: 14; nomes ruins detectados: 2`).
-- **che-scope-checker TODOS 4 checks**: 🔍 Entrega (entrega_de_escopo_completo_para_ac_<slug>), 🧪 Testes (cobertura_de_teste_unitario_ou_e2e_para_<comportamento>), 📘 Docs (atualizacao_documental_para_<mudanca>_em_<doc>), 🔐 Env Vars (declaracao_env_var_no_parser_para_<VAR>).
+## 🟥 RULE 8: SPEC + PARALLELISM (body in CHE_RULES)
+- **SPEC**: replaces legacy PRD; 4 input sources (existing / ticket URL / legacy project PRD path / brief inline); 7 canonical sections + required YAML frontmatter fields; **mandatory Approved gate** BEFORE scope capture in che-act §0.5; SPEC-OVERRIDE with log in decisions.
+- **Parallelism:** Kahn waves + conflict graph colouring + file locks + single-writer shared artifacts. Cap 4 parallel. If overhead > serial, KISS wins.
+- **Full body:** `CHE_RULES.md` §🔴 PARALLELISM + §🟣 SPEC Rules (gate + validation + approval loop)
 
 ---
 
-## 🟥 REGRA 8: SPEC + PARALELISMO (corpo em CHE_RULES)
-- **SPEC**: substitui PRD legacy; 4 fontes input (existente / ticket URL / PRD Flockr path / inline breve); 7 seções canônicas + YAML frontmatter required fields; gate **Approved obrigatório** ANTES scope capture no §0.5 do che-act; override SPEC-OVERRIDE com log em decisions.
-- **Paralelismo:** Kahn waves + conflict graph coloring + file locks + single-writer shared artifacts. Cap 4 paralelo. Se overhead > serial, KISS vence.
-- **Corpo completo:** `CHE_RULES.md` §🔴 PARALELISMO + §🟣 SPEC Rules (gate + validation + approval loop)
-
----
-
-## 🔴 REGRA 9: PII + SEGURANÇA (CORPO COMPLETO EM engineering-contracts §2)
-- NUNCA loga/persiste raw email, email body, secrets, JWT, tokens, chaves Stripe/Supabase.
-- Hashing de correlação PII: `NOTIFICATION_PII_HASH_SECRET` (exemplo pattern).
-- Toda tabela Postgres nova: ENABLE RLS + policies. (Solicitado: agora é regra global §17).
-- **Corpo completo:** `engineering-contracts` SKILL §2 (Security & PII compliance) + §17 (Supabase RLS default)
+## 🔴 RULE 9: PII + SECURITY (FULL BODY IN engineering-contracts §2)
+- NEVER log/persist raw email, email body, secrets, JWT, tokens, Stripe/Supabase keys.
+- PII correlation hashing: `NOTIFICATION_PII_HASH_SECRET` (example pattern).
+- Every new Postgres table: ENABLE RLS + policies.
+- **Full body:** `engineering-contracts` SKILL §2 (Security & PII compliance) + §17 (Supabase RLS default)

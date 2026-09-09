@@ -66,6 +66,18 @@ def main():
     parser_dec_app.add_argument("--session-id", default=None)
     parser_dec_app.add_argument("--spec-id", default=None)
 
+    # config
+    parser_config = subparsers.add_parser("config", help="Set session configuration flags.")
+    parser_config.add_argument("session_id")
+    parser_config.add_argument("worktree_root")
+    parser_config.add_argument("--lang-chat", choices=["en", "pt-BR"], help="Language for agent chat dialogue.")
+    parser_config.add_argument("--lang-docs", choices=["en", "pt-BR"], help="Language for documentation and commits.")
+    parser_config.add_argument("--lang-report", choices=["en", "pt-BR"], help="Language for generated reports.")
+    parser_config.add_argument(
+        "--pt-check", choices=["ENABLED", "DISABLED"], help="Enable/disable Portuguese text detection hook."
+    )
+    parser_config.add_argument("--flags", help="Raw JSON string of extra flags to merge.")
+
     # export
     parser_export = subparsers.add_parser("export")
     parser_export.add_argument("worktree_root")
@@ -73,13 +85,13 @@ def main():
     parser_export.add_argument(
         "--include-db",
         action="store_true",
-        help="Opcional: inclui bancos de dados SQLite (state + rag) no export, se existirem e se tamanho <= limite.",
+        help="Optional: include SQLite databases (state + rag) in export if they exist and total size <= limit.",
     )
     parser_export.add_argument(
         "--db-size-limit-mb",
         type=int,
         default=250,
-        help="Limite máximo de tamanho SOMADO dos bancos para incluir no export (MB). Default = 250MB.",
+        help="Maximum total size of databases to include in export (MB). Default = 250MB.",
     )
 
     # import
@@ -89,7 +101,7 @@ def main():
     parser_import.add_argument(
         "--include-db",
         action="store_true",
-        help="Restaura também bancos SQLite se presentes no archive.",
+        help="Also restore SQLite databases if present in the archive.",
     )
 
     # TASK ENGINE SUBCOMMANDS =================================================
@@ -98,9 +110,11 @@ def main():
 
     pt_list = task_subs.add_parser("list")
     pt_list.add_argument("worktree_root")
-    pt_list.add_argument("--status", default=None, help="ex: TODO,IN_PROGRESS,DONE")
-    pt_list.add_argument("--domain", default=None, help="ex: ux,engineering")
-    pt_list.add_argument("--ready-only", action="store_true", help="apenas tasks com deps DONE + handoff existente.")
+    pt_list.add_argument("--status", default=None, help="e.g. TODO,IN_PROGRESS,DONE")
+    pt_list.add_argument("--domain", default=None, help="e.g. ux,engineering")
+    pt_list.add_argument(
+        "--ready-only", action="store_true", help="Only tasks with dependencies DONE + handoff existing."
+    )
 
     pt_show = task_subs.add_parser("show")
     pt_show.add_argument("worktree_root")
@@ -132,15 +146,15 @@ def main():
     ps_query.add_argument(
         "--sql",
         required=True,
-        help="Consulta SQL parametrizada (use ? para placeholders). Ex: SELECT id,title FROM tasks WHERE domain=?",
+        help="Parameterised SQL query (use ? for placeholders). E.g. SELECT id,title FROM tasks WHERE domain=?",
     )
-    ps_query.add_argument("--bind", nargs="*", default=[], help="Valores para placeholders ? (ordem textual)")
+    ps_query.add_argument("--bind", nargs="*", default=[], help="Values for ? placeholders (textual order)")
     ps_query.add_argument(
         "--worktree-root",
         default=None,
-        help="Worktree alvo (algumas consultas não precisam).",
+        help="Target worktree (some queries do not require it).",
     )
-    ps_query.add_argument("--json", action="store_true", dest="json_out", help="Retorna JSON ao invés de tabela.")
+    ps_query.add_argument("--json", action="store_true", dest="json_out", help="Return JSON instead of a table.")
 
     ps_sanitize = state_subs.add_parser("sanitize")
     ps_sanitize.add_argument("worktree_root")
@@ -148,18 +162,18 @@ def main():
         "--max-age-days",
         type=int,
         default=180,
-        help="Idade máxima de registros para manter (decisions / bindings / sessions old). Default = 180 dias.",
+        help="Maximum age of records to keep (old decisions / bindings / sessions). Default = 180 days.",
     )
     ps_sanitize.add_argument(
         "--max-decisions",
         type=int,
         default=5000,
-        help="Número máximo de decisions.log entries a manter no state store. Mais antigos são purgados.",
+        help="Maximum number of decisions.log entries to keep in state store. Older ones are purged.",
     )
     ps_sanitize.add_argument(
         "--dry-run",
         action="store_true",
-        help="Apenas mostra quantos registros seriam deletados, sem efetivar.",
+        help="Only show how many records would be deleted, without applying changes.",
     )
 
     ps_search = state_subs.add_parser("search")
@@ -172,8 +186,8 @@ def main():
         help="all | tasks | specs | decisions | envelopes. Default = all.",
     )
 
-    # RAG / VECTOR STORE SUBCOMMANDS (SQLite-vec, opcional) ==================
-    parser_rag = subparsers.add_parser("rag", help="Che RAG embeddings (sqlite-vec, opcional).")
+    # RAG / VECTOR STORE SUBCOMMANDS (SQLite-vec, optional) ==================
+    parser_rag = subparsers.add_parser("rag", help="Che RAG embeddings (sqlite-vec, optional).")
     rag_subs = parser_rag.add_subparsers(dest="rag_cmd", required=True)
 
     pr_build = rag_subs.add_parser("build-index")
@@ -182,12 +196,12 @@ def main():
         "--chunk-size",
         type=int,
         default=512,
-        help="Tokens por chunk antes de embeddings. Default 512.",
+        help="Tokens per chunk before embeddings. Default 512.",
     )
     pr_build.add_argument(
         "--provider",
         default="auto",
-        help="auto | none | sentence-transformers | openai | anthropic. none = só BM25 sem vetores.",
+        help="auto | none | sentence-transformers | openai | anthropic. none = only BM25 without vectors.",
     )
 
     pr_rag_search = rag_subs.add_parser("search")
@@ -198,171 +212,169 @@ def main():
         "--hybrid",
         action="store_true",
         default=True,
-        help="Busca híbrida BM25 + rerank vetorial (default True).",
+        help="Hybrid search BM25 + vector rerank (default True).",
     )
 
     # WORKSPACE MGMT SUBCOMMANDS (L1) =============================================
-    parser_ws = subparsers.add_parser("workspace", help="Gerencia workspaces Che (L1 workspaces root).")
+    parser_ws = subparsers.add_parser("workspace", help="Manage Che workspaces (L1 workspaces root).")
     ws_subs = parser_ws.add_subparsers(dest="ws_cmd", required=True)
 
     # create (primary)
-    pw_create = ws_subs.add_parser("create", help="Cria um novo workspace L1.")
-    pw_create.add_argument("name", help="Nome do workspace (será slugged).")
-    pw_create.add_argument("--worktree-root", default=None, help="Worktree opcional para definir workspace principal.")
+    pw_create = ws_subs.add_parser("create", help="Create a new L1 workspace.")
+    pw_create.add_argument("name", help="Workspace name (will be slugified).")
+    pw_create.add_argument("--worktree-root", default=None, help="Optional worktree to define primary workspace.")
 
-    ws_subs.add_parser("list", help="Lista workspaces existentes + projects count.")
+    ws_subs.add_parser("list", help="List existing workspaces + projects count.")
 
     pw_remove = ws_subs.add_parser("remove")
-    pw_remove.add_argument("name", help="Workspace slug a mover para lixeira (NÃO apaga, move para .trash/).")
+    pw_remove.add_argument("name", help="Workspace slug to move to trash (DOES NOT delete, moves to .trash/).")
     pw_remove.add_argument(
         "--dry-run",
         action="store_true",
         default=True,
-        help="Default: só mostra, NÃO move. Set --no-dry-run para efetivar.",
+        help="Default: only show, DO NOT move. Set --no-dry-run to apply.",
     )
     pw_remove.add_argument(
-        "--no-dry-run", dest="dry_run", action="store_false", help="Efetivamente move. Requer também --confirm."
+        "--no-dry-run", dest="dry_run", action="store_false", help="Effectively move. Requires --confirm as well."
     )
     pw_remove.add_argument(
         "--confirm",
         dest="confirmed",
         action="store_true",
         default=False,
-        help="Safety gate obrigatório após revisão do --dry-run.",
+        help="Mandatory safety gate after reviewing --dry-run.",
     )
 
     pw_restore = ws_subs.add_parser("restore")
-    pw_restore.add_argument("trash_slug", help="Slug da entrada na lixeira (ex: workspace--foo--20260904-235959).")
+    pw_restore.add_argument("trash_slug", help="Trash entry slug (e.g. workspace--foo--20260904-235959).")
 
-    ws_subs.add_parser("trash-list", help="Conteúdo da lixeira .trash/.")
+    ws_subs.add_parser("trash-list", help="Contents of the .trash/ folder.")
 
     # PROJECT MGMT SUBCOMMANDS (L2) =============================================
-    parser_proj = subparsers.add_parser("project", help="Gerencia projects L2 (.registry/projects/<slug>).")
+    parser_proj = subparsers.add_parser("project", help="Manage L2 projects (.registry/projects/<slug>).")
     proj_subs = parser_proj.add_subparsers(dest="proj_cmd", required=True)
 
     # create (primary), add and init (aliases)
-    pj_create = proj_subs.add_parser(
-        "create", aliases=["add", "init"], help="Cria/Adiciona um projeto L2 a um workspace."
-    )
-    pj_create.add_argument("worktree_root", help="Worktree root do projeto a adicionar.")
-    pj_create.add_argument("--workspace", required=True, help="Nome do workspace destino (OBRIGATÓRIO).")
+    pj_create = proj_subs.add_parser("create", aliases=["add", "init"], help="Create/Add an L2 project to a workspace.")
+    pj_create.add_argument("worktree_root", help="Project worktree root to add.")
+    pj_create.add_argument("--workspace", required=True, help="Target workspace name (MANDATORY).")
     pj_create.add_argument(
         "--domain",
         default="engineering",
-        help="Domínio Politburo default: engineering|ux|product|devops|copywriting|social|seo-analytics.",
+        help="Default Politburo domain: engineering|ux|product|devops|copywriting|social|seo-analytics.",
     )
     pj_create.add_argument(
-        "--name", dest="friendly_name", default=None, help="Nome amigável (default: <workspace>--<folder>)."
+        "--name", dest="friendly_name", default=None, help="Friendly name (default: <workspace>--<folder>)."
     )
-    pj_create.add_argument("--session-id", default="project-create-cli", help="Session id para criar L3 dirs iniciais.")
+    pj_create.add_argument("--session-id", default="project-create-cli", help="Session ID to create initial L3 dirs.")
 
-    proj_subs.add_parser("list", help="Lista projects L2 + arquitetura/profile/db existentes.")
+    proj_subs.add_parser("list", help="List L2 projects + existing architecture/profile/db.")
 
     pj_remove = proj_subs.add_parser("remove")
-    pj_remove.add_argument("project_slug", help="Slug do projeto a mover para lixeira (NÃO apaga, move para .trash/).")
-    pj_remove.add_argument("workspace_name", help="Nome do workspace que contém o projeto.")
-    pj_remove.add_argument("--dry-run", action="store_true", default=True, help="Default: só mostra, NÃO move.")
+    pj_remove.add_argument("project_slug", help="Project slug to move to trash (DOES NOT delete, moves to .trash/).")
+    pj_remove.add_argument("workspace_name", help="Name of the workspace containing the project.")
+    pj_remove.add_argument("--dry-run", action="store_true", default=True, help="Default: only show, DO NOT move.")
     pj_remove.add_argument(
-        "--no-dry-run", dest="dry_run", action="store_false", help="Efetivamente move. Requer também --confirm."
+        "--no-dry-run", dest="dry_run", action="store_false", help="Effectively move. Requires --confirm as well."
     )
     pj_remove.add_argument(
-        "--confirm", dest="confirmed", action="store_true", default=False, help="Safety gate obrigatório."
+        "--confirm", dest="confirmed", action="store_true", default=False, help="Mandatory safety gate."
     )
 
     pj_restore = proj_subs.add_parser("restore")
-    pj_restore.add_argument("trash_slug", help="Slug da entrada na lixeira.")
+    pj_restore.add_argument("trash_slug", help="Trash entry slug.")
 
-    # EJECT SUBCOMMANDS (desinstalação segura do Che) ============================
+    # EJECT SUBCOMMANDS (safe Che uninstallation) ============================
     parser_eject = subparsers.add_parser(
         "eject",
-        help="Ejetar Che de forma segura: desinstala adapters, move não-blacklist para lixeira, restaura.",
+        help="Safely eject Che: uninstall adapters, move non-blacklist files to trash, restore.",
     )
     parser_eject.add_argument(
         "--che-home",
         default=None,
-        help="Override do diretório Che (default: resolve ~/.trae automaticamente).",
+        help="Che directory override (default: resolves ~/.trae automatically).",
     )
     parser_eject.add_argument(
         "--trash-root",
         default=None,
-        help="Override da raiz da lixeira (default: ~/.che-workspaces/.trash/che-eject).",
+        help="Trash root override (default: ~/.che-workspaces/.trash/che-eject).",
     )
     parser_eject.add_argument(
         "--keep-git-repo",
         action="store_true",
         default=True,
-        help="(git-clone apenas) Mantém .git/ intacto pós-eject (default True). Use --no-keep-git-repo para remover junto.",
+        help="(git-clone only) Keep .git/ intact after eject (default True). Use --no-keep-git-repo to remove it.",
     )
     parser_eject.add_argument(
         "--no-keep-git-repo",
         dest="keep_git_repo",
         action="store_false",
-        help="Remove também o diretório .git/ no eject (apenas install_kind copy-install ou se explicitamente sobrescrito).",
+        help="Also remove the .git/ directory on eject (only for copy-install or if explicitly overridden).",
     )
     parser_eject.add_argument(
         "--scan-client-repos",
         nargs="*",
         default=None,
-        help="Lista opcional de projetos clientes para limpar o snippet CHE PLANNING ARTIFACTS BLACKLIST do .gitignore.",
+        help="Optional list of client projects to clean the CHE PLANNING ARTIFACTS BLACKLIST snippet from .gitignore.",
     )
     parser_eject.add_argument(
         "--dry-run",
         action="store_true",
         default=True,
-        help="Default: só exibe o plano, NÃO escreve nada. Use --apply para efetivar.",
+        help="Default: only display plan, DO NOT write anything. Use --apply to apply.",
     )
     parser_eject.add_argument(
         "--apply",
         dest="dry_run",
         action="store_false",
-        help="Efetivamente aplica o eject. Requer também --confirmed e --i-know-what-im-doing.",
+        help="Effectively apply the eject. Requires --confirmed and --i-know-what-im-doing.",
     )
     parser_eject.add_argument(
         "--confirmed",
         action="store_true",
         default=False,
-        help="Safety gate 1/2: confirmação explícita após revisar --dry-run.",
+        help="Safety gate 1/2: explicit confirmation after reviewing --dry-run.",
     )
     parser_eject.add_argument(
         "--i-know-what-im-doing",
         action="store_true",
         default=False,
-        help="Safety gate 2/2: confirmação dupla de que o usuário tem ciência do risco.",
+        help="Safety gate 2/2: double confirmation of user awareness of risk.",
     )
     eject_subs = parser_eject.add_subparsers(dest="eject_cmd", required=True)
 
     eject_subs.add_parser(
         "plan",
-        help="(default) Gera o plano de eject, aplica ou só exibe de acordo com --dry-run/--apply.",
+        help="(default) Generate eject plan, apply or just display based on --dry-run/--apply.",
     )
 
     eject_subs.add_parser(
         "trash-list",
-        help="Lista todos os ejects já enviados para a lixeira (com manifests JSON).",
+        help="List all ejects already sent to trash (with JSON manifests).",
     )
 
     pe_restore = eject_subs.add_parser(
         "restore",
-        help="Restaura um eject anterior de volta, movendo da lixeira para che_home e rodando setup-adapters.",
+        help="Restore a previous eject, moving from trash to che_home and running setup-adapters.",
     )
-    pe_restore.add_argument("trash_slug", help="Slug da entrada na lixeira (ex: che-eject--abc123--20260904-235959).")
+    pe_restore.add_argument("trash_slug", help="Trash entry slug (e.g. che-eject--abc123--20260904-235959).")
     pe_restore.add_argument(
         "--dry-run",
         action="store_true",
         default=True,
-        help="Default: só exibe o plano de restore. Use --apply para efetivar.",
+        help="Default: only show restore plan. Use --apply to apply.",
     )
     pe_restore.add_argument(
         "--apply",
         dest="dry_run",
         action="store_false",
-        help="Efetivamente restaura. Requer também --confirmed.",
+        help="Effectively restore. Requires --confirmed.",
     )
     pe_restore.add_argument(
         "--confirmed",
         action="store_true",
         default=False,
-        help="Safety gate obrigatório para aplicar o restore.",
+        help="Mandatory safety gate to apply the restore.",
     )
 
     args = parser.parse_args()
@@ -397,6 +409,29 @@ def main():
             session_id=args.session_id,
             spec_id=args.spec_id,
         )
+        return
+
+    if args.command == "config":
+        payload = {"flags": {}}
+        if args.lang_chat:
+            payload["flags"]["LANG_CHAT"] = args.lang_chat
+        if args.lang_docs:
+            payload["flags"]["LANG_DOCS"] = args.lang_docs
+        if args.lang_report:
+            payload["flags"]["LANG_REPORT"] = args.lang_report
+        if args.pt_check:
+            payload["flags"]["LANG_PT_CHECK"] = args.pt_check
+        if args.flags:
+            try:
+                extra = json.loads(args.flags)
+                if isinstance(extra, dict):
+                    payload["flags"].update(extra)
+            except Exception as e:
+                print(f"Error parsing --flags: {e}", file=sys.stderr)
+                sys.exit(2)
+
+        registry_append_jsonl(args.session_id, "FLAGS", args.worktree_root, json.dumps(payload))
+        print(f"Configuration updated for session {args.session_id}")
         return
 
     if args.command == "export":

@@ -19,12 +19,12 @@ Runs the **sanitize / data retention** routine on the Che state store. Intended 
 
 **Agent action:**
 1. Resolve worktree from binding or user input.
-2. FIRST RUN ALWAYS `--dry-run` unless the user explicitly typed `--apply` / "aplicar" / "yes I want to delete". Show the user:
-   - `decisions_old`: número de decisions mais velhas que max-age-days a ser purgadas
-   - `decisions_over_cap`: número de decisions removidas por excesso da cap max-decisions
-   - `bindings_old`: non-BOUND bindings expiradas
-   - `tasks_done_old`: tasks DONE com updated_at > max-age
-   - `db_path`: arquivo afetado
+2. FIRST RUN ALWAYS `--dry-run` unless the user explicitly typed `--apply` / "apply" / "yes I want to delete". Show the user:
+   - `decisions_old`: number of decisions older than max-age-days to be purged
+   - `decisions_over_cap`: number of decisions removed exceeding the max-decisions cap
+   - `bindings_old`: expired non-BOUND bindings
+   - `tasks_done_old`: DONE tasks with updated_at > max-age
+   - `db_path`: affected file
 3. If user confirms (or dry-run was not requested because user explicitly said "aplicar sem dry-run"), run:
    ```
    python3 -m che_core.cli state sanitize "$WORKTREE_ROOT" \

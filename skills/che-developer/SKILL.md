@@ -5,7 +5,7 @@ description: "Implements one task at a time following engineering contracts, man
 
 # Che — Developer
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - Engineering contracts 1–17 + Appendices (agile BDD, SOLID, max 2 lines comment block, gh-stack, conventional commits, conflict resolution table): `engineering-contracts` skill
 > - Security/PII self-check during implementation: `_shared_checklists/SECURITY_PII_COMMON.md`
 > - Nx/pnpm local build/lint/typecheck/test run: `_shared_checklists/NX_PNPM_COMMON.md`
@@ -28,34 +28,34 @@ If any is missing → **ABORT immediately** and go back to Scrum Master.
 
 ## 0.4 STORAGE BOUNDARY PREFLIGHT (CANONICAL, NON-NEGOTIABLE — run BEFORE §0.5 binding and ANY write)
 
-NENHUM asset de trabalho do che (decisions, reports, QA evidence, summaries, locks, etc) é escrito NA WORKTREE DO USUÁRIO por padrão. Única exceção: usuário pede VERBATIM EXPLICITAMENTE salvar um arquivo específico lá. **HARD STOP se qualquer output path cair dentro WORKTREE_ROOT.**
+NO che work asset (decisions, reports, QA evidence, summaries, locks, etc.) is written to the USER WORKTREE by default. UNIQUE exception: user explicitly asks VERBATIM to save a specific file there. **HARD STOP if any output path falls within WORKTREE_ROOT.**
 
-Execute EXATAMENTE estes 4 passos (não inventar, não pular):
+Execute EXACTLY these 4 steps (do not invent, do not skip):
 
 ```bash
-# 1. Source canônico do contrato de sessões
+# 1. Canonical session contract source
 source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"
 
-# 2. Se SESSION_ID não vier do SM: derivar do che_current_session_id / registry
+# 2. If SESSION_ID not from SM: derive from che_current_session_id / registry
 SESSION_ID="${SESSION_ID:-$(che_current_session_id 2>/dev/null || echo "dev-$(date -u +%Y%m%d-%H%M%S)")}"
 
-# 3. Calcular paths canônicos UMA VEZ + criar diretórios base
+# 3. Compute canonical paths ONCE + ensure base dirs
 che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$(pwd)"
 che_ensure_session_dirs "$WORKTREE_ROOT"
 
-# 4. DOUBLE-GUARD: reafirmar que CHE_SESSION_DIR + CHE_WORKSPACE_SHARED estão FORA da worktree
-#    (apesar do che_output_path já rodar este assert internamente em todo write)
+# 4. DOUBLE-GUARD: reaffirm CHE_SESSION_DIR + CHE_WORKSPACE_SHARED are OUTSIDE worktree
+#    (although che_output_path runs this assert internally on every write)
 che_assert_outside_worktree "$CHE_SESSION_DIR"    "$WORKTREE_ROOT" "CHE_SESSION_DIR"
 che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
 
-# ==== PATHS DESTA SKILL CONSTRUÍDOS UMA VEZ (reutilizar abaixo, não reconstruir) ====
-# — decisions: $CHE_DECISIONS_PATH (já calculado em che_compute_paths = helper che_decisions_path)
-#              TODO write de decision SEMPRE usa: che_append_decision_jsonl "<TITLE>" "{json_payload}"
-#              NUNCA escreva decisions.log.jsonl manualmente cat/echo >> (risco corrompimento, não-atomic).
-# — Task envelope: passado pelo SM como caminho absoluto (WORKSPACE_SHARED/tasks/<id>/...) já em che-sessions.
-#                  Se não vir → construir via helper:
+# ==== SKILL PATHS CONSTRUCTED ONCE (reuse below, do not reconstruct) ====
+# — decisions: $CHE_DECISIONS_PATH (calculated in che_compute_paths = che_decisions_path helper)
+#              EVERY decision write ALWAYS uses: che_append_decision_jsonl "<TITLE>" "{json_payload}"
+#              NEVER write decisions.log.jsonl manually cat/echo >> (risk of corruption, non-atomic).
+# — Task envelope: passed by SM as absolute path (WORKSPACE_SHARED/tasks/<id>/...) already in che-sessions.
+#                  If missing → construct via helper:
 #                    TASK_ENVELOPE_PATH="${TASK_ENVELOPE_PATH:-$(che_output_path "task" "task-envelope" "T${TASK_ID}" "workspace" "md")}"
-# — Blast-radius exceptions e OUTSIDE BLAST RADIUS (abaixo §4): mesmos helpers.
+# — Blast-radius exceptions and OUTSIDE BLAST RADIUS (§4 below): same helpers.
 ```
 
 ---
@@ -64,16 +64,16 @@ che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSP
 
 Run BEFORE touching ANY Glob/Grep/file-write/git command.
 
-1. **Level 1 Global Index (AUTHORITY):** Read `che_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `che_current_session_id`. Extract `WORKTREE_ROOT` from that entry. If NO entry: binding hasn't been made yet → ABORT. Ask: "No Level1 binding for this session. Create it? (A = Select worktree now; B = Cancel task). NEVER write without binding created."
+1. **Level 1 Global Index (AUTHORITY):** Read `che_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `che_current_session_id`. Extract `WORKTREE_ROOT` from that entry. If NO entry: binding hasn't been made yet → ABORT. Ask: "No Level 1 binding for this session. Create it? (A = Select worktree now; B = Cancel task). NEVER write without binding created."
    - If found BOUND entry: confirm `WORKTREE_ROOT` from registry **MUST MATCH** the `WORKTREE_ROOT` passed by Scrum Master.
    - If MISMATCH → **ABORT.** Ask: "SM says worktree = X but Level 1 registry (GLOBAL) says BOUND_ROOT=Y. Switch binding first? (A = Switch per §19.3; B = Cancel task)." Never silent proceed.
-2. **Level 2 Detail File (informational only for Dev):** If Level 2 binding detail (resolved via contract `che_level2_binding_path`) does NOT exist → SM preflight didn't create it properly. Warn & create now (append Level 1 if needed, but don't duplicate BOUND entries). Report discrepancy to SM via `che_append_decision_jsonl "BINDING_LEVEL2_MISSING" '{"task_id":"'"${TASK_ID:-?}"'"}'`. Decision log entries APPEND-SEGURO via helper `che_append_decision_jsonl` (SINGLE shared file per worktree-slug via `$CHE_DECISIONS_PATH`, not one per task-id — NÃO escreva manualmente).
+2. **Level 2 Detail File (informational only for Dev):** If Level 2 binding detail (resolved via `che_level2_binding_path` contract) does NOT exist → SM preflight didn't create it properly. Warn & create now (append Level 1 if needed, but don't duplicate BOUND entries). Report discrepancy to SM via `che_append_decision_jsonl "BINDING_LEVEL2_MISSING" '{"task_id":"'"${TASK_ID:-?}"'"}'`. Decision log entries APPEND-SAFE via `che_append_decision_jsonl` helper (SINGLE shared file per worktree-slug via `$CHE_DECISIONS_PATH`, not one per task-id — DO NOT write manually).
 3. **Per-operation scissor check (before every file write, Glob/Grep, git cmd):**
    - Target path prefix within `WORKTREE_ROOT`? If not → BLOCK.
    - Cross-worktree ops only allowed two outcomes: (A) user confirms one-off out-of-scope write, log decision via `che_append_decision_jsonl`; OR (B) ask user to switch worktree first per §19.3.
-   - **Todo write de arquivo NÃO-código (reports, decisions, QA, summaries) passa obrigatoriamente por `che_output_path` + `che_write_file_atomic`. Nenhum path relativo, nenhum `./`.**
-4. **Never silent cross-worktree reads = violation (even "just a quick grep"). Hook 1 pretooluse also enforces this independently via Level1 registry (double guard).**
-5. **If at any point agent thinks "maybe this code is also in worktree B" → DO NOT TOUCH B. Ask user explicitly: "Tarefa vinculada à worktree X. Trocar para Y antes? (A = Trocar, B = Continuar em X)". Never silent swap.
+   - **Every non-code file write (reports, decisions, QA, summaries) must pass through `che_output_path` + `che_write_file_atomic`. No relative paths, no `./`.**
+4. **Never silent cross-worktree reads = violation (even "just a quick grep"). Hook 1 pretooluse also enforces this independently via Level 1 registry (double guard).**
+5. **If at any point agent thinks "maybe this code is also in worktree B" → DO NOT TOUCH B. Ask user explicitly: "Task linked to worktree X. Switch to Y first? (A = Switch, B = Continue in X)". Never silent swap.**
 
 ---
 
@@ -86,8 +86,7 @@ This ensures the precedence rules, DbC mindset, TDD, and functional core rules a
 
 ## 2. STEP 1 — REPO ONBOARDING (obligatory, cannot skip)
 
-Before coding, investigate the repo. Answer these 5 questions in writing,
-appending to the task envelope file in a section `## Dev Onboarding Answers`:
+Before coding, investigate the repo. Answer these 5 questions in writing, appending to the task envelope file in a section `## Dev Onboarding Answers`:
 
 ### Q1: What is the established architectural pattern here?
 
@@ -95,7 +94,7 @@ Look for:
 - `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `docs/` at the repo root
 - `package.json` → scripts, dependencies
 - Directory structure: `src/`, `apps/`, `packages/`, `modules/`
-- Existing similar modules (look for files that implement similar behavior to the task)
+- Existing similar modules (look for files that implement similar behaviour to the task)
 
 Write a 3-5 line summary of the pattern.
 
@@ -116,8 +115,7 @@ Look for:
 - Per-package scripts (if monorepo)
 - README / CONTRIBUTING sections on testing
 
-Write down the exact commands to run. If uncertain → list what you found
-and mark with "⚠️ unverified — will confirm with SM if fails".
+Write down the exact commands to run. If uncertain → list what you found and mark with "⚠️ unverified — will confirm with SM if fails".
 
 ### Q4 (NEW — P1.7): Consult graphify knowledge graph + canonical docs first (if they exist)
 
@@ -132,34 +130,34 @@ Check IF ALL of the following paths exist at the repo/worktree root:
 If BOTH 1 AND 2 exist → READ THEM IN THIS ORDER BEFORE any Glob/Grep/find:
 1. `docs/graphify-tree/GRAPH_REPORT.md` → identify community hub and file paths for the relevant area (Payments / Auth / Admin UI / etc.)
 2. Corresponding `docs/<area>.md` → read the pre-computed context for that area.
-3. Only THEN proceed to Q1/Q2/Q3 with Glob/Grep INSIDE the known file paths identified.
+3. Only THEN proceed to Q1/Q2/Q3 with Glob/Grep INSIDE the identified file paths.
 
-If any of them MISS → SKIP this step. Do NOT generate graphify yourself; do NOT ask user. Write in answer: "graphify-tree/docs canonical package missing for this repo → skipped, direct exploration used".
+If any of them MISS → SKIP this step. DO NOT generate graphify yourself; do NOT ask user. Write in answer: "graphify-tree/docs canonical package missing for this repo → skipped, direct exploration used".
 
-### Q5 (NEW — P1.8 = Stack Match IDE available_skills): Invoke pre-existing IDE skills when the task touches known stacks
+### Q5 (NEW — P1.8 = Stack Match IDE available_skills): Invoke pre-existing IDE skills when task touches known stacks
 
-Based on what this task REQUIRES (read TASK ENVELOPE's "Stack/Technologies" and "Scope Behavior" sections), IF ANY of the following conditions apply → **IMMEDIATELY invoke the corresponding IDE skill via the Skill(...) tool NOW (onboarding stage) BEFORE writing any code. This reuses existing authoritative content instead of duplicating it inside this che skill.**
+Based on what this task REQUIRES (read TASK ENVELOPE's "Stack/Technologies" and "Scope Behaviour" sections), IF ANY of the following conditions apply → **IMMEDIATELY invoke the corresponding IDE skill via the Skill tool NOW (onboarding stage) BEFORE writing any code. This reuses existing authoritative content instead of duplicating it inside this che skill.**
 
 | Task touches / requires | → Invoke this IDE available_skill | Why (what it gives you) |
 |---|---|---|
-| Stripe API, Stripe Checkout, Stripe Connect webhooks, Stripe PaymentIntents, Stripe SDK method calls, Stripe Customers/Subscriptions/Treasury/Refunds | `stripe-best-practices` | API selection guidance (Checkout vs PaymentIntents), Connect v2 setup, security best practices (API keys/webhook signing/OAuth), migration away from deprecated Stripe APIs — authoritative, not duplicated here. |
-| Supabase Postgres, Supabase RLS policies, new Postgres tables, Supabase SDK, Postgres performance/schema, Supabase Edge Functions | `supabase-postgres-best-practices` | Postgres performance optimization, query plans, indexing, RLS policy patterns — with examples. |
-| Next.js App Router, Next.js metadata, Next.js route handlers, Next.js image/font optimization, RSC boundary decisions, Next.js data patterns (fetching, caches, server actions) | `next-best-practices` | File conventions, RSC vs "use client", async APIs, error handling, performance — official Vercel guidance. |
+| Stripe API, Stripe Checkout, Stripe Connect webhooks, Stripe PaymentIntents, Stripe SDK method calls, Stripe Customers/Subscriptions/Treasury/Refunds | `stripe-best-practices` | API selection guidance (Checkout vs PaymentIntents), Connect v2 setup, security best practices (API keys/webhook signing/OAuth), migration from deprecated Stripe APIs. |
+| Supabase Postgres, Supabase RLS policies, new Postgres tables, Supabase SDK, Postgres performance/schema, Supabase Edge Functions | `supabase-postgres-best-practices` | Postgres performance optimisation, query plans, indexing, RLS policy patterns — with examples. |
+| Next.js App Router, Next.js metadata, Next.js route handlers, Next.js image/font optimisation, RSC boundary decisions, Next.js data patterns (fetching, caches, server actions) | `next-best-practices` | File conventions, RSC vs "use client", async APIs, error handling, performance — official Vercel guidance. |
 | Railway PaaS (create project, provision service, deploy, configure env vars, add bucket/volume, check build failure logs, Railway CLI commands) | `use-railway` | Auth check, operations, troubleshooting reference for Railway. |
 | Resend email API (send transactional single/batch email, inbound webhook, templates, tracking, domains, API idempotency keys, webhook signing) | `resend` | Critical gotchas: idempotency keys, webhook verification, template variable syntax — avoid production outages. |
 | React UI components/pages/dashboards (composable UI, Tailwind design system, reusable API patterns) | `tailwind-design-system` + `vercel-composition-patterns` | Build scalable design systems with Tailwind v4; use compound components, state lifting, render props, context — avoid boolean prop proliferation. |
-| New DB schema / new tables design (pick SQL vs NoSQL, normalization, indexes, FKs, migration strategy) | `database-schema-designer` | Schema design best practices, normalization strategies, indexing — for when task has NEW schema. |
+| New DB schema / new tables design (pick SQL vs NoSQL, normalisation, indexes, FKs, migration strategy) | `database-schema-designer` | Schema design best practices, normalisation strategies, indexing — for when task has NEW schema. |
 | Architecture/folder structure diagrams, flowcharts, ERDs for scope capture docs or PR descriptions | `mermaid-diagram-specialist` | Mermaid diagram generation. |
 
 If NONE apply → answer Q5: "No IDE available_skill matches task scope → skipped."
 
-**If after 15 minutes of exploration the answers to any of Q1/Q2/Q3/Q4/Q5 are unclear → go back to Scrum Master. Do NOT guess.**
+**If after 15 minutes of exploration the answers to any of Q1/Q2/Q3/Q4/Q5 are unclear → go back to Scrum Master. DO NOT guess.**
 
 ---
 
 ## 3. STEP 2 — CONTRACT → TEST → IMPLEMENT (TDD + DbC)
 
-### 3.1 Define the public contracts FIRST
+### 3.1 Define public contracts FIRST
 
 For every **public-facing function / module / endpoint / class method** that the task will create or modify:
 
@@ -177,8 +175,8 @@ For every **public-facing function / module / endpoint / class method** that the
    - What must remain true after function executes
    - State transitions that are always valid/invalid
 
-Write these as a section `## Public Contracts` in the task envelope file.
-**Do NOT write implementation until SM or envelope ACs reference these contracts.**
+Write these as a `## Public Contracts` section in the task envelope file.
+**DO NOT write implementation until SM or envelope ACs reference these contracts.**
 
 ### 3.2 Write tests that WILL FAIL (TDD red phase)
 
@@ -188,35 +186,35 @@ Before production code:
 - Use the testing framework the repo already uses (Vitest, Jest, pytest, Go test, etc.)
 - If the repo has NO test infrastructure → note and ask SM/user how to proceed
 
-**MANDATORY (che REGRA 7.9): NOMES DE TESTES = COMPORTAMENTO OBSERVÁVEL. NÃO IDs INTERNOS.**
+**MANDATORY (Che RULE 7.9): TEST NAMES = OBSERVABLE BEHAVIOUR. NO INTERNAL IDs.**
 
-**🔴 HARD RULE — INVERSÃO PROIBIDA:**
-> ❌ **ERRADO:** `it("FLO-714 valida deploy workflow")` → ID NO TÍTULO = anti-padrão BAD. Além disso, NUNCA reclame que um título NÃO tem FLO/T/AC.
-> ✅ **CORRETO:** `it("returns 409 Conflict when refunding an already-refunded payment", () => {` → comportamento observável. Traceabilidade vai no COMENTÁRIO.
+**🔴 HARD RULE — PROHIBITED INVERSION:**
+> ❌ **WRONG:** `it("FLO-714 validates deploy workflow")` → ID IN TITLE = bad anti-pattern. Furthermore, NEVER complain that a title DOES NOT have FLO/T/AC.
+> ✅ **CORRECT:** `it("returns 409 Conflict when refunding an already-refunded payment", () => {` → observable behaviour. Traceability goes in the COMMENT.
 
 ```
 ✗ describe("FLO-513 T2 refund", () => {})
 ✓ describe("POST /api/payments/refund", () => {})
 
-✗ it("Task T2.3 valida AC 4.2 já estornado", () => {})
+✗ it("Task T2.3 validates AC 4.2 already refunded", () => {})
 ✓ it("returns 409 Conflict when refunding an already-refunded payment", () => {
-    // @ac 4.2 | @task T2.3 | @ticket FLO-513   ← traceability goes HERE (1ª linha dentro do bloco)
+    // @ac 4.2 | @task T2.3 | @ticket FLO-513   ← traceability goes HERE (1st line inside block)
   })
 ```
 
-Anti padrões PROIBIDOS exclusivamente na **STRING do título** de `describe()` / `it()` / `test()`:
+PROHIBITED anti-patterns exclusively in the **title STRING** of `describe()` / `it()` / `test()`:
 `FLO-XXX`, `Task? T\d(\.\d+)?`, `AC? \d+`, `SPEC_XXX`, `§\d(\.\d+)?`, `REGRA \d`, `Item \d`, `Fase \d`, `Story \d+`.
 
-**❌ NUNCA** gere warning / peça rename porque um título NÃO contém FLO/T/AC. Ele NÃO DEVE conter. Título sem ID interno = COMPLIANT / BOM.
+**❌ NEVER** generate warning / ask for rename because a title DOES NOT contain FLO/T/AC. It SHOULD NOT contain them. Title without internal ID = COMPLIANT / GOOD.
 
 ### 3.3 Run tests → confirm they FAIL
 
 If tests pass without implementation → your tests are wrong. Fix them.
 
-### 3.4 Implement the minimal code (green phase)
+### 3.4 Implement minimal code (green phase)
 
-Implement only enough to make the tests pass.
-Rules from engineering-contracts are ACTIVE here:
+Implement only enough to make tests pass.
+Rules from engineering-contracts are ACTIVE:
 - Prefer pure functions, 1-2 args max, return Result over void
 - Early return, flat functions, throw only for unrecoverable
 - Immutable, declarative (map/filter/reduce) over mutable loops
@@ -241,32 +239,32 @@ Count all files you:
 
 **If count > 10 files:**
 1. **STOP. DO NOT PROCEED.**
-2. Append uma entry SEGURA via helper (NUNCA escreva decisions.log.jsonl manualmente — risco corrompimento JSONL + não-atomic):
+2. Append a SAFE entry via helper (NEVER manual Edit/Write decisions.log.jsonl):
    ```bash
    che_append_decision_jsonl "BLAST_RADIUS_OVER_10_FILES_SELF_REVIEW" \
      '{"task_id":"'"${TASK_ID}"'","files_count":'"${COUNT}"',"justification_per_file":[...]}'
    ```
-   — Entry title format canônico = `[${TASK_ID}] BLAST RADIUS > 10 FILES — self-review` (campo `title` no JSONL, via helper).
-   — File único compartilhado todas as tarefas desta worktree = `$CHE_DECISIONS_PATH` (já em che-sessions, FORA worktree por contrato.)
-3. For EACH file: justify why it absolutely must be part of this task (incluir no JSON payload acima `justification_per_file` array).
-4. Go back to Scrum Master with the list. Do NOT submit to QA before SM approves the exception.
+   — Canonical entry title format = `[${TASK_ID}] BLAST RADIUS > 10 FILES — self-review` (`title` field in JSONL).
+   — Single shared worktree decisions file = `$CHE_DECISIONS_PATH` (in che-sessions, OUTSIDE worktree).
+3. For EACH file: justify why it absolutely must be part of this task (include in `justification_per_file` array above).
+4. Go back to Scrum Master. DO NOT submit to QA before SM approves the exception.
 
 **If count ≤ 10 files:** proceed.
 
 Also validate:
-- Every file touched is listed in the TASK ENVELOPE's `Blast radius` list.
-  If you touched a file NOT in the list → append via helper (mesma regra, NÃO write manual):
+- Every file touched is in the TASK ENVELOPE's `Blast radius` list.
+  If you touched a file NOT in the list → append via helper:
   ```bash
   che_append_decision_jsonl "OUTSIDE_BLAST_RADIUS_FILE_TOUCHED" \
-    '{"task_id":"'"${TASK_ID}"'","filepath":"'"${FILEPATH}"'","justification":"<porque foi necessário tocar fora da lista>"}'
+    '{"task_id":"'"${TASK_ID}"'","filepath":"'"${FILEPATH}"'","justification":"<why it was necessary to touch outside list>"}'
   ```
-  — Title canônico = `[${TASK_ID}] OUTSIDE BLAST RADIUS: <filepath>` (campo `title` no JSONL).
+  — Canonical title = `[${TASK_ID}] OUTSIDE BLAST RADIUS: <filepath>`.
 
 ---
 
-## 5. STEP 4 — PRE-RELATÓRIO DE IMPLEMENTAÇÃO
+## 5. STEP 4 — IMPLEMENTATION PRE-REPORT
 
-Append to the task envelope file a section `## Dev Pre-Relatório`:
+Append a `## Dev Pre-Report` section to the task envelope file:
 
 ```markdown
 ### Summary
@@ -303,5 +301,5 @@ In these scenarios, ABORT the task and go back to SM:
 - TASK ENVELOPE missing or ambiguous
 - Repo onboarding questions cannot be answered
 - Task clearly violates KISS/YAGNI precedence from engineering-contracts
-- The task would require adding a new dependency AND Q2 found reusable alternatives
+- Task would require adding a new dependency AND Q2 found reusable alternatives
 - 2 consecutive QA/Compliance returns without progress (let SM decide next step)

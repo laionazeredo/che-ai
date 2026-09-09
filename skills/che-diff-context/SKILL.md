@@ -5,7 +5,7 @@ description: "Context builder for diff conversations. TWO MODES: (A) GitHub PR U
 
 # Che — Diff Context (Conversation Brief Builder)
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - Security + PII + compliance patterns (if flagged during analysis): `_shared_checklists/SECURITY_PII_COMMON.md`
 > - GitHub CLI gh auth + PR metadata commands: `_shared_checklists/GITHUB_CLI_COMMON.md`
 > - Worktree Session Binding rules (one session = one worktree, ask on doubt): engineering-contracts §19
@@ -15,13 +15,13 @@ description: "Context builder for diff conversations. TWO MODES: (A) GitHub PR U
 
 | Concern | `che-code-review` | This skill `che-diff-context` |
 |---|---|---|
-| **Goal** | Block production breaks. Verdict: 🔴/🟡/🟢. | Give the user **conversation context** so they can talk to someone about this diff. No verdict, no approve/request-changes. |
+| **Goal** | Block production breaks. Verdict: 🔴/🟡/🟢. | Give user **conversation context** so they can talk to someone about this diff. No verdict, no approve/request-changes. |
 | **Scope** | ONLY CRITICAL + HIGH blocking issues (Runtime / Security / Deps / Scope deviation). | EVERYTHING the user needs to understand intent + changes + CI state + talking points. Mild concerns are OK as "things to bring up". |
 | **Output** | Review report with numbered blocking issues. | Lightweight brief: What / Main changes / CI / Attention points. Narrative structure for dialogue. |
 | **Severity tone** | Bold red blockers. Polite but firm. | Neutral, descriptive. "Potential risk worth discussing" vs "this is broken." |
 | **Call to action** | "Fix X before merge" or "Approve". | "3 things I'd ask about in review: A, B, C." |
 
-**Rule:** User says "review this / approvação / blocking issues" → use `che-code-review`. User says "contexto / entender o que foi feito / preparar pra conversar sobre esse diff" → use THIS skill. Never mix.
+**Rule:** User says "review this / approval / blocking issues" → use `che-code-review`. User says "context / understand what was done / prepare to talk about this diff" → use THIS skill. Never mix.
 
 ---
 
@@ -39,7 +39,7 @@ description: "Context builder for diff conversations. TWO MODES: (A) GitHub PR U
 
 1. **`gh` CLI authenticated:** Run `gh auth status` silently. If not → guide user to `gh auth login` then stop.
 2. **PR URL reachable:** Validate URL format + run a tiny `gh pr view <url> --json number,title` to confirm it exists. If 404 / 403 → stop and report.
-3. **Worktree binding optional + 🔴 STORAGE PREFLIGHT (ANTES do primeiro write):** If user also gave `--worktree <path>`, write/read session binding per §19 (ask if mismatch). **Em QUALQUER modo (A ou B), ANTES de salvar o primeiro arquivo em disco, rode:**
+3. **Worktree binding optional + 🔴 STORAGE PREFLIGHT (BEFORE first write):** If user also gave `--worktree <path>`, write/read session binding per §19 (ask if mismatch). **In ANY mode (A or B), BEFORE saving the first file to disk, run:**
    ```bash
    CHE_HOME="${CHE_HOME:-$HOME/.trae}"
    CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
@@ -49,9 +49,9 @@ description: "Context builder for diff conversations. TWO MODES: (A) GitHub PR U
      che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
      che_ensure_session_dirs "$WORKTREE_ROOT"
    fi
-   # APÓS isto: usar SOMENTE che_output_path "diff_context" ... para construir paths.
+   # AFTER this: use ONLY che_output_path "diff_context" ... to build paths.
    ```
-   NUNCA use `./reports/` nem paths dentro da worktree. MORATÓRIA §20.
+   NEVER use `./reports/` or paths inside the worktree. §20 MORATORIUM.
 
 #### A.1 Context collection (3 sources)
 
@@ -63,7 +63,7 @@ gh pr view <PR_URL> --json \
 ```
 Extract fields:
 - **Title + number**
-- **Body summary** (1–3 sentences maximum; if body is >30 lines → pick TL;DR header or first paragraph only)
+- **Body summary** (1–3 sentences max; if body > 30 lines → pick TL;DR header or first paragraph only)
 - **Author, Draft/Ready, Base → Head branch**
 - **Diff stats** (lines + files + commits count)
 - **Labels / linked issues** if any
@@ -75,8 +75,8 @@ gh pr diff <PR_URL> --name-only
 ```
 Build:
 - **Top 5–8 most meaningful files** sorted by additions+deletions. Group by folder/module (e.g., `packages/db/*`, `packages/platform/app/api/*`).
-- **One-liner per group:** ex "`packages/db` — 2 new entities + 1 migration".
-- **Flag obvious big groups:** if a single group has >40% of diff → highlight that as "main blast radius".
+- **One-liner per group:** e.g. "`packages/db` — 2 new entities + 1 migration".
+- **Flag obvious big groups:** if a single group has >40% of diff → highlight as "main blast radius".
 
 ##### A.1.3 CI checks status
 Run:
@@ -99,57 +99,57 @@ The output saved to disk AND presented to user uses THESE sections in THIS order
 
 ---
 
-## 1. 🧭 O que esta PR está implementando (contexto alto-nível)
-1–3 frases claras. Responde: "Qual problema ela resolve? Qual o comportamento novo?"
-- Usa título + resumo do body.
-- Se body tiver Acceptance Criteria → copiar em bullet máximo 5 ACs core.
-- NÃO reproduz o body inteiro. Trim.
+## 1. 🧭 What this PR implements (high-level context)
+1–3 clear sentences. Answers: "What problem does it solve? What is the new behavior?"
+- Use title + body summary.
+- If body has Acceptance Criteria → copy max 5 core AC bullets.
+- DO NOT reproduce entire body. Trim.
 
-## 2. 🧩 Principais áreas de mudança (blast radius por módulo)
-Max 6–8 bullets. Cada bullet = 1 módulo/grupo + 1 verb + o que mudou.
-Ex:
-• **packages/db — entidades + migração**: `TicketRefund` entity + SQL migration adds `refund_status` enum.
+## 2. 🧩 Main change areas (blast radius per module)
+Max 6–8 bullets. Each bullet = 1 module/group + 1 verb + what changed.
+E.g.:
+• **packages/db — entities + migration**: `TicketRefund` entity + SQL migration adds `refund_status` enum.
 • **packages/platform/api/refunds — endpoint**: `POST /api/events/:id/refunds` + Stripe refund call.
 
-Section end → 1 summary line: **Total:** X arquivos / +Y linhas / -Z linhas / W commits.
+Section end → 1 summary line: **Total:** X files / +Y lines / -Z lines / W commits.
 
-## 3. ✅ Status dos CI Checks
-• **Global:** <passando/tem falhas/com pendências> — <M> passed / <N> failed / <P> pending de <TOTAL>.
-• **Failed checks (se houver):**
-  - <Check 1 nome>: <1 linha causa, ex "build platform step 42 TypeScript type error: ...">
-  - <Check 2 nome>: ...
-• **Review Decision do GitHub (se houver):** reviewDecision field.
+## 3. ✅ CI Checks Status
+• **Global:** <passing/has failures/pending> — <M> passed / <N> failed / <P> pending of <TOTAL>.
+• **Failed checks (if any):**
+  - <Check 1 name>: <1 line cause, e.g. "build platform step 42 TypeScript type error: ...">
+  - <Check 2 name>: ...
+• **GitHub Review Decision (if any):** reviewDecision field.
 
-## 4. 🔴 Riscos / Coisas quebradas que vejo (levemente crítico)
-Aqui é o espaço para problemas claros mas NO BLOCKING verdict (diferente de code-review). Max 3 bullets.
-- Se nada: dizer "Nenhum risco óbvio no diff analisado."
-- Exemplos típicos: "Novo endpoint não tem check de permissão explícito (verificar se herda do middleware pai)"; "Migration DROP sem rollback documentado"; "Chave secreta apareceu 1 linha — parece placeholder dummy, confirmar".
+## 4. 🔴 Risks / Broken things I see (slightly critical)
+Space for clear problems but NO BLOCKING verdict (different from code-review). Max 3 bullets.
+- If none: say "No obvious risks in analyzed diff."
+- Typical examples: "New endpoint has no explicit permission check (verify if inherited from parent middleware)"; "Migration DROP without documented rollback"; "Secret key appeared 1 line — looks like dummy placeholder, confirm".
 
-## 5. 💬 3 Pontos de Atenção PARA VOCÊ CONVERSAR sobre esta PR
-MÁXIMO 3 itens. 1 frase cada. Estes são seus tópicos pra pautar na call/comentário.
-• Ponto 1: Pergunta sobre arquitetura / abordagem
-• Ponto 2: Cobertura de testes ou casos edge faltando
-• Ponto 3: Alinhamento com ACs do PR body / ticket
+## 5. 💬 3 Attention Points FOR YOU TO DISCUSS about this PR
+MAXIMUM 3 items. 1 sentence each. These are your topics to bring up in call/comment.
+• Point 1: Question about architecture / approach
+• Point 2: Test coverage or missing edge cases
+• Point 3: Alignment with PR body ACs / ticket
 ```
 
 #### A.3 Save + delivery
-**Construir path SOMENTE via helper (preflight já rodou em A.0 item 3):**
+**Construct path ONLY via helper (preflight already ran in A.0 item 3):**
 ```bash
-# Mode A = PR URL → related_id = pr-<N>; type = diff_context; scope = session (efêmero)
+# Mode A = PR URL → related_id = pr-<N>; type = diff_context; scope = session (ephemeral)
 DIFFCTX_PATH="$(che_output_path "diff_context" "diff-context" "pr-${PR_ID}" "session" "md")"
 ```
-Resultado exemplo: `$CHE_SESSION_DIR/diff_contexts/pr-382/20260902-103000-diff-context.md`
-→ Fallback se sem binding já é tratado pelo helper (cai em `$CHE_HOME/outputs/fallback-session/...` nunca worktree).
-→ Timestamp UTC prefix garante ordenação se rodar múltiplas vezes na mesma PR.
+Example result: `$CHE_SESSION_DIR/diff_contexts/pr-382/20260902-103000-diff-context.md`
+→ Fallback without binding is handled by helper (lands in `$CHE_HOME/outputs/fallback-session/...` never worktree).
+→ UTC timestamp prefix ensures ordering if run multiple times on same PR.
 
-Delivery to chat follows §18 shape: **📍 Status / 🧩 Resumo / 🔗 Refs / ❓ Deep-dive**.
-Never dump the full 5-section report into chat verbatim unless user says "mostra tudo". Chat summary = condensed 3 bullets from each of sections 1/2/3 + warning if section 4 > 0 items. Offer: "Quer o relatório completo salvo no disco ou o full text aqui?"
+Delivery to chat follows §18 shape: **📍 Status / 🧩 Summary / 🔗 Refs / ❓ Deep-dive**.
+Never dump full 5-section report into chat verbatim unless user says "show everything". Chat summary = condensed 3 bullets from each of sections 1/2/3 + warning if section 4 > 0 items. Offer: "Full report saved to disk or show full text here?".
 
 ---
 
 ### Mode B — Local Worktree — Diff vs Default Branch
 
-> **Goal same as Mode A: conversation context.** Only difference: source = LOCAL WORKTREE, and we split into 3 temporal buckets vs a PR's single diff.
+> **Goal same as Mode A: conversation context.** Only difference: source = LOCAL WORKTREE, and we split into 3 temporal buckets vs PR's single diff.
 
 #### B.0 Worktree preflight (engineering-contracts §19, NON-NEGOTIABLE)
 
@@ -159,24 +159,24 @@ Run BEFORE any git command.
 2. **Valid git worktree check:** `cd <WORKTREE_ROOT> && git rev-parse --is-inside-work-tree 2>/dev/null` → true. If not → stop.
 3. **Session binding file read:** Read `$CHE_SESSION_DIR/binding.md` if exists (via contract).
    - If exists and `WORKTREE_ROOT` entry ≠ provided path → BLOCK. Ask user: "Session binding says X but you asked Y. Proceed with Y anyway? (A = Y override; B = Switch back to X; C = Cancel)". Never silent override.
-   - If binding file missing → follow §19 canonical 2-LEVEL flow (global registry Level1 + Level2 in session dir). Ask user confirms worktree once.
+   - If binding file missing → follow §19 canonical 2-LEVEL flow (global registry Level 1 + Level 2 in session dir). Ask user to confirm worktree once.
 
-#### B.1 Resolve BASE BRANCH (na dúvida = pergunta)
+#### B.1 Resolve BASE BRANCH (if in doubt = ask)
 
-Goal: find the branch to compare AGAINST. This is the "default comparison branch" user would open a PR against.
+Goal: find branch to compare AGAINST. This is the "default comparison branch" user would open a PR against.
 
 1. **Try auto-detect first:**
-   - Fetch default remote default branch: `cd <WORKTREE_ROOT> && gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null`. If returns string like `main`/`master`/`dev` → that's candidate 1.
-   - Local branches list sorted by most recent commit: `git branch -a --sort=-committerdate | head -20`
+   - Fetch remote default branch: `cd <WORKTREE_ROOT> && gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null`. If string like `main`/`master`/`dev` → candidate 1.
+   - Local branches list sorted by most recent: `git branch -a --sort=-committerdate | head -20`
    - Heuristic: candidate 2 = remote `origin/dev`, `origin/develop`, `origin/main` commonly used.
 2. **Ambiguity rule (§19 doubt = ask):**
-   - If ≥2 equally-valid candidates (e.g., `origin/dev` AND `origin/main` both exist and both are recent) → **STOP. Ask user directly.**
+   - If ≥2 equally-valid candidates (e.g., `origin/dev` AND `origin/main` both exist and recent) → **STOP. Ask user directly.**
    - Ask format (AskUserQuestion 2 choices max + other):
-     > Comparar contra qual branch base?
-     > A) `origin/dev` (mais recente, dev staging)
-     > B) `origin/main` (produção)
-     > (other / digitar o nome)
-3. **Once BASE_BRANCH resolved:** Record variable `BASE_BRANCH_REF = origin/<name>` (remote preferred so we compare working tree vs the actual upstream base, not stale local copy).
+     > Compare against which base branch?
+     > A) `origin/dev` (most recent, dev staging)
+     > B) `origin/main` (production)
+     > (other / type name)
+3. **Once BASE_BRANCH resolved:** Record `BASE_BRANCH_REF = origin/<name>` (remote preferred to compare worktree vs actual upstream base, not stale local copy).
 
 #### B.2 Context collection (4 buckets = key difference from Mode A)
 
@@ -199,7 +199,7 @@ Extract:
 - Commits count + file count.
 
 ##### B.2.2 Bucket 2 — 🟡 To Commit (STAGED + UNSTAGED tracked changes)
-This = work-in-progress the user has locally but NOT in any commit on this branch yet.
+This = local work-in-progress NOT in any commit on this branch yet.
 ```bash
 git status --short  # filter M/A/D/R + space or M (not ??)
 # staged only
@@ -219,78 +219,78 @@ Extract:
 git ls-files --others --exclude-standard   # respect .gitignore
 ```
 Rules:
-- Skip: `node_modules/`, `.next/`, `dist/`, build artifacts even if they somehow leaked here.
-- If ≤5 untracked → list them all by path.
-- If >5 → list first 5 + "e mais <K>".
+- Skip: `node_modules/`, `.next/`, `dist/`, build artifacts.
+- If ≤5 untracked → list all by path.
+- If >5 → list first 5 + "and <K> more".
 - Flag any **untracked `.env*` or secret-looking files** immediately (Security quick flag).
 
 ##### B.2.4 Bucket 4 — 🔧 Current branch metadata
 - Current branch: `git branch --show-current`
 - HEAD commit short SHA
 - Worktree clean/dirty boolean
-- Optional: stashes count: `git stash list | wc -l`
+- Optional stash count: `git stash list | wc -l`
 
 #### B.3 Conversation Brief Canonical Output (Mode B)
 
-Same rule as Mode A: 5 fixed sections, §18 diagonal shape. Bucket 1/2/3 take the place of PR diff.
+Same rule as Mode A: 5 fixed sections, §18 diagonal shape. Buckets 1/2/3 replace PR diff.
 
 ```markdown
 # 📋 Diff Context — Local Worktree vs <BASE_BRANCH_REF>
 
-**Mode:** Local Worktree | **Path:** <WORKTREE_ROOT> | **Branch atual:** <BRANCH> | **Generated at:** <ISO ts>
+**Mode:** Local Worktree | **Path:** <WORKTREE_ROOT> | **Current Branch:** <BRANCH> | **Generated at:** <ISO ts>
 **Clean/Dirty:** <clean|dirty> | **Stashes:** <N> | **Commits ahead of base:** <W>
 
 ---
 
-## 1. 🧭 O que esta sendo desenvolvido aqui (contexto alto-nível)
-1–3 frases. Baseado nos últimos commits mensagens + arquivos principais.
-- Combina top 3 commit messages oneline em narrativa curta.
-- Se commits forem "WIP" / vague → dizer "Contexto em títulos de commits não claro; focar em seções 2.1–2.3 abaixo".
+## 1. 🧭 What is being developed here (high-level context)
+1–3 sentences. Based on last commit messages + main files.
+- Combine top 3 commit oneliners into short narrative.
+- If commits "WIP" / vague → say "Context in commit titles not clear; focusing on sections 2.1–2.3 below".
 
-## 2. 🧩 Mudanças separadas por etapa (pra conversar)
+## 2. 🧩 Main changes by stage (for discussion)
 
-### 2.1 🟢 Já Commitado (W commits / X arquivos / +Y / -Z)
+### 2.1 🟢 Already Committed (W commits / X files / +Y / -Z)
 Max 5 bullets:
-• Últimos commits principais (3–5 oneline).
-• Módulos/áreas principais afetadas (como Modo A seção 2).
-• 1 linha: qual o estado geral desta parte (ex: "Pipeline refund completo em commits, refactor migration half done").
+• Main recent commits (3–5 oneliner).
+• Main modules/areas affected (as in Mode A section 2).
+• 1 line: general state of this part (e.g. "Refund pipeline complete in commits, migration refactor half done").
 
-### 2.2 🟡 Por Commitar (staged N, unstaged M tracked files)
+### 2.2 🟡 To Commit (staged N, unstaged M tracked files)
 Max 5 bullets:
-• Arquivos principais com alteração staged.
-• Arquivos principais unstaged (WIP).
-• Flag: se algum arquivo de migração/segurança tem mudanças UNSTAGED.
-• Summary line: quanto % do trabalho parece em WIP vs pronto.
+• Main files with staged changes.
+• Main unstaged files (WIP).
+• Flag: if any migration/security file has UNSTAGED changes.
+• Summary line: % of work appearing as WIP vs ready.
 
-### 2.3 ⚪ Untracked / Novos arquivos ainda não adicionados (K)
-• Listar 5 mais importantes + path.
-• Flag env/secrets se aparecem.
-• "K > 5" aviso.
+### 2.3 ⚪ Untracked / New files not yet added (K)
+• List 5 most important + path.
+• Flag env/secrets if present.
+• "K > 5" warning.
 
-## 3. ✅ Local build/lint status hints (se possível, 1 linha cada)
-Se for fácil rodar num comando rápido e tiver pipeline conhecido (Nx/pnpm workspace):
-• NÃO rode full lint+build+tests full (overkill). Apenas quick check se conhecido: roda typecheck de 1 package que mudou se ≤ 10s.
-• Se não rodar nada → dizer: "Nenhum check local executado; rode `corepack pnpm nx run <pkg>:typecheck` p/ confirmar tipos na área alterada."
+## 3. ✅ Local build/lint status hints (if possible, 1 line each)
+If easy via known pipeline (Nx/pnpm workspace):
+• DO NOT run full lint+build+tests (overkill). Quick check only: run 1 package typecheck if ≤ 10s.
+• If none run → say: "No local checks executed; run `corepack pnpm nx run <pkg>:typecheck` to confirm types in changed area."
 
-## 4. 🔴 Problemas / Riscos que destaco (antes mesmo de revisão formal)
-Max 3 bullets. Algo claramente errado OU arriscado no estado atual.
-Exemplos típicos:
-• "Migration com ALTER TABLE DROP COLUMN sem comentário de rollback / down migration"
-• ".env.local está untracked (contém chaves provavelmente reais — **cuidado** caso esse worktree seja compartilhado)"
-• "Arquivo `refunds.ts` tem ~400 linhas mudadas unstaged — risco de trabalho half-done se abrir PR agora".
-Nada = "Nenhum risco óbvio de cara".
+## 4. 🔴 Highlighted Problems / Risks (before formal review)
+Max 3 bullets. Something clearly wrong OR risky in current state.
+Typical examples:
+• "Migration with ALTER TABLE DROP COLUMN without rollback comment / down migration"
+• ".env.local is untracked (contains likely real keys — **careful** if this worktree is shared)"
+• "File `refunds.ts` has ~400 lines changed unstaged — risk of half-done work if opening PR now".
+None = "No obvious immediate risks".
 
-## 5. 💬 3 Pontos de Atenção PARA VOCÊ CONVERSAR / SE PREPARAR
-MÁXIMO 3, 1 frase cada:
-• 1 ponto sobre escopo atual vs desejado (ainda faltando? Quais peças)
-• 1 ponto sobre ordem de commitagem (o que commitar primeiro / o que deixar WIP)
-• 1 ponto sobre abrir PR agora vs esperar mais alguns commits
+## 5. 💬 3 Attention Points TO DISCUSS / PREPARE FOR
+MAXIMUM 3, 1 sentence each:
+• 1 point on current vs desired scope (still missing? Which pieces)
+• 1 point on committing order (what to commit first / leave WIP)
+• 1 point on opening PR now vs waiting for more commits
 ```
 
 #### B.4 Save + delivery
-**Construir path SOMENTE via helper (preflight já rodou no A.0 item 3, reutilizar aqui também no Mode B — se não rodou ainda por algum motivo, rodar AGORA antes do write):**
+**Construct path ONLY via helper (preflight already ran in A.0 item 3, reuse here — if not run yet, run NOW before write):**
 ```bash
-# Caso o preflight A.0 item 3 NÃO tenha rodado (usuário pulou direto para Mode B sem Mode A), GARANTIR aqui:
+# If A.0 item 3 preflight NOT run (user jumped to Mode B), GUARANTEE here:
 if [ -z "${CHE_SESSION_DIR:-}" ]; then
   CHE_HOME="${CHE_HOME:-$HOME/.trae}"
   CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
@@ -305,18 +305,18 @@ fi
 WT_SLUG="$(basename "${WORKTREE_ROOT%/}")"
 DIFFCTX_LOCAL_PATH="$(che_output_path "diff_context" "diff-context-local" "worktree-${WT_SLUG}" "session" "md")"
 ```
-Resultado exemplo: `$CHE_SESSION_DIR/diff_contexts/worktree-feat-FLO-714--X/20260902-110000-diff-context-local.md`
-→ Múltiplas passes locais ordenam por timestamp UTC automaticamente.
+Example result: `$CHE_SESSION_DIR/diff_contexts/worktree-feat-FLO-714--X/20260902-110000-diff-context-local.md`
+→ Multiple local passes ordered by UTC timestamp automatically.
 
-Chat delivery follows §18 shape (condensed, not full dump unless asked).
+Chat delivery follows §18 shape (condensed).
 
 ---
 
 ## General rules for BOTH modes
 
 1. **No verdict.** Never "Approve / Request Changes". That is **only** `che-code-review`.
-2. **Report ≤250 lines max.** If diff is huge → pick top changes; don't enumerate every file.
-3. **§18 response verbosity budget active for chat delivery.** The chat summary is 250–500w, 4 sections, 3 bullets max. Full report = saved to disk, user can open.
-4. **§19 worktree binding active on any mode that touches disk writes.** Always read binding file if worktree path is known.
+2. **Report ≤250 lines max.** If diff huge → pick top changes; don't enumerate every file.
+3. **§18 response verbosity budget active for chat delivery.** Chat summary 250–500w, 4 sections, 3 bullets max. Full report = saved to disk.
+4. **§19 worktree binding active on any mode touching disk writes.** Always read binding file if worktree path known.
 5. **NEVER invent PR body / commit intent.** If titles/vague → explicitly say "context from authors not clear, recommend asking".
-6. **PII / secrets scanning (light):** While collecting diffs/text, a quick grep (same patterns as compliance) — if a raw key/token shows up, **flag it immediately in section 4 regardless of other content.**
+6. **PII / secrets scanning (light):** Quick grep (same as compliance patterns) while collecting diffs — if raw key/token shows up, **flag immediately in section 4 regardless of content.**

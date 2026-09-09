@@ -64,14 +64,14 @@
 
 ## 🤝 Findings Alignment with Human Comments (non-duplication guarantee)
 
-> Every finding ≥ MEDIUM must be classified against existing human threads. NÃO DUPLIQUE achados que humanos já levantaram (exceto para estender/discordar com justificativa explícita + cross-ref URL).
+> Every finding ≥ MEDIUM must be classified against existing human threads. DO NOT DUPLICATE findings that humans have already raised (except to extend/disagree with explicit justification + cross-ref URL).
 
 | Finding # | Classification | Cross-ref (thread id + author) | Justification when extends / disagrees |
 |---|---|---|---|
-| #F-1 🔴 CRITICAL (runtime) | **NOVO (não mencionado por nenhum revisor humano)** | — | Null deref é um caso edge novo descoberto em `renderPhone()` quando profile = null. Não conflita com as threads abertas existentes. |
-| #F-2 🟠 HIGH (Security / PII) | **EXTENDS human thread #comment-123457** (concorda parcialmente) | `#comment-123457` by @alice · [thread URL] | @alice mencionou só admin UI table; extendemos PARA logger também (linha adicional `logger.info({email:...})` em `RefundService.ts:211` não comentada). A correção recomendada cobre ambos os locais. |
-| #F-3 (exemplo) | **OMITIDO (duplicata exata)** | `#comment-123456` by @octocat | Idempotency key já levantado por @octocat; nenhuma informação adicional a acrescentar. 🎯 Reportado em "Existing Review Context" acima — não duplicamos aqui. |
-| #F-4 (exemplo) | **DISCORDA parcialmente de humano** | `#comment-999999` by @bob · [thread URL] | @bob recomendou `dayjs()` → `date-fns` em 3 locais; análise mostra que `date-fns-tz` não seria necessário e que dayjs com `.tz()` plugin existente resolve. Recomendação contrária: manter dayjs + adicionar plugin tz (1 linha, sem new dep). |
+| #F-1 🔴 CRITICAL (runtime) | **NEW (not mentioned by any human reviewer)** | — | Null deref is a new edge case discovered in `renderPhone()` when profile = null. Does not conflict with existing open threads. |
+| #F-2 🟠 HIGH (Security / PII) | **EXTENDS human thread #comment-123457** (partially agrees) | `#comment-123457` by @alice · [thread URL] | @alice mentioned only admin UI table; we extended TO logger as well (additional line `logger.info({email:...})` in `RefundService.ts:211` not commented). Recommended fix covers both locations. |
+| #F-3 (example) | **OMITTED (exact duplicate)** | `#comment-123456` by @octocat | Idempotency key already raised by @octocat; no additional info to add. 🎯 Reported in "Existing Review Context" above — we don't duplicate here. |
+| #F-4 (example) | **DISAGREES partially with human** | `#comment-999999` by @bob · [thread URL] | @bob recommended `dayjs()` → `date-fns` in 3 locations; analysis shows `date-fns-tz` wouldn't be necessary and existing dayjs with `.tz()` plugin resolves it. Contrary recommendation: keep dayjs + add tz plugin (1 line, no new dep). |
 
 ---
 
@@ -204,7 +204,7 @@ it("refund pending booking with settled Stripe capture", async () => {
      >
 ```
 
-**Note on isenções:**
+**Note on exemptions:**
 - This finding CANNOT be exempted via QA_OVERRIDE because it's an icon button in a table row with multiple siblings (3/3 G8.1 HIGH triggers simultaneously). If user wants override, they must sign `QA_OVERRIDE=G8.1 FLO-513: action button only appears once per screen today with no plan to add siblings` in the PR body, explicitly.
 
 ---
@@ -232,10 +232,11 @@ User should trust we actually ran the full process:
 **(Written in Portuguese in the actual chat delivery; this template records what was checked.)**
 
 Blocking:
-1. Fix F-1 + F-2 before merge.
+1. Fix F-1, F-2 + F-6 before merge.
 2. Decide on F-3: scope creep (remove or justify).
 
 Non-blocking nice-to-haves:
 - F-4 (deps) — up to you.
+- F-5 (testing traceability) — up to you.
 
 After fixes: re-run a short follow-up review, then OK to move to /che-ship or merge.

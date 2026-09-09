@@ -1,12 +1,12 @@
 # ==============================
-# Harness Flockr — .gitignore GLOBAL
+# Che Flockr — GLOBAL .gitignore
 # ==============================
-# Estratégia 3 camadas ENGINEERING-CONTRACTS §6.2:
-#   - VERSIONADO no repo (WHITELIST): commands/ contracts/ skills/ hooks/ scripts/ permission/
-#     + docs raiz (README, HARNESS_*, REFERENCE_*, package.json, pnpm-lock.yaml, tsconfig.json, hooks.json)
-#   - IGNORADO TOTAL (BLACKLIST): dados por-máquina / por-usuário — NUNCA sobrescritos por git pull
+# 3-Layer Strategy ENGINEERING-CONTRACTS §6.2:
+#   - VERSIONED in repo (WHITELIST): commands/ contracts/ skills/ hooks/ scripts/ permission/
+#     + root docs (README, CHE_*, REFERENCE_*, package.json, pnpm-lock.yaml, tsconfig.json, hooks.json)
+#   - TOTALLY IGNORED (BLACKLIST): per-machine / per-user data — NEVER overwritten by git pull
 
-# ===== .trae internals da IDE Trae =====
+# ===== .trae internals from Trae IDE =====
 builtin/
 builtin_skills/
 mcps/
@@ -15,21 +15,21 @@ toolhost/
 memory-config.json
 skill-config.json
 
-# ===== BLACKLIST ABSOLUTA: dados por-máquina (user-specific) =====
+# ===== ABSOLUTE BLACKLIST: per-machine data (user-specific) =====
 memory/
-#   Nível 1 binding local — cada sessão local. Escritor único = contracts helper.
+#   Level 1 local binding — each local session. Single writer = contracts helper.
 bindings/registry.jsonl
 
-#   Regras pessoais do usuário (perfil, idioma, preferências, flags por sessão).
-#   Use user_rules/.gitkeep para manter a pasta estrutura vazia no repo.
+#   User's personal rules (profile, language, preferences, per-session flags).
+#   Use user_rules/.gitkeep to maintain empty folder structure in repo.
 user_rules/*
 !user_rules/.gitkeep
 
-# ===== DEPS & ARTIFATOS GERADOS =====
+# ===== DEPS & GENERATED ARTIFACTS =====
 node_modules/
 pnpm-debug.log*
 
-# ===== Backups do install-harness.sh (~/.trae.bak-YYYYMMDD-HHMM) =====
+# ===== Backups from install-che.sh (~/.trae.bak-YYYYMMDD-HHMM) =====
 *.bak-*
 *.bak
 
@@ -42,15 +42,15 @@ Thumbs.db
 *.swo
 *~
 
-# ===== Logs runtime harness =====
+# ===== Runtime logs =====
 *.log
 
-# ====== HARNESS PLANNING ARTIFACTS — NEVER COMMIT ======
-# (Fail-closed: mesmo que algum bug de skill legada crie esses arquivos
-#  DENTRO do repo che-ai em vez de $HARNESS_SESSIONS_ROOT, o git
-#  não stageia. Projetos clientes recebem o snippet completo via
-#  contracts/harness-planning-artifacts-blacklist.gitignore injetado
-#  no .gitignore por install-harness.sh / self-update-harness.sh.)
+# ====== CHE PLANNING ARTIFACTS — NEVER COMMIT ======
+# (Fail-closed: even if a legacy skill bug creates these files
+#  INSIDE the che-ai repo instead of $CHE_WORKSPACES_ROOT, git
+#  won't stage them. Client projects receive the complete snippet via
+#  contracts/che-planning-artifacts-blacklist.gitignore injected
+#  into .gitignore by install-che.sh / self-update-che.sh.)
 .trae/
 !.trae/.gitkeep
 decisions.log.jsonl
@@ -71,7 +71,7 @@ gh_stack_plan.md
 session.md
 envelope.md
 graphify-out/
-harness-review-report.md
-harness-compliance-report.md
+che-review-report.md
+che-compliance-report.md
 flockr-review-report.md
 __pycache__/

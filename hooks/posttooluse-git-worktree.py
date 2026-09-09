@@ -7,7 +7,7 @@ che_home = os.environ.get("CHE_HOME") or os.environ.get("HARNESS_HOME") or os.pa
 if che_home not in sys.path:
     sys.path.insert(0, che_home)
 
-from che_core.hooks import posttooluse_git_worktree  # noqa: E402 (sys.path inserido logo acima é intencional)
+from che_core.hooks import posttooluse_git_worktree  # noqa: E402 (sys.path inserted above is intentional)
 
 
 def main():
@@ -20,7 +20,7 @@ def main():
         result = posttooluse_git_worktree(input_json)
         print(json.dumps(result))
     except Exception as e:
-        print(json.dumps({"decision": "allow", "additionalContext": f"Hook git-worktree error (safe-noop): {e}"}))
+        print(json.dumps({"decision": "allow", "additionalContext": f"git-worktree hook error (safe-noop): {e}"}))
 
 
 if __name__ == "__main__":

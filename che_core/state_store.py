@@ -339,11 +339,11 @@ def query_state_db(
         first_token = sql.lstrip().split(" ")[0].lower() if sql.strip() else ""
         if first_token not in {"select", "explain", "pragma"}:
             raise ValueError(
-                "SQL restrito a SELECT / EXPLAIN / PRAGMA por padrão. Para modificar dados, passe --force explicitamente."
+                "SQL restricted to SELECT / EXPLAIN / PRAGMA by default. To modify data, pass --force explicitly."
             )
     db_path = _get_state_db_path(worktree_root=worktree_root)
     if not db_path.exists():
-        raise FileNotFoundError(f"State store ainda não existe em: {db_path}. Rode `che state rebuild-index` primeiro.")
+        raise FileNotFoundError(f"State store does not exist yet at: {db_path}. Run `che state rebuild-index` first.")
     conn = _connect(db_path, read_only=(not force))
     try:
         cur = conn.execute(sql, binds)

@@ -18,16 +18,16 @@ arguments:
 IMMEDIATELY invoke **`che-scope-checker`** Skill.
 
 Preflight dispatch (pick ONE mode):
-- **Mode A (PR URL)** — arg é URL válida GitHub `github.com/*/pull/*` → mode A. Pré: `gh auth status` OK; parse PR number. PR body text becomeia fonte ESCOPO ADICIONAL junto com `--prd`/`--ticket`/`--task-graph`/`--scope`.
-- **Mode B (Worktree local)** — `--worktree` fornecido OU `target` é path absoluto válido worktree git SEM PR URL. Pré: `cd <worktree> && git rev-parse --is-inside-work-tree` = `true`. Detecta base branch (pergunta se ambíguo).
+- **Mode A (PR URL)** — arg is a valid GitHub URL `github.com/*/pull/*` → mode A. Pre: `gh auth status` OK; parse PR number. PR body text becomes an ADDITIONAL SCOPE source along with `--prd`/`--ticket`/`--task-graph`/--scope.
+- **Mode B (Local Worktree)** — `--worktree` provided OR `target` is a valid absolute path to a git worktree WITHOUT PR URL. Pre: `cd <worktree> && git rev-parse --is-inside-work-tree` = `true`. Detect base branch (ask if ambiguous).
 
-Scope source obrigatoriedade (pelo MENOS 1 dos 5 aceitos — combinação permitida):
+Scope source mandatory (at LEAST 1 of the 5 accepted — combination permitted):
 1. `--prd=/path/prd.md` (headings ACs / Goals / OOS)
 2. `--ticket=<Linear/Jira URL>` (via API GraphQL/REST)
 3. `--task-graph=/path/task_graph.md` (todos os nodes status DONE)
-4. `--scope="texto livre com as ACs"`
-5. **PR body** (Modo A apenas, extraído automaticamente)
+4. `--scope="free text with ACs"`
+5. **PR body** (Mode A only, extracted automatically)
 
-Se NENHUM scope source fornecido → ASK ao usuário. Não prossegue sem escopo definido.
+If NO scope source provided → ASK user. Do not proceed without a defined scope.
 
-Relatório: `$CHE_WORKSPACE_SHARED/scope-check_<slug>_<YYYYMMDD>.md` com 4 seções canônicas + verdict final 🟢🟡🔴 em PT-BR.
+Report: `$CHE_WORKSPACE_SHARED/scope-check_<slug>_<YYYYMMDD>.md` with 4 canonical sections + final verdict 🟢🟡🔴 in English.

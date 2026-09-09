@@ -1,4 +1,4 @@
-"""Smoke test RAG: provider none sempre funciona, build incremental, search não crasha."""
+"""Smoke test RAG: none provider always works, incremental build, search doesn't crash."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from che_core.rag import NoneBM25Provider, build_rag_index, get_provider, search
 
 def test_none_provider_always_encodes():
     p = NoneBM25Provider(dim=4)
-    out = p.encode(["hello world", "segundo texto"])
+    out = p.encode(["hello world", "second text"])
     assert len(out) == 2
     assert len(out[0]) == 4
     norm = math.sqrt(sum(v * v for v in out[0]))
@@ -28,7 +28,7 @@ def test_get_provider_none_returns_none():
 
 
 def test_get_provider_unknown_falls_back_to_none():
-    p, label, _ = get_provider("nao_existo_xyz")
+    p, label, _ = get_provider("non_existent_xyz")
     assert isinstance(p, NoneBM25Provider)
     assert "none" in label
 
@@ -43,33 +43,33 @@ def _setup_content(tmp_path: Path):
 
     (Path(paths["CHE_PROJECT_DIR"]) / "architecture.md").write_text(
         """
-# Arquitetura
+# Architecture
 
-O sistema usa monorepo NX com aplicações Next.js e pacotes compartilhados: db, auth, trpc, ui.
-Camada de dados usa PostgreSQL com RLS habilitado em todas tabelas de tenancy.
-Pagamentos processados via Stripe Connect com separacao de fundos entre organizacoes.
+The system uses NX monorepo with Next.js applications and shared packages: db, auth, trpc, ui.
+Data layer uses PostgreSQL with RLS enabled on all tenancy tables.
+Payments processed via Stripe Connect with funds separation between organisations.
 """.strip(),
         encoding="utf-8",
     )
     (Path(paths["CHE_PROJECT_DIR"]) / "product_context.md").write_text(
         """
-# Produto
+# Product
 
-Plataforma de ingressos UK-first: descoberta publica, checkout seguro, painel administrativo
-para criadores de eventos, e app de scanner para funcionarios na entrada. Moeda GBP.
+UK-first ticketing platform: public discovery, secure checkout, administrative panel
+for event creators, and scanner app for staff at entrance. Currency GBP.
 """.strip(),
         encoding="utf-8",
     )
     specs = Path(paths["CHE_WORKSPACE_SHARED"]) / "specs"
-    (specs / "pagamento.md").write_text(
+    (specs / "payment.md").write_text(
         """---
-title: Pagamento
+title: Payment
 status: Approved
 domain: engineering
 ---
 
-Pagamento usa Stripe Connect. Apos o checkout criamos PaymentIntent por transacao,
-e guardamos referencia no banco. Refunds requerem papel admin e registram em log de auditoria.
+Payment uses Stripe Connect. After checkout we create PaymentIntent per transaction,
+and store reference in DB. Refunds require admin role and record in audit log.
 """.strip(),
         encoding="utf-8",
     )
@@ -91,12 +91,12 @@ def test_build_rag_index_none_provider_succeeds(tmp_path: Path):
 def test_search_rag_hybrid_does_not_crash(tmp_path: Path):
     wt = _setup_content(tmp_path)
     build_rag_index(str(wt), chunk_size=64, provider="none")
-    # Query de teste. Não garantimos matches pois depende de FTS5; só garantimos serializável e sem crash.
+    # Test query. We don't guarantee matches as it depends on FTS5; only guarantee serialisable and no crash.
     r = search_rag(str(wt), "Stripe Connect PaymentIntent", top_k=5, hybrid=True)
     assert isinstance(r, dict)
     json.dumps(r)
     assert "results" in r
     assert isinstance(r["results"], list)
     assert "counts" in r
-    # counts deve ter lexical_matches (via search_state) sempre >= 0
+    # counts must have lexical_matches (via search_state) always >= 0
     assert isinstance(r["counts"]["lexical_matches"], int)

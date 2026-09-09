@@ -5,25 +5,25 @@ description: "Two-stage security & compliance review: LIGHT per-task diff scan a
 
 # Che — Compliance & Security
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - Security + PII + RLS full checklist: see `_shared_checklists/SECURITY_PII_COMMON.md`
 > - GitHub CLI auth preflight + operations: see `_shared_checklists/GITHUB_CLI_COMMON.md` (final ship PR checks)
-> - Nx/pnpm run order for local verification: see `_shared_checklists/NX_PNPM_COMMON.md`
+> - Nx/pnpm run order local verification: see `_shared_checklists/NX_PNPM_COMMON.md`
 
 Security/PII/security pattern scanner. Two stages:
-- **Stage `per-task` (LIGHT)**: scans only files changed in the current task only.
-- **Stage `final` (HEAVY)**: scans the FULL cumulative diff of the entire session + global patterns that per-task might have missed across files.
+- **Stage `per-task` (LIGHT)**: scans only files changed in the current task.
+- **Stage `final` (HEAVY)**: scans FULL cumulative session diff + global patterns missed by per-task.
 
-**CRITICAL RULE: This skill MUST NEVER modify source code directly. It only produces a structured FINDINGS report. Developer fixes, SM validates.
+**CRITICAL RULE: This skill MUST NEVER modify source code directly. It only produces a structured FINDINGS report. Developer fixes, SM validates.**
 
 ---
 
-## -0.1 STORAGE BOUNDARY PREFLIGHT (CANONICAL, NON-NEGOTIABLE — run BEFORE §0 e ANTES DO PRIMEIRO WRITE)
+## -0.1 STORAGE BOUNDARY PREFLIGHT (CANONICAL, NON-NEGOTIABLE — run BEFORE §0 and BEFORE FIRST WRITE)
 
-NENHUM compliance report é escrito NA WORKTREE DO USUÁRIO por padrão. Todo report cai em che-sessions via helper centralizado. Única exceção: usuário pede VERBATIM EXPLICITAMENTE salvar um report específico lá.
+NO compliance report is written to the USER WORKTREE by default. All reports land in che-sessions via centralized helper. UNIQUE exception: user explicitly asks VERBATIM to save a specific report there.
 
 ```bash
-# 1. Source contrato (se não herdado de SM/ship)
+# 1. Source contract (if not inherited from SM/ship)
 source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"
 
 # 2. SESSION_ID + RELATED_ID (per-task = T<id>; final = worktree slug)
@@ -34,7 +34,7 @@ else
   COMPLIANCE_RELATED_ID="T${TASK_ID:-0000}-${TASK_SLUG:-per-task}"
 fi
 
-# 3. Paths canônicos + dirs (se não herdado)
+# 3. Canonical paths + dirs (if not inherited)
 if [[ -z "${CHE_SESSION_DIR}" ]]; then
   che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$(pwd)"
   che_ensure_session_dirs "$WORKTREE_ROOT"
@@ -44,15 +44,15 @@ fi
 che_assert_outside_worktree "${CHE_SESSION_DIR}"      "$WORKTREE_ROOT" "CHE_SESSION_DIR"
 che_assert_outside_worktree "${CHE_WORKSPACE_SHARED}" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
 
-# ==== OUTPUT PATH DESTA SKILL (construído UMA VEZ) ====
-# stage = final     → scope=workspace (durable: comparação entre sessões)
-# stage = per-task  → scope=session   (ephemeral: só esta sessão)
+# ==== OUTPUT PATH OF THIS SKILL (constructed ONCE) ====
+# stage = final     → scope=workspace (durable: cross-session comparison)
+# stage = per-task  → scope=session   (ephemeral: this session only)
 COMPLIANCE_SCOPE="session"
 [[ "${stage}" == "final" ]] && COMPLIANCE_SCOPE="workspace"
 COMPLIANCE_REPORT_PATH="$(che_output_path "report" "compliance-${stage}" "${COMPLIANCE_RELATED_ID}" "${COMPLIANCE_SCOPE}" "md")"
-# → Exemplo per-task:  $CHE_SESSION_DIR/reports/T2-refund/20260902-143000-compliance-per-task.md
-# → Exemplo final:     $CHE_WORKSPACE_SHARED/report/compliance-final-wt-feat-X/20260902-143000-compliance-final.md
-# → Ordenação intrínseca por prefixo timestamp UTC. Write atômico via: che_write_file_atomic "$COMPLIANCE_REPORT_PATH" stdin
+# → per-task example:  $CHE_SESSION_DIR/reports/T2-refund/20260902-143000-compliance-per-task.md
+# → final example:     $CHE_WORKSPACE_SHARED/report/compliance-final-wt-feat-X/20260902-143000-compliance-final.md
+# → Intrinsic ordering by UTC timestamp prefix. Atomic write via: cat <<EOF | che_write_file_atomic "$COMPLIANCE_REPORT_PATH"
 ```
 
 ---
@@ -62,15 +62,15 @@ COMPLIANCE_REPORT_PATH="$(che_output_path "report" "compliance-${stage}" "${COMP
 Must receive:
 - `WORKTREE_ROOT`
 - `stage`: `"per-task"` OR `"final"`
-- If `per-task`: list of changed files for that task
-- If `final`: list of ALL files changed in the session so far
-- Che session task-id (to know where to write report; usa `$COMPLIANCE_REPORT_PATH` do preflight acima)
+- If `per-task`: current task changed files list
+- If `final`: entire session cumulative diff files list
+- Che session task-id (to know where to write report; uses `$COMPLIANCE_REPORT_PATH` from preflight above)
 
 ---
 
 ## 1. SCAN CATEGORY 1 — Secrets & Credentials (CRITICAL / HARD BLOCK)
 
-Run ALL of these checks. A match = SEVERITY:CRITICAL.
+Run ALL checks. A match = SEVERITY:CRITICAL.
 
 ### 1.1 Generic secret regex patterns
 
@@ -86,17 +86,17 @@ Scan changed files (grep / content scan) for these patterns:
 | `xox[baprs]-[A-Za-z0-9-]{10,}` | Slack tokens |
 | `AIza[0-9A-Za-z\-_]{35}` | Google API keys |
 | `AKIA[0-9A-Z]{16}` | AWS Access Key ID |
-| `(?i)(password\s*[:=]\s*["'][^"']{8,}["']` | Password hardcoded in strings |
-| `(?i)(api[_-]?key\|secret[_-]?key\|access[_-]?token\|client[_-]?secret)\s*[:=]\s*["'][^"']{6,}["']` | Generic API keys assigned to string literals |
+| `(?i)(password\s*[:=]\s*["'][^"']{8,}["']` | Hardcoded password strings |
+| `(?i)(api[_-]?key\|secret[_-]?key\|access[_-]?token\|client[_-]?secret)\s*[:=]\s*["'][^"']{6,}["']` | Generic API keys assigned to literals |
 
 ### 1.2 `.env` files and leaking
 
-- Check if `.env*` files were ADDED or EDITED:
-  - `.env` → CRITICAL if tracked by git (must be in .gitignore)
-  - `.env.example` → OK, but verify no real values in it
+- Check if `.env*` files ADDED or EDITED:
+  - `.env` → CRITICAL if git tracked (must be in .gitignore)
+  - `.env.example` → OK, but verify no real values
 - Check if any code does:
-  - `console.log(process.env)` or similar logger output of full env objects
-  - Passing env vars to frontend bundles (Next.js public env leaking secrets)
+  - `console.log(process.env)` or similar full env object output
+  - Passing env vars to frontend bundles (Next.js public env secret leak)
 
 ---
 
@@ -105,17 +105,17 @@ Scan changed files (grep / content scan) for these patterns:
 ### 2.1 Logging & persistence patterns
 
 Scan for:
-- `console.log(email)` / `logger.*email`, `logger.*password` — any raw PII field being logged. (Must use hashing / correlation secret, never raw)
+- `console.log(email)` / `logger.*email`, `logger.*password` — any raw PII field logged. (Must use hashing / correlation secret, never raw)
 - Direct storage of: credit card numbers (PAN), CVV, SSN equivalents
 - Email addresses / phone numbers persisted without explicit PII hash / masking
 - Any logger.info/debug lines containing: username + password together
 
-### 2.2 Known PII fields (heuristic — match any occurrence then contextual review
+### 2.2 Known PII fields (heuristic — match any occurrence then contextual review)
 
-If found in NEW code: flag and REQUIRE a rationale for each instance:
+If found in NEW code: flag and REQUIRE rationale for each instance:
 ```
 <file>:<line>: contains assignment of <field> — flagged as possible PII
-Context: <3 lines before, 3 lines after
+Context: <3 lines before, the finding line, 3 lines after context>
 Rationale required: is this hashed? masked? needed?
 ```
 
@@ -129,16 +129,16 @@ Scan for:
 - String concatenation / template literals building SQL:
   ```
   `SELECT * FROM users WHERE id = ${userId}`
-  `"SELECT * FROM users WHERE id = " + userId
+  "SELECT * FROM users WHERE id = " + userId
   ```
-  Except when inside a well-known ORM parameterized builder (Knex `.whereRaw` only when params array provided).
-- `.whereRaw / .raw / queryRaw with string template without parameter array
+  Except when inside well-known ORM parameterized builder (Knex `.whereRaw` only when params array provided).
+- `.whereRaw / .raw / queryRaw` with string template without parameter array
 - Dynamically concatenating table names / column names from user input (whitelist needed)
 
 ### 3.2 Command injection patterns
 
 Scan for:
-- `child_process.exec` / `execSync` with unsanitized user input in the command string (use `execFile` or `spawn` + args array)
+- `child_process.exec` / `execSync` with unsanitized user input in command string (use `execFile` or `spawn` + args array)
 - Shell commands with `;`, `&&`, `|`, backticks interpolated from external input
 - `system()` / `os.popen()` / `Runtime.getRuntime().exec()` in other languages with tainted args
 
@@ -149,32 +149,32 @@ Scan for:
 - `.innerHTML =` user_input
 - `document.write(user_input)`
 - `<script>user_input</script>` in SSR output
-- eval() / new Function() with user-controlled strings
+- `eval()` / `new Function()` with user-controlled strings
 
 ---
 
 ## 4. SCAN CATEGORY 4 — Auth & Authorization (HIGH severity)
 
-### 4.1 Auth check (web / API projects
+### 4.1 Auth check (web / API projects)
 
 Scan changed auth-related files for:
-- Open routes defined without authentication checks missing (`@deprecated` / `@Public()` auth
-- Skipping auth intentionally without explicit `// eslint-disable-next-line` comments
+- Open routes defined without missing authentication checks (`@deprecated` / `@Public()` auth)
+- Intentionally skipping auth without explicit `// eslint-disable-next-line` comments
 - Hard bypass of RLS policies if Postgres+Supabase:
   - `.select().then(result => result)` — rows returned from Supabase without RLS enforced
-  - usage of service_role key client on the client-side (service_role MUST be server only)
+  - usage of service_role key on client-side (service_role MUST be server only)
 
 ### 4.2 Permission checks
 
 - Any endpoint / route:
-  - Does it check ownership / roles BEFORE database read/write operation?
+  - Does it check ownership / roles BEFORE database read/write?
   - Is the check EARLY RETURN on request lifecycle? (fail-early)
 
 ---
 
-## 5. SCAN CATEGORY 5 — Dangerous URLs (CRITICAL when pointing to prod-looking destinations
+## 5. SCAN CATEGORY 5 — Dangerous URLs (CRITICAL when pointing to prod-looking destinations)
 
-Check ALL new URLs introduced. Block any new AWS / RDS / Supabase / Neon / production DB:
+Check ALL new URLs. Block any new AWS / RDS / Supabase / Neon / production DB:
 
 - Hostname patterns to block (case-insensitive):
 - `*.rds.amazonaws.com`
@@ -183,7 +183,7 @@ Check ALL new URLs introduced. Block any new AWS / RDS / Supabase / Neon / produ
 - `*.cockroachlabs.cloud`
 - `*.azure.com` + `/sql` or `/db`
 
-If such URL is used in NEW code → flag SEVERITY:HIGH + ask: is this DEV or PROD? correct env?
+If used in NEW code → flag SEVERITY:HIGH + ask: is this DEV or PROD? correct env?
 
 ---
 
@@ -192,50 +192,50 @@ If such URL is used in NEW code → flag SEVERITY:HIGH + ask: is this DEV or PRO
 Scan for NEW code:
 - DROP TABLE / TRUNCATE / DELETE FROM without WHERE
 - `fs.rm(force:true, recursive:true)`
-- destructive migration that doesNOT have NODE_ENV check + consent string checks
+- destructive migration without NODE_ENV check + consent string checks
 - destructive script
 
 ---
 
-## 6.5 SCAN CATEGORY 7 — Test Naming Behavioral Conventions (REGRA 7.9 do che)
+## 6.5 SCAN CATEGORY 7 — Test Naming Behavioral Conventions (Che RULE 7.9)
 
-**Aplica-se APENAS a:** arquivos novos/editados que batem `*.test.*`, `*.spec.*`, ou estão dentro de pasta `__tests__/`. Se task não mexeu com testes → SKIP essa categoria.
+**Applies ONLY to:** new/edited files matching `*.test.*`, `*.spec.*`, or inside `__tests__/` folder. If task did not touch tests → SKIP this category.
 
-**Objetivo:** evitar nomes de `describe()` / `it()` / `test()` que contenham APENAS IDs internos, forçando que o título descreva COMPORTAMENTO OBSERVÁVEL (válido por meses, não só enquanto a task aberta).
+**Goal:** avoid `describe()` / `it()` / `test()` names containing ONLY internal IDs, forcing title to describe OBSERVABLE BEHAVIOR (valid for months, not just task duration).
 
-**🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça isso):**
-> ❌ **ERRADO:** Reclamar / reportar finding por um teste NÃO TER `FLO-xxx` / `T<N>` / `AC<N>` na string de título.
-> ✅ **CORRETO:** Ter essas referências NO TÍTULO é ANTI-PADRÃO (ruim = finding). Não tê-los e descrever comportamento observável é BOM / COMPLIANT.
+**🔴 HARD RULE — PROHIBITED INVERSION (NEVER do this):**
+> ❌ **WRONG:** Complain / report finding because a test DOES NOT HAVE `FLO-xxx` / `T<N>` / `AC<N>` in the title string.
+> ✅ **CORRECT:** Having these references IN THE TITLE is ANTI-PATTERN (bad = finding). NOT having them and describing behavior is GOOD / COMPLIANT.
 >
-> **Decisão 1-sentence:** `title contains FLO-ID? → BAD = FINDING. title does NOT contain FLO-ID? → GOOD = NUNCA gere finding por ausência de ID.`
+> **1-sentence decision:** `title contains FLO-ID? → BAD = FINDING. title does NOT contain FLO-ID? → GOOD = NEVER generate finding for missing ID.`
 
-**Scan pattern:** procurar por strings dentro de `describe("...")`, `it("...")`, `test("...")` (com aspas simples ou duplas). Para cada título encontrado, verificar anti-padrões:
+**Scan pattern:** look for strings inside `describe("...")`, `it("...")`, `test("...")`. For each title found, check anti-patterns:
 
-| Anti padrão (regex case-insensitive) | Motivo | Severidade |
+| Anti-pattern (regex case-insensitive) | Reason | Severity |
 |---|---|---|
-| `FLO-\d+` / `[A-Z]{2,}-\d+` | Ticket IDs Linear/Jira no TÍTULO. Válidos só enquanto ticket aberto; invalida relatório CI em 6 meses. | WARN |
-| `Task?\s*T\d+(\.\d+)?` / `Item\s*\d+` | Task IDs do task graph do che no TÍTULO. Rearranjo de tasks quebra nome. | WARN |
-| `AC\s*\d+` / `Critério\s*\d+` | IDs de acceptance criteria de SPEC/PRD no TÍTULO. | WARN |
-| `§\s*\d+(\.\d+)?` / `REGRA\s*\d+` / `SPEC[_-]\w+` / `PRD\s*§` | Referências a seções de doc planejamento NO TÍTULO. | WARN |
-| `Fase\s*\d+` / `Story\s*#?\d+` | Phase/story IDs temporários no TÍTULO. | WARN |
+| `FLO-\d+` / `[A-Z]{2,}-\d+` | Linear/Jira Ticket IDs in TITLE. Valid only while ticket open; invalidates CI report in 6 months. | WARN |
+| `Task?\s*T\d+(\.\d+)?` / `Item\s*\d+` | Che Task IDs in TITLE. Task rearrangement breaks name. | WARN |
+| `AC\s*\d+` / `Criteria\s*\d+` | SPEC/PRD Acceptance Criteria IDs in TITLE. | WARN |
+| `§\s*\d+(\.\d+)?` / `RULE\s*\d+` / `SPEC[_-]\w+` / `PRD\s*§` | Planning doc section references IN TITLE. | WARN |
+| `Phase\s*\d+` / `Story\s*#?\d+` | Temporary phase/story IDs in TITLE. | WARN |
 
-**Traceabilidade correta (NÃO gera finding, NÃO é anti-padrão — use estas):**
-1. JSDoc comentário ACIMA do bloco: `/** @ticket FLO-714 · @ac 3.2 · @task T1.4 */`
-2. Linha comentário DENTRO bloco 1ª linha: `// @ticket FLO-714 | @ac 3.2 | @task T1.4`
+**Correct traceability (DOES NOT generate finding — use these):**
+1. JSDoc comment ABOVE block: `/** @ticket FLO-714 · @ac 3.2 · @task T1.4 */`
+2. 1st line comment INSIDE block: `// @ticket FLO-714 | @ac 3.2 | @task T1.4`
 
-**Regra de severidade (FINDING só se BAD patterns ACIMA presentes no TÍTULO):**
-- 1–9 títulos ruins → **WARN** (não blocking; lista detalhada no report)
-- ≥10 títulos ruins no mesmo diff → **HIGH** (blocking; engineering-contracts deixa de ser review-friendly)
-- Títulos bons = contêm verbo de ação + condição + resultado; NÃO têm regexes acima. Um título BOM não ter FLO-xxx nem Task-id. ISSO É O ESPERADO.
+**Severity rule (FINDING only if BAD patterns ABOVE present in TITLE):**
+- 1–9 bad titles → **WARN** (non-blocking; detailed list in report)
+- ≥10 bad titles in same diff → **HIGH** (blocking; engineering-contracts becomes non-review-friendly)
+- Good titles = contain action verb + condition + result; DO NOT have regexes above. A GOOD title not having FLO-xxx or Task-id IS EXPECTED.
 
-**❌ NUNCA gere finding por ausência de FLO/T/AC no título** → isso é default correto. Se seu relatório tem linha tipo "missing FLO prefix in title" é REGRESSÃO desta categoria, descarte a linha antes do output.
+**❌ NEVER generate finding for missing FLO/T/AC in title** → this is default correct. If your report has "missing FLO prefix in title" it's a REGRESSION of this category, discard the line before output.
 
-**Como reportar:**
+**How to report:**
 ```
-## Scan 7 — Test naming (REGRA 7.9)
+## Scan 7 — Test naming (RULE 7.9)
 Total spec files modified: 3 | Test titles inspected: 24
 Good (behavioral, NO internal IDs): 20 | Bad (contains internal IDs in TITLE STRING): 4
-  1. /src/__tests__/auth.test.ts:88 — it("Task T2.3 valida AC 4.2 service role") → BAD in title: "Task T2.3" + "AC 4.2"
+  1. /src/__tests__/auth.test.ts:88 — it("Task T2.3 validates AC 4.2 service role") → BAD in title: "Task T2.3" + "AC 4.2"
      Suggest rename: it("blocks non-service-role callers with 403 Forbidden when anon key used")
      Keep traceability: inside block line 1: // @ac 4.2 | @task T2.3 | @ticket FLO-745
   2. ...
@@ -243,18 +243,18 @@ Good (behavioral, NO internal IDs): 20 | Bad (contains internal IDs in TITLE STR
 
 ---
 
-## 7. REPORT FORMAT — Stage: findings)
+## 7. REPORT FORMAT — Stage: findings
 
 ### Findings report structure
 
 ```markdown
 # Compliance Report — <TASK-ID> — Stage: <per-task | final>
 
-Scan date: <ISO datetime>Files scanned: N
+Scan date: <ISO datetime> | Files scanned: N
 
 ## Summary
-Total findings: <count
-CRITICAL: N  |  HIGH: N  | MEDIUM: N  | LOW: N  | WARN: N
+Total findings: <count>
+CRITICAL: N | HIGH: N | MEDIUM: N | LOW: N | WARN: N
 
 ## Table of findings
 
@@ -267,8 +267,9 @@ CRITICAL: N  |  HIGH: N  | MEDIUM: N  | LOW: N  | WARN: N
 ## Detailed findings
 
 ### #1 — CRITICAL — Secrets leak
-**File:** <path><line context 3 before, the finding line, 3 lines after context
-**Recommendation:** <step the recommended
+**File:** <path>
+<line context 3 before, finding line, 3 lines context after>
+**Recommendation:** <recommended steps>
 
 ### #2 — HIGH — PII leak
 **File:** ...
@@ -282,35 +283,34 @@ CRITICAL: N  |  HIGH: N  | MEDIUM: N  | LOW: N  | WARN: N
 ```
 
 Severity definitions:
-- **CRITICAL**: immediate prod breach potential or credential leak. Hard block: cannot move task/final. FIX before next step. → back to Dev
+- **CRITICAL**: immediate prod breach potential or credential leak. Hard block. FIX before next step. → back to Dev
 - **HIGH**: vulnerability with clear exploit path in realistic scenario. Hard block. → back to Dev
-- **MEDIUM**: plausible but requires unlikely preconditions. Soft block: if task is tiny patch release or justification; or explicit user override.
+- **MEDIUM**: plausible but requires unlikely preconditions. Soft block: if tiny patch release or justification; or explicit user override.
 - **LOW**: best-practice violations, readability / smell. Non-blocking logged.
 - **WARN**: cosmetic / informational. Non-blocking.
 
-### Como escrever o report para disco (NÃO cai dentro da worktree)
+### How to write report to disk (NOT inside worktree)
 
-Use sempre o path e write atômico do PREFLIGHT. NUNCA construa `$CHE_*` manualmente, nunca use `./reports`, nunca escreva em `<WORKTREE_ROOT>/.trae/`.
+Always use path and atomic write from PREFLIGHT. NEVER construct `$CHE_*` manually, never use `./reports`, never write to `<WORKTREE_ROOT>/.trae/`.
 
 ```bash
-# Gera o report markdown em memória e escreve atômico:
+# Generate markdown report in memory and atomic write:
 cat <<'EOF' | che_write_file_atomic "$COMPLIANCE_REPORT_PATH"
 # Compliance Report — <TASK-ID> — Stage: <per-task | final>
-... (estrutura §7 acima completa)
+... (§7 structure above)
 EOF
 
-# Printa ao usuário (PT-BR):
-#   Compliance <stage> concluído. 0 CRITICAL. 0 HIGH.
-#   Report completo salvo em: $COMPLIANCE_REPORT_PATH (fora da sua worktree).
-#   Nenhum arquivo untracked/modified adicionado em git status.
+303→# Print to user in English:
+304→#   Compliance <stage> completed. 0 CRITICAL. 0 HIGH.
+305→#   Full report saved at: $COMPLIANCE_REPORT_PATH (outside your worktree).
+306→#   No untracked/modified files added to git status.
 ```
 
-Se stage=`final` (cross-session durable): decision-log via helper para audit trail:
+If stage=`final` (cross-session durable): decision-log via helper for audit trail:
 ```bash
-che_append_decision_jsonl "COMPLIANCE_HEAVY_RUN" \
-  '{"report_path":"'"${COMPLIANCE_REPORT_PATH}"'","total_findings":<N>,"critical":<N>,"high":<N>}'
+che_append_decision_jsonl "COMPLIANCE_HEAVY_RUN"   '{"report_path":"'"${COMPLIANCE_REPORT_PATH}"'","total_findings":<N>,"critical":<N>,"high":<N>}'
 ```
-NÃO escreva este decision append como `cat >> $CHE_DECISIONS_PATH` (risco não-atomic + corrompimento JSONL).
+DO NOT manual append (`cat >> $CHE_DECISIONS_PATH`) — non-atomic + JSONL corruption risk.
 
 ---
 
@@ -320,15 +320,15 @@ Same scans, plus:
 
 ### 8.1 Cross-file consistency
 
-- Scan the FULL diff session. If secret was moved from file A to file B in different tasks. Per-task scans each separately — final catches cross-task.
-- Architecture boundary violations: Does the diff introduce cross-layer violations onion/clean.
-- Circular imports / dependency direction (if language supports.
+- Scan FULL session diff. If secret moved from file A to B in different tasks. Per-task scans separately — final catches cross-task.
+- Architecture boundary violations: Does diff introduce cross-layer onion/clean violations.
+- Circular imports / dependency direction.
 
 ### 8.2 ENV check / environment-specific code
 
 Look for:
-- `NODE_ENV === 'production'` checks that are inverted or missing
-- Hardcoded `localhost` or staging/dev hostnames left in paths that go to production
+- `NODE_ENV === 'production'` checks inverted or missing
+- Hardcoded `localhost` or staging/dev hostnames in prod-bound paths
 - Timezone / currency hardcoded vs env-driven
 
 ### 8.3 Result
@@ -338,17 +338,17 @@ Final stage produces 1 additional overall verdict:
 ```
 Final Compliance verdict:
 - CRITICAL found: 0
-HIGH found:0
-MEDIUM: 2 (Dev+1 logged)
-LOW: 3
-WARN: 5
-OVERALL: PASS / FAIL
-Blocking issues remain → back to SM → → to Dev for fixes.
+- HIGH found: 0
+- MEDIUM: 2 (Dev+1 logged)
+- LOW: 3
+- WARN: 5
+- OVERALL: PASS / FAIL
+Blocking issues remain → back to SM → to Dev for fixes.
 ```
 
 ---
 
-## A: What Compliance must **NEVER**
+## A: What Compliance must NEVER do
 
-- Fix source code / files directly. Compliance = reviewer, never execut
+- Fix source code / files directly. Compliance = reviewer, never executor.
 - Run tests, build, lint. That's QA's job.

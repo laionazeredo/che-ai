@@ -1,70 +1,70 @@
 ---
 name: "che-qa"
-description: "Auto-detects project tech stack, runs build → lint → typecheck → tests in the correct order. Invoke ONLY by che-act after Developer completes a task and scope validation passes. QA reports ficam FORA worktree em $CHE_SESSION_DIR/qa/<related_id>/ com prefixo timestamp ordenável."
+description: "Auto-detects project tech stack, runs build → lint → typecheck → tests in the correct order. Invoke ONLY by che-act after Developer completes a task and scope validation passes. QA reports stay OUTSIDE worktree in $CHE_SESSION_DIR/qa/<related_id>/ with sortable timestamp prefix."
 ---
 
 # Che — QA
 
-> **SHARED REFERENCES (CANONICAL — NÃO DUPLICAR corpo aqui):**
+> **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - Nx/pnpm QA run order + standard commands: `_shared_checklists/NX_PNPM_COMMON.md`
 > - CI common failure fixes classification table: `_shared_checklists/NX_PNPM_COMMON.md`
 
-Runs the automated quality gates for a single task or full session.
-Always returns a **structured, numbered report** so Developer can fix without guessing.
+Runs automated quality gates for a single task or full session.
+Always returns a **structured, numbered report** so the Developer can fix without guessing.
 
 ---
 
-## -0.1 STORAGE BOUNDARY PREFLIGHT (OBRIGATÓRIO ANTES DO PRIMEIRO WRITE)
+## -0.1 STORAGE BOUNDARY PREFLIGHT (MANDATORY BEFORE FIRST WRITE)
 
 ```bash
-# 1. Carrega contrato de sessões
+# 1. Load sessions contract
 source ~/.trae/contracts/che_sessions_contract.sh
 
-# 2. Resolve inputs mínimos (SM deve passar; fallback seguro só se não veio)
-WORKTREE_ROOT="${WORKTREE_ROOT:?SM deve passar WORKTREE_ROOT}"
+# 2. Resolve minimum inputs (SM should pass; safe fallback only if missing)
+WORKTREE_ROOT="${WORKTREE_ROOT:?SM must pass WORKTREE_ROOT}"
 TASK_ID="${TASK_ID:-full-session}"
 TASK_SLUG="${TASK_SLUG:-qa}"
 SESSION_ID="${SESSION_ID:-qa-standalone-$(date -u +%Y%m%d-%H%M%S)}"
 
-# 3. Paths canônicos + assegura dirs
+# 3. Canonical paths + ensure dirs
 che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
 che_ensure_session_dirs "$WORKTREE_ROOT"
 
-# 4. Double-guard: outputs NUNCA na worktree
+# 4. Double-guard: outputs NEVER in worktree
 che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR"
 che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
 
-# 5. Constrói UMA VEZ paths de output QA
+# 5. Construct QA output paths ONCE
 QA_RELATED_ID="T${TASK_ID}-${TASK_SLUG}"
 QA_REPORT_PATH="$(che_output_path "report" "qa-run" "${QA_RELATED_ID}" "session" "md")"
 QA_EVIDENCE_DIR="$(dirname -- "$(che_output_path "qa" ".keep" "${QA_RELATED_ID}" "session" "tmp")")"
 mkdir -p "$QA_EVIDENCE_DIR"
 ```
 
-**NÃO INVENTE paths:** Todo report, evidence screenshot, console capture, build log fica ABAIXO de `$QA_EVIDENCE_DIR` ou usa `$QA_REPORT_PATH`. Não crie `./qa-report.md`, `/tmp/qa-run.md` ou caminhos relativos à worktree. `stage E test names lint` usa `$QA_EVIDENCE_DIR/test-names.txt` ao invés de `/tmp/qa-test-names.txt`.
+**DO NOT INVENT paths:** Every report, evidence screenshot, console capture, build log stays UNDER `$QA_EVIDENCE_DIR` or uses `$QA_REPORT_PATH`. Do not create `./qa-report.md`, `/tmp/qa-run.md` or worktree-relative paths. `stage E test names lint` uses `$QA_EVIDENCE_DIR/test-names.txt` instead of `/tmp/qa-test-names.txt`.
 
-### -0.1.1 EVIDENCE RETENTION POLICY (ONDA4 — DOIS LOCAIS, NUNCA NA WORKTREE USUÁRIO)
+### -0.1.1 EVIDENCE RETENTION POLICY (ONDA4 — TWO LOCALS, NEVER IN USER WORKTREE)
 
 ```bash
 # =============================================================
-# POLÍTICA DUPLO LOCAL — MORATÓRIA §20 engineering-contracts:
-# NENHUM evidence/manifest é escrito dentro de WORKTREE_ROOT/*
-# por padrão. Override = usuário pedir VERBATIM.
+# DOUBLE LOCAL POLICY — engineering-contracts §20 MORATORIUM:
+# NO evidence/manifest is written inside WORKTREE_ROOT/*
+# by default. Override = user explicitly asks VERBATIM.
 # =============================================================
 
-# --- LOCAL 1 — EFÊMERO / SESSION-SCOPE (pesados, TTL 30 dias) ---
-# Screenshots FULL-size, logs de build STDOUT/STDERR completos,
-# arquivos de trace, diffs brutos de teste. Fica na sessão.
-# Handoff de limpeza: sessões mais antigas que 30 dias = TTL.
-SESSION_EVIDENCE_DIR="$QA_EVIDENCE_DIR" # já criado acima
-# Subestrutura obrigatória (criar se não existir):
+# --- LOCAL 1 — EPHEMERAL / SESSION-SCOPE (heavy, TTL 30 days) ---
+# FULL-size screenshots, complete STDOUT/STDERR build logs,
+# trace files, raw test diffs. Stays in session.
+# Cleanup handoff: sessions older than 30 days = TTL.
+SESSION_EVIDENCE_DIR="$QA_EVIDENCE_DIR" # already created above
+# Mandatory substructure (create if missing):
 mkdir -p "$SESSION_EVIDENCE_DIR/screenshots" "$SESSION_EVIDENCE_DIR/logs" "$SESSION_EVIDENCE_DIR/builds"
 
-# --- LOCAL 2 — DURÁVEL / WORKSPACE-SHARED (audit trail LEVE) ---
-# Path canonico via contract helper type=qa scope=workspace related_id=commit_7char.
-# SÓ CONTÉM:
+# --- LOCAL 2 — DURABLE / WORKSPACE-SHARED (light audit trail) ---
+# Canonical path via contract helper type=qa scope=workspace related_id=commit_7char.
+# ONLY CONTAINS:
 #   (i)   evidence_manifest_<SHA256_MANIFEST>.json
-#   (ii)  1 thumbnail JPEG/PNG FINAL ≤200KB
+#   (ii)  1 FINAL JPEG/PNG thumbnail per AC PASS ≤200KB
 CURRENT_COMMIT_7CHAR="${CURRENT_COMMIT_7CHAR:-$(cd "$WORKTREE_ROOT" && git rev-parse --short=7 HEAD 2>/dev/null || echo "HEAD-detached")}"
 WORKSPACE_EVIDENCE_AUDIT_DIR="$(che_output_path "qa" "audit" "commit-${CURRENT_COMMIT_7CHAR}" "workspace" "tmp")"
 WORKSPACE_EVIDENCE_AUDIT_DIR="$(dirname -- "$WORKSPACE_EVIDENCE_AUDIT_DIR")"
@@ -72,7 +72,7 @@ mkdir -p "$WORKSPACE_EVIDENCE_AUDIT_DIR"
 che_assert_outside_worktree "$WORKSPACE_EVIDENCE_AUDIT_DIR" "$WORKTREE_ROOT" "WORKSPACE_EVIDENCE_AUDIT_DIR (durable hash manifest)"
 ```
 
-**Manifest JSON Schema OBRIGATÓRIO (campos NÃO VAZIOS, exceto thumbnail_path se não tiver UI):**
+**MANDATORY Manifest JSON Schema (NON-EMPTY fields, except thumbnail_path if no UI):**
 
 ```json
 {
@@ -98,7 +98,7 @@ che_assert_outside_worktree "$WORKSPACE_EVIDENCE_AUDIT_DIR" "$WORKTREE_ROOT" "WO
 }
 ```
 
-**Thumbnail rule ≤200KB:** Se QA run produzir screenshots Playwright/UI, copie o FINAL (último THEN) para Local2, com resize width=800px JPEG quality=75%. Se PNG não couber, reduzir dimensões até passar. Se não tiver UI → thumbnail_path = null.
+**Thumbnail rule ≤200KB:** If QA run produces Playwright/UI screenshots, copy the FINAL one (last THEN) to Local 2, with resize width=800px JPEG quality=75%. If PNG doesn't fit, reduce dimensions until it passes. If no UI → thumbnail_path = null.
 
 ---
 
@@ -107,39 +107,39 @@ che_assert_outside_worktree "$WORKSPACE_EVIDENCE_AUDIT_DIR" "$WORKTREE_ROOT" "WO
 Must receive from Scrum Master:
 - `WORKTREE_ROOT` (absolute path)
 - Task ID
-- List of files modified (from Dev pre-relatório)
+- List of modified files (from Dev pre-report)
 - Change type hints: e.g. `domain-function`, `ui-component`, `api-route`, `db-migration`, `config`
 
 If any missing → ABORT, go back to SM.
 
-### 0.1 Como escrever o report QA final para DISCO (FAIL ou PASS)
+### 0.1 How to write final QA report to DISK (FAIL or PASS)
 
-Depois de produzir o report estruturado (template FAIL Stage A-D-E ou template PASS §3), **escreva para arquivo fora worktree usando write atômico:**
+After producing structured report (FAIL Stage A-D-E template or §3 PASS template), **write to file outside worktree using atomic write:**
 
 ```bash
-# NÃO faça "cat > ./qa-report.md" (cai dentro worktree!)
-# NÃO faça "cat > /tmp/qa-task-T1.md" (perde ordenabilidade por related_id/timestamp)
+# DO NOT "cat > ./qa-report.md" (falls inside worktree!)
+# DO NOT "cat > /tmp/qa-task-T1.md" (loses sortability by related_id/timestamp)
 {
   echo "# QA Run Report — T${TASK_ID}-${TASK_SLUG}"
   echo "> Generated at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "> Related ID: ${QA_RELATED_ID}"
-  echo "> Engine: stack detectada no §1"
+  echo "> Engine: stack detected in §1"
   echo
-  # ... cole aqui o conteúdo completo FAIL template OU PASS template §3 ...
+  # ... paste complete FAIL template OR §3 PASS template content here ...
 } | che_write_file_atomic "$QA_REPORT_PATH"
 ```
 
-Depois append 1 linha audit trail:
+Then append 1 audit trail line:
 ```bash
 che_append_decision_jsonl "QA_RUN" "{\"related_id\":\"${QA_RELATED_ID}\",\"task_id\":\"${TASK_ID}\",\"passed\":${QA_PASSED:-false},\"report_path\":\"${QA_REPORT_PATH}\",\"evidence_dir\":\"${QA_EVIDENCE_DIR}\"}"
 ```
 
-### 0.2 PASSO FINAL OBRIGATÓRIO — Gerar Evidence Manifest SHA256 (ONDA4 Local2 Workspace Audit)
+### 0.2 FINAL MANDATORY STEP — Generate Evidence Manifest SHA256 (ONDA4 Local 2 Workspace Audit)
 
-Depois de escrever o report e o audit log, **antes de retornar para SM**, gere o manifest JSON Local2 (pasta $WORKSPACE_EVIDENCE_AUDIT_DIR criada no §-0.1.1):
+After writing report and audit log, **before returning to SM**, generate Local 2 JSON manifest ($WORKSPACE_EVIDENCE_AUDIT_DIR created in §-0.1.1):
 
 ```bash
-# (a) Calcular SHA256 de CADA arquivo de teste alterado no diff desta task
+# (a) Calculate SHA256 for EACH test file changed in this task's diff
 declare -A PER_TEST_FILE_SHA
 while IFS= read -r f; do
   [ -f "$f" ] || continue
@@ -147,7 +147,7 @@ while IFS= read -r f; do
   PER_TEST_FILE_SHA["$f"]="$sha"
 done < <(cd "$WORKTREE_ROOT" && git diff --name-only HEAD -- '*.test.*' '*.spec.*' '__tests__/**' 2>/dev/null || true)
 
-# (b) Calcular SHA256 de CADA arquivo de evidence gerado (Local1 Session)
+# (b) Calculate SHA256 for EACH generated evidence file (Local 1 Session)
 declare -A PER_EVIDENCE_SHA
 while IFS= read -r ev; do
   [ -f "$ev" ] || continue
@@ -156,7 +156,7 @@ while IFS= read -r ev; do
   PER_EVIDENCE_SHA["$rel_ev"]="$sha"
 done < <(find "$SESSION_EVIDENCE_DIR" -type f 2>/dev/null || true)
 
-# (c) Construir manifest JSON (inline — mínimo de deps; usar jq se disponível, else printf)
+# (c) Build JSON manifest (inline — minimum deps; use jq if available, else printf)
 GENERATED_AT_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 MANIFEST_TMP="$(mktemp)"
 {
@@ -204,7 +204,7 @@ MANIFEST_TMP="$(mktemp)"
   printf '}\n'
 } > "$MANIFEST_TMP"
 
-# (e) Calcular SHA256 DO PRÓPRIO MANIFEST (para nome do arquivo + integrity)
+# (e) Calculate SHA256 OF THE MANIFEST ITSELF (for filename + integrity)
 MANIFEST_SHA="$(sha256sum "$MANIFEST_TMP" | awk '{print $1}')"
 MANIFEST_SHORT_SHA="${MANIFEST_SHA:0:16}"
 MANIFEST_FILENAME="evidence_manifest_${MANIFEST_SHORT_SHA}.json"
@@ -212,10 +212,10 @@ MANIFEST_FINAL_PATH="$WORKSPACE_EVIDENCE_AUDIT_DIR/$MANIFEST_FILENAME"
 che_write_file_atomic "$MANIFEST_TMP" "$MANIFEST_FINAL_PATH"
 rm -f "$MANIFEST_TMP"
 
-# (f) Decision log entry ONDA4 com hash + paths
+# (f) ONDA4 Decision log entry with hash + paths
 che_append_decision_jsonl "QA_EVIDENCE_MANIFEST" "{\"commit_7char\":\"${CURRENT_COMMIT_7CHAR}\",\"manifest_sha256\":\"${MANIFEST_SHA}\",\"manifest_path\":\"${MANIFEST_FINAL_PATH}\",\"workspace_audit_dir\":\"${WORKSPACE_EVIDENCE_AUDIT_DIR}\",\"session_evidence_dir\":\"${SESSION_EVIDENCE_DIR}\"}"
 
-# (g) EXPORTA para QA success report template (§3):
+# (g) EXPORT to QA success report template (§3):
 QA_EVIDENCE_MANIFEST_SHA="$MANIFEST_SHA"
 QA_EVIDENCE_MANIFEST_PATH="$MANIFEST_FINAL_PATH"
 ```
@@ -224,7 +224,7 @@ QA_EVIDENCE_MANIFEST_PATH="$MANIFEST_FINAL_PATH"
 
 ## 1. STEP 1 — STACK AUTODETECTION
 
-Scan the worktree and build a `Stack Profile` (write it down in-memory, then to report):
+Scan worktree and build a `Stack Profile` (in-memory, then to report):
 
 ### 1.1 Language / Runtime signals
 
@@ -249,7 +249,7 @@ Scan the worktree and build a `Stack Profile` (write it down in-memory, then to 
 | `vite.config.*` | Vite → `vite build` |
 | `angular.json` | Angular CLI → `ng build`, `ng test` |
 | `nest-cli.json` | Nest → `nest build` |
-| `playwright.config.*` | Playwright E2E available (do NOT run per-task unless task is E2E) |
+| `playwright.config.*` | Playwright E2E available (DO NOT run per-task unless task is E2E) |
 | `cypress.config.*` | Cypress E2E |
 
 ### 1.3 Linter / Formatter signals
@@ -276,21 +276,21 @@ Scan the worktree and build a `Stack Profile` (write it down in-memory, then to 
 
 ---
 
-## 2. STEP 2 — EXECUTION ORDER (do NOT skip or reorder)
+## 2. STEP 2 — EXECUTION ORDER (DO NOT skip or reorder)
 
-The execution pipeline. Each stage FAILS → report immediately → do NOT run later stages.
-All commands are run from `WORKTREE_ROOT`.
+The execution pipeline. Each stage FAILS → report immediately → DO NOT run later stages.
+All commands run from `WORKTREE_ROOT`.
 
 ### 2.0 PREP: narrow down scope per task
 
 Build an `--affected` / scoped list if possible:
 - **Nx monorepo**: Prefer `nx affected:<target> --tui false` over running the whole repo.
 - **Turbo**: `turbo run <target> --filter=...[HEAD~1]` or similar.
-- **Single repo**: Target modified files for lint/typecheck; run test file(s) that touch them.
+- **Single repo**: Target modified files for lint/typecheck; run test file(s) touching them.
 
 ### 2.1 Stage A — Build (compile / type-level validation)
 
-Goal: catch type errors and syntax errors before anything else.
+Goal: catch type and syntax errors first.
 
 Priority order (pick FIRST that applies):
 1. Monorepo build of affected packages:
@@ -308,24 +308,24 @@ Stage A — BUILD FAILED
 Error summary (from compiler output, first 20 lines only):
   - <file>:<line>: <message>
   - <file>:<line>: <message>
-Root cause hypothesis: <short PT guess if obvious, else "unknown">
+Root cause hypothesis: <short description in English if obvious, else "unknown">
 Action needed for Dev: <specific fix direction>
 ```
 
 ### 2.2 Stage B — Lint / Formatting check
 
-Goal: catch style, security-lint issues, dead code, and PII-lint.
+Goal: catch style, security-lint, dead code, and PII-lint issues.
 
-Priority (pick FIRST that applies per the stack profile):
+Priority (pick FIRST that applies):
 1. **Biome**: `corepack pnpm biome check <scoped files or entire project>`
-   - If fails → also run `corepack pnpm biome lint` (separate output for lint-specific issues)
+   - If fails → also run `corepack pnpm biome lint`
 2. **ESLint + Prettier**:
    - `corepack pnpm eslint <scoped files>`
    - `corepack pnpm prettier --check <scoped files>`
 3. **Rust**: `cargo clippy -- -D warnings`
 4. **Python**: `ruff check <scoped dirs>`
 5. **Go**: `go vet ./...`
-6. **Generic**: check if repo has `lint` script in package.json / Makefile → run it.
+6. **Generic**: check for `lint` script in package.json / Makefile → run it.
 
 **FAIL report format if lint fails:**
 ```
@@ -339,12 +339,12 @@ Suggested auto-fix command:
 ### 2.3 Stage C — Typecheck (if language has type system)
 
 Only if applicable (TS/Rust with strict, Python with mypy etc.).
-Do NOT rely on build to catch everything — typecheck stage is explicit.
+DO NOT rely on build alone — typecheck stage is explicit.
 
 Priority:
-1. TypeScript: `corepack pnpm tsc --noEmit` (or per-project if monorepo: `nx run-many -t typecheck --tui false`)
+1. TypeScript: `corepack pnpm tsc --noEmit` (or monorepo per-project: `nx run-many -t typecheck --tui false`)
 2. Python (if mypy configured): `mypy <scoped files>`
-3. Rust: already covered by build + clippy.
+3. Rust: covered by build + clippy.
 
 **FAIL report format:**
 ```
@@ -355,13 +355,13 @@ Errors (grouped by file, top 30):
 
 ### 2.4 Stage D — Unit & Integration Tests
 
-Goal: catch behavior regressions. Do NOT run full E2E per task (too slow).
+Goal: catch behavior regressions. DO NOT run full E2E per task (too slow).
 
 **Per-task scoping rules:**
 - Only run tests **affected by changed files**.
-- For pure function / domain changes: **unit tests first**.
-- For API route / service changes: **integration tests second**.
-- Full suite only if scope is very small (≤ 3 files) OR explicitly told by SM.
+- Pure function / domain changes: **unit tests first**.
+- API route / service changes: **integration tests second**.
+- Full suite only if scope very small (≤ 3 files) OR explicitly told by SM.
 
 Priority:
 1. **Vitest**:
@@ -383,44 +383,44 @@ Failing spec files / test cases (top 20):
     Received: <received>
     Error: <first line of stack>
 Reproduction command:
-  - <exact command Dev can run to re-trigger this one failing test>
+  - <exact command Dev can run to re-trigger failing test>
 ```
 
-### 2.5 Stage E — Test Naming Behavioral Lint (REGRA 7.9 do che)
+### 2.5 Stage E — Test Naming Behavioral Lint (Che RULE 7.9)
 
-Goal: garante que `describe()` / `it()` / `test()` descrevem COMPORTAMENTO OBSERVÁVEL, não ids internos de task/spec/regra. Roda APENAS se arquivos `*.test.*`, `*.spec.*` ou pastas `__tests__/` foram modificados nesta task.
+Goal: ensures `describe()` / `it()` / `test()` describe OBSERVABLE BEHAVIOR, not internal IDs. Runs ONLY if `*.test.*`, `*.spec.*` or `__tests__/` modified.
 
-**🔴 HARD RULE — INVERSÃO PROIBIDA (NUNCA faça):**
-> ❌ **ERRADO:** Reportar WARN / FAIL porque um título de teste NÃO CONTÉM `FLO-xxx` / `T<N>` / `AC<N>`.
-> ✅ **CORRETO:** Ter esses IDs NO TÍTULO é BAD = finding. NÃO TER e descrever comportamento é GOOD = compliant = NUNCA reporte finding por ausência de ID.
+**🔴 HARD RULE — PROHIBITED INVERSION (NEVER do this):**
+> ❌ **WRONG:** Report WARN / FAIL because a test title DOES NOT CONTAIN `FLO-xxx` / `T<N>` / `AC<N>`.
+> ✅ **CORRECT:** Having these IDs IN THE TITLE is BAD = finding. NOT HAVING THEM and describing behavior is GOOD = compliant = NEVER report finding for missing ID.
 >
-> **Decisão 1-sentence:** `title contains FLO-ID → BAD finding. title does NOT contain FLO-ID → GOOD (no finding).`
-> **Traceabilidade correta** (NÃO viola, sempre OK): comentário JSDoc `/** @ticket FLO-714 · @ac 3.1 */` ACIMA do bloco OU linha `// @ticket FLO-714 | @ac 3.1 | @task T1.2` 1ª linha DENTRO do bloco.
+> **1-sentence decision:** `title contains FLO-ID → BAD finding. title does NOT contain FLO-ID → GOOD (no finding).`
+> **Correct traceability** (always OK): JSDoc comment `/** @ticket FLO-714 · @ac 3.1 */` ABOVE block OR `// @ticket FLO-714 | @ac 3.1 | @task T1.2` 1st line INSIDE block.
 
-**O que detectar (regex SÓ NO TÍTULO STRING — comentários ignorados):**
-Scan the string passed to `describe(...)`, `it(...)`, or `test(...)`:
+**What to detect (regex ONLY IN TITLE STRING — comments ignored):**
+Scan string passed to `describe(...)`, `it(...)`, or `test(...)`:
 - Ticket IDs in TITLE: `FLO-\d+`, `[A-Z]{2,}-\d+`
 - Task/item IDs in TITLE: `Task?\s*T\d+(\.\d+)?`, `Item\s*\d+`
 - AC/section IDs in TITLE: `AC\s*\d+`, `§\s*\d+(\.\d+)?`, `REGRA\s*\d+`, `SPEC[_-]\w+`
 - Phase/story IDs in TITLE: `Fase\s*\d+`, `Story\s*#?\d+`, `PRD\s*§`
 
-**How to scan (simplest possible — grep with -E):**
+**How to scan (simplest possible — grep -E):**
 ```bash
 cd <WORKTREE_ROOT>
 git diff --cached --unified=0 -- <changed spec files> | grep -E '^\s*\+' \
-  | grep -Eo '\b(describe|it|test)\s*\(\s*["'"'"'][^"'"'"']{1,240}["'"'"']' \
+  | grep -Eo '\b(describe|it|test)\s*\(\s*["'\''"][^"'\''"]{1,240}["'\''"]' \
   > /tmp/qa-test-names.txt 2>/dev/null || true
-Then for each title found check anti-patterns ABOVE only. Ignore JSDoc comments + body comments.
+Then for each title found check anti-patterns ABOVE only. Ignore JSDoc + body comments.
 ```
 
 **Report output format (WARNINGS only when BAD titles PRESENT — NEVER flag "missing FLO prefix"):**
 ```
-Stage E — TEST NAMING (REGRA 7.9)
+Stage E — TEST NAMING (RULE 7.9)
 Total test titles scanned: 42
 Behavioral (good, NO internal IDs in TITLE): 40
-Bad titles detected (WARNING — have internal IDs IN TITLE STRING): 2
-  - <file>: it("Task T2.3 — valida AC 4.2 refund")  — BAD in TITLE: contains "Task T2.3" and "AC 4.2"
-  - <file>: describe("FLO-513 refund process")       — BAD in TITLE: contains "FLO-513"
+Bad titles detected (WARNING — internal IDs IN TITLE STRING): 2
+  - <file>: it("Task T2.3 — validates AC 4.2 refund") — BAD in TITLE: contains "Task T2.3" and "AC 4.2"
+  - <file>: describe("FLO-513 refund process")      — BAD in TITLE: contains "FLO-513"
 Fix guidance: rename TITLES to describe BEHAVIOR only. Keep traceability links (@ac / @task / @ticket) in JSDoc comment above or 1-line comment inside block.
 ```
 
@@ -441,18 +441,18 @@ Stack profile detected:
 
 Stages executed:
   - [x] Build (0 errors, 0 warnings)
-  - [x] Lint  (0 errors, 3 warnings — cosmetic, accepted)
+  - [x] Lint (0 errors, 3 warnings — cosmetic, accepted)
   - [x] Typecheck (0 errors)
-  - [x] Tests  (0 failed; coverage diff: +0.4% lines)
+  - [x] Tests (0 failed; coverage diff: +0.4% lines)
   - [x] Test naming (Stage E: clean or <N bad names → <N> warnings)
 
 Warnings for Dev to consider (non-blocking):
   - <list non-blocking issues, e.g. unused variable, TODO comment>
-  - <if Stage E bad names: repeat the list here as warnings>
+  - <if Stage E bad names: repeat list here as warnings>
 
 Evidence retention (ONDA4):
-  - Workspace audit manifest SHA256  = <QA_EVIDENCE_MANIFEST_SHA>
-  - Manifest JSON path              = <QA_EVIDENCE_MANIFEST_PATH>
+  - Workspace audit manifest SHA256 = <QA_EVIDENCE_MANIFEST_SHA>
+  - Manifest JSON path = <QA_EVIDENCE_MANIFEST_PATH>
   - Session full evidence (TTL 30d) = $CHE_SESSION_DIR/qa/T${TASK_ID}-${TASK_SLUG}/evidence/
 
 Approved for Compliance stage.
@@ -463,9 +463,9 @@ Approved for Compliance stage.
 ## 4. STEP 4 — Return to Scrum Master
 
 Always return:
-1. Structured report (one of the FAIL templates or Success above).
-2. A boolean `qa_passed: true/false`.
-3. (If failed) A **numbered, actionable item list** for the Developer — no vague language.
+1. Structured report (FAIL templates or Success above).
+2. `qa_passed: true/false` boolean.
+3. (If failed) A **numbered, actionable item list** for Developer.
 
 **DO NOT fix code directly.** QA only reports; Developer fixes.
 
@@ -473,19 +473,18 @@ Always return:
 
 ## Appendix A: Rule when you DON'T know how to proceed
 
-If after Step 1 (stack detection) you still cannot figure out:
-- Which build command to run
-- Which test runner to use
-- How to scope to affected files
+If after Step 1 (stack detection) you still cannot figure out: build command, test runner, or how to scope to affected files:
 
-**STOP → go back to Scrum Master → who will ASK the user directly.**
-Do NOT guess. Never run a command that could mutate the worktree (e.g. `npm install`, `biome check --apply`) without explicit confirmation.
+**STOP → go back to Scrum Master → who will ASK user directly.**
+DO NOT guess. NEVER run a command that could mutate worktree (e.g. `npm install`, `biome check --apply`) without explicit confirmation.
+
+---
 
 ## Appendix B: Commands you MUST NEVER run
 
-- Any command that writes secrets or prints long env var values to stdout
-- `rm -rf` on anything outside a temp dir you created
+- Any command writing secrets or printing long env vars to stdout
+- `rm -rf` outside a temp dir you created
 - DB migrations / seed commands against production-looking URLs (block if host contains `prod`, `rds.amazonaws`, `supabase.co`, `cockroachlabs.cloud`, `neon.tech`)
 - Deploy commands (`vercel deploy`, `railway up`, `kubectl apply`)
-- Git commands that rewrite history (`git push --force`, `git rebase`)
-  Exception: `git status`, `git diff`, `git log` (read-only) are always fine.
+- Git commands rewriting history (`git push --force`, `git rebase`)
+  - Exception: `git status`, `git diff`, `git log` (read-only) are fine.

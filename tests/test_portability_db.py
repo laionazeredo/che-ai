@@ -1,4 +1,4 @@
-"""Smoke test portability: export/import com flag include_db; DB > 1MB deve ser SKIPPED."""
+"""Smoke test portability: export/import with include_db flag; DB > 1MB should be SKIPPED."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def _mk_project_content(tmp_path: Path):
     os.environ["CHE_WORKSPACES_ROOT"] = str(ws_root)
     paths = ensure_session_dirs(str(wt), "smoke-portability")
     (Path(paths["CHE_PROJECT_DIR"]) / "architecture.md").write_text(
-        "# Arquitetura\nMonorepo Next.js + tRPC.\n", encoding="utf-8"
+        "# Architecture\nNext.js + tRPC monorepo.\n", encoding="utf-8"
     )
     shared = Path(paths["CHE_WORKSPACE_SHARED"])
     dec = shared / "decisions.log.jsonl"
@@ -66,12 +66,12 @@ def test_export_with_db_big_size_limit_skips(tmp_path: Path):
     assert Path(out).is_file()
     with tarfile.open(str(out), "r:gz") as tf:
         names = [n.lstrip("./") for n in tf.getnames()]
-        # Tar cria "./_db/SKIPPED.txt" então strip("./") fica "_db/SKIPPED.txt"
+        # Tar creates "./_db/SKIPPED.txt" so strip("./") results in "_db/SKIPPED.txt"
         assert "_db/SKIPPED.txt" in names
         f = tf.extractfile("./_db/SKIPPED.txt" if "./_db/SKIPPED.txt" in tf.getnames() else "_db/SKIPPED.txt")
         assert f
         content = f.read().decode("utf-8")
-        assert "exceeded" in content.lower() or "limite" in content.lower() or "MB" in content
+        assert "exceeded" in content.lower() or "limit" in content.lower() or "MB" in content
 
 
 def test_import_restores_files(tmp_path: Path):
@@ -84,7 +84,7 @@ def test_import_restores_files(tmp_path: Path):
     os.environ["CHE_WORKSPACES_ROOT"] = str(target_ws)
     res = import_project(str(out), target_workspace=None, include_db=False)
     assert isinstance(res, dict)
-    # Ou status ou project_dir, dependendo da implementação
+    # Either status or project_dir, depending on implementation
     assert res.get("project_dir") or res.get("status") or res.get("target_project_dir")
     project_dir = res.get("project_dir") or res.get("target_project_dir")
     if project_dir:

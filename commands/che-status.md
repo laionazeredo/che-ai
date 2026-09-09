@@ -9,10 +9,10 @@ arguments:
 Lightweight inline command (no Skill needed):
 
 1. If worktree not confirmed → ASK user for absolute worktree path FIRST.
-2. Source `$HOME/.trae/contracts/che_sessions_contract.sh → run `che_compute_paths WORKTREE_ROOT`; look for `task_graph.md` at `$CHE_WORKSPACE_SHARED/task_graph.md` (strictly outside worktree; never inside `<WORKTREE_ROOT>/.trae/`).
-3. If not found → reply (in Portuguese):
-   "Nenhuma sessão do che ativa nesta worktree. Use `/che-act`."
-4. If found → print (in Portuguese):
+2. Source `$HOME/.trae/contracts/che_sessions_contract.sh` → run `che_compute_paths WORKTREE_ROOT`; look for `task_graph.md` at `$CHE_WORKSPACE_SHARED/task_graph.md` (strictly outside worktree; never inside `<WORKTREE_ROOT>/.trae/`).
+3. If not found → reply (in English):
+   "No active Che session in this worktree. Use `/che-act`."
+4. If found → print (in English):
    - Task currently IN_PROGRESS + current phase (scope/qa/compliance)
    - Counts: Total / TODO / SCOPE_OK / QA_OK / DONE / BLOCKED
    - Blocked tasks list, if any
