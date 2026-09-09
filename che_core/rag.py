@@ -11,12 +11,12 @@ RAG_DB_FILENAME = "che_rag.sqlite"
 
 
 # ---------------------------------------------------------------------------
-# Providers abstratos + implementações (zero-deps mandatory default)
+# Abstract providers + implementations (zero-deps mandatory default)
 # ---------------------------------------------------------------------------
 
 
 class EncodeProvider:
-    """Abstract encoder. Toda implementação deve garantir encode() sempre retorna list[list[float]] mesmo em fallback."""
+    """Abstract encoder. Every implementation must ensure encode() always returns list[list[float]] even in fallback."""
 
     name: str = "abstract"
 
@@ -25,10 +25,10 @@ class EncodeProvider:
 
 
 class NoneBM25Provider(EncodeProvider):
-    """Fallback ZERO DEPENDÊNCIAS: retorna vetores dummy unitários de dimensão 8.
-    Com isso sqlite-vec carrega, scores vetoriais = cosseno similar entre unitários = constante;
-    search_rag híbrido cai automaticamente para 100% BM25 lexical, sem crash.
-    Funciona SEM pip install nenhum."""
+    """ZERO DEPENDENCY fallback: returns unit dummy vectors of dimension 8.
+    This allows sqlite-vec to load, vector scores = cosine similarity between unit vectors = constant;
+    hybrid search_rag automatically falls back to 100% BM25 lexical, without crashing.
+    Works WITHOUT any pip install."""
 
     name = "none"
 
@@ -46,18 +46,18 @@ class _SentenceTransformersProvider(EncodeProvider):
     def __init__(self, model_name: str = "all-MiniLM-L6-v2", dim: int = 384):
         try:
             from sentence_transformers import SentenceTransformer  # type: ignore
-        except ImportError as e:  # pragma: no cover - só cai se AutoProvider chutar errado
+        except ImportError as e:  # pragma: no cover - only triggered if AutoProvider guesses wrong
             raise RuntimeError("sentence-transformers not installed") from e
         self._model = SentenceTransformer(model_name)
         self.dim = dim
 
     def encode(self, texts: List[str]) -> List[List[float]]:
-        arr = self._model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+        arr = self._model.encode(texts, convert_to_numpy=True, normalise_embeddings=True)
         return [row.astype(float).tolist() for row in arr]
 
 
 class OpenAIProvider(EncodeProvider):
-    """Requer OPENAI_API_KEY + lib openai instalada (opcional). Se falhar => raise RuntimeError para AutoProvider."""
+    """Requires OPENAI_API_KEY + openai lib installed (optional). If fails => raise RuntimeError for AutoProvider."""
 
     name = "openai"
 
@@ -86,9 +86,9 @@ class OpenAIProvider(EncodeProvider):
 
 
 class AnthropicProvider(EncodeProvider):
-    """Anthropic não tem endpoint de embeddings público em 2024-01. Implementação de contrato forward-compatible:
-    usa Voyage AI opcional ou fallback; por segurança, se ANTHROPIC_API_KEY existir mas sem modelo embedding,
-    cai em RuntimeError para AutoProvider escolher None."""
+    """Anthropic does not have a public embedding endpoint as of 2024-01. Forward-compatible contract implementation:
+    uses optional Voyage AI or fallback; for safety, if ANTHROPIC_API_KEY exists but without embedding model,
+    falls back to RuntimeError for AutoProvider to choose None."""
 
     name = "anthropic"
 
@@ -99,14 +99,14 @@ class AnthropicProvider(EncodeProvider):
             raise RuntimeError("ANTHROPIC_API_KEY not set")
         raise RuntimeError("Anthropic embedding endpoint not available; please use --provider=none or openai")
 
-    def encode(self, texts: List[str]) -> List[List[float]]:  # pragma: no cover - __init__ já raise
+    def encode(self, texts: List[str]) -> List[List[float]]:  # pragma: no cover - __init__ already raises
         raise RuntimeError("not available")
 
 
 def _auto_provider() -> Tuple[EncodeProvider, str]:
-    """Tenta, na ordem: (1) sentence-transformers instalado, (2) OPENAI_API_KEY setada + lib,
-    (3) ANTHROPIC_API_KEY (falhará), (4) SEMPRE cai em NoneBM25Provider no final.
-    Nunca retorna erro — sempre há um provider funcional."""
+    """Tries, in order: (1) sentence-transformers installed, (2) OPENAI_API_KEY set + lib,
+    (3) ANTHROPIC_API_KEY (will fail), (4) ALWAYS falls back to NoneBM25Provider at the end.
+    Never returns error — there is always a functional provider."""
     try:
         p = _SentenceTransformersProvider()
         return p, p.name
@@ -126,7 +126,7 @@ def _auto_provider() -> Tuple[EncodeProvider, str]:
 
 
 def get_provider(name: str) -> Tuple[EncodeProvider, str, int]:
-    """Retorna (provider instance, label usada no metadata, embedding dim)."""
+    """Returns (provider instance, label used in metadata, embedding dim)."""
     n = (name or "auto").lower().strip()
     if n == "auto":
         p, label = _auto_provider()
@@ -143,19 +143,19 @@ def get_provider(name: str) -> Tuple[EncodeProvider, str, int]:
     if n == "anthropic":
         p = AnthropicProvider()
         return p, p.name, getattr(p, "dim", 0)
-    # desconhecido => fallback none, warning no metadata
+    # unknown => fallback none, warning in metadata
     p = NoneBM25Provider()
     return p, f"none(unknown:{n})", p.dim
 
 
 # ---------------------------------------------------------------------------
-# Chunker (zero-dep, aproximado 0.75 words-per-token ratio)
+# Chunker (zero-dep, approximate 0.75 words-per-token ratio)
 # ---------------------------------------------------------------------------
 
 
 def _split_md_chunks(text: str, source_path: str, chunk_words: int) -> List[Dict[str, Any]]:
-    """Chunk por ~chunk_words palavras com 10% overlap. Preserva títulos markdown como heuristic anchor.
-    Sem lib tokenizer: words ≈ 0.75 * tokens. Para 512 tokens → ≈ 384 words."""
+    """Chunks by ~chunk_words words with 10% overlap. Preserves markdown headers as heuristic anchors.
+    Without tokenizer lib: words ≈ 0.75 * tokens. For 512 tokens → ≈ 384 words."""
     if not text:
         return []
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
@@ -186,7 +186,7 @@ def _split_md_chunks(text: str, source_path: str, chunk_words: int) -> List[Dict
 
     for para in paragraphs:
         w = para.split()
-        # Se um único parágrafo > chunk_words, quebra frases internas também
+        # If a single paragraph > chunk_words, break internal sentences as well
         if len(w) > chunk_words:
             sentence_parts = re.split(r"(?<=[.!?])\s+", para)
             buf: List[str] = []
@@ -212,8 +212,8 @@ def _split_md_chunks(text: str, source_path: str, chunk_words: int) -> List[Dict
 
 
 def _collect_doc_sources(paths: Dict[str, str]) -> List[Tuple[str, str, str]]:
-    """Varre L2 (project dir) + L3 worktree shared em busca de fontes de texto para indexar.
-    Retorna [(scope, source_path, file_content)].
+    """Scans L2 (project dir) + L3 worktree shared for text sources to index.
+    Returns [(scope, source_path, file_content)].
     Scope ∈ {project_profile, architecture, product_context, roadmap, spec, task_envelope, decision}."""
     project_dir = Path(paths["CHE_PROJECT_DIR"])
     ws_shared = Path(paths["CHE_WORKSPACE_SHARED"])
@@ -252,12 +252,12 @@ def _collect_doc_sources(paths: Dict[str, str]) -> List[Tuple[str, str, str]]:
             except Exception:
                 pass
 
-    # --- L3 DECISIONS LOG (como chunks line-range) ---
+    # --- L3 DECISIONS LOG (as line-range chunks) ---
     dec_path = ws_shared / "decisions.log.jsonl"
     if dec_path.is_file():
         try:
             lines = dec_path.read_text(encoding="utf-8").splitlines()
-            # 1 chunk por bloco de 50 decisions
+            # 1 chunk per block of 50 decisions
             block_size = 50
             for i in range(0, len(lines), block_size):
                 block = "\n".join(lines[i : i + block_size])
@@ -277,7 +277,7 @@ def _collect_doc_sources(paths: Dict[str, str]) -> List[Tuple[str, str, str]]:
 
 
 # ---------------------------------------------------------------------------
-# RAGStore SQLite + sqlite-vec OPCIONAL
+# RAGStore SQLite + sqlite-vec OPTIONAL
 # ---------------------------------------------------------------------------
 
 
@@ -290,20 +290,20 @@ def _get_rag_db_path(worktree_root: Optional[str] = None, paths: Optional[Dict[s
 
 
 def _try_load_sqlite_vec(conn: sqlite3.Connection) -> Tuple[bool, Optional[str]]:
-    """Tenta carregar sqlite-vec. Retorna (loaded_ok, error_message). NUNCA dá raise."""
+    """Tries to load sqlite-vec. Returns (loaded_ok, error_message). NEVER raises."""
     try:
         conn.enable_load_extension(True)
     except Exception as e:
         return False, f"enable_load_extension disabled: {e}"
     try:
-        # sqlite-vec distribui módulo Python; tenta caminho .so/.dylib/.dll via importlib
+        # sqlite-vec distributes Python module; tries .so/.dylib/.dll path via importlib
         try:
             import sqlite_vec  # type: ignore
 
             sqlite_vec.load(conn)
             return True, None
         except Exception as e2:
-            # fallback: tenta load por nome genérico
+            # fallback: tries load by generic name
             try:
                 conn.load_extension("sqlite3_vec0")
                 return True, None
@@ -333,14 +333,14 @@ def _ensure_rag_schema(conn: sqlite3.Connection, vec_loaded: bool, embedding_dim
         CREATE INDEX IF NOT EXISTS idx_documents_source ON documents(source_path);
         """
     )
-    # sqlite-vec 0.1.x usa vec0 virtual table; se falhar, apenas skip
+    # sqlite-vec 0.1.x uses vec0 virtual table; if fails, just skip
     if vec_loaded and embedding_dim and embedding_dim > 0:
         try:
             conn.execute(
                 f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_documents USING vec0(embedding float[{embedding_dim}])"
             )
         except Exception:
-            pass  # se versão sqlite-vec incompatível, deixa sem vector table
+            pass  # if sqlite-vec version incompatible, leave without vector table
 
 
 def _hash_chunk(source_path: str, chunk_id: int, text_body: str) -> str:
@@ -354,7 +354,7 @@ def _hash_chunk(source_path: str, chunk_id: int, text_body: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Funções públicas
+# Public functions
 # ---------------------------------------------------------------------------
 
 
@@ -363,8 +363,8 @@ def build_rag_index(
     chunk_size: int = 512,
     provider: str = "auto",
 ) -> Dict[str, Any]:
-    """Builda ou atualiza incrementalmente o índice RAG.
-    Chunks existentes (por source_path+chunk_id) cujo hash não mudou são pulados."""
+    """Builds or incrementally updates the RAG index.
+    Existing chunks (by source_path+chunk_id) whose hash hasn't changed are skipped."""
     enc_prov, prov_label, emb_dim = get_provider(provider)
     chunk_words = max(64, int(chunk_size * 0.75))
 
@@ -376,7 +376,7 @@ def build_rag_index(
     conn.row_factory = sqlite3.Row
     vec_loaded, vec_note = _try_load_sqlite_vec(conn)
     if not vec_loaded:
-        # se vetor indisponível, força provider none para embeddings dummy consistentes
+        # if vector unavailable, force none provider for consistent dummy embeddings
         if not isinstance(enc_prov, NoneBM25Provider):
             enc_prov = NoneBM25Provider()
             prov_label = prov_label + "+vec-fallback-none"
@@ -384,10 +384,10 @@ def build_rag_index(
 
     _ensure_rag_schema(conn, vec_loaded, emb_dim)
 
-    # 1. Coleta todos doc sources
+    # 1. Collect all doc sources
     sources = _collect_doc_sources(paths)
 
-    # 2. Split em chunks
+    # 2. Split into chunks
     all_chunks: List[Dict[str, Any]] = []
     for scope, src_path, content in sources:
         for ch in _split_md_chunks(content, src_path, chunk_words):
@@ -401,7 +401,7 @@ def build_rag_index(
                 }
             )
 
-    # 3. Verifica quais já existem e não mudaram (incremental)
+    # 3. Check which ones already exist and haven't changed (incremental)
     existing = {
         row["hash"]: (row["source_path"], row["chunk_id"])
         for row in conn.execute("SELECT hash, source_path, chunk_id FROM documents").fetchall()
@@ -415,7 +415,7 @@ def build_rag_index(
         c["hash"] = h
         to_insert.append(c)
 
-    # 4. Embed batch novo + insert
+    # 4. Embed new batch + insert
     inserted = 0
     skipped = len(all_chunks) - len(to_insert)
     batch_encode_size = 32
@@ -425,7 +425,7 @@ def build_rag_index(
         batch = to_insert[i : i + batch_encode_size]
         texts = [b["text_body"] for b in batch]
         vecs = enc_prov.encode(texts)
-        # Garante dimensão consistente (provider none 8; st 384; openai 1536)
+        # Ensures consistent dimension (none provider 8; st 384; openai 1536)
         real_dim = len(vecs[0]) if vecs else emb_dim
         for b, v in zip(batch, vecs):
             cur = conn.cursor()
@@ -440,7 +440,7 @@ def build_rag_index(
                     inserted += 1
             except Exception:
                 pass
-            # vector table insert (se disponível)
+            # vector table insert (if available)
             if vec_loaded and real_dim:
                 try:
                     import struct
@@ -454,7 +454,7 @@ def build_rag_index(
                     pass
     conn.commit()
 
-    # 5. Prune documents que não existem mais nas sources (stale)
+    # 5. Prune documents that no longer exist in sources (stale)
     valid_keys = {_hash_chunk(c["source_path"], c["chunk_id"], c["text_body"]) for c in all_chunks}
     stale = [h for h in existing if h not in valid_keys]
     deleted = 0
@@ -487,11 +487,11 @@ def build_rag_index(
 
 
 # ---------------------------------------------------------------------------
-# Search híbrida: BM25 (state_store) 40% + vector cosine 60%
+# Hybrid search: BM25 (state_store) 40% + vector cosine 60%
 # ---------------------------------------------------------------------------
 
 
-def _normalize_01(scores: List[float]) -> List[float]:
+def _normalise_01(scores: List[float]) -> List[float]:
     if not scores:
         return scores
     mn = min(scores)
@@ -507,9 +507,9 @@ def search_rag(
     top_k: int = 10,
     hybrid: bool = True,
 ) -> Dict[str, Any]:
-    """Busca RAG. Se provider/vetor indisponível ou hybrid=False → só BM25 lexical.
-    Strategy: (a) pega top_k*5 lexical via state_store search_state, (b) pega top_k*5 vector via sqlite-vec,
-    (c) junta por hash/source_path+chunk_id, (d) weighted merge 0.4 lexical + 0.6 vector."""
+    """RAG search. If provider/vector unavailable or hybrid=False → BM25 lexical only.
+    Strategy: (a) gets top_k*5 lexical via state_store search_state, (b) gets top_k*5 vector via sqlite-vec,
+    (c) joins by hash/source_path+chunk_id, (d) weighted merge 0.4 lexical + 0.6 vector."""
     paths = compute_paths(worktree_root, "rag-search")
     db_path = _get_rag_db_path(paths=paths)
 
@@ -517,7 +517,7 @@ def search_rag(
     conn.row_factory = sqlite3.Row
     vec_loaded, _vec_note = _try_load_sqlite_vec(conn)
 
-    # --- Passo 1: sempre pega lexical BM25 via state_store (se houver FTS) ou fallback LIKE ---
+    # --- Step 1: always get lexical BM25 via state_store (if FTS exists) or fallback LIKE ---
     lexical_results: List[Dict[str, Any]] = []
     lexical_hits: Dict[str, float] = {}
     try:
@@ -527,7 +527,7 @@ def search_rag(
         if isinstance(sres, dict):
             items = sres.get("results") or []
             for r in items:
-                # r.keys variam por scope; melhor: construir key por source_path se existir, senão por id
+                # r.keys vary by scope; better: build key by source_path if exists, otherwise by id
                 key = r.get("path") or r.get("source_path") or f"lex-{r.get('scope', 'x')}-{r.get('id', '?')}"
                 score = float(r.get("score_bm25") or r.get("score") or 0.0)
                 lexical_hits[key] = max(lexical_hits.get(key, 0.0), score)
@@ -535,19 +535,19 @@ def search_rag(
     except Exception:
         pass
 
-    # --- Passo 2: vector search se possível ---
+    # --- Step 2: vector search if possible ---
     vector_results: List[Dict[str, Any]] = []
     vector_hits: Dict[str, float] = {}
     if vec_loaded and hybrid:
-        # Determina dim real consultando sqlite_vec_info ou a primeira row
+        # Determine real dim by checking sqlite_vec_info or the first row
         emb_dim = 8
         prov_for_q: Optional[EncodeProvider] = None
         try:
-            # detectar dim por metadata ultima build => não existe tabela. Usa heuristica: consulta provider none por enquanto
+            # detect dim by last build metadata => table doesn't exist. Use heuristic: check none provider for now
             row = conn.execute("SELECT COUNT(*) as c FROM documents").fetchone()
             count_doc = row["c"] if row else 0
             if count_doc > 0:
-                # tenta carregar vec_documents info
+                # try to load vec_documents info
                 try:
                     meta = conn.execute("SELECT * FROM vec_documents LIMIT 1").fetchone()
                     if meta and hasattr(meta, "keys"):
@@ -556,9 +556,9 @@ def search_rag(
                     pass
         except Exception:
             pass
-        # para pegar query embedding, reutiliza um provider coerente:
-        # se sqlite-vec carregou mas não sabemos dim, usamos none provider (unit vector) que sempre matcha
-        # caso contrário, tentamos auto
+        # to get query embedding, reuse a coherent provider:
+        # if sqlite-vec loaded but we don't know dim, use none provider (unit vector) which always matches
+        # otherwise, try auto
         if prov_for_q is None:
             prov_for_q, _, emb_dim = get_provider("auto")
         try:
@@ -573,11 +573,11 @@ def search_rag(
             ).fetchall()
             for r in rows:
                 rid = r["rowid"]
-                # distance = squared L2 ou cosine dist (menor = melhor). Converter para score similaridade (maior = melhor).
+                # distance = squared L2 or cosine dist (smaller = better). Convert to similarity score (larger = better).
                 dist = float(r["distance"])
                 sim = 1.0 / (1.0 + dist)
                 vector_hits[rid] = sim
-                # Join com documents
+                # Join with documents
                 drow = conn.execute(
                     "SELECT hash, scope, source_path, chunk_id, text_body FROM documents WHERE hash=?", (rid,)
                 ).fetchone()
@@ -598,17 +598,17 @@ def search_rag(
 
     conn.close()
 
-    # --- Passo 3: merge híbrido ponderado ---
-    # Para combinar: lexical score normalizado (40%) + vector score normalizado (60%)
+    # --- Step 3: weighted hybrid merge ---
+    # To combine: normalised lexical score (40%) + normalised vector score (60%)
     merged: Dict[str, Dict[str, Any]] = {}
 
     lex_keys = list(lexical_hits.keys())
-    lex_scores_norm = _normalize_01([lexical_hits[k] for k in lex_keys])
+    lex_scores_norm = _normalise_01([lexical_hits[k] for k in lex_keys])
     for k, ns in zip(lex_keys, lex_scores_norm):
         merged[k] = {"_join_key": k, "lex_score_norm": ns, "vec_score_norm": 0.0, "count_hits": 1}
 
     vec_keys = list(vector_hits.keys())
-    vec_scores_norm = _normalize_01([vector_hits[k] for k in vec_keys])
+    vec_scores_norm = _normalise_01([vector_hits[k] for k in vec_keys])
     for k, ns in zip(vec_keys, vec_scores_norm):
         if k in merged:
             merged[k]["vec_score_norm"] = max(merged[k]["vec_score_norm"], ns)
@@ -616,10 +616,10 @@ def search_rag(
         else:
             merged[k] = {"_join_key": k, "lex_score_norm": 0.0, "vec_score_norm": ns, "count_hits": 1}
 
-    # Encontrar record base (texto) por cada merged entry
+    # Find base record (text) for each merged entry
     joined: List[Dict[str, Any]] = []
     for key, m in merged.items():
-        # prioriza vector result para texto (mais específico com chunk id)
+        # prioritize vector result for text (more specific with chunk id)
         rec = next((v for v in vector_results if v.get("hash") == key or v.get("_join_key") == key), None)
         if rec is None:
             rec = next((lr for lr in lexical_results if lr.get("_join_key") == key), None)
