@@ -50,8 +50,8 @@ def registry_append_jsonl(
 
     flags = {
         "LANG_CODE": incoming_flags.pop("LANG_CODE", "en"),
-        "LANG_DOCS": incoming_flags.pop("LANG_DOCS", "pt-BR" if legacy_pt_check == "DISABLED" else "en"),
-        "LANG_CHAT": incoming_flags.pop("LANG_CHAT", "pt-BR"),
+"LANG_DOCS": incoming_flags.pop("LANG_DOCS", "en"),
+        "LANG_CHAT": incoming_flags.pop("LANG_CHAT", "en"),
         "LANG_REPORT": incoming_flags.pop("LANG_REPORT", "en"),
     }
 
