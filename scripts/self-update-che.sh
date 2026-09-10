@@ -4,19 +4,24 @@
 #                           and merge into your local installation WITHOUT losing personal data.
 #
 # PREMISE (real user scenario):
-#   "User already has che installed in ~/.trae for weeks/months. Doesn't remember
+#   "User already has che installed for weeks/months (default ~/.che-ai since
+#    Sep 2026, or legacy ~/.trae for pre-Sep-2026 installs). Doesn't remember
 #    if installed via git clone or zip. Just wants to have the latest version from GitHub.
 #    Doesn't want to download anything manually, doesn't want to remember flags. Just wants to run
 #    ONE COMMAND and guarantee that their user_rules/bindings/memory/custom skills
-#    remain intact."
+#    remain intact. CHE_HOME env var overrides the default if set."
 #
 # THIS SCRIPT IS THAT COMMAND:
-#   bash ~/.trae/scripts/self-update-che.sh               # Default DRY-RUN.
-#   bash ~/.trae/scripts/self-update-che.sh --apply       # Applies for real.
-#   bash ~/.trae/scripts/self-update-che.sh -h
+#   # Default DRY-RUN (uses CHE_HOME env or auto-detects ~/.che-ai → ~/.trae legacy):
+#   bash "${CHE_HOME:-$HOME/.che-ai}/scripts/self-update-che.sh"
+#   # Apply for real:
+#   bash "${CHE_HOME:-$HOME/.che-ai}/scripts/self-update-che.sh --apply"
+#   # Legacy install (explicit):
+#   bash ~/.trae/scripts/self-update-che.sh --apply
+#   bash -h | --help
 #
 # What this script DOES AUTOMATICALLY, ZERO CONFIGURATION:
-#   1) Validates that ~/.trae (TARGET) already exists (not a fresh install).
+#   1) Validates that the resolved Che home (TARGET) already exists (not a fresh install).
 #   2) Performs AUTONOMOUS fetch of the LATEST official version from github.com/laionazeredo/che-ai:
 #        ONLY PERMITTED WAY (Che HARD RULE): logged-in `gh` CLI (official GitHub CLI).
 #          → gh repo clone ... --depth 1 into /tmp/tmpXXXXXX.
@@ -60,7 +65,18 @@ set -euo pipefail
 # Flags and defaults.
 # ============================================================
 APPLY=0
-TARGET="${HOME}/.trae"
+TARGET="${HOME}/.che-ai"
+# Backward-compat auto-detect (Sep 2026 rebrand: ~/.trae → ~/.che-ai).
+# Exact same logic as install-che.sh — see there for full rationale.
+# CHE_HOME env var has top precedence; if NOT set we try new default first,
+# then legacy valid checkout, then final new default (will fail existence check below).
+if [ -n "${CHE_HOME:-}" ]; then
+  TARGET="${CHE_HOME}"
+elif [ -n "${HARNESS_HOME:-}" ]; then
+  TARGET="${HARNESS_HOME}"
+elif [ ! -e "$TARGET" ] && [ -f "${HOME}/.trae/CHE_RULES.md" ]; then
+  TARGET="${HOME}/.trae"
+fi
 GH_REPO="laionazeredo/che-ai"
 TMP_SRC=""   # defined below if fetch is successful.
 
@@ -137,7 +153,7 @@ if [ ! -e "$TARGET" ]; then
 fi
 
 if [ ! -f "${TARGET}/README.md" ] && [ ! -f "${TARGET}/CHE_RULES.md" ]; then
-  echo "❌ Folder ${TARGET} does not seem to be a che .trae (missing README.md and CHE_RULES.md)." >&2
+  echo "❌ Folder ${TARGET} does not seem to be a valid Che checkout (missing README.md and CHE_RULES.md)." >&2
   exit 2
 fi
 
@@ -165,7 +181,7 @@ else
     echo "   Install gh CLI + authenticate:" >&2
     echo "        https://cli.github.com/" >&2
     echo "        gh auth login --scopes repo,read:org,workflow" >&2
-    echo "   Then run again: bash ~/.trae/scripts/self-update-che.sh" >&2
+    echo "   Then run again: bash \${CHE_HOME:-\$HOME/.che-ai}/scripts/self-update-che.sh" >&2
     exit 6
   fi
 

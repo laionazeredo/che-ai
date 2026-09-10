@@ -5,6 +5,51 @@ from pathlib import Path
 from typing import Dict, Optional
 
 
+def resolve_che_home() -> Path:
+    """Resolve the canonical Che source-of-truth root directory (where pyproject.toml,
+    domains/, skills/, che_core/ and adapters/ live).
+
+    Resolution order (intentionally stable, no breaking changes for legacy installs):
+
+      1. $CHE_HOME env var — explicit user override wins unconditionally.
+      2. $HARNESS_HOME env var — backward-compatible alias for pre-rebrand installs.
+      3. $HOME/.che-ai — the canonical default path (Sep 2026 rebrand, project has its
+         own home on the user machine instead of living inside an IDE agent folder).
+      4. $HOME/.trae — LEGACY fallback (before Sep 2026 the project lived inside the
+         Trae IDE home). Only used if the path actually contains a valid Che checkout
+         (has CHE_RULES.md); prevents breakage for long-running existing installations.
+      5. Fallback final: $HOME/.che-ai (the installer will create it on next run).
+
+    This function is the SINGLE SOURCE OF TRUTH for this fallback cascade; every hook,
+    skill, contract and script MUST call it instead of hard-coding any of the four
+    paths above inline. (DRY + blast radius 1 when we rename this folder again in
+    2027.)
+    """
+    home_dir = Path(os.path.expanduser("~"))
+
+    # 1. Explicit env overrides
+    for env_key in ("CHE_HOME", "HARNESS_HOME"):
+        value = os.environ.get(env_key)
+        if value:
+            return Path(value).expanduser().resolve()
+
+    new_default = home_dir / ".che-ai"
+    legacy_path = home_dir / ".trae"
+
+    # 3. New default (preferred if we already migrated or it is a fresh install)
+    if new_default.exists():
+        return new_default
+
+    # 4. Legacy fallback, but ONLY if it's a real Che checkout (not an empty folder
+    # or the real Trae IDE config that happened to share the directory name before
+    # the rebrand split.)
+    if legacy_path.exists() and (legacy_path / "CHE_RULES.md").is_file():
+        return legacy_path
+
+    # 5. Final: new default. Installer will materialize it on next run.
+    return new_default
+
+
 def _slugify(text: str) -> str:
     """Equivalent to the bash che_slug_safe logic"""
     if not text:

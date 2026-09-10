@@ -4,7 +4,8 @@
 #
 # TWO PATHS (AUTOMATICALLY detects which case is yours):
 #
-#   CASE 1 — target (~/.trae) IS A GIT REPO cloned DIRECTLY from laionazeredo/che-ai
+#   CASE 1 — target (default ~/.che-ai, legacy ~/.trae if valid, or $CHE_HOME)
+#            IS A GIT REPO cloned DIRECTLY from laionazeredo/che-ai
 #     → executes:  git fetch  (dry-run) or  git pull --ff-only (--apply)
 #        + if package.json/pnpm-lock.yaml changed → corepack pnpm install --prefer-offline
 #     Advantage: zero copies, zero conflict merge (ff-only aborts if divergence),
@@ -17,9 +18,11 @@
 #        untouchable blacklist, preserve target custom items that don't exist in source).
 #
 # USAGE:
-#   ./scripts/update-che.sh               # Default DRY-RUN (fetch / install --update dry-run).
-#   ./scripts/update-che.sh --apply       # Applies the update for real.
-#   ./scripts/update-che.sh --target /custom/.trae
+#   ./scripts/update-che.sh                        # Default DRY-RUN (fetch / install --update dry-run).
+#   ./scripts/update-che.sh --apply                # Applies the update for real.
+#   ./scripts/update-che.sh --target ~/.che-ai     # Explicit new default (Sep 2026+).
+#   ./scripts/update-che.sh --target ~/.trae       # Explicit legacy path.
+#   ./scripts/update-che.sh --target /custom/che-home
 #   ./scripts/update-che.sh -h
 #
 # SECURITY GUARANTEES:
@@ -34,7 +37,15 @@
 set -euo pipefail
 
 APPLY=0
-TARGET="${HOME}/.trae"
+TARGET="${HOME}/.che-ai"
+# Backward-compat auto-detect (Sep 2026 rebrand). Same cascade as install-che.sh.
+if [ -n "${CHE_HOME:-}" ]; then
+  TARGET="${CHE_HOME}"
+elif [ -n "${HARNESS_HOME:-}" ]; then
+  TARGET="${HARNESS_HOME}"
+elif [ ! -e "$TARGET" ] && [ -f "${HOME}/.trae/CHE_RULES.md" ]; then
+  TARGET="${HOME}/.trae"
+fi
 
 while [ $# -gt 0 ]; do
   case "$1" in

@@ -25,7 +25,9 @@ Che ships as a **zero-dependency PEP-621 Python package** installable via `pipx`
 
 **Installation (agents should never reimplement this; assume already installed. The `scripts/install-che.sh --apply` command runs this as its final step, and also configures the Claude Code global rules adapter automatically):**
 ```bash
-cd ~/.trae                         # Che config repo. Symlinked by Claude Code adapters at ~/.claude-codex/ or ~/.cursor/ if needed.
+cd ~/.che-ai                      # Che config repo (canonical default, Sep 2026+).
+                                  # Legacy installs (pre-Sep 2026) use cd ~/.trae.
+                                  # $CHE_HOME env var always has top precedence.
 pipx install -e . --force          # user-isolated venv, ~/.local/bin/ on PATH
 which che        # → ~/.local/bin/che
 che --help       # 15 structural subcommands: workspace/project/config/task/state/rag/export/import/eject + plumbing
@@ -61,7 +63,7 @@ Why three layers and why SpecFlow? Short answer plus full trade-off rationale in
 
 ## 3. Workspaces Hierarchy (Path Canonicity)
 
-Che organizes project data into a 4-level hierarchy. **Do not create `.trae/` folders inside user projects.** Che memory lives outside repositories, inside `~/.che-workspaces/` (the user's home directory), by design.
+Che organizes project data into a 4-level hierarchy. **Do not create `.che-ai/` or legacy `.trae/` folders inside user projects (never nest the Che source checkout inside a downstream product repo).** Che team-state memory lives outside repositories, inside `~/.che-workspaces/` (the user's home directory), by design.
 
 1.  **L1 (Workspace Root)**: `~/.che-workspaces/workspaces/<workspace-slug>/`
 2.  **L2 (Project Level)**: `<L1>/<project-slug>/project/` (Durable info: `architecture.md`, `project_profile.md`, `product_context.md`, `roadmap.md`, `roles/index.md`, `registry.jsonl`; plus shared `_db/` folder).

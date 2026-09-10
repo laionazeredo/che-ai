@@ -143,7 +143,7 @@ The agent MUST recognise these and react immediately.
 **What it does:** Prints a concise status report of the CURRENT che session.
 **When to invoke:** User wants to see where we are in the TASK GRAPH progress.
 **Agent action:**
-1. Source `$HOME/.trae/contracts/che_sessions_contract.sh` → `che_compute_paths WORKTREE_ROOT` → look for `task_graph.md` at `$CHE_WORKSPACE_SHARED/task_graph.md` (OUTSIDE worktree).
+1. Source `"${CHE_HOME:-${HOME}/.che-ai}/contracts/che_sessions_contract.sh"` → `che_compute_paths WORKTREE_ROOT` → look for `task_graph.md` at `$CHE_WORKSPACE_SHARED/task_graph.md` (OUTSIDE worktree).
 2. If not found → "No active che session in this worktree. Use `/che-act`."
 3. If found → print in Portuguese:
    - Which task is IN_PROGRESS and in which phase (scope/qa/compliance)
@@ -233,7 +233,7 @@ Agent action: ask confirmation first.
 4. Wait for your explicit APPROVAL of the commit plan.
 5. Apply each commit individually.
 6. `git push --no-verify --set-upstream origin <branch>` (creates remote if missing).
-7. Build readable PR body (default English; Portuguese only if YOU explicitly request) from: `$CHE_WORKSPACE_SHARED/manual_test_plan.md` + `PR_DESCRIPTION_TEMPLATE.md` (filled style reference, follow it strictly) + relevant decisions from `$(che_decisions_path)`. Resolve paths via `che_compute_paths`; NEVER read from `<WORKTREE_ROOT>/.trae/*`. Enforce §A-4.2 process gates (acronyms expanded, 1 bullet = 1 change + why, risk→consequence, plain steps to verify, ≤50 lines total).
+7. Build readable PR body (default English; Portuguese only if YOU explicitly request) from: `$CHE_WORKSPACE_SHARED/manual_test_plan.md` + `PR_DESCRIPTION_TEMPLATE.md` (filled style reference, follow it strictly) + relevant decisions from `$(che_decisions_path)`. Resolve paths via `che_compute_paths`; NEVER read from inside the Che checkout folder (e.g. `<WORKTREE_ROOT>/.che-ai/*` or legacy `<WORKTREE_ROOT>/.trae/*`). Anti-pattern: never nest the Che source checkout inside a user project repo. Enforce §A-4.2 process gates (acronyms expanded, 1 bullet = 1 change + why, risk→consequence, plain steps to verify, ≤50 lines total).
 8. Open DRAFT PR against default branch → assign to `@me` → print PR URL.
 **Syntax examples:**
 ```
@@ -275,7 +275,7 @@ Agent action: ask confirmation first.
 3. Pull PR metadata + diff + files list via `gh pr view --json`.
 4. Pull ticket context / scope description from your args.
 5. Run the 4-category review framework (Runtime / Security / Deps-blast-radius / Scope deviation).
-6. Structured review report saved to disk: `.trae/review_PR-<N>_<YYYYMMDD>.md`.
+6. Structured review report saved to disk: resolve canonical OUTSIDE-WORKTREE path via `che_output_path "review" "che-code-review" "pr-<N>" "session" "md"` (NOT inside the Che checkout; NEVER hardcode `.trae/` or `.che-ai/` relative to worktree).
 7. Verdict delivered to chat (Portuguese): 🔴 REQUEST CHANGES / 🟡 APPROVE WITH COMMENTS / 🟢 APPROVE, with numbered blocking issues.
 8. If user says "suba essa review oficial": use `gh pr review` with the report as body + request-changes / comment / approve flag.
 **Syntax examples:**
@@ -299,7 +299,7 @@ Agent action: ask confirmation first.
 4. Collect 3 context sources Mode A: PR descr/metadata via gh pr view --json, diff names/stat, CI checks gh pr checks.
 5. Collect 4 buckets Mode B: Already Committed (base..HEAD), To Commit (staged + unstaged tracked), Untracked, Branch metadata.
 6. Structure report in 5 CANONICAL sections (high context / change areas / CI or buckets / slight risks / 3 conversation points).
-7. Save file to `.trae/diff-context_PR-<N>_<ts>.md` (Mode A) or `.trae/diff-context_LOCAL_<ts>.md` (Mode B).
+7. Save file via canonical helper: `che_output_path "diff_context" "diff-summary" "<pr-or-local>" "session" "md"` → resolves OUTSIDE the worktree to `$CHE_SESSION_DIR/diff_contexts/...`; NEVER hardcode `.trae/` or `.che-ai/` relative to worktree.
 8. Deliver condensed summary in chat §18 contracts (250–500w + 4 sections). Full report saved to disk.
 
 **Syntax examples:**
@@ -320,7 +320,7 @@ Agent action: ask confirmation first.
 **Agent action:**
 1. Invoke `che-manual-test-executor` skill IMMEDIATELY.
 2. Preflight #1: confirm worktree path + validate §19 session binding (mismatch = block question).
-3. Preflight #2: resolve manual_test_plan.md path → (a) `--plan-path` given → use; (b) default (no flag): `source $HOME/.trae/contracts/che_sessions_contract.sh && che_compute_paths $WORKTREE_ROOT && echo $CHE_WORKSPACE_SHARED/manual_test_plan.md`; (c) no binding created → AskUserQuestion which option.
+3. Preflight #2: resolve manual_test_plan.md path → (a) `--plan-path` given → use; (b) default (no flag): `source "${CHE_HOME:-${HOME}/.che-ai}/contracts/che_sessions_contract.sh" && che_compute_paths $WORKTREE_ROOT && echo $CHE_WORKSPACE_SHARED/manual_test_plan.md`; (c) no binding created → AskUserQuestion which option.
 4. Preflight #3: plan parse (§0 Setup env, AC-N steps with GWT, Smoke S1..S5, HUMAN_ONLY items §3).
 5. **MANDATORY setup approval GATE (before any shell setup command):** ask user (A=Execute setup, B=Skip app already running, C=Cancel).
 6. Create evidence dir: `$CHE_SESSION_DIR/manual_test_evidence/` (OUTSIDE worktree) with subdirs AC-1, AC-2, ... + `execution.log`.
@@ -332,7 +332,7 @@ Agent action: ask confirmation first.
 **Syntax examples:**
 ```
 /che-manual-test --worktree /abs/path/to/worktree --task-id feat-PROJ-123-Process-a-refund
-/che-manual-test --worktree /abs/path --plan-path /abs/.trae/some-other/manual_test_plan.md
+/che-manual-test --worktree /abs/path --plan-path /abs/che-ws-shared/some-other/manual_test_plan.md
 ```
 
 ---
@@ -345,7 +345,7 @@ Agent action: ask confirmation first.
 1. Invoke `che-pr-comments` skill.
 2. Pull ALL comments via `gh pr view --json comments,reviews` → flatten.
 3. Classification framework: BOT vs HUMAN, then HUMAN → (CORRECTNESS, SECURITY, ARCHITECTURE, SCOPE CREEP, QUESTION, NIT, PRAISE, DISCUSSION, OUTDATED, DUPLICATE).
-4. Triage report saved to `$CHE_WORKSPACE_SHARED/pr_comments/pr-<N>_<YYYYMMDD>.md` (resolve via `che_compute_paths`; NEVER inside `<WORKTREE_ROOT>/.trae/`).
+4. Triage report saved to `$CHE_WORKSPACE_SHARED/pr_comments/pr-<N>_<YYYYMMDD>.md` (resolve via `che_compute_paths`; NEVER inside the Che checkout folder nested in a user project, e.g. `<WORKTREE_ROOT>/.che-ai/` or legacy `<WORKTREE_ROOT>/.trae/`).
 5. Deliver to user chat: summary buckets count, Section 1 (TO IMPLEMENT) sorted by severity, Section 2 (DRAFT RESPONSES) English polite non-argumentative, Section 3 DISCUSSION PENDING USER, Section 4 NIT optional, Section 5 RESOLVED SILENTLY.
 6. Aggregated implementation plan as atomic commits batches.
 7. If user says: implement → apply fixes in worktree. If user says: post replies → `gh pr reply` each drafted comment.
@@ -387,7 +387,7 @@ Agent action: ask confirmation first.
 **Agent action (MANDATORY PREFLIGHT if parameters are missing):**
 1. Invoke **`che-social-ui-designer`** skill IMMEDIATELY.
 2. Preflight question #1 (if `--mode` omitted): "Which mode? A) Social Media / B) UI-UX / C) Design System" (AskUserQuestion 1 question, 3 options).
-3. Preflight question #2 (equivalent to "which figma project to work on", user-asked): which ABSOLUTE path to save the design file (`.pen` = OpenPencil / Figma-equivalent). Default `/home/laion/.trae/designs/<modo>-<slug>-YYYYMMDD.pen`.
+3. Preflight question #2 (equivalent to "which figma project to work on", user-asked): which ABSOLUTE path to save the design file (`.pen` = OpenPencil / Figma-equivalent). Default is the Che-scoped durable designs folder inside the BOUND worktree's shared workspace: `${CHE_WORKSPACE_SHARED}/designs/<mode>-<slug>-YYYYMMDD.pen`. If the session is not yet bound, use the user Che home designs subfolder: `"${CHE_HOME:-${HOME}/.che-ai}/designs/<mode>-<slug>-YYYYMMDD.pen"`.
 4. Preflight question #3 (if missing): palette / typography / tone of voice (copy).
 5. Skill executes selected mode §A/B/C with fail-fast + WCAG AA quality gates.
 6. Final delivery always with: 2× PNG exported files / tokens / source `.pen` + ONE SINGLE offer to deep-dive (§18 contracts).
@@ -464,7 +464,7 @@ Agent action: ask confirmation first.
 1. **Worktree check FIRST.** If `/che-*` is called but worktree is not yet confirmed → **ASK FOR WORKTREE before executing anything else.** Even if the command is just `/che-status`. EXCEPTION: `/che-spec` runs preflight binding if none exists (auto-creates Level 1+2).
 2. **English for files, Portuguese for chat.** The reports printed to the user (status, decisions, warnings) are in Portuguese (as per user preference). The files written to disk are in English.
 3. **Do NOT invent new commands.** Only those listed above, plus any repo-local commands already defined per-worktree.
-4. **Logging.** Every command execution results in a new entry to `session.md` under `$CHE_SESSION_DIR/` (resolved via `che_compute_paths` contract; NO longer in worktree/.trae — §19.1 MORATORIUM).
+4. **Logging.** Every command execution results in a new entry to `session.md` under `$CHE_SESSION_DIR/` (resolved via `che_compute_paths` contract; NEVER inside the Che checkout nested inside a user worktree, e.g. `worktree/.che-ai/` or legacy `worktree/.trae/` — §19.1 MORATORIUM).
 5. **SPEC GATE precedence order for planning:**
    - Standalone `/che-spec` = document only (no scope-capture / dev), runs before che-act.
    - `/che-act` = SM §0.5 auto-calls che-spec IF no Approved SPEC exists, passing user input args (ticket/prd/desc); Approved releases scope-capture.

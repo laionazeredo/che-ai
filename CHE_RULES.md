@@ -44,10 +44,10 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 >
 > ONLY POSSIBLE EXCEPTION: User explicitly and clearly asks VERBATIM for a SPECIFIC file to be saved inside the worktree. Without this verbal request, default = **OUTSIDE WORKTREE**.
 >
-> - **IMMUTABLE che CODE (skills/commands/hooks/user_rules/contracts):** remains in `$HOME/.trae/`.
+> - **IMMUTABLE che CODE (skills/commands/hooks/user_rules/contracts):** lives in Che home, resolved via 5-tier cascade: `$CHE_HOME` (top precedence, user override) → `$HARNESS_HOME` (compat alias) → `$HOME/.che-ai` (canonical default, Sep 2026+) → `$HOME/.trae` if CHE_RULES.md exists there (legacy pre-Sep-2026, originally inside Trae IDE home folder, historical accident) → final fallback `$HOME/.che-ai`.
 > - **DATA/GENERATED/MUTABLE (specs, plans, decisions, reports, QA evidence, bindings, diff contexts, PR comments):** must go to `$CHE_SESSIONS_ROOT` (default `$HOME/code/che-sessions`), **OUTSIDE USER WORKTREES**, under `<WORKSPACE_NAME>/<WORKTREE_SLUG>/`.
 >
-> Canonical paths SINGLE SOURCE OF TRUTH contract: `source ~/.trae/contracts/che_sessions_contract.sh` + `che_compute_paths WORKTREE_ROOT SESSION_ID CWD`. **Hardcoded path construction is prohibited.**
+> Canonical paths SINGLE SOURCE OF TRUTH contract: `source "${CHE_HOME:-${HOME}/.che-ai}/contracts/che_sessions_contract.sh"` + `che_compute_paths WORKTREE_ROOT SESSION_ID CWD`. **Hardcoded path construction (e.g. `~/.trae/...`) is prohibited.** Always use `$CHE_HOME` env var first.
 >
 > **🔧 MANDATORY HELPER FOR ALL OUTPUT WRITES:**
 > DO NOT invent paths manually. Always call:
@@ -90,8 +90,8 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
        - `execution/` — batch logs, execution trace, runtime envelopes.
        - `debugger/` — screenshots, logs, and traces from che-debugger-bugfix.
        - `final_summary.md` — final summary and statistics of this execution.
-2. **NEVER** create these files in other locations (docs/, repo root, package folders, `<WORKTREE_ROOT>/.trae/*`, `<WORKTREE_ROOT>/reports/`) unless the user explicitly asks.
-3. **NEVER** touch `AGENTS.md` or `CLAUDE.md` in the user's worktree (che only modifies ~/.trae + che-sessions).
+2. **NEVER** create these files in other locations (docs/, repo root, package folders, `<WORKTREE_ROOT>/.che-ai/*`, `<WORKTREE_ROOT>/.trae/*`, `<WORKTREE_ROOT>/reports/`) unless the user explicitly asks. Anti-pattern: never nest the Che source checkout inside a user project repo.
+3. **NEVER** touch `AGENTS.md` or `CLAUDE.md` in the user's worktree. Che only modifies files inside its own home folder (resolved via `$CHE_HOME` cascade) + the durable session state in `$CHE_SESSIONS_ROOT`.
 
 ---
 
@@ -138,7 +138,7 @@ For ANY feature implementation / bugfix with more than one step:
 ## 🟡 ALWAYS LOG DECISIONS
 
 Whenever you make a non-trivial decision (trade-off, rule exception, unforeseen files, mutability in hot path, RLS policy on new table, choice of creating multi-PR stack vs single PR, etc.):
-1. **USE OFFICIAL HELPER:** `source ~/.trae/contracts/che_sessions_contract.sh && che_append_decision_jsonl "$WORKTREE_ROOT" "EVENT_TYPE" '{"key":"value"}'`.
+1. **USE OFFICIAL HELPER:** `source "${CHE_HOME:-${HOME}/.che-ai}/contracts/che_sessions_contract.sh" && che_append_decision_jsonl "$WORKTREE_ROOT" "EVENT_TYPE" '{"key":"value"}'`.
    - Single point of append (dedup, JSON safe, schema v1). Single source: `$CHE_WORKSPACE_SHARED/decisions.log.jsonl`.
    - DO NOT use manual JSONL Edit/Write (risk of broken quoting / semicolons / no dedup).
 2. To consult human-readable → `/che-decisions` or `che-decisions-query` Skill (English summary / filters / CSV export).
@@ -176,7 +176,7 @@ In ANY loop/iterations between agents, the rule is:
 
 ### Mandatory Preflight (BEFORE any command, file reading, git operation, Glob/Grep):
 
-1. **Read Level 1 GLOBAL INDEX (resolve chicken-and-egg):** Read `$HOME/.trae/bindings/registry.jsonl`. Search for the LAST entry with STATUS=BOUND and SESSION_ID=<current>. Extract WORKTREE_ROOT from this entry.
+1. **Read Level 1 GLOBAL INDEX (resolve chicken-and-egg):** Read the canonical registry at `$CHE_HOME/bindings/registry.jsonl` (use cascade if env var empty: try `$HOME/.che-ai`, else `$HOME/.trae` if CHE_RULES.md exists there, else `$HOME/.che-ai`). Search for the LAST entry with STATUS=BOUND and SESSION_ID=<current>. Extract WORKTREE_ROOT from this entry.
    - If found → use its WORKTREE_ROOT as the ABSOLUTE SCOPE of the session.
    - If NOT found → follow rule §19.2 (precedence order: explicit user mention → open files → env workdirs → AskUserQuestion with ≤2 options. Always ask when ambiguous; NEVER guess).
 
@@ -201,10 +201,10 @@ In ANY loop/iterations between agents, the rule is:
    - If draft output has clickable refs from ≥2 DIFFERENT worktrees AND the user did NOT ask for comparison → STOP. Delete incorrect worktree refs. Keep only refs from the BOUND WORKTREE_ROOT.
 
 > **AUTOMATIC GLOBAL ENFORCEMENT (§19 2-LEVEL LAYOUT):**
->   - **Level 1 (GLOBAL INDEX resolve chicken-and-egg + FLAGS + FRIENDLY_NAME per session):** `$HOME/.trae/bindings/registry.jsonl` — entry per SESSION_ID, append-only, NOT per worktree. `SESSION_ID → WORKTREE_ROOT` lookup without needing to know worktree. SINGLE writer = `che_registry_append_jsonl` helper (never manual Edit/Write). Optional payload: `"friendly_name":""`, `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}` (omitted=ENABLED for Hook 3 per session).
->   - **Level 2 (PER-SESSION DETAIL — OUTSIDE USER WORKTREE):** `$CHE_SESSION_DIR/binding.md` (no longer inside `<WORKTREE_ROOT>/.trae/bindings/`) — resolve via `che_compute_paths` contract → `che_level2_binding_path`. History/audit re-binding chain + mirror FLAGS + FRIENDLY_NAME for human reading. Never committed by design.
->   - **Hook 1 (PreToolUse):** [pretooluse-worktree-binding.sh](file:///home/laion/.trae/hooks/pretooluse-worktree-binding.sh) in [hooks.json](file:///home/laion/.trae/hooks.json#L5) — uses ONLY Level 1 for scissor check. **EXCEPTION:** paths in `$CHE_SESSIONS_ROOT/**` are permitted (not user code). Zero lock contention, resolves catch-22, parallel multi-session works.
->   - **Hook 3 (PostToolUse WARN-only):** [posttooluse-lang-pt-check.sh](file:///home/laion/.trae/hooks/posttooluse-lang-pt-check.sh) in [hooks.json](file:///home/laion/.trae/hooks.json#L22) — detects PT-BR text in files written via Edit/Write (4+ PT stopwords OR 2+ lines with accents + 2 stopwords). NEVER fixes automatically, NEVER blocks (always exit 0). Decision=warn + additionalContext instructs agent to **mandatory AskUserQuestion**: (A) Translate to English, (B) Keep confirmed PT, (C) Disable Hook 3 in this session (append `"flags":{"LANG_PT_CHECK":"DISABLED"}` via official helper in Level 1 registry.jsonl + Level 2 mirror).
+>   - **Level 1 (GLOBAL INDEX resolve chicken-and-egg + FLAGS + FRIENDLY_NAME per session):** `${CHE_HOME:-$HOME/.che-ai}/bindings/registry.jsonl` — entry per SESSION_ID, append-only, NOT per worktree. `SESSION_ID → WORKTREE_ROOT` lookup without needing to know worktree. SINGLE writer = `che_registry_append_jsonl` helper (never manual Edit/Write). Optional payload: `"friendly_name":""`, `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}` (omitted=ENABLED for Hook 3 per session).
+>   - **Level 2 (PER-SESSION DETAIL — OUTSIDE USER WORKTREE):** `$CHE_SESSION_DIR/binding.md` (never inside the user project or `<WORKTREE_ROOT>/.che-ai/` or legacy `.trae/`) — resolve via `che_compute_paths` contract → `che_level2_binding_path`. History/audit re-binding chain + mirror FLAGS + FRIENDLY_NAME for human reading. Never committed by design.
+>   - **Hook 1 (PreToolUse):** [pretooluse-worktree-binding.sh](./hooks/pretooluse-worktree-binding.sh) in [hooks.json](./hooks.json#L5) — uses ONLY Level 1 for scissor check. **EXCEPTION:** paths in `$CHE_SESSIONS_ROOT/**` are permitted (not user code). Zero lock contention, resolves catch-22, parallel multi-session works.
+>   - **Hook 3 (PostToolUse WARN-only):** [posttooluse-lang-pt-check.sh](./hooks/posttooluse-lang-pt-check.sh) in [hooks.json](./hooks.json#L22) — detects PT-BR text in files written via Edit/Write (4+ PT stopwords OR 2+ lines with accents + 2 stopwords). NEVER fixes automatically, NEVER blocks (always exit 0). Decision=warn + additionalContext instructs agent to **mandatory AskUserQuestion**: (A) Translate to English, (B) Keep confirmed PT, (C) Disable Hook 3 in this session (append `"flags":{"LANG_PT_CHECK":"DISABLED"}` via official helper in Level 1 registry.jsonl + Level 2 mirror).
 
 ---
 
@@ -533,8 +533,8 @@ If `LANG_PT_CHECK = DISABLED` legacy exists in session flags → automatically m
 
 | Gate | Rule | Canonical body location | Automatic enforcement |
 |---|---|---|---|
-| ✅ **Test Naming Behavioral** | `describe()/it()/test()` names = observable behaviour. **PROHIBITED** to put task id / AC / § / FLO-XXX / rule / SPEC id DIRECTLY in the title. Traceability allowed **ONLY** via JSDoc comment above OR line comment `// @ac ... | @task ...` INSIDE the block. Suites = grouping by functional DOMAIN/context. | **RULE 7.9** → [REFERENCE_USER_RULES_MINIFIED.md §7.9](file:///home/laion/.trae/REFERENCE_USER_RULES_MINIFIED.md#L247-L305) | **QA Stage E** (lint scan diffs, FAIL ≥10 bad titles) · **Compliance Scan 6.5** (severity gradient 1-9 WARN / ≥10 HIGH) · **CR Cat 4.7** (1-4 LOW / 5-9 MEDIUM / ≥10 HIGH). All validate and allow JSDoc/in-block traceability as an exception. |
-| ✅ **4-Checks Scope Delivery Audit** | **Before Draft PR or when reviewing worktree/PR:** MANDATORY scan of 4 pillars using PRD/ticket/task-graph/scope source: (1) every AC/delivery has file evidence in the diff mapped by behavioural keyword, (2) expected behaviour covered by unit/e2e tests with RULE 7.9 names, (3) mandatory documents updated (README, AGENTS, runbooks, .env.example) when heuristic trigger applies, (4) NO NEW env var used without declaration in parser (zod schema, env.ts, .env.example, terraform/vercel/railway). Report names RULE 7.9: not `well_implemented` but `full_scope_delivery_for_ac_<slug>`. | **RULE 8.2** → [che-scope-checker SKILL §2..§5](file:///home/laion/.trae/skills/che-scope-checker/SKILL.md#L60-L250) · commands: [/che-scope-check](file:///home/laion/.trae/commands/che-scope-check.md) | **GATE SHIP (FAIL-CLOSED):** `/che-ship` automatically invokes before opening Draft PR. 🔴 Verdict blocks PR opening until action items are resolved. Manual audit: standalone `/che-scope-check` at any time. |
+| ✅ **Test Naming Behavioral** | `describe()/it()/test()` names = observable behaviour. **PROHIBITED** to put task id / AC / § / FLO-XXX / rule / SPEC id DIRECTLY in the title. Traceability allowed **ONLY** via JSDoc comment above OR line comment `// @ac ... | @task ...` INSIDE the block. Suites = grouping by functional DOMAIN/context. | **RULE 7.9** → [REFERENCE_USER_RULES_MINIFIED.md §7.9](./REFERENCE_USER_RULES_MINIFIED.md#L247-L305) | **QA Stage E** (lint scan diffs, FAIL ≥10 bad titles) · **Compliance Scan 6.5** (severity gradient 1-9 WARN / ≥10 HIGH) · **CR Cat 4.7** (1-4 LOW / 5-9 MEDIUM / ≥10 HIGH). All validate and allow JSDoc/in-block traceability as an exception. |
+| ✅ **4-Checks Scope Delivery Audit** | **Before Draft PR or when reviewing worktree/PR:** MANDATORY scan of 4 pillars using PRD/ticket/task-graph/scope source: (1) every AC/delivery has file evidence in the diff mapped by behavioural keyword, (2) expected behaviour covered by unit/e2e tests with RULE 7.9 names, (3) mandatory documents updated (README, AGENTS, runbooks, .env.example) when heuristic trigger applies, (4) NO NEW env var used without declaration in parser (zod schema, env.ts, .env.example, terraform/vercel/railway). Report names RULE 7.9: not `well_implemented` but `full_scope_delivery_for_ac_<slug>`. | **RULE 8.2** → [che-scope-checker SKILL §2..§5](./skills/che-scope-checker/SKILL.md#L60-L250) · commands: [/che-scope-check](./commands/che-scope-check.md) | **GATE SHIP (FAIL-CLOSED):** `/che-ship` automatically invokes before opening Draft PR. 🔴 Verdict blocks PR opening until action items are resolved. Manual audit: standalone `/che-scope-check` at any time. |
 
 ---
 

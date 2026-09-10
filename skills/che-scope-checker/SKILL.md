@@ -595,9 +595,27 @@ Verdict =                                                              # thresho
 
 Run EXACTLY this block BEFORE constructing any path:
 ```bash
-CHE_HOME="${CHE_HOME:-$HOME/.trae}"
+# Resolve Che home with the 5-tier canonical cascade (identical to che_core/paths.py resolve_che_home).
+# 1. Explicit CHE_HOME env var (top precedence, user override)
+# 2. HARNESS_HOME compat alias (very old installs)
+# 3. New canonical default ~/.che-ai if it exists (Sep 2026+ rebrand)
+# 4. Legacy ~/.trae IFF it actually contains CHE_RULES.md (historical accident: Che was born
+#    inside the Trae IDE home folder before becoming a standalone multi-agent harness;
+#    the extra CHE_RULES.md file check avoids collision with a real/empty Trae IDE home)
+# 5. Final fallback: canonical ~/.che-ai (installer creates it on next --apply)
+if [ -n "${CHE_HOME:-}" ]; then
+  : # user override, keep
+elif [ -n "${HARNESS_HOME:-}" ]; then
+  CHE_HOME="${HARNESS_HOME}"
+elif [ -e "${HOME}/.che-ai" ]; then
+  CHE_HOME="${HOME}/.che-ai"
+elif [ -f "${HOME}/.trae/CHE_RULES.md" ]; then
+  CHE_HOME="${HOME}/.trae"
+else
+  CHE_HOME="${HOME}/.che-ai"
+fi
 CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-[ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ Contract $CONTRACT missing — exit 98"; exit 98; }
+[ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ Contract $CONTRACT missing (CHE_HOME=$CHE_HOME) — exit 98"; exit 98; }
 SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-scope-session}"
 if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
   che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# install-che.sh — Installs OR updates Che (this .trae) PLUS the
+# install-che.sh — Installs OR updates Che (this source checkout) PLUS the
 #                  standalone `che-ai` / `che` CLI binaries via pipx.
 #
 # ###########################################################################
@@ -35,14 +35,16 @@
 #        - Ideal for: "got a new version from laionazeredo/che-ai repo, want to update
 #          skills/commands/rules without losing my personal rules".
 #
-# USAGE (inside source .trae folder or --source=/custom/.trae):
-#   ./scripts/install-che.sh                                 # Default DRY-RUN (fresh install).
-#   ./scripts/install-che.sh --apply                         # REAL fresh install.
-#   ./scripts/install-che.sh --update                        # DRY-RUN NON-DESTRUCTIVE update mode.
-#   ./scripts/install-che.sh --update --apply                # REAL NON-DESTRUCTIVE update.
-#   ./scripts/install-che.sh --apply --no-cli                # Skip the pipx CLI install step.
-#   ./scripts/install-che.sh --target ~/.trae
-#   ./scripts/install-che.sh --source ~/Downloads/dot-trae-exported --apply
+# USAGE (inside the Che source checkout folder, or --source=/custom/che-source):
+#   ./scripts/install-che.sh                                        # Default DRY-RUN (fresh install).
+#   ./scripts/install-che.sh --apply                                # REAL fresh install.
+#   ./scripts/install-che.sh --update                               # DRY-RUN NON-DESTRUCTIVE update mode.
+#   ./scripts/install-che.sh --update --apply                       # REAL NON-DESTRUCTIVE update.
+#   ./scripts/install-che.sh --apply --no-cli                       # Skip the pipx CLI install step.
+#   ./scripts/install-che.sh --target ~/.che-ai                     # New default (Sep 2026+).
+#   # Legacy installs (pre-Sep 2026 originally in ~/.trae):
+#   ./scripts/install-che.sh --target ~/.trae                       # Explicit legacy path.
+#   ./scripts/install-che.sh --source ~/Downloads/che-ai-export --apply
 #   ./scripts/install-che.sh -h
 #
 # WHAT ABOUT THE IDE SLASH COMMANDS (/che-workspace, /che-spec, /che-act, /che-ship, ...)?
@@ -84,7 +86,17 @@ APPLY=0
 UPDATE=0
 NO_CLI=0
 SOURCE=""
-TARGET="${HOME}/.trae"
+TARGET="${HOME}/.che-ai"
+# Backward-compat auto-detect (Sep 2026 rebrand: ~/.trae → ~/.che-ai).
+# If the new default does NOT exist yet AND the user originally installed Che
+# inside the legacy ~/.trae (historical accident: Che was born inside the Trae
+# IDE home folder before becoming a standalone multi-agent harness), silently
+# reuse the legacy path so existing installations keep working after upgrade.
+# Only triggers if legacy is a valid Che checkout (avoids collision with a
+# real/empty Trae IDE home folder that happens to share the same name).
+if [ ! -e "$TARGET" ] && [ -f "${HOME}/.trae/CHE_RULES.md" ]; then
+  TARGET="${HOME}/.trae"
+fi
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -187,8 +199,8 @@ fi
 
 # Minimum validations.
 if [ ! -f "${SOURCE}/CHE_RULES.md" ]; then
-  echo "ERROR: SOURCE does not seem to be a valid .trae directory (missing CHE_RULES.md): ${SOURCE}" >&2
-  echo "Try: $0 --source=/path/to/.trae" >&2
+  echo "ERROR: SOURCE does not seem to be a valid Che checkout directory (missing CHE_RULES.md): ${SOURCE}" >&2
+  echo "Try: $0 --source=/path/to/che-source-checkout" >&2
   exit 2
 fi
 
@@ -478,14 +490,14 @@ inject_blacklist_snippet_into_client_gitignore() {
   marker_begin="# >>> CHE PLANNING ARTIFACTS BLACKLIST BEGIN (DO NOT EDIT MANUALLY)"
   marker_end="# <<< CHE PLANNING ARTIFACTS BLACKLIST END"
 
-  # Find CLIENT repo root: if PWD/PARENT has .git AND is NOT ~/.trae itself
+  # Find CLIENT repo root: if PWD/PARENT has .git AND is NOT the Che checkout itself
   local search_root="${PWD:-$HOME}"
   client_repo_root=""
   local d="$search_root"
   while true; do
     if [ -d "$d/.git" ]; then
       case "$d" in
-        "$TARGET"|"${HOME}/.trae"|"${HOME}/.trae/") ;;  # skip: it is che itself
+        "$TARGET"|"${HOME}/.che-ai"|"${HOME}/.che-ai/"|"${HOME}/.trae"|"${HOME}/.trae/") ;;  # skip: it is che itself
         *) client_repo_root="$d"; break ;;
       esac
     fi
@@ -657,7 +669,7 @@ else
   echo ""
   echo " Post-check checklist:"
   echo "  1. Open Claude Code again (or reload)."
-  echo "  2. Confirm ~/.trae/README.md exists."
+  echo "  2. Confirm ${TARGET}/README.md exists."
   echo "  3. Smoke : bash $TARGET/scripts/install-che.sh -h"
   echo "  4. CLI   : che --help   (or che-ai --help)"
   echo "  5. IDE slash-commands (/che-workspace, /che-project, /che-spec, /che-act,"
@@ -676,7 +688,7 @@ else
 
   # FINAL FINAL STEP: Install local Git hooks if the TARGET is THIS Che repo itself
   # (i.e. an agent/dev bootstrapping the Che repo — not a downstream user installing
-  # Che into their own .trae folder). Hooks live in .git/hooks/ of the TARGET.
+  # Che into their own home folder). Hooks live in .git/hooks/ of the TARGET.
   if [ -d "$TARGET/.git" ] && [ -f "$TARGET/scripts/install-git-hooks.sh" ]; then
     echo ""
     echo "  7. Git hooks (pre-commit / pre-push): installing into $TARGET/.git/hooks/"
