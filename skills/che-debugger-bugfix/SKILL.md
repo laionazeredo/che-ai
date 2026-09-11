@@ -37,28 +37,21 @@ If user fails to provide ANY of 1, 2, or 3 → **ASK with specific questions** b
 Run **exactly this block BEFORE** writing any file (logs, traces, screenshots, session md, decisions append):
 
 ```bash
-CHE_HOME="${CHE_HOME:-$HOME/.trae}"
-CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-if [ -f "$CONTRACT" ]; then
-  # shellcheck disable=SC1090
-  source "$CONTRACT"
-else
-  echo "❌ FATAL: $CONTRACT not found. HARD STOP — zero files written without storage boundary. exit 98"
-  exit 98
-fi
+# Resolve the `che` CLI (owns the Che-home cascade + canonical path construction)
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. HARD STOP — zero files written without storage boundary. exit 98"; exit 98; }
 
-SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-debugger-session}"
-che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-che_ensure_session_dirs "$WORKTREE_ROOT"
+SESSION_ID="${CHE_CURRENT_SESSION_ID:-${CHE_SESSION_ID:-fallback-debugger-session}}"
+eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
 
 # Double-guard: asserts fail-fast if any output directory lands INSIDE worktree (exit 99)
-che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR (ephemeral debug)"
-che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED (durable decisions)"
+che assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" --label "CHE_SESSION_DIR (ephemeral debug)"
+che assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" --label "CHE_WORKSPACE_SHARED (durable decisions)"
 
-# Construct ALL paths ONCE here via UNIQUE helper. Then reuse only these variables:
-BUGFIX_SESSION_MD="$(che_output_path "debugger" "bugfix-session" "${BUG_SLUG:-generic-bug}" "session" "md")"
+# Construct ALL paths ONCE here via the unique CLI. Then reuse only these variables:
+BUGFIX_SESSION_MD="$(che output_path "debugger" "bugfix-session" "${BUG_SLUG:-generic-bug}" "session" "md")"
 # Hypothesis log (jsonl append via atomic helper):
-HYPOTHESIS_LOG="$(che_output_path "debugger" "hypotheses" "${BUG_SLUG:-generic-bug}" "session" "jsonl")"
+HYPOTHESIS_LOG="$(che output_path "debugger" "hypotheses" "${BUG_SLUG:-generic-bug}" "session" "jsonl")"
 # Evidence dir = CHE_SESSION_DIR/qa/evidence/<related_id>/ (already created by helper when needed)
 ```
 
@@ -73,7 +66,7 @@ $CHE_WORKSPACE_SHARED/                  ← durable: decisions.log.jsonl (single
 
 **NEVER write to `<WORKTREE_ROOT>/.trae/` or `<WORKTREE_ROOT>/reports/` or any relative path inside worktree.** §20 MORATORIUM. If for any reason you need to save something inside the worktree (rare exception), stop and ask for EXPLICIT VERBATIM user confirmation in text.
 
-Append to `$BUGFIX_SESSION_MD` on every loop iteration using `che_write_file_atomic` (pipe append) or `>>` redirection (safe as the path has already passed outside assert).
+Append to `$BUGFIX_SESSION_MD` on every loop iteration using `che write_file_atomic` (pipe append) or `>>` redirection (safe as the path has already passed outside assert).
 
 ---
 
@@ -157,7 +150,7 @@ Append to `$BUGFIX_SESSION_MD`:
 | Outcome of 1.2.5.1 → 1.2.5.3 | What happens next |
 |---|---|
 | ✅ Test written, FAIL confirmed, evidence saved | **ADVANCE to Step 1.3 → build hypotheses.** Gate unlocked. |
-| ⚠️ Cannot write automated repro (e.g. visual-only bug that requires GPU rendering / prod-specific race / third-party-UI-outside-our-code) | **HARD STOP — DO NOT ADVANCE.** Ask user verbatim: *"I could not write an automated test that reproduces the bug. Reason: <1-line technical explanation>. To proceed, I need an EXPLICIT_OVERRIDE from you confirming this exception is acceptable. Please confirm by typing EXPLICIT_OVERRIDE_DEBUGGER_REPRO=YES + 1-line justification why it cannot be automated."* Log override VERBATIM into decisions.log.jsonl via `che_append_decision_jsonl` BEFORE advancing. |
+| ⚠️ Cannot write automated repro (e.g. visual-only bug that requires GPU rendering / prod-specific race / third-party-UI-outside-our-code) | **HARD STOP — DO NOT ADVANCE.** Ask user verbatim: *"I could not write an automated test that reproduces the bug. Reason: <1-line technical explanation>. To proceed, I need an EXPLICIT_OVERRIDE from you confirming this exception is acceptable. Please confirm by typing EXPLICIT_OVERRIDE_DEBUGGER_REPRO=YES + 1-line justification why it cannot be automated."* Log override VERBATIM into decisions.log.jsonl via `che decision_append "$WORKTREE_ROOT"` BEFORE advancing. |
 
 **POST-FIX MIRROR CHECK — performed at Phase 2 Step 3.3 (verify lock flipped):**
 After root cause fix applied, run EXACT SAME `repro_test_run_command`. Assert:
@@ -329,7 +322,7 @@ Report to user in English:
   3. ...
   4. Expected: ...
 
-📎 Artifacts (all OUTSIDE worktree, resolved via `che_compute_paths`):
+📎 Artifacts (all OUTSIDE worktree, resolved via `che compute_paths`):
   - bugfix_session.md: `$CHE_SESSION_DIR/bugfix_session.md`
   - Decisions: `$CHE_WORKSPACE_SHARED/decisions.log.jsonl`
   - Ticket link recommended if applicable.

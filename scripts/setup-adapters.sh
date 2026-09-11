@@ -96,10 +96,8 @@ if [ $install_cursor -eq 1 ]; then
 fi
 
 if [ $install_trae -eq 1 ]; then
-    echo "Ensuring Trae global rules..."
-    # Trae uses the repo root directly, but we can ensure ~/.trae is current
-    # This is mostly a placeholder for future global Trae config
-    echo "Trae ready."
+    echo "Installing Trae adapter..."
+    bash "$CHE_REPO/adapters/trae/install.sh"
 fi
 
 echo

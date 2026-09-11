@@ -15,7 +15,7 @@ description: "Executes the manual_test_plan.md step-by-step using Playwright MCP
 
 | Concern | `che-qa` | This skill `che-manual-test-executor` |
 |---|---|---|
-| Scope | lint / typecheck / build / unit / E2E commands (CI-style) | **Manual Test Plan steps** written in `$CHE_WORKSPACE_SHARED/manual_test_plan.md` (via `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"`) — DURABLE, shared between sessions in this worktree. |
+| Scope | lint / typecheck / build / unit / E2E commands (CI-style) | **Manual Test Plan steps** written in `$CHE_WORKSPACE_SHARED/manual_test_plan.md` (`$CHE_WORKSPACE_SHARED` is exported by `che compute_paths`; see §0 preflight) — DURABLE, shared between sessions in this worktree. |
 | Driver | Shell commands (pnpm/vitest/playwright CLI) | **Playwright MCP** (open tab, navigate, click, fill, screenshot) + **HTTP driver** (curl-style via playwright_get/post/put/patch/delete). |
 | Evidence | Command exit codes + stdout/stderr | **PNG screenshots per step**, visible text assertions, HTTP response bodies, browser console logs. |
 | Output | Per-pass/fail command line summary | **Per-AC pass/fail report** with evidence links + environment checks pass/fail + smoke check summary. |
@@ -33,31 +33,27 @@ description: "Executes the manual_test_plan.md step-by-step using Playwright MCP
 3. If neither exists → STOP. Ask user for task-id or manual_test_plan.md path.
 4. **Worktree Session Binding preflight + 🔴 STORAGE BOUNDARY (engineering-contracts §19 + §20 MORATORIUM — NON-NEGOTIABLE):**
    ```bash
-   # (a) Source contract + resolver for CANONICAL paths
-   CHE_HOME="${CHE_HOME:-$HOME/.trae}"
-   CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-   [ -f "$CONTRACT" ] || { echo "❌ FATAL: $CONTRACT missing. Zero writes allowed without storage boundary. exit 98"; exit 98; }
-   # shellcheck disable=SC1090
-   source "$CONTRACT"
-   SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-manual-test-session}"
-   che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-   che_ensure_session_dirs "$WORKTREE_ROOT"
+   # (a) Resolve the `che` CLI (owns the Che-home cascade + canonical path construction)
+   command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Zero writes allowed without storage boundary. exit 98"; exit 98; }
+   SESSION_ID="${CHE_CURRENT_SESSION_ID:-${CHE_SESSION_ID:-fallback-manual-test-session}}"
+   eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+   che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
 
    # (b) Double-guard: assert NO output directory falls WITHIN worktree
-   che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR (ephemeral QA evidence)"
-   che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED (durable plans)"
+   che assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" --label "CHE_SESSION_DIR (ephemeral QA evidence)"
+   che assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" --label "CHE_WORKSPACE_SHARED (durable plans)"
 
    # (c) CANONICAL PATHS FOR ALL SKILL OUTPUTS — construct ONCE, reuse everywhere
    # Final report (session-scope — ephemeral, this execution only):
-   MANUAL_TEST_REPORT_PATH="$(che_output_path "qa" "manual-test-execution-report" "${TASK_ID:-standalone}" "session" "md")"
-   # Evidence directory helper: every screenshot/log must use che_output_path type=qa scope=session related_id=TASK_ID suffix="AC-<id>"
-   # AC-2 screenshot example:  "SCREENSHOT_AC2_PATH=$(che_output_path "qa" "screenshot" "${TASK_ID:-standalone}" "session" "png" "AC-002")"
-   # env setup log example:    "ENV_SETUP_LOG_PATH=$(che_output_path "qa" "env-setup" "${TASK_ID:-standalone}" "session" "log")"
+   MANUAL_TEST_REPORT_PATH="$(che output_path "qa" "manual-test-execution-report" "${TASK_ID:-standalone}" "session" "md")"
+   # Evidence directory helper: every screenshot/log must use che output_path type=qa scope=session related_id=TASK_ID suffix="AC-<id>"
+   # AC-2 screenshot example:  "SCREENSHOT_AC2_PATH=$(che output_path "qa" "screenshot" "${TASK_ID:-standalone}" "session" "png" "AC-002")"
+   # env setup log example:    "ENV_SETUP_LOG_PATH=$(che output_path "qa" "env-setup" "${TASK_ID:-standalone}" "session" "log")"
    ```
    - Check `$CHE_SESSION_DIR/binding.md` Level 2 entry if present (EPHEMERAL per-session).
    - Mismatch with provided WORKTREE_ROOT → BLOCK. Ask override/switch/cancel.
    - Missing binding → follow §19 canonical binding flow (global registry Level 1 + Level 2), ask user for confirmation.
-   - **HARD RULE FROM NOW ON:** NEVER construct path manually. Every screenshot, log, report = mandatorily via `che_output_path "qa" ...`. No PNG/LOG/MD file lands inside worktree. MORATORIUM.
+   - **HARD RULE FROM NOW ON:** NEVER construct path manually. Every screenshot, log, report = mandatorily via `che output_path "qa" ...`. No PNG/LOG/MD file lands inside worktree. MORATORIUM.
 
 ### 0.1 EVIDENCE RETENTION POLICY (ONDA4 — TWO LOCALS, NEVER IN USER WORKTREE)
 
@@ -81,10 +77,10 @@ mkdir -p "$MANUAL_SESSION_EVIDENCE_DIR/screenshots" "$MANUAL_SESSION_EVIDENCE_DI
 #   (i)   evidence_manifest_<SHA16_MANIFEST>.json
 #   (ii)  1 FINAL JPEG/PNG thumbnail per AC PASS ≤200KB
 CURRENT_COMMIT_7CHAR="${CURRENT_COMMIT_7CHAR:-$(cd "$WORKTREE_ROOT" && git rev-parse --short=7 HEAD 2>/dev/null || echo "HEAD-detached")}"
-MANUAL_WORKSPACE_AUDIT_DIR="$(che_output_path "qa" "audit" "commit-${CURRENT_COMMIT_7CHAR}" "workspace" "tmp")"
+MANUAL_WORKSPACE_AUDIT_DIR="$(che output_path "qa" "audit" "commit-${CURRENT_COMMIT_7CHAR}" "workspace" "tmp")"
 MANUAL_WORKSPACE_AUDIT_DIR="$(dirname -- "$MANUAL_WORKSPACE_AUDIT_DIR")"
 mkdir -p "$MANUAL_WORKSPACE_AUDIT_DIR"
-che_assert_outside_worktree "$MANUAL_WORKSPACE_AUDIT_DIR" "$WORKTREE_ROOT" "MANUAL_WORKSPACE_AUDIT_DIR (durable hash manifest)"
+che assert_outside_worktree "$MANUAL_WORKSPACE_AUDIT_DIR" "$WORKTREE_ROOT" --label "MANUAL_WORKSPACE_AUDIT_DIR (durable hash manifest)"
 ```
 
 **MANDATORY Manifest JSON Schema (same as che-qa schema):** same `generated_at_utc / commit_7char / session_id / qa_run_passed / per_test_file_sha256 / per_evidence_sha256 / per_behavior_result / thumbnail_path` keys (see che-qa §-0.1.1 for canonical format). For this skill, `per_behavior_result` maps manual AC-IDs (e.g. `AC-001 → PASS`).
@@ -123,7 +119,7 @@ If zero `### AC-` headers → STOP. Report: "manual_test_plan.md missing AC sect
 
 ## 2. STEP 1 — Evidence directory pre-creation
 
-Create directory structure immediately after successful parsing (before browser/curl). Use `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"` + `che_ensure_session_dirs` first.
+Create directory structure immediately after successful parsing (before browser/curl). Use `eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"` + `che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"` first (see §0 item 4 preflight).
 
 ```
 $CHE_SESSION_DIR/qa/              ← EPHEMERAL per-session (generated evidence, never in user code)
@@ -233,7 +229,7 @@ Save evidence: `SMOKE_<Sx>_<name>.log` or `.png`.
 
 Canonical sections (match `references/MANUAL_TEST_EXECUTION_REPORT.md`). Use **English for file content and chat summary**.
 
-Report saved to: **`$MANUAL_TEST_REPORT_PATH`** variable (constructed during §0 item 4c preflight via `che_output_path`). Example:
+Report saved to: **`$MANUAL_TEST_REPORT_PATH`** variable (constructed during §0 item 4c preflight via `che output_path`). Example:
 ```
 $CHE_SESSION_DIR/qa/evidence/T123-refund/20260902-130000-manual-test-execution-report.md
 ```
@@ -260,7 +256,7 @@ After saving final report (§6), **before returning**, generate Local 2 manifest
 - SHA256 of EVERY FINAL_ASSERT screenshot for AC PASS → ≤200KB Local 2 (Workspace) thumbnail.
 - `per_behavior_result` maps AC-ID → PASS/FAIL/PARTIAL/SKIP.
 - `per_test_file_sha256` = empty `{}` for this skill.
-- Calculate manifest SHA256 → name `evidence_manifest_<SHA16>.json`; save via `che_write_file_atomic`.
+- Calculate manifest SHA256 → name `evidence_manifest_<SHA16>.json`; save via `che write_file_atomic`.
 - Decision log entry: `MANUAL_TEST_EVIDENCE_MANIFEST` with manifest details.
 
 ### Chat delivery rule (§18 contracts)

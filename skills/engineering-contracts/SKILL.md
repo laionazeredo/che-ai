@@ -148,7 +148,7 @@ Granularity:
 > **USER VERBATIM HARD RULE (contractual):** "never mix languages". Each axis below has EXACTLY 1 language configured per file/session/project. Translated UI strings = i18n artifact in separate JSON (not counted as LANG_CODE). **ALL implementation MUST maintain compatibility with Trae, Codex, Claude Code, and Cursor.**
 
 **Configuration Precedence (HIGH → LOW):**
-1. **Level 1 registry flags session override** (`che_registry_append_jsonl … FLAGS … '{"flags":{"LANG_DOCS":"pt-BR"}}'`) — temporary, this session only.
+1. **Level 1 registry flags session override** (`che registry_append "$SESSION_ID" FLAGS "$WORKTREE_ROOT" '{"flags":{"LANG_DOCS":"pt-BR"}}'`, where `SESSION_ID="${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}}"`) — temporary, this session only.
 2. **Level 1.5 project registry** `.registry/projects/<slug>/product_context.md` frontmatter `lang_code:` + `lang_docs:` — durable per project, shared across worktrees × sessions.
 3. **Defaults BELOW** if neither of the above is defined.
 
@@ -880,6 +880,6 @@ These rules are **intentionally strict.** They exist because:
 - LLMs write overly-commented/verbose code hard to review. §16 forces clean/concise code.
 - LLMs anticipate future and deliver giant PRs. §15 + gh-stack Appendix C forces small incrementals.
 
-If any rule feels wrong for a specific case → **log the exception + rationale to `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` (NEVER under `<WORKTREE_ROOT>/.trae/`; use `che_compute_paths` from `$CHE_HOME/contracts/che_sessions_contract.sh` to resolve the correct path outside the user worktree)**, and proceed.
+If any rule feels wrong for a specific case → **log the exception + rationale to `$CHE_DECISIONS_PATH` (NEVER under `<WORKTREE_ROOT>/.trae/`; run `eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"` to resolve the correct path outside the user worktree)**, and proceed.
 
 ---

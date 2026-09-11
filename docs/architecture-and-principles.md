@@ -88,7 +88,7 @@ No token. No auth. No feature flags. If any of these ever requires a network cal
 
 ## 4. 3-Layer Rule (Framework Structure) — topology inspired by SpecFlow / Cucumber BDD
 
-Che's rulebook (the part that lives *inside* the `~/.trae` installation, not inside a project) is a 3-layer onion. **No layer may embed a copy of a deeper layer's body.** A router layer links; it never repeats.
+Che's rulebook (the part that lives *inside* the `~/.che-ai` installation, not inside a project) is a 3-layer onion. **No layer may embed a copy of a deeper layer's body.** A router layer links; it never repeats.
 
 This 3-layer topology is **directly inspired by [SpecFlow](https://www.specflow.com/)'s BDD onion** (used at enterprise .NET teams for 15+ years). The exact mapping:
 
@@ -99,7 +99,7 @@ This 3-layer topology is **directly inspired by [SpecFlow](https://www.specflow.
 | **L3 — Skills** (`skills/<id>/SKILL.md`) | **Step Definitions + Hooks** | Declarative rule bodies + task boundaries. The actual executable part. Each skill references L1 via links, never verbatim copy. |
 
 ```
-~/.trae/
+~/.che-ai/
 ├─ domains/                   ← L1 = SpecFlow Feature Files (Gherkin). Human context.
 │   ├─ engineering/           ← "What good engineering looks like for Che teams."
 │   ├─ product/               ← "How we write PRDs and map outcomes (SBE)."
@@ -138,7 +138,7 @@ The other half of the architecture is **project memory** — where Che puts the 
 
 ```
 $CHE_WORKSPACES_ROOT
-  (default: ~/.che-workspaces, never ~/.trae, never inside a user repo)
+  (default: ~/.che-workspaces, never ~/.che-ai, never inside a user repo)
 │
 └─ workspaces/<ws-slug>/                 ← L1 WORKSPACE. One per "concern space"
    │                                      (example per-company: "acme", "my-company").

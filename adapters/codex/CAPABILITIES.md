@@ -7,7 +7,7 @@ This file documents runtime mappings between the shared Che and Codex.
 | Global rules | Trae global rules | `~/.codex/AGENTS.md` |
 | Skills | Trae skills | `~/.agents/skills` |
 | Session identity | `SESSION_ID` | `CHE_SESSION_ID` |
-| Che root | `$HOME/.trae` | `CHE_HOME` |
+| Che root | `$HOME/.che-ai` | `CHE_HOME` |
 | Shell | IDE command tool | Codex shell |
 | Git | git | git |
 | GitHub | gh | gh |
@@ -30,7 +30,7 @@ The Che core must not depend directly on one IDE runtime.
 Use:
 
 - `CHE_HOME` for the Che installation root.
-- `che_current_session_id` for the effective session identifier.
+- `${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}}` for the effective session identifier.
 - canonical contracts for generated artifact paths.
 
 Figma capability is session-dependent. Until a real smoke test proves the
@@ -38,5 +38,5 @@ active integration, do not claim read, write or export support.
 
 Trae compatibility remains available through:
 
-- default `CHE_HOME=$HOME/.trae`
+- default `CHE_HOME=$HOME/.che-ai` (legacy `$HOME/.trae` is honoured only while it still contains `CHE_RULES.md`)
 - fallback `SESSION_ID`

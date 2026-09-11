@@ -4,7 +4,13 @@ import sys
 from pathlib import Path
 
 from che_core.decisions import append_decision_jsonl
-from che_core.paths import compute_paths, ensure_session_dirs
+from che_core.paths import (
+    assert_outside_worktree,
+    compute_paths,
+    ensure_session_dirs,
+    output_path,
+    write_file_atomic,
+)
 from che_core.portability import export_project, import_project
 from che_core.registry import registry_append_jsonl, registry_lookup_last
 from che_core.task_engine import (
@@ -46,6 +52,34 @@ def main():
     parser_ensure.add_argument("worktree_root")
     parser_ensure.add_argument("session_id")
     parser_ensure.add_argument("--cwd", default=None)
+
+    # output_path (storage boundary resolver — replaces legacy che_output_path)
+    parser_out = subparsers.add_parser(
+        "output_path",
+        help="Resolve the canonical path for a Che artifact outside the worktree.",
+    )
+    parser_out.add_argument("type", help="Artifact type (e.g. qa, spec, task, review, adr).")
+    parser_out.add_argument("slug", help="Human-readable slug for the filename.")
+    parser_out.add_argument("related_id", help="Related id (ticket/feature id); pass '' to omit.")
+    parser_out.add_argument("scope", choices=["session", "workspace"], help="Storage scope.")
+    parser_out.add_argument("ext", help="File extension without the dot (e.g. md, json).")
+    parser_out.add_argument("suffix", nargs="?", default="", help="Optional filename suffix.")
+
+    # write_file_atomic (stdin -> target, tmp+rename — replaces che_write_file_atomic)
+    parser_write = subparsers.add_parser(
+        "write_file_atomic",
+        help="Atomically write stdin bytes to a target path outside the worktree.",
+    )
+    parser_write.add_argument("target", help="Destination path (must be outside the worktree).")
+
+    # assert_outside_worktree (hard-stop guard — replaces che_assert_outside_worktree)
+    parser_assert = subparsers.add_parser(
+        "assert_outside_worktree",
+        help="Hard-stop (exit 99) if a candidate path falls inside the worktree.",
+    )
+    parser_assert.add_argument("candidate_path")
+    parser_assert.add_argument("worktree_root")
+    parser_assert.add_argument("--label", default="path")
 
     # append_registry
     parser_reg_app = subparsers.add_parser("registry_append")
@@ -292,7 +326,7 @@ def main():
     parser_eject.add_argument(
         "--che-home",
         default=None,
-        help="Che directory override (default: resolves ~/.trae automatically).",
+        help="Che directory override (default: resolves the Che home cascade automatically).",
     )
     parser_eject.add_argument(
         "--trash-root",
@@ -387,6 +421,18 @@ def main():
 
     if args.command == "ensure_dirs":
         ensure_session_dirs(args.worktree_root, args.session_id, args.cwd)
+        return
+
+    if args.command == "output_path":
+        print(output_path(args.type, args.slug, args.related_id, args.scope, args.ext, args.suffix))
+        return
+
+    if args.command == "write_file_atomic":
+        write_file_atomic(args.target, sys.stdin.buffer.read())
+        return
+
+    if args.command == "assert_outside_worktree":
+        assert_outside_worktree(args.candidate_path, args.worktree_root, args.label)
         return
 
     if args.command == "registry_append":

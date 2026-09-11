@@ -9,7 +9,7 @@ arguments:
 Lightweight inline command (no Skill needed):
 
 1. If worktree not confirmed → ASK user for absolute worktree path FIRST.
-2. Source `$HOME/.trae/contracts/che_sessions_contract.sh` → run `che_compute_paths WORKTREE_ROOT`; look for `task_graph.md` at `$CHE_WORKSPACE_SHARED/task_graph.md` (strictly outside worktree; never inside `<WORKTREE_ROOT>/.trae/`).
+2. Run `eval "$(che compute_paths WORKTREE_ROOT SESSION_ID)"`; look for `task_graph.md` at `$CHE_WORKSPACE_SHARED/task_graph.md` (strictly outside worktree; never inside `<WORKTREE_ROOT>/.trae/`).
 3. If not found → reply (in English):
    "No active Che session in this worktree. Use `/che-act`."
 4. If found → print (in English):

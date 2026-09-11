@@ -7,7 +7,7 @@ description: "Shared human registry (Level 1.5 registry) of PRODUCT + MANUAL ARC
 
 > **SHARED REFERENCES (CANONICAL):**
 > - Complementary auto-onboarding: `/che-xray` (this skill does not replace xray)
-> - Paths: `source "${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che_sessions_contract.sh"`
+> - Paths: `che` CLI (`che compute_paths`, `che ensure_dirs`, `che registry_lookup`)
 > - Accidental complexity rules + deep modules: `engineering-contracts` §1 + Appendix D (Ousterhout)
 
 ---
@@ -15,24 +15,25 @@ description: "Shared human registry (Level 1.5 registry) of PRODUCT + MANUAL ARC
 ## -0.1 STORAGE BOUNDARY PREFLIGHT (MANDATORY BEFORE FIRST WRITE)
 
 ```bash
-# 1. Load sessions contract (registry helpers + paths)
-source ~/.trae/contracts/che_sessions_contract.sh
+# 1. Resolve the `che` CLI — it owns the 5-tier Che-home cascade (CHE_HOME → HARNESS_HOME
+#    → ~/.che-ai → legacy ~/.trae iff CHE_RULES.md exists → ~/.che-ai fallback).
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Zero writes without storage boundary. exit 98"; exit 98; }
 
 # 2. WORKTREE_ROOT required to resolve canonical PROJECT_SLUG
 WORKTREE_ROOT="${WORKTREE_ROOT:-$(pwd)}"
 SESSION_ID="${SESSION_ID:-onboarding-$(date -u +%Y%m%d-%H%M%S)}"
 
 # 3. Canonical paths + ensure dirs (creates CHE_PROJECT_DIR under .registry/projects)
-che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-che_ensure_session_dirs "$WORKTREE_ROOT"
+eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
 
 # 4. Double-guard: registry stays OUTSIDE worktree (by design .registry/ is in CHE_SESSIONS_ROOT)
 [ -n "${CHE_PROJECT_DIR:-}" ] || { echo "[che-onboarding] ❌ CHE_PROJECT_DIR not defined. compute_paths failed?" >&2; exit 99; }
-che_assert_outside_worktree "$CHE_PROJECT_DIR" "$WORKTREE_ROOT" "CHE_PROJECT_DIR"
-che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
+che assert_outside_worktree "$CHE_PROJECT_DIR" "$WORKTREE_ROOT" --label "CHE_PROJECT_DIR"
+che assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" --label "CHE_WORKSPACE_SHARED"
 
 # 5. Construct canonical registry paths ONCE via type=project_registry helper
-PROJECT_REGISTRY_DIR="$(dirname -- "$(che_output_path "project_registry" ".keep" "${CHE_PROJECT_SLUG:-unknown}" "workspace" "md")")"
+PROJECT_REGISTRY_DIR="$(dirname -- "$(che output_path "project_registry" ".keep" "${CHE_PROJECT_SLUG:-unknown}" "workspace" "md")")"
 # If helper generated subpath under WORKSPACE_SHARED but canonical registry uses CHE_PROJECT_DIR → use CHE_PROJECT_DIR
 [ -d "$CHE_PROJECT_DIR" ] || mkdir -p "$CHE_PROJECT_DIR"
 
@@ -80,21 +81,21 @@ ${CHE_PROJECT_DIR:-$CHE_SESSIONS_ROOT/.registry/projects/<slug>}/
 ├── product_context.md   ← HUMAN (THIS SKILL)    · 8 MANDATORY sections
 ├── architecture.md      ← HYBRID                  · xray auto + manual here
 ├── roadmap.md           ← HUMAN (THIS SKILL)    · planned epics
-└── registry.jsonl       ← append-only audit via che_append_decision_jsonl
+└── registry.jsonl       ← append-only audit via che decision_append
 ```
 
 ### 2.1 How to write to the registry (3 HARD rules)
 
-1. **Every write is an atomic tmp→mv write** via `che_write_file_atomic <path>` (DO NOT `cat > file`, DO NOT edit in-place in interactive Mode B).
-2. **Every audit append** in registry.jsonl **uses `che_append_decision_jsonl`**; DO NOT `echo "{}" >> registry.jsonl` manually.
+1. **Every write is an atomic tmp→mv write** via `che write_file_atomic <path>` (DO NOT `cat > file`, DO NOT edit in-place in interactive Mode B).
+2. **Every audit append** in registry.jsonl **uses `che decision_append`**; DO NOT `echo "{}" >> registry.jsonl` manually.
 3. **NEVER create docs inside the worktree as primary.** Exception only if the user asks VERBATIM to "save this product_context.md in the worktree to commit"; in that case, the canonical source remains `$PRODUCT_CONTEXT_PATH` and snapshotted (OPTIONALLY) to the worktree.
 
 Example Mode B item 8 audit trail (PREVIOUSLY manual echo → NOW helper):
 ```bash
-che_append_decision_jsonl "PROJECT_KNOWLEDGE_UPDATE" "{\"project_slug\":\"${CHE_PROJECT_SLUG:-unknown}\",\"updated_sections\":[\"product_context.1\",\"roadmap.E1\"]}"
+che decision_append "$WORKTREE_ROOT" "PROJECT_KNOWLEDGE_UPDATE" "{\"project_slug\":\"${CHE_PROJECT_SLUG:-unknown}\",\"updated_sections\":[\"product_context.1\",\"roadmap.E1\"]}"
 # Output lands AUTOMATICALLY in CANONICAL decisions.log.jsonl (outside worktree)
 # + optionally append to $PROJECT_REGISTRY_JSONL if registry-local audit desired:
-che_append_decision_jsonl "PROJECT_KNOWLEDGE_UPDATE" "{...}" 2>/dev/null || true
+che decision_append "$WORKTREE_ROOT" "PROJECT_KNOWLEDGE_UPDATE" "{...}" 2>/dev/null || true
 ```
 
 ---
@@ -261,7 +262,7 @@ Does not ask questions. Creates the 3 files (product_context, manual architectur
 
 **OBLIGATION OF OTHER SKILLS (engineering-contracts §X):**
 Before ANY `che-spec` generates a feature SPEC, che MUST:
-1. Run `source contracts/che_sessions_contract.sh` + resolve `$CHE_PROJECT_DIR`
+1. Run `eval "$(che compute_paths WORKTREE_ROOT SESSION_ID)"` + resolve `$CHE_PROJECT_DIR`
 2. If `product_context.md` exists → **read sections §2 (personas) + §5 (hard invariants) + §8 (out of scope)**.
 3. Inject at the beginning of the SPEC:
    ```

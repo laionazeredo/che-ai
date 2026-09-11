@@ -7,7 +7,7 @@ This file documents runtime mappings between the shared Che and Cursor.
 | Global rules | Trae global rules | `.cursorrules` or `.cursor/rules/` |
 | Skills | Trae skills | `.cursor/rules/*.mdc` |
 | Session identity | `SESSION_ID` | `SESSION_ID` |
-| Che root | `$HOME/.trae` | `CHE_HOME` |
+| Che root | `$HOME/.che-ai` | `CHE_HOME` |
 | Shell | IDE command tool | Cursor terminal |
 | Git | git | git |
 | GitHub | gh | gh |
@@ -29,5 +29,5 @@ The Che core must not depend directly on one IDE runtime.
 Use:
 
 - `CHE_HOME` for the Che installation root.
-- `che_current_session_id` for the effective session identifier.
+- `${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}}` for the effective session identifier.
 - canonical contracts for generated artifact paths.

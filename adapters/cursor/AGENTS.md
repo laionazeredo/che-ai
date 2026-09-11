@@ -29,9 +29,7 @@ Bug workflow uses che-fix.
 
 ## Runtime
 
-The Che runtime is resolved through:
-
-$CHE_HOME/contracts/che_sessions_contract.sh
+The Che runtime is resolved through the `che` CLI (`che compute_paths`, `che ensure_dirs`).
 
 Cursor sessions use SESSION_ID (compatible with Trae).
 

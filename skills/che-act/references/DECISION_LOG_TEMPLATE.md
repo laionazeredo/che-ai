@@ -1,7 +1,7 @@
 # DECISION LOG TEMPLATE
 
 > Append-only log. Each entry = one non-obvious decision / trade-off / exception to rules.
-> Resolve path via `che_decisions_path` from $HOME/.trae/contracts/che_sessions_contract.sh (che_compute_paths WORKTREE_ROOT first)
+> Resolve path via the `che` CLI: `eval "$(che compute_paths WORKTREE_ROOT SESSION_ID)"` then use `$CHE_DECISIONS_PATH`.
 > File location: `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` (NEVER inside `<WORKTREE_ROOT>/.trae/*`)
 > Format for each entry:
 

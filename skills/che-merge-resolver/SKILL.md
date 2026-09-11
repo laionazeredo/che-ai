@@ -19,7 +19,7 @@ Persona: **merge-conflict-resolver.** Maintains KISS/YAGNI + minimum blast-radiu
 
 Run BEFORE any git operation.
 
-1. Read Level 1 Global Index `che_registry_path`. LAST STATUS=BOUND for the effective session id from `che_current_session_id` → WORKTREE_ROOT.
+1. Read Level 1 Global Index `$CHE_REGISTRY_PATH`. LAST STATUS=BOUND for the effective session id from `${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}}` → WORKTREE_ROOT.
 2. If user passed `--worktree <path>` AND mismatch with Level 1 → **BLOCK.** 3 user options:
    - A = temporarily override binding to `<path>`;
    - B = switch binding first (§19.3 re-bind chain);
@@ -139,21 +139,19 @@ For EACH resolved hunk, append 1 `MERGE_RESOLVE` entry to `decisions.log.jsonl` 
 2. `git status --short`: no `UU AA DD AU UA DU UD` status should remain.
 3. **🔴 STORAGE PREFLIGHT (§20 MORATORIUM) + build paths BEFORE writing report:**
    ```bash
-   CHE_HOME="${CHE_HOME:-$HOME/.trae}"
-   CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-   [ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ FATAL: $CONTRACT missing. HARD STOP without storage boundary. exit 98"; exit 98; }
-   # shellcheck disable=SC1090
-   source "$CONTRACT"
-   SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-merge-session}"
+   # Resolve the `che` CLI — it owns the 5-tier Che-home cascade (CHE_HOME → HARNESS_HOME
+   # → ~/.che-ai → legacy ~/.trae iff CHE_RULES.md exists → ~/.che-ai fallback).
+   command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. HARD STOP without storage boundary. exit 98"; exit 98; }
+   SESSION_ID="${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-fallback-merge-session}}"
    if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
-     che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-     che_ensure_session_dirs "$WORKTREE_ROOT"
-     che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "WORKSPACE_SHARED"
+     eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+     che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
+     che assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" --label "WORKSPACE_SHARED"
    fi
    # Build UNIQUE path via helper (DURABLE workspace-shared — merge logs are reusable across sessions)
    # related_id = merge slug (e.g. merge-main-into-feat-FLO-714)
    MERGE_SLUG="${MERGE_SLUG:-wt-$(basename "${WORKTREE_ROOT%/}")}"
-   MERGE_REPORT_PATH="$(che_output_path "merge_audit" "merge-resolve-final" "${MERGE_SLUG}" "workspace" "md")"
+   MERGE_REPORT_PATH="$(che output_path "merge_audit" "merge-resolve-final" "${MERGE_SLUG}" "workspace" "md")"
    ```
    Final report saved at **`$MERGE_REPORT_PATH`**. Example on filesystem:
    ```

@@ -23,10 +23,10 @@ Lightweight inline command. Resolve path via contracts helper. Use Skill `che-de
 Flow:
 
 1. **If worktree arg missing → ASK user.** Never guess path.
-2. Source contracts + resolve path:
+2. Resolve path via `che` CLI:
    ```bash
-   source ~/.trae/contracts/che_sessions_contract.sh
-   JSONL=$(che_decisions_path "<WORKTREE_ROOT>")
+   eval "$(che compute_paths "<WORKTREE_ROOT>" "<SESSION_ID>")"
+   JSONL="$CHE_DECISIONS_PATH"
    ```
 3. **File not exists?** "No decisions registered in this worktree yet." → STOP.
 4. Default mode = summary. Run CLI helper python module:

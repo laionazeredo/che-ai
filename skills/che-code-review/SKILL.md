@@ -25,7 +25,7 @@ We ONLY flag things that actually break production or waste $$$ or risk users.
 
 Run THIS BEFORE deciding mode or starting any review context gathering.
 
-1. **Read Level 1 Global Index FIRST:** Read `che_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `che_current_session_id`. Use its WORKTREE_ROOT for the session.
+1. **Read Level 1 Global Index FIRST:** Read `$CHE_REGISTRY_PATH`. Find LAST STATUS=BOUND entry using the effective session id from `${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}}`. Use its WORKTREE_ROOT for the session.
 2. **Mode B mismatch check (CRITICAL):**
    - If user passed --worktree <path>: confirm Level 1 registry WORKTREE_ROOT EXISTS and is DIFFERENT than <path> → BLOCK.
    - Ask: "You asked review on worktree X but Level 1 GLOBAL session is BOUND to Y. Options: (A = X, override binding; B = Switch binding first (§19.3 re-bind chain); C = Cancel review). NEVER silent override. If no Level 1 entry → binding not made; proceed to decision flow to create binding (§19.2) only if user continues."
@@ -699,44 +699,36 @@ At the end (both modes, except verdict notes):
 **BEFORE FIRST disk write (report, screenshots, decisions, QA evidence, etc.), RUN EXACTLY THIS BLOCK:**
 
 ```bash
-# (1) Source canonical session contract (provides che_output_path, che_assert_outside_worktree, etc.)
-CHE_HOME="${CHE_HOME:-$HOME/.trae}"
-CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-if [ -f "$CONTRACT" ]; then
-  # shellcheck disable=SC1090
-  source "$CONTRACT"
-else
-  echo "❌ FATAL: che_sessions_contract.sh not found in $CONTRACT. Cannot write outputs without storage boundary. Aborting write."
-  exit 98
-fi
+# (1) Resolve the `che` CLI (owns the Che-home cascade + canonical path construction)
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Cannot write outputs without storage boundary. Aborting write."; exit 98; }
 
 # (2) Define minimum variables for binding
-SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-review-session}"
+SESSION_ID="${CHE_CURRENT_SESSION_ID:-${CHE_SESSION_ID:-fallback-review-session}}"
 
 # (3) Compute canonical paths + ensure base dirs (SESSION_DIR, WORKSPACE_SHARED, etc.)
 if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
-  che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-  che_ensure_session_dirs "$WORKTREE_ROOT"
-  # Double-guard: che_output_path helper already runs assert automatically; reaffirm here for clarity
-  che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR (ephemeral root)"
-  che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED (durable root)"
+  eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+  che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
+  # Double-guard: `che output_path` already runs assert automatically; reaffirm here for clarity
+  che assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" --label "CHE_SESSION_DIR (ephemeral root)"
+  che assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" --label "CHE_WORKSPACE_SHARED (durable root)"
 fi
 
 # ⚠️ AFTER this block, DO NOT construct paths manually.
-# ALWAYS USE: OUTPUT_PATH="$(che_output_path "<type>" "<slug>" "<related_id>" "<scope=session|workspace>" "<ext>" "<suffix>")"
+# ALWAYS USE: OUTPUT_PATH="$(che output_path "<type>" "<slug>" "<related_id>" "<scope=session|workspace>" "<ext>" "<suffix>")"
 ```
 
 ---
 
 ## 5. Post-report actions
 
-> **IMPORTANT: STORAGE BOUNDARY — NEVER write inside worktree. ALL output via `che_output_path` only (see §4.9).**
+> **IMPORTANT: STORAGE BOUNDARY — NEVER write inside worktree. ALL output via `che output_path` only (see §4.9).**
 
 ### Mode A (GitHub PR):
 - **Construct report path USING HELPER (never manual):**
   ```bash
   # Principal (full) report — related_id = pr-<ID>; grouped in reviews/pr-<ID>/
-  REPORT_FULL_PATH="$(che_output_path "review" "che-code-review" "pr-${PR_ID}" "session" "md" "full")"
+  REPORT_FULL_PATH="$(che output_path "review" "che-code-review" "pr-${PR_ID}" "session" "md" "full")"
   ```
   - **Expected result:**
     ```
@@ -744,19 +736,19 @@ fi
       ├── 20260902-092400-che-code-review_full.md   (1st round)
       └── 20260902-093000-che-code-review_postfix.md (2nd round)
     ```
-  - **Safe fallback WITHOUT binding (rare):** `che_output_path` automatically falls back to `$CHE_HOME/outputs/fallback-session/reviews/pr-<ID>/...`; NEVER worktree or `./reports/`.
+  - **Safe fallback WITHOUT binding (rare):** `che output_path` automatically falls back to `$CHE_HOME/outputs/fallback-session/reviews/pr-<ID>/...`; NEVER worktree or `./reports/`.
   - **NEVER use relative path `./reports/` or `$WORKTREE_ROOT/.trae/`. §20 MORATORIUM.**
 
 - **DO NOT approve or request changes DIRECTLY on GitHub via `gh pr review`** unless user explicitly asks after seeing report. First deliverable = report for user to review in chat.
 - If ZERO findings → still write report: "No CRITICAL/HIGH issues found; scope matches; dependencies justified." + list checked items.
-- **Write using atomic write:** pipe markdown to `che_write_file_atomic "$REPORT_FULL_PATH"` stdin.
+- **Write using atomic write:** pipe markdown to `che write_file_atomic "$REPORT_FULL_PATH"` stdin.
 
 ### Mode B (Local Worktree):
 - **Construct report path USING HELPER:**
   ```bash
   # Worktree slug: extract basename from WORKTREE_ROOT
   WT_SLUG="$(basename "${WORKTREE_ROOT%/}")"
-  REPORT_LOCAL_PATH="$(che_output_path "review" "che-code-review" "worktree-${WT_SLUG}" "session" "md" "full")"
+  REPORT_LOCAL_PATH="$(che output_path "review" "che-code-review" "worktree-${WT_SLUG}" "session" "md" "full")"
   ```
   - **Expected result:** `$CHE_SESSION_DIR/reviews/worktree-<WT_SLUG>/20260902-101500-che-code-review_full.md`
 - **DO NOT interact with GitHub at all** in Mode B. Pure local output inside che-sessions.

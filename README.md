@@ -17,7 +17,7 @@ The result is a harness that:
   1. **L1 — Shared team brain (Che-managed, durable):** `~/.che-workspaces/` → specs, decisions, scopes, QA reports, design exports, worktree state. **Always outside user git repos.**
   2. **L2 — IDE User-scope Adapter (Claude Code official, env var `CLAUDE_CONFIG_DIR` default `~/.claude/`):** Che installs **five non-destructive injection points** here per official docs: (a) user `CLAUDE.md` symlink, (b) `skills/<slug>/` symlinks (slash commands, engineering contracts), (c) **NEW `rules/che-domains/*.md` + `che-user/*.md`** symlinks (domain playbooks loaded for every project, path-scopable), (d) legacy `commands/*.md` symlinks, and (e) **deep-merge appended hooks** in `settings.json` (PreToolUse/PostToolUse, never overwrite user plugins/theme/their own hooks).
   3. **L3 — IDE Project-scope Adapter (per user repo):** `./CLAUDE.md` or `./.claude/*`. Che does **not** touch this layer by default (team-managed via source control).
-  4. **L4 — Source-of-Truth Rule Package Checkout (pipx feed, IDE-agnostic):** The Che package root directory — the folder containing `pyproject.toml`, `domains/`, `skills/` and `che_core/` from where `pipx install -e .` was run, and where the IDE adapter installers (`adapters/*/install.sh`) live. By default the quick installer clones it into `~/.trae/` for convenience, but it can live anywhere on disk. *This* folder is the single source of truth that feeds all symlinks of the L2 IDE adapter layer; Claude Code (or any other supported IDE) **never reads L4 directly** — it only ever sees the adapter symlinks in L2. (Pragmatic Programmer orthogonality: keep the *agent source package* and the *running IDE wiring* in separate layers so either can move without breaking the other).
+  4. **L4 — Source-of-Truth Rule Package Checkout (pipx feed, IDE-agnostic):** The Che package root directory — the folder containing `pyproject.toml`, `domains/`, `skills/` and `che_core/` from where `pipx install -e .` was run, and where the IDE adapter installers (`adapters/*/install.sh`) live. By default the quick installer clones it into `~/.che-ai/` for convenience, but it can live anywhere on disk. *This* folder is the single source of truth that feeds all symlinks of the L2 IDE adapter layer; Claude Code (or any other supported IDE) **never reads L4 directly** — it only ever sees the adapter symlinks in L2. (Pragmatic Programmer orthogonality: keep the *agent source package* and the *running IDE wiring* in separate layers so either can move without breaking the other).
   (Pragmatic Programmer orthogonality: *team process state* does not live inside the *shipped artifact*; *adapter IDE wiring* does not pollute *rule package source*).
 - **Never deletes anything permanently.** Every `remove` is a **move to trash** with a printed one-line restore command (Design by Contract postcondition: "after `remove X`, the state of X is recoverable in one deterministic command"). Hard-delete commands do not exist, and will not be added.
 - **Runs structural/admin operations deterministically as a terminal CLI.** Project onboarding, workspace creation, session config, task listing, state indexing, export/import portability, and safe eject are exposed as a zero-dependency stdlib Python CLI (`che-ai` / `che`), installed once and callable from any shell or CI. This is a feature for predictability and cost discipline, not the product's headline.
@@ -49,7 +49,7 @@ The result is a harness that:
 
 ### 1. Quick Install Script (recommended for end users)
 
-Installs or updates Che in **Claude Code**'s default config location (`~/.trae`), injects the planning-artifacts `.gitignore` snippet into every repo it touches, **and installs the `che-ai` / `che` CLI binaries globally via `pipx`** (fallback `pip install --user` if pipx is missing, with a warning):
+Installs or updates the Che source-of-truth checkout in `~/.che-ai` (or `$CHE_HOME` / `$HARNESS_HOME` if set), symlinks its skills, rules, commands and hooks into every supported IDE's adapter home, injects the planning-artifacts `.gitignore` snippet into every repo it touches, **and installs the `che-ai` / `che` CLI binaries globally via `pipx`** (fallback `pip install --user` if pipx is missing, with a warning):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.sh | bash -s -- --apply
@@ -72,7 +72,7 @@ Use **pipx** (isolated user-venv, never breaks system Python):
 # from this folder to find pyproject.toml. setup-adapters.sh (ran auto-
 # matically at the installer's end) then links skills/commands/rules into
 # Claude Code's real adapter home at ~/.claude/.
-cd ~/.trae
+cd ~/.che-ai
 pipx install -e . --force
 
 # ✅ Confirm install
@@ -89,7 +89,7 @@ che --help            # 15 subcommands, 0 tokens, 0 network
 che --help                                            # CLI surface
 che workspace list                                    # List L1 workspaces
 che config --help                                     # Session flags (LANG_CHAT etc)
-python3 -m pytest tests/ -q                           # 39 unit tests (core harness)
+python3 -m pytest tests/ -q                           # 52 unit tests (core harness)
 ```
 
 ***
@@ -135,7 +135,7 @@ The full command reference, including `task`, `state` (SQLite FTS5), `rag`, `exp
 
 Two complementary hierarchies, one **3-layer** for the rulebook, one **4-level** for project memory.
 
-### 3-Layer Rulebook (what ships inside `~/.trae`) — topology inspired by SpecFlow / Cucumber BDD
+### 3-Layer Rulebook (what ships inside `~/.che-ai`) — topology inspired by SpecFlow / Cucumber BDD
 
 1. **L1 (Domains)** → SpecFlow *Feature Files (Gherkin)*: Human context, product language — playbooks in `domains/engineering/`, `domains/product/`, `domains/ux/`. What the customer asked for, in their words.
 2. **L2 (Routers)** → SpecFlow *step bindings registry (links only)*: Link lists in `CHE_RULES.md` and `CHE_COMMANDS.md`. **Titles and links ONLY.** Rule bodies never live here (just like `[Binding]` C# classes in SpecFlow are a registration table, not the prose).
@@ -213,7 +213,7 @@ It will print copy-pasteable install commands for **exactly what's missing on yo
 | Tool | Kind | Why Che needs it | Quick install (pick one method) |
 | :--- | :---: | :--------------- | :------------------------------ |
 | `python3` (≥ 3.9) | **Required** | Che's core language (`pyproject.toml` requires-python). | System package manager: `sudo apt install -y python3 python3-venv python3-pip` (Ubuntu) / `brew install python` (macOS) |
-| `pytest` (Python module) | **Required** | 39 unit tests. CI step `python-ci` step 5 runs it. | Venv (isolated): `python3 -m venv .venv && . .venv/bin/activate && pip install pytest ruff`<br>— or user-level: `python3 -m pip install --user pytest ruff` |
+| `pytest` (Python module) | **Required** | 52 unit tests. CI step `python-ci` step 5 runs it. | Venv (isolated): `python3 -m venv .venv && . .venv/bin/activate && pip install pytest ruff`<br>— or user-level: `python3 -m pip install --user pytest ruff` |
 | `ruff` | **Required** | Linter + formatter in a single binary. Replaces flake8 + isort + black. CI step `python-ci` steps 3+4. | Pipx: `pipx install ruff`<br>— or inside a venv: `pip install ruff` |
 | `npx` / Node.js (LTS) | *Optional* | Runs `markdownlint-cli2` (CI job `markdown-ci`). Without it the **markdown lint gates are SKIPPED locally** (CI still catches them — you just waste one CI roundtrip). | NodeSource (Ubuntu): `curl -fsSL https://deb.nodesource.com/setup_lts.x \| sudo -E bash - && sudo apt install -y nodejs`<br>— or `brew install node` (macOS). |
 

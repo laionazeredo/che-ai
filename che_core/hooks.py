@@ -288,7 +288,7 @@ def posttooluse_lang_pt_check(input_json: Dict[str, Any]) -> Dict[str, Any]:
 Current project LANG_DOCS=en (default). What do you want to do?
 (A) Translate detected content to English (recommended to maintain LANG_DOCS=en)
 (B) Keep in Portuguese — IN THIS SPECIFIC FILE (justify, and if it is a new pattern apply in (C))
-(C) CONFIGURE THIS PROJECT/SESSION with LANG_DOCS=pt-BR. Add via `che_registry_append_jsonl` helper with {{"flags":{{"LANG_DOCS":"pt-BR"}}}} to Level 1 registry.jsonl.
+(C) CONFIGURE THIS PROJECT/SESSION with LANG_DOCS=pt-BR. Add via `che registry_append "$SESSION_ID" FLAGS "$WORKTREE_ROOT" '{{"flags":{{"LANG_DOCS":"pt-BR"}}}}'` to Level 1 registry.jsonl.
 Sample lines: {"; ".join(sample_lines)}
 File analyzed: {file_path}"""
         return {"decision": "warn", "reason": reason, "additionalContext": addl}

@@ -41,15 +41,15 @@ description: "Context builder for diff conversations. TWO MODES: (A) GitHub PR U
 2. **PR URL reachable:** Validate URL format + run a tiny `gh pr view <url> --json number,title` to confirm it exists. If 404 / 403 → stop and report.
 3. **Worktree binding optional + 🔴 STORAGE PREFLIGHT (BEFORE first write):** If user also gave `--worktree <path>`, write/read session binding per §19 (ask if mismatch). **In ANY mode (A or B), BEFORE saving the first file to disk, run:**
    ```bash
-   CHE_HOME="${CHE_HOME:-$HOME/.trae}"
-   CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-   [ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ $CONTRACT missing; exit 98"; exit 98; }
-   SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-diffctx-session}"
+   # Resolve the `che` CLI — it owns the 5-tier Che-home cascade (CHE_HOME → HARNESS_HOME
+   # → ~/.che-ai → legacy ~/.trae iff CHE_RULES.md exists → ~/.che-ai fallback).
+   command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Zero writes without storage boundary. exit 98"; exit 98; }
+   SESSION_ID="${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-fallback-diffctx-session}}"
    if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
-     che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-     che_ensure_session_dirs "$WORKTREE_ROOT"
+     eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+     che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
    fi
-   # AFTER this: use ONLY che_output_path "diff_context" ... to build paths.
+   # AFTER this: use ONLY `che output_path "diff_context" ...` to build paths.
    ```
    NEVER use `./reports/` or paths inside the worktree. §20 MORATORIUM.
 
@@ -136,7 +136,7 @@ MAXIMUM 3 items. 1 sentence each. These are your topics to bring up in call/comm
 **Construct path ONLY via helper (preflight already ran in A.0 item 3):**
 ```bash
 # Mode A = PR URL → related_id = pr-<N>; type = diff_context; scope = session (ephemeral)
-DIFFCTX_PATH="$(che_output_path "diff_context" "diff-context" "pr-${PR_ID}" "session" "md")"
+DIFFCTX_PATH="$(che output_path "diff_context" "diff-context" "pr-${PR_ID}" "session" "md")"
 ```
 Example result: `$CHE_SESSION_DIR/diff_contexts/pr-382/20260902-103000-diff-context.md`
 → Fallback without binding is handled by helper (lands in `$CHE_HOME/outputs/fallback-session/...` never worktree).
@@ -292,18 +292,16 @@ MAXIMUM 3, 1 sentence each:
 ```bash
 # If A.0 item 3 preflight NOT run (user jumped to Mode B), GUARANTEE here:
 if [ -z "${CHE_SESSION_DIR:-}" ]; then
-  CHE_HOME="${CHE_HOME:-$HOME/.trae}"
-  CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-  [ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ $CONTRACT missing; exit 98"; exit 98; }
-  SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-diffctx-local-session}"
+  command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Zero writes without storage boundary. exit 98"; exit 98; }
+  SESSION_ID="${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-fallback-diffctx-local-session}}"
   if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
-    che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-    che_ensure_session_dirs "$WORKTREE_ROOT"
+    eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+    che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
   fi
 fi
 # Mode B = Local Worktree → related_id = worktree-<slug>
 WT_SLUG="$(basename "${WORKTREE_ROOT%/}")"
-DIFFCTX_LOCAL_PATH="$(che_output_path "diff_context" "diff-context-local" "worktree-${WT_SLUG}" "session" "md")"
+DIFFCTX_LOCAL_PATH="$(che output_path "diff_context" "diff-context-local" "worktree-${WT_SLUG}" "session" "md")"
 ```
 Example result: `$CHE_SESSION_DIR/diff_contexts/worktree-feat-FLO-714--X/20260902-110000-diff-context-local.md`
 → Multiple local passes ordered by UTC timestamp automatically.

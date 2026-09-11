@@ -7,9 +7,9 @@ description: "Queries, filters, summarizes, exports, and audits Che decisions.lo
 
 **Use when:** User asks to see / filter / summarise / audit decisions from a worktree's `decisions.log.jsonl` (single source of truth JSONL format, v1 schema). Also use when any skill needs to query decision history programmatically.
 
-**What it does:** Queryable wrapper around `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` for a worktree. Resolves path via `che_decisions_path` contract. Runs queries via in-process python3/jq.
+**What it does:** Queryable wrapper around `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` for a worktree. Resolves the path from `$CHE_DECISIONS_PATH` (exported by `che compute_paths`). Runs queries via in-process python3/jq.
 
-**Do NOT use for:** Writing new entries (use `che_append_decision_jsonl` helper instead).
+**Do NOT use for:** Writing new entries (use `che decision_append` instead).
 
 ---
 
@@ -18,30 +18,30 @@ description: "Queries, filters, summarizes, exports, and audits Che decisions.lo
 1. **Worktree absolute path known.** If not → ASK user; NEVER guess.
 2. **Source contracts first (STORAGE BOUNDARY PREFLIGHT, MANDATORY even for read-only skill):**
    ```bash
-   # 1. Canonical session contract source
-   source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"
+   # 1. Resolve the `che` CLI (owns the 5-tier Che-home cascade)
+   command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Aborting."; exit 98; }
 
    # 2. SESSION_ID (if not defined by orchestrator)
-   SESSION_ID="${SESSION_ID:-$(che_current_session_id 2>/dev/null || echo "decisions-$(date -u +%Y%m%d-%H%M%S)")}"
+   SESSION_ID="${SESSION_ID:-${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-decisions-$(date -u +%Y%m%d-%H%M%S)}}}"
 
    # 3. Canonical paths for this session
    if [[ -z "${CHE_SESSION_DIR}" ]]; then
-     che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$(pwd)"
-     che_ensure_session_dirs "$WORKTREE_ROOT"
+     eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+     che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
    fi
 
    # 4. Double-guard: reaffirm OUTSIDE worktree
-   che_assert_outside_worktree "${CHE_SESSION_DIR}"      "$WORKTREE_ROOT" "CHE_SESSION_DIR"
-   che_assert_outside_worktree "${CHE_WORKSPACE_SHARED}" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
+   che assert_outside_worktree "${CHE_SESSION_DIR}"      "$WORKTREE_ROOT" --label "CHE_SESSION_DIR"
+   che assert_outside_worktree "${CHE_WORKSPACE_SHARED}" "$WORKTREE_ROOT" --label "CHE_WORKSPACE_SHARED"
 
    # 5. Resolve unique canonical decisions file path (single shared file OUTSIDE worktree)
-   PATH_FILE=$(che_decisions_path "${WORKTREE_ROOT}")
+   PATH_FILE="$CHE_DECISIONS_PATH"
    ```
 3. **Does `decisions.log.jsonl` exist?** If not → say "No decisions registered in this worktree yet." Stop.
 4. **Optional EXPORT to spreadsheet (optional output writing):**
    - If user asks to "export to CSV/TSV/JSON" → build output_file path via:
      ```bash
-     EXPORT_PATH="$(che_output_path "summary" "decisions-export-${MODE}" "${EXPORT_RELATED_ID:-decisions-general}" "workspace" "${EXT:-csv}")"
+     EXPORT_PATH="$(che output_path "summary" "decisions-export-${MODE}" "${EXPORT_RELATED_ID:-decisions-general}" "workspace" "${EXT:-csv}")"
      ```
      Never write exports to `./decisions-export.csv` or worktree.
 
@@ -139,7 +139,7 @@ Copy/paste this 1-liner pattern for queries; it's what the helper does internall
 
 ```bash
 # Example: summary mode
-PATH_FILE=$(che_decisions_path "$WORKTREE_ROOT")
+PATH_FILE="$CHE_DECISIONS_PATH"
 python3 - "$PATH_FILE" summary <<'PY'
 import json, sys
 path, mode = sys.argv[1:3]

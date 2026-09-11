@@ -1,8 +1,31 @@
 import os
 import re
 import subprocess
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
+
+# Maps an output "type" to the subfolder inside the storage root where the
+# artifact must live. Single source of truth for every Che write.
+_OUTPUT_SUBFOLDERS = {
+    "report": "reports",
+    "review": "reviews",
+    "qa": "qa/evidence",
+    "spec": "specs",
+    "design": "design",
+    "task": "tasks",
+    "diff_context": "diff_contexts",
+    "pr_comments": "pr_comments",
+    "merge_audit": "merge_audits",
+    "execution": "execution",
+    "graph": "graph",
+    "debugger": "debugger",
+    "architecture": "architecture",
+    "adr": "architecture",
+    "gh_stack": "gh_stack",
+    "other": "other",
+}
 
 
 def resolve_che_home() -> Path:
@@ -225,7 +248,25 @@ def get_workspaces_root() -> Path:
 
 
 def get_che_home() -> Path:
-    return Path(os.environ.get("CHE_HOME") or os.environ.get("HARNESS_HOME") or (Path.home() / ".trae")).resolve()
+    """Resolve the Che home using the canonical cascade.
+
+    Precedence: $CHE_HOME -> $HARNESS_HOME -> $HOME/.che-ai (new default)
+    -> $HOME/.trae (legacy, only while it still holds CHE_RULES.md)
+    -> $HOME/.che-ai.
+    """
+    env_home = os.environ.get("CHE_HOME") or os.environ.get("HARNESS_HOME")
+    if env_home:
+        return Path(env_home).resolve()
+
+    new_default = Path.home() / ".che-ai"
+    if new_default.is_dir():
+        return new_default.resolve()
+
+    legacy_default = Path.home() / ".trae"
+    if (legacy_default / "CHE_RULES.md").is_file():
+        return legacy_default.resolve()
+
+    return new_default.resolve()
 
 
 def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[str] = None) -> Dict[str, str]:
@@ -265,6 +306,7 @@ def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[st
         "CHE_WORKSPACE_DIR": str(workspace_dir),
         "CHE_WORKTREE_DIR": str(worktree_dir),
         "CHE_WORKSPACE_SHARED": str(workspace_shared),
+        "CHE_DECISIONS_PATH": str(workspace_shared / "decisions.log.jsonl"),
         "CHE_SESSION_DIR": str(session_dir),
         "CHE_LEVEL2_BINDING": str(session_dir / "binding.md"),
         "CHE_PROJECT_PROFILE": str(project_dir / "project_profile.md"),
@@ -272,26 +314,16 @@ def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[st
         "CHE_ARCHITECTURE_DOC": str(project_dir / "architecture.md"),
         "CHE_ROADMAP_DOC": str(project_dir / "roadmap.md"),
         "CHE_PROJECT_REGISTRY": str(project_dir / "registry.jsonl"),
+        "CHE_REGISTRY_PATH": str(get_che_home() / "bindings" / "registry.jsonl"),
     }
 
     # Assert outside worktree logic
-    def assert_outside(candidate_path: Path, label: str):
-        try:
-            if candidate_path == wt_root or wt_root in candidate_path.parents:
-                print("🔴 CHE SESSIONS CONTRACT VIOLATION — HARD STOP")
-                print(f"{label} is inside the worktree! Path: {candidate_path}")
-                import sys
-
-                sys.exit(99)
-        except Exception:
-            pass
-
-    assert_outside(project_dir, "CHE_PROJECT_DIR")
-    assert_outside(project_graph_dir, "CHE_PROJECT_GRAPH_DIR")
-    assert_outside(workspace_dir, "CHE_WORKSPACE_DIR")
-    assert_outside(worktree_dir, "CHE_WORKTREE_DIR")
-    assert_outside(workspace_shared, "CHE_WORKSPACE_SHARED")
-    assert_outside(session_dir, "CHE_SESSION_DIR")
+    assert_outside_worktree(project_dir, str(wt_root), "CHE_PROJECT_DIR")
+    assert_outside_worktree(project_graph_dir, str(wt_root), "CHE_PROJECT_GRAPH_DIR")
+    assert_outside_worktree(workspace_dir, str(wt_root), "CHE_WORKSPACE_DIR")
+    assert_outside_worktree(worktree_dir, str(wt_root), "CHE_WORKTREE_DIR")
+    assert_outside_worktree(workspace_shared, str(wt_root), "CHE_WORKSPACE_SHARED")
+    assert_outside_worktree(session_dir, str(wt_root), "CHE_SESSION_DIR")
 
     return paths
 
@@ -341,3 +373,130 @@ def ensure_session_dirs(worktree_root: str, session_id: str, cwd_override: Optio
         registry_file.touch()
 
     return paths
+
+
+def assert_outside_worktree(candidate_path, worktree_root, label: str = "path") -> None:
+    """Hard-stop guard: refuse any candidate path that falls inside the user worktree.
+
+    Che artifacts (decisions.log, task graphs, specs, QA reports, ...) must NEVER
+    live inside the user repository, otherwise they get accidentally committed.
+    Everything Che writes must go through the storage roots resolved by
+    :func:`compute_paths` (``$CHE_WORKSPACE_SHARED`` / ``$CHE_SESSION_DIR``).
+
+    Preconditions (silently satisfied, matching the legacy bash contract):
+      - empty ``candidate_path`` or ``worktree_root`` -> no-op and return.
+
+    Postcondition: returns ``None`` when the path is safely outside; otherwise
+    prints the violation report to stderr and exits with code 99.
+    """
+    if not candidate_path or not worktree_root:
+        return
+
+    wt_root = Path(worktree_root).expanduser().resolve()
+    candidate = Path(candidate_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = Path.cwd() / candidate
+    candidate = candidate.resolve()
+
+    wt_str = str(wt_root).rstrip("/")
+    cand_str = str(candidate)
+
+    if cand_str == wt_str or cand_str.startswith(wt_str + "/"):
+        print(
+            "🔴 CHE SESSIONS CONTRACT VIOLATION — HARD STOP\n"
+            f"{label} is falling INSIDE the user worktree.\n"
+            "This must NEVER happen — it causes accidental commits of "
+            "decisions.log, task_graph, manual_test_plan, spec_*.md, etc. into PRs.\n"
+            f"  label        : {label}\n"
+            f"  candidate    : {cand_str}\n"
+            f"  worktree_root: {wt_str}\n"
+            "How to fix:\n"
+            "  - Do NOT build paths with $PWD/.che/ or $WORKTREE_ROOT/.che/.\n"
+            "  - Always use:\n"
+            '      eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID")"\n'
+            "    then use $CHE_WORKSPACE_SHARED (guaranteed OUTSIDE the worktree).",
+            file=sys.stderr,
+        )
+        sys.exit(99)
+
+
+def output_path(
+    type: str,
+    slug: str,
+    related_id: str,
+    scope: str,
+    ext: str,
+    suffix: str = "",
+    worktree_root: Optional[str] = None,
+) -> str:
+    """Resolve the canonical path for a Che artifact and create its parent directory.
+
+    Single source of truth for every Che write (replaces the legacy
+    ``che_output_path`` bash helper). Guarantees the target lives in the storage
+    roots resolved by :func:`compute_paths`, never inside the user worktree.
+
+    Preconditions:
+      - ``type``, ``slug`` and ``ext`` are non-empty.
+      - ``scope`` is either ``"session"`` or ``"workspace"``.
+
+    Returns the absolute target path (parent directory created on disk).
+    """
+    if not type:
+        raise ValueError("che_output_path: type is required")
+    if not slug:
+        raise ValueError("che_output_path: slug is required")
+    if not ext:
+        raise ValueError("che_output_path: ext is required")
+    if scope not in ("session", "workspace"):
+        raise ValueError("che_output_path: scope must be 'session' or 'workspace'")
+
+    subfolder = _OUTPUT_SUBFOLDERS.get(type, type)
+
+    if scope == "session":
+        root_dir = os.environ.get("CHE_SESSION_DIR") or os.environ.get("HARNESS_SESSION_DIR")
+        if not root_dir:
+            root_dir = str(resolve_che_home() / "outputs" / "fallback-session")
+    else:
+        root_dir = os.environ.get("CHE_WORKSPACE_SHARED") or os.environ.get("HARNESS_WORKSPACE_SHARED")
+        if not root_dir:
+            root_dir = str(resolve_che_home() / "outputs" / "fallback-workspace")
+
+    parent_dir = Path(root_dir) / subfolder
+    if related_id:
+        parent_dir = parent_dir / related_id
+
+    ts_prefix = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    filename = f"{ts_prefix}-{slug}"
+    if suffix:
+        filename = f"{filename}_{suffix}"
+    filename = f"{filename}.{ext}"
+
+    parent_dir.mkdir(parents=True, exist_ok=True)
+    final_path = parent_dir / filename
+
+    wt = worktree_root or os.environ.get("WORKTREE_ROOT") or ""
+    assert_outside_worktree(str(final_path), wt, f"che_output_path: type={type} related={related_id} scope={scope}")
+
+    return str(final_path)
+
+
+def write_file_atomic(target, content: bytes, worktree_root: Optional[str] = None) -> str:
+    """Atomically write ``content`` to ``target`` (replaces ``che_write_file_atomic``).
+
+    Writes to a sibling ``<target>.tmp.<pid>`` then renames it over the target, so
+    readers never observe a partially written artifact. Refuses targets that fall
+    inside the user worktree.
+    """
+    if not target:
+        raise ValueError("che_write_file_atomic: target path required")
+
+    target_path = Path(target).expanduser()
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    wt = worktree_root or os.environ.get("WORKTREE_ROOT") or ""
+    assert_outside_worktree(str(target_path), wt, f"atomic_write: {target_path}")
+
+    tmp_path = target_path.with_name(f"{target_path.name}.tmp.{os.getpid()}")
+    tmp_path.write_bytes(content)
+    os.replace(tmp_path, target_path)
+    return str(target_path)

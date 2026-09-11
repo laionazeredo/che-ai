@@ -15,30 +15,30 @@ description: "Canonical and generic wrapper for Graphify CLI (pipx package graph
 ## -0.1 STORAGE BOUNDARY PREFLIGHT (MANDATORY BEFORE EVERYTHING)
 
 ```bash
-# 1. Load sessions contract
-source ~/.trae/contracts/che_sessions_contract.sh
+# 1. Resolve the `che` CLI (owns the Che-home cascade + canonical path construction)
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Cannot write outputs without storage boundary. Aborting write."; exit 98; }
 
 # 2. Resolve WORKTREE_ROOT + SESSION_ID
 WORKTREE_ROOT="${WORKTREE_ROOT:-$(pwd)}"
 SESSION_ID="${SESSION_ID:-graph-standalone-$(date -u +%Y%m%d-%H%M%S)}"
 
 # 3. Compute canonical paths + ensure dirs
-che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-che_ensure_session_dirs "$WORKTREE_ROOT"
+eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
 
 # 4. Double-guard: outputs NEVER inside worktree
-che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR"
-che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
+che assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" --label "CHE_SESSION_DIR"
+che assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" --label "CHE_WORKSPACE_SHARED"
 
 # 5. Construct graph output paths ONCE (all in L2)
 GRAPHIFY_OUTPUT_ROOT="${CHE_PROJECT_GRAPH_DIR}"
-che_assert_outside_worktree "$GRAPHIFY_OUTPUT_ROOT" "$WORKTREE_ROOT" "GRAPHIFY_OUTPUT_ROOT"
+che assert_outside_worktree "$GRAPHIFY_OUTPUT_ROOT" "$WORKTREE_ROOT" --label "GRAPHIFY_OUTPUT_ROOT"
 mkdir -p "$GRAPHIFY_OUTPUT_ROOT"
 
 GRAPH_REPORT_PATH="${GRAPHIFY_OUTPUT_ROOT}/GRAPH_REPORT.md"
 ```
 
-**DO NOT INVENT:** No other path in this skill. All cache, index, graphify artifacts stay UNDER `$GRAPHIFY_OUTPUT_ROOT`. If other subfiles are needed (graph.db, index.sqlite, nodes.json) → `$GRAPHIFY_OUTPUT_ROOT/<name>`. `che_cleanup_legacy_artifacts_in_worktree` already removes `graphify-out/` if it accidentally landed in an old worktree.
+**DO NOT INVENT:** No other path in this skill. All cache, index, graphify artifacts stay UNDER `$GRAPHIFY_OUTPUT_ROOT`. If other subfiles are needed (graph.db, index.sqlite, nodes.json) → `$GRAPHIFY_OUTPUT_ROOT/<name>`. If a legacy `graphify-out/` accidentally landed inside an old worktree, move it out manually: `mv "$WORKTREE_ROOT/graphify-out" "$CHE_WORKSPACE_SHARED/legacy_cleanup/"` (it is a cache, always safe to delete).
 
 > **100% Node.js alternatives (OPTIONAL · unify JS-only ecosystem):**
 > che uses the first engine found in this order (declarative fallback chain):
@@ -50,7 +50,7 @@ GRAPH_REPORT_PATH="${GRAPHIFY_OUTPUT_ROOT}/GRAPH_REPORT.md"
 > 6. **Final fallback:** grep-based (no tool installed, lower precision)
 >
 > Full comparison + install commands:
-> → [README.md §Getting Started 3b](file:///home/laion/.trae/README.md#L38-L55)
+> → [README.md §Getting Started 3b](file:///home/laion/.che-ai/README.md#L38-L55)
 
 ---
 
@@ -104,7 +104,7 @@ Canonical execution. **ALL outputs stay in `$GRAPHIFY_OUTPUT_ROOT` OUTSIDE workt
 ```bash
 # Ensure output directory OUTSIDE worktree (already created in PREFLIGHT)
 [ -n "${GRAPHIFY_OUTPUT_ROOT:-}" ] || { echo "[che-graph refresh] ❌ PREFLIGHT NOT run. GRAPHIFY_OUTPUT_ROOT empty." >&2; exit 99; }
-che_assert_outside_worktree "$GRAPHIFY_OUTPUT_ROOT" "$WORKTREE_ROOT" "GRAPHIFY_OUTPUT_ROOT"
+che assert_outside_worktree "$GRAPHIFY_OUTPUT_ROOT" "$WORKTREE_ROOT" --label "GRAPHIFY_OUTPUT_ROOT"
 
 if [ "$GRAPH_ENGINE" = "graphify" ]; then
   if [ -f "$GRAPH_REPORT_PATH" ]; then
@@ -130,7 +130,7 @@ else
 fi
 
 # Audit trail (always append decision log OUTSIDE worktree — using official helper)
-che_append_decision_jsonl "GRAPH_REFRESH" "{\"related_id\":\"${GRAPHIFY_RELATED_ID}\",\"engine\":\"${GRAPH_ENGINE}\",\"version\":\"${GRAPHIFY_V:-n/a}\",\"ok\":${RESULT},\"output_root\":\"${GRAPHIFY_OUTPUT_ROOT}\"}"
+che decision_append "$WORKTREE_ROOT" "GRAPH_REFRESH" "{\"related_id\":\"${GRAPHIFY_RELATED_ID}\",\"engine\":\"${GRAPH_ENGINE}\",\"version\":\"${GRAPHIFY_V:-n/a}\",\"ok\":${RESULT},\"output_root\":\"${GRAPHIFY_OUTPUT_ROOT}\"}"
 
 [ $RESULT -eq 0 ] || { echo "[che-graph refresh] ❌ failed. Check graphify --version." >&2; exit 1; }
 
@@ -207,4 +207,4 @@ Skills that use che-graph:
 - **graphify CLI versions:** pin to >= 0.9.x if installing via pipx. Ousterhout + Graph knowledge graph API version may change in 1.0.
 - **Rollback:** If graphify crashes on some project, just uninstall → che-graph automatically falls back to grep-based. Nothing breaks. Reversible.
 - **Cache (ALL OUTSIDE WORKTREE):** `$GRAPHIFY_OUTPUT_ROOT` can be deleted at any time (`rm -rf "$GRAPHIFY_OUTPUT_ROOT"`). Next `refresh` recreates from scratch without side effects.
-- **Legacy cleanup:** `che_cleanup_legacy_artifacts_in_worktree` already moves old `graphify-out/` (landed inside worktree due to bug) to safe backup in `$CHE_WORKSPACE_SHARED/legacy_cleanup/`.
+- **Legacy cleanup:** If an old `graphify-out/` accidentally landed inside a worktree, move it out: `mkdir -p "$CHE_WORKSPACE_SHARED/legacy_cleanup" && mv "$WORKTREE_ROOT/graphify-out" "$CHE_WORKSPACE_SHARED/legacy_cleanup/"`. It is a cache and always safe to delete.

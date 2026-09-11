@@ -26,17 +26,17 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
 
 > **One session = ONE worktree by default. DOUBT = ASK. Never guess. Never silent cross-worktree ops.**
 
-1. **Read existing binding FIRST from Level 1 GLOBAL INDEX (chicken-and-egg resolver):** Read `che_registry_path`. Look for LAST entry with:
-   - `SESSION_ID: <effective-session-id-from-che_current_session_id>` AND `STATUS: BOUND`. If found → use its `WORKTREE_ROOT` as default binding proposal for this session; jump to step 3 only if user explicitly says "switch".
+1. **Read existing binding FIRST from Level 1 GLOBAL INDEX (chicken-and-egg resolver):** Read `$CHE_REGISTRY_PATH` (exported by `che compute_paths`). Look for LAST entry with:
+   - `SESSION_ID: <effective-session-id (${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}})>` AND `STATUS: BOUND`. If found → use its `WORKTREE_ROOT` as default binding proposal for this session; jump to step 3 only if user explicitly says "switch".
 2. **Binding decision PRECEDENCE (STOP first match):**
    a. **Explicit user mention:** user said "worktree X" or gave path → PROPOSE binding to X, confirm once.
    b. **Open files / context:** all user-open files inside one worktree → PROPOSE that worktree. (≥2 worktrees → fall 2c.)
    c. **Working dirs / session memory:** single most-recent worktree referenced prior msgs → PROPOSE it.
    d. **Ambiguous (≥2 candidates or 0):** STOP. AskUserQuestion ≤2 concrete + "other (type path)". NEVER default.
 3. **After user confirms worktree (no existing BOUND for this SESSION_ID in registry):** WRITE INTO BOTH LEVELS (§19 2-LEVEL LAYOUT) — atomically:
-   a. **Level 1 (GLOBAL INDEX append-only JSONL):** DO NOT use manual Edit/Write. Use UNIQUE OFFICIAL HELPER: `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh" && che_registry_append_jsonl <EFFECTIVE_SESSION_ID> BOUND <WORKTREE_ROOT> '{payload json}'`. NEVER overwrite existing BOUND entries (keep history append-only). Helper performs automatic sha256 dedup + JSON safe sort_keys. **Also runs AUTOMATIC cleanup of legacy artifacts INSIDE the worktree: anything that is legacy .trae/, decisions.log, task_graph etc is moved OUTSIDE to backup in $CHE_WORKSPACE_SHARED/legacy_binding_cleanup/<ts>/. Optional payload fields: workspace_name, worktree_slug, branch, friendly_name, che_session_dir, che_workspace_shared, workspace_file, reason, flags:{LANG_PT_CHECK:ENABLED|DISABLED}. Schema _v:1 per line.**
+   a. **Level 1 (GLOBAL INDEX append-only JSONL):** DO NOT use manual Edit/Write. Use UNIQUE OFFICIAL HELPER: `che registry_append <EFFECTIVE_SESSION_ID> BOUND <WORKTREE_ROOT> '{payload json}'`. NEVER overwrite existing BOUND entries (keep history append-only). Helper performs automatic sha256 dedup + JSON safe sort_keys. **Also runs AUTOMATIC cleanup of legacy artifacts INSIDE the worktree: anything that is legacy .trae/, decisions.log, task_graph etc is moved OUTSIDE to backup in $CHE_WORKSPACE_SHARED/legacy_binding_cleanup/<ts>/. Optional payload fields: workspace_name, worktree_slug, branch, friendly_name, che_session_dir, che_workspace_shared, workspace_file, reason, flags:{LANG_PT_CHECK:ENABLED|DISABLED}. Schema _v:1 per line.**
       ```
-      SESSION_ID: <effective-session-id-from-che_current_session_id>
+      SESSION_ID: <effective-session-id (${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}})>
       WORKTREE_ROOT: <absolute path>
       TASK_ID: <slug or "manual">
       BOUND_AT: <ISO timestamp>
@@ -44,8 +44,8 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
       ---
       ```
    b. **Level 2 (PER-SESSION DETAIL OUTSIDE user worktree — NEVER inside worktree):**
-      1. `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh" && che_compute_paths <WORKTREE_ROOT> <EFFECTIVE_SESSION_ID> && che_ensure_session_dirs <WORKTREE_ROOT>`
-      2. Write `$CHE_LEVEL2_BINDING` (= `$CHE_SESSION_DIR/binding.md`, contract-resolved, guaranteed outside worktree by che_assert_outside_worktree) with:
+      1. `command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. exit 98"; exit 98; }` then `eval "$(che compute_paths <WORKTREE_ROOT> <EFFECTIVE_SESSION_ID> --cwd "$PWD")" && che ensure_dirs <WORKTREE_ROOT> <EFFECTIVE_SESSION_ID> --cwd "$PWD"`
+      2. Write `$CHE_LEVEL2_BINDING` (= `$CHE_SESSION_DIR/binding.md`, contract-resolved, guaranteed outside worktree by `che assert_outside_worktree`) with:
          ```
          SESSION_ID: <session-id>
          WORKTREE_ROOT: <absolute path>
@@ -97,22 +97,23 @@ $CHE_SESSION_DIR       (ephemeral per-session, OUTSIDE worktree)
 
 Where:
 - `<task-id>` slug now goes inside `CHE_WORKSPACE_SHARED/tasks/<task-id>/` subdir when needed (not a folder inside worktree).
-- Before ANY file writes: resolve paths via contract: `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"` then `che_compute_paths "$WORKTREE_ROOT" "$(che_current_session_id)" "$PWD"`. Never hardcode.
-- Run `che_ensure_session_dirs WORKTREE_ROOT` immediately after binding decision. Creates 2 directory trees **strictly outside user's worktree** — `che_assert_outside_worktree` HARD-STOPs (exit 99) if any resolved path falls inside the worktree (for example if user set CHE_SESSIONS_ROOT wrong). MORATORIUM: never write generated files under `<WORKTREE_ROOT>/.trae/*` — and NEVER write generated files under ANY OTHER path inside `<WORKTREE_ROOT>` (entire worktree root, not just `.trae/`). UNIQUE exception: user explicitly asks VERBATIM for a specific file to be saved there.
+- Before ANY file writes: resolve paths via the `che` CLI: `eval "$(che compute_paths "$WORKTREE_ROOT" "${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}}" --cwd "$PWD")"`. Never hardcode, and never reimplement the Che-home cascade in bash.
+- Run `che ensure_dirs "$WORKTREE_ROOT" "${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}}" --cwd "$PWD"` immediately after binding decision. Creates 2 directory trees **strictly outside user's worktree** — `che assert_outside_worktree` HARD-STOPs (exit 99) if any resolved path falls inside the worktree (for example if user set CHE_SESSIONS_ROOT wrong). MORATORIUM: never write generated files under `<WORKTREE_ROOT>/.trae/*` — and NEVER write generated files under ANY OTHER path inside `<WORKTREE_ROOT>` (entire worktree root, not just `.trae/`). UNIQUE exception: user explicitly asks VERBATIM for a specific file to be saved there.
 
 ### 0.2.1 MANDATORY STORAGE PREFLIGHT (run immediately after binding decision 0.1, BEFORE first write)
 
 BEFORE writing ANY file (binding.md, task_graph, decisions, envelope, any report), execute EXACTLY these 5 steps ONCE per session:
 
 ```bash
-CHE_HOME="${CHE_HOME:-$HOME/.trae}"; CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-[ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ $CONTRACT missing; exit 98"; exit 98; }
-SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-sm-session}"
+# Resolve the `che` CLI — it owns the 5-tier Che-home cascade (CHE_HOME → HARNESS_HOME
+# → ~/.che-ai → legacy ~/.trae iff CHE_RULES.md exists → ~/.che-ai fallback).
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Zero writes without storage boundary. exit 98"; exit 98; }
+SESSION_ID="${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-fallback-sm-session}}"
 if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
-  che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-  che_ensure_session_dirs "$WORKTREE_ROOT"
-  che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR (ephemeral root)"
-  che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "WORKSPACE_SHARED (durable root)"
+  eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+  che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
+  che assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" --label "CHE_SESSION_DIR (ephemeral root)"
+  che assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" --label "WORKSPACE_SHARED (durable root)"
 fi
 ```
 
@@ -121,33 +122,33 @@ fi
 TASK_SLUG="${TASK_ID:-global-scope}"
 RELATED_ID="${TASK_SLUG}"
 
-SESSION_MD_PATH="$(che_output_path "session" "session-metadata" "${RELATED_ID}" "session" "md")"
-TASK_GRAPH_PATH="$(che_output_path "task" "task-graph" "${RELATED_ID}" "workspace" "md")"
-GH_STACK_PLAN_PATH="$(che_output_path "gh_stack" "gh-stack-plan" "${RELATED_ID}" "workspace" "md")"
-MANUAL_TEST_PLAN_PATH="$(che_output_path "qa" "manual-test-plan" "${RELATED_ID}" "workspace" "md")"
-FINAL_SUMMARY_PATH="$(che_output_path "summary" "session-final" "${RELATED_ID}" "session" "md")"
-TEST_SPEC_SMOKE_PATH="$(che_output_path "qa" "test-spec-smoke" "${RELATED_ID}" "workspace" "md")"
-DISPATCHER_CONFIG_PATH="$(che_output_path "config" "dispatcher-config" "${RELATED_ID}" "workspace" "json")"
-DISPATCHER_BATCHES_PATH="$(che_output_path "report" "dispatcher-execution-batches" "${RELATED_ID}" "session" "md")"
-DISPATCHER_BATCH_REPORT_PATH="$(che_output_path "report" "dispatcher-batch-final" "${RELATED_ID}" "session" "md")"
+SESSION_MD_PATH="$(che output_path "session" "session-metadata" "${RELATED_ID}" "session" "md")"
+TASK_GRAPH_PATH="$(che output_path "task" "task-graph" "${RELATED_ID}" "workspace" "md")"
+GH_STACK_PLAN_PATH="$(che output_path "gh_stack" "gh-stack-plan" "${RELATED_ID}" "workspace" "md")"
+MANUAL_TEST_PLAN_PATH="$(che output_path "qa" "manual-test-plan" "${RELATED_ID}" "workspace" "md")"
+FINAL_SUMMARY_PATH="$(che output_path "summary" "session-final" "${RELATED_ID}" "session" "md")"
+TEST_SPEC_SMOKE_PATH="$(che output_path "qa" "test-spec-smoke" "${RELATED_ID}" "workspace" "md")"
+DISPATCHER_CONFIG_PATH="$(che output_path "config" "dispatcher-config" "${RELATED_ID}" "workspace" "json")"
+DISPATCHER_BATCHES_PATH="$(che output_path "report" "dispatcher-execution-batches" "${RELATED_ID}" "session" "md")"
+DISPATCHER_BATCH_REPORT_PATH="$(che output_path "report" "dispatcher-batch-final" "${RELATED_ID}" "session" "md")"
 
 # Per-task paths (repeat for each TASK_ID in loop):
-TASK_ENVELOPE_PATH_Tn="$(che_output_path "task" "task-envelope" "T${TASK_N}-${TASK_SLUG}" "workspace" "md")"
-MERGE_AUDIT_PATH_Tn="$(che_output_path "merge_audit" "merge-audit" "batch-${BATCH_N}-${RELATED_ID}" "session" "md")"
+TASK_ENVELOPE_PATH_Tn="$(che output_path "task" "task-envelope" "T${TASK_N}-${TASK_SLUG}" "workspace" "md")"
+MERGE_AUDIT_PATH_Tn="$(che output_path "merge_audit" "merge-audit" "batch-${BATCH_N}-${RELATED_ID}" "session" "md")"
 ```
 
-**Atomicity rule:** EVERY write (any file) uses `che_write_file_atomic "$PATH"` with stdin pipe, except decisions.log which uses the official `che_append_decision_jsonl` helper (already atomic internally).
+**Atomicity rule:** EVERY write (any file) uses `che write_file_atomic "$PATH"` with stdin pipe, except decisions.log which uses the official `che decision_append` helper (already atomic internally).
 
 **MANDATORY files created by this skill:**
 
-| File | Location (all resolved via `che_output_path` helper; timestamp UTC prefix + `<type>/<related_id>/` structure) | When created | Purpose |
+| File | Location (all resolved via `che output_path` helper; timestamp UTC prefix + `<type>/<related_id>/` structure) | When created | Purpose |
 |---|---|---|---|
-| `registry.jsonl` entries + `binding.md` (2-LEVEL) | Level 1 = `che_registry_path` (GLOBAL append-only JSONL, SINGLE writer = `che_registry_append_jsonl` — NO manual Edit/Write). Level 2 = `che_output_path "session" "binding" "${RELATED_ID}" "session" "md"` → `$CHE_SESSION_DIR/sessions/<slug>/YYYYMMDD-HHMMSS-binding.md` (automatic outside assert). | Immediately preflight 0.1 after binding decision (before ANY scope). | **Session ↔ worktree.** Resolve chicken-and-egg (Level 1: `SESSION_ID → WORKTREE_ROOT`). Level 1 payload: `friendly_name`, `flags.LANG_PT_CHECK`, `workspace_name`, `worktree_slug`, `branch`, etc. |
-| `spec_<slug>.md` | `che_output_path "spec" "spec" "${SPEC_SLUG}" "workspace" "md"` → `$CHE_WORKSPACE_SHARED/specs/<slug>/YYYYMMDD-HHMMSS-spec.md` (durable, sorted by timestamp). | §0.5 BEFORE scope capture. Generated by che-spec skill (4 inputs). Durable: shared across sessions; Approved status = GATE unlock. | **Execution contract.** 7 sections + YAML frontmatter (PRE/POST/INV, GWT AC + TEST_METHOD per AC, thresholds). Replaces legacy PRD. |
+| `registry.jsonl` entries + `binding.md` (2-LEVEL) | Level 1 = `$CHE_REGISTRY_PATH` (GLOBAL append-only JSONL, SINGLE writer = `che registry_append` — NO manual Edit/Write). Level 2 = `che output_path "session" "binding" "${RELATED_ID}" "session" "md"` → `$CHE_SESSION_DIR/sessions/<slug>/YYYYMMDD-HHMMSS-binding.md` (automatic outside assert). | Immediately preflight 0.1 after binding decision (before ANY scope). | **Session ↔ worktree.** Resolve chicken-and-egg (Level 1: `SESSION_ID → WORKTREE_ROOT`). Level 1 payload: `friendly_name`, `flags.LANG_PT_CHECK`, `workspace_name`, `worktree_slug`, `branch`, etc. |
+| `spec_<slug>.md` | `che output_path "spec" "spec" "${SPEC_SLUG}" "workspace" "md"` → `$CHE_WORKSPACE_SHARED/specs/<slug>/YYYYMMDD-HHMMSS-spec.md` (durable, sorted by timestamp). | §0.5 BEFORE scope capture. Generated by che-spec skill (4 inputs). Durable: shared across sessions; Approved status = GATE unlock. | **Execution contract.** 7 sections + YAML frontmatter (PRE/POST/INV, GWT AC + TEST_METHOD per AC, thresholds). Replaces legacy PRD. |
 | `session.md` | `$SESSION_MD_PATH` (preflight §0.2.1 variable) → `$CHE_SESSION_DIR/sessions/<slug>/YYYYMMDD-HHMMSS-session-metadata.md` | Session start | Session metadata: task-id, worktree path, start time, goals. |
 | `task_graph.md` | `$TASK_GRAPH_PATH` (preflight §0.2.1 variable) → `$CHE_WORKSPACE_SHARED/tasks/<slug>/YYYYMMDD-HHMMSS-task-graph.md` (timestamp prefix ordered; multiple revisions = multiple files). | After scope capture | Full task list, deps, status, DONE criteria. Durable: shared across sessions on same worktree. |
-| `task_envelope_<id>.md` | `che_output_path "task" "task-envelope" "T${TASK_ID}-${RELATED_ID}" "workspace" "md"` → `$CHE_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope.md` (one envelope per task, nested by task id). | One per task before Dev handoff | Formal contract per task. Blast radius + DONE criteria explicit. |
-| `decisions.log.jsonl` | `che_decisions_path` (official contract helper, already runs outside assert) → `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` (single shared worktree file, append via `che_append_decision_jsonl` only). | Append during execution (atomic, official helper) | Trade-off / non-obvious decision rationale. Multi-session durable. |
+| `task_envelope_<id>.md` | `che output_path "task" "task-envelope" "T${TASK_ID}-${RELATED_ID}" "workspace" "md"` → `$CHE_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope.md` (one envelope per task, nested by task id). | One per task before Dev handoff | Formal contract per task. Blast radius + DONE criteria explicit. |
+| `decisions.log.jsonl` | `$CHE_DECISIONS_PATH` (official contract path, already runs outside assert) → `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` (single shared worktree file, append via `che decision_append` only). | Append during execution (atomic, official helper) | Trade-off / non-obvious decision rationale. Multi-session durable. |
 | `manual_test_plan.md` | `$MANUAL_TEST_PLAN_PATH` (preflight §0.2.1 variable) → `$CHE_WORKSPACE_SHARED/qa/<slug>/YYYYMMDD-HHMMSS-manual-test-plan.md` | After all tasks DONE | Step-by-step manual verification plan. Durable (reusable in future sessions on same worktree). |
 | `final_summary.md` | `$FINAL_SUMMARY_PATH` (preflight §0.2.1 variable) → `$CHE_SESSION_DIR/summary/<slug>/YYYYMMDD-HHMMSS-session-final.md` | Session end | Delivered content, risks, stats for THIS run only. |
 | `gh_stack_plan.md` | `$GH_STACK_PLAN_PATH` (preflight §0.2.1 variable) → `$CHE_WORKSPACE_SHARED/gh_stack/<slug>/YYYYMMDD-HHMMSS-gh-stack-plan.md` (threshold trigger ≥3 tasks or >15 files). | After TASK GRAPH (Phase 1.4) if trigger TRUE | gh-stack hierarchical PR plan. APPROVED status before `/che-ship` consumes. Durable. |
@@ -165,7 +166,7 @@ b) The Level 1 registry BOUND entry for the current `SESSION_ID` already contain
 
 **Execution logic:**
 1. Extract `TID` value: if (a) → use flag value; if (b) → use `flags.ACTIVE_TASK_ID` from BOUND entry payload.
-2. Run: `RESULT=$(python3 -m che_core.cli task resume "$WORKTREE_ROOT" "$TID" "$(che_current_session_id)" --json)` — this call handles all internal work: re-bind registry with ACTIVE_DOMAIN/ACTIVE_TASK_ID flags, append TASK_RESUME decision, validate task readiness (deps + handoff), auto-load envelope domain's profile/playbook/gates, and return `{ready, domain, recommended_action:{slash_command, description}, expert_skills[]}`.
+2. Run: `RESULT=$(che task resume "$WORKTREE_ROOT" "$TID" "${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}}" --json)` — this call handles all internal work: re-bind registry with ACTIVE_DOMAIN/ACTIVE_TASK_ID flags, append TASK_RESUME decision, validate task readiness (deps + handoff), auto-load envelope domain's profile/playbook/gates, and return `{ready, domain, recommended_action:{slash_command, description}, expert_skills[]}`.
 3. If `RESULT.ready == false`: STOP. Show pending blockers list (which parent tasks not DONE, which handoff_output files missing). Offer user: "(A) Continue anyway (log SPEC-OVERRIDE equivalent TASK-OVERRIDE to decisions) / (B) Stop here and run parent tasks first".
 4. If `RESULT.ready == true`: Display returned `recommended_action` prominently. Example UX output:
    ```
@@ -192,15 +193,15 @@ Execution logic (in order — STOP at first match):
 2. **Fallback project registry domains array:** If `domain:` field is empty/null/absent in SPEC, read Level 1.5 registry `domains: [ ]` array at `$CHE_HOME/bindings/project_registry.json` (if it exists) for bound worktree project. Take FIRST non-null entry if present.
 3. **Default fallback:** If both 1 and 2 returned `null` → **canonical default value = `engineering`** (no more "silent skip").
 4. **ALL domains ALWAYS load (no SKIP, no conditional):**
-   a. Check if folders exist: `${CHE_HOME:-$HOME/.trae}/domains/<domain>/` → SHOULD exist for all 7 canonical. If not → WARN "Domain <slug> referenced but folder `domains/<slug>/` doesn't exist yet (phase 2 rollout). Proceeding with fallback engineering profile only for this session." → ignores c/d but continues (phase 2 compatibility).
-   b. **Read and inject profile.md:** Read `${CHE_HOME:-$HOME/.trae}/domains/<domain>/profile.md`. Append full content verbatim to session context preamble (same level as engineering-contracts §1-21). Agent MUST follow all Forbidden Patterns + Hard Rules in profile with same precedence as §14 Conventional Commits.
-   c. **Read and inject playbook.md:** Read `${CHE_HOME:-$HOME/.trae}/domains/<domain>/playbook.md`. Append to session context. Steps listed in playbook are treated as REQUIRED PRECONDITIONS before §1 scope capture for domain-specific tasks.
+   a. Check if folders exist: `${CHE_HOME:-$HOME/.che-ai}/domains/<domain>/` → SHOULD exist for all 7 canonical. If not → WARN "Domain <slug> referenced but folder `domains/<slug>/` doesn't exist yet (phase 2 rollout). Proceeding with fallback engineering profile only for this session." → ignores c/d but continues (phase 2 compatibility).
+   b. **Read and inject profile.md:** Read `${CHE_HOME:-$HOME/.che-ai}/domains/<domain>/profile.md`. Append full content verbatim to session context preamble (same level as engineering-contracts §1-21). Agent MUST follow all Forbidden Patterns + Hard Rules in profile with same precedence as §14 Conventional Commits.
+   c. **Read and inject playbook.md:** Read `${CHE_HOME:-$HOME/.che-ai}/domains/<domain>/playbook.md`. Append to session context. Steps listed in playbook are treated as REQUIRED PRECONDITIONS before §1 scope capture for domain-specific tasks.
    d. **Register mandatory gates list for downstream §0.9.5 ship:** Parse playbook YAML frontmatter key `gate_files_required: [ ... ]`. Store in session state `SESSION_DOMAIN_GATES = array`. Consumed AUTOMATICALLY by che-ship §0.9.5 DOMAIN GATES later.
    e. **Mandatory decision.log entry (single line):** DO NOT manual append. Use UNIQUE OFFICIAL HELPER:
       ```bash
-      che_append_decision_jsonl "DOMAIN-LOAD" "session=${SESSION_ID} worktree=<wt_slug> domain=<slug> profile=LOADED playbook=LOADED mandatory_gates=<n> gates_list=[<comma-sep>]"
+      che decision_append "$WORKTREE_ROOT" "DOMAIN-LOAD" "session=${SESSION_ID} worktree=<wt_slug> domain=<slug> profile=LOADED playbook=LOADED mandatory_gates=<n> gates_list=[<comma-sep>]"
       ```
-      (Helper already guarantees: atomic append, safe JSON, outside worktree by construction via `che_decisions_path` + outside assert.)
+      (Helper already guarantees: atomic append, safe JSON, outside worktree by construction via `$CHE_DECISIONS_PATH` + outside assert.)
 5. **Never load 2 simultaneous domains:** If SPEC `domain:` and registry `domains[0]` differ → ALWAYS use SPEC `domain:` (SPEC has higher precedence than global registry). NEVER load profile + playbook of 2 domains in the same session. If cross-domain really needed → SM creates 2 SEPARATE tasks in task graph each with its domain.
 
 ### 0.4 Project Knowledge Level 1.5 Reuse (auto-load, same as §0.3 pattern)
@@ -218,7 +219,7 @@ Execution logic (no breaking change — adds 2 more reads only):
 
 ### 0.5 Preflight: Approved SPEC validation (GATE before scope capture)
 
-This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and `che_ensure_session_dirs`, **BEFORE** any §1 scope capture questions.
+This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and `che ensure_dirs`, **BEFORE** any §1 scope capture questions.
 
 1. **Glob existing specs:** Look in `$CHE_WORKSPACE_SHARED/spec_*.md`. Parse `status` YAML frontmatter of each.
 2. **Count Approved specs:**
@@ -240,11 +241,11 @@ This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and 
    - If `SPEC_STATUS=Draft` after che-spec (user cancelled Approval) → offer: "(A) Run scope capture WITHOUT approved SPEC (log override to decisions) / (B) Stop here, finish SPEC later via /che-spec".
 5. **Case A (override without Approved SPEC):** DO NOT manual append. Use OFFICIAL HELPER:
    ```bash
-   che_append_decision_jsonl "SPEC-OVERRIDE" "scope capture started without Approved SPEC — user confirmed. Reason: <user typed reason or cancel-approval exit>"
+   che decision_append "$WORKTREE_ROOT" "SPEC-OVERRIDE" "scope capture started without Approved SPEC — user confirmed. Reason: <user typed reason or cancel-approval exit>"
    ```
 5b. **Case B (HORIZONTAL override logged):** If H_OVERRIDE_EXISTS path used in step 4 → run helper BEFORE §1:
    ```bash
-   che_append_decision_jsonl "EXPLICIT_OVERRIDE_HORIZONTAL_PLAN" "scope capture with explicit horizontal plan. justification=<1-linha from SPEC §2 verbatim, safe JSON escaped>"
+   che decision_append "$WORKTREE_ROOT" "EXPLICIT_OVERRIDE_HORIZONTAL_PLAN" "scope capture with explicit horizontal plan. justification=<1-linha from SPEC §2 verbatim, safe JSON escaped>"
    ```
 6. **Gate enforcement — CANONICAL #1 REVERSIBILITY (G-REV-1 pass-through, per S08 CHE_RULES §X V19 trigger):**
    - If `SPEC_STATUS=Approved`:
@@ -255,7 +256,7 @@ This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and 
         > "(A) Re-run che-spec and ADD WRAPPER BOUNDARY TABLE §4.6.1 (1 row per external SDK dep — single glob / folder each) AND §4.6.2 rollback flags IF critical path B-IDs exist AND §4.6.3 forking road test IF wrappers ≥2.  (B) Type 1-line justification ≤120 chars → I will write literal `EXPLICIT_OVERRIDE_REVERSIBILITY: <your text>` into SPEC §2 SCOPE + log decision."
      5. If WRAPPER_COUNT > 0 OR R_OVERRIDE_EXISTS === true → proceed. If R_OVERRIDE_EXISTS was used, run helper BEFORE §1:
         ```bash
-        che_append_decision_jsonl "EXPLICIT_OVERRIDE_REVERSIBILITY" "scope capture with explicit reversibility override. justification=<1-line from SPEC §2 verbatim, safe JSON escaped>"
+        che decision_append "$WORKTREE_ROOT" "EXPLICIT_OVERRIDE_REVERSIBILITY" "scope capture with explicit reversibility override. justification=<1-line from SPEC §2 verbatim, safe JSON escaped>"
         ```
 7. **Gate enforcement — CANONICAL #3 DBC ASSERTIVE PROGRAMMING (G-DBC-1 pass-through, per S09 CHE_RULES §X V20 trigger + S02 min-rows):**
    - If `SPEC_STATUS=Approved`:
@@ -266,7 +267,7 @@ This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and 
         > "(A) Re-run che-spec and ADD ASSERTIVE INVARIANTS TABLE §4.7 with >= ceil(B/3) rows. Each invariant that is IMPOSSIBLE in correct code MUST have column 4 === literal 'CRASH'.  (B) Type 1-line justification ≤120 chars → I will write literal `EXPLICIT_OVERRIDE_DBC_ASSERTIONS: <your text>` into SPEC §2 SCOPE + log decision."
      5. If ASSERTION_ROWS_OK === true OR D_OVERRIDE_EXISTS === true → proceed. If D_OVERRIDE_EXISTS was used, run helper BEFORE §1:
         ```bash
-        che_append_decision_jsonl "EXPLICIT_OVERRIDE_DBC_ASSERTIONS" "scope capture with explicit DbC assertions override. justification=<1-line from SPEC §2 verbatim, safe JSON escaped>"
+        che decision_append "$WORKTREE_ROOT" "EXPLICIT_OVERRIDE_DBC_ASSERTIONS" "scope capture with explicit DbC assertions override. justification=<1-line from SPEC §2 verbatim, safe JSON escaped>"
         ```
 8. **Downstream propagation:** If gates 4+6+7 all passed → unlock scope capture §1.1. Persist into session L3 ephemeral: `SESSION_WRAPPERS = all rows from §4.6.1`, `SESSION_ASSERTIONS = all A-IDs from §4.7`, `SESSION_DRY_RULES = all Business Rule rows from §4.8`. Proceed to §1.
 
@@ -299,7 +300,7 @@ If user said "decompose into tasks" or did not provide a list:
 
 Write to `$TASK_GRAPH_PATH` (§0.2.1 preflight variable, UTC timestamp prefix + outside worktree — durable; multiple revisions = multiple files). Use atomic write helper:
 ```bash
-che_write_file_atomic "$TASK_GRAPH_PATH" <<'TASK_GRAPH_EOF'
+che write_file_atomic "$TASK_GRAPH_PATH" <<'TASK_GRAPH_EOF'
    ... content below ...
 TASK_GRAPH_EOF
 ```
@@ -335,7 +336,7 @@ Good: "User can POST /register with {email, password} and receives a JWT; invali
 For EVERY row (T1..TN), run EXACT checks, STOP on first 🔴:
 1. **F0 position check:** Row T1 MUST have `Vertical Slice === F0` (unless H-OVERRIDE). If not → reorder T1 to F0 slice.
 2. **Layers count check:** Split `Layers Touched` on ` · ` → compute distinct set size. If `size < 2` AND ID does NOT contain `-H-OVERRIDE-` → 🔴 REJECT that individual task. Present 2 options verbatim:
-   > "(A) Add missing layer(s) to task to make it vertical (≥2 layers) / (B) Rename task ID to `<original-id>-H-OVERRIDE-<N>` and append decision via `che_append_decision_jsonl EXPLICIT_OVERRIDE_HORIZONTAL_PLAN` with 1-line justification ≤120 chars."
+   > "(A) Add missing layer(s) to task to make it vertical (≥2 layers) / (B) Rename task ID to `<original-id>-H-OVERRIDE-<N>` and append decision via `che decision_append "$WORKTREE_ROOT" EXPLICIT_OVERRIDE_HORIZONTAL_PLAN` with 1-line justification ≤120 chars."
 3. **F0 completeness check:** If row is F0 → compare layers to SPEC §4.5 F0 row. If mismatch → 🔴 WARN and ask user: "F0 in task-graph has layers [A·B] but SPEC §4.5 F0 has [A·B·C]. Proceed (extra layers added in exec) OR revise SPEC first?"
 4. **Consecutive single-layer scan:** If ≥3 CONSECUTIVE rows all have `Layers Touched size === 1` AND none have `-H-OVERRIDE-` → 🔴 HORIZONTAL STACK DETECTED. Block entire task-graph. User fix required: regroup into ≥2-layer slices OR add 1 global H-OVERRIDE to SPEC §2.
 5. **CAN #1 REVERSIBILITY — Wrapper Boundary Touched mandatory fill (G-REV-2):**
@@ -386,7 +387,7 @@ If `needs_gh_stack = TRUE` → Step B.
 **Step B — Build gh_stack_plan.md:**
 Group TASK GRAPH tasks into "PR layers" (semantic groups). Bottom = contracts/types/model. Top = UI/routes/integration tests. Write to `$GH_STACK_PLAN_PATH` (§0.2.1 preflight variable — durable area). Use atomic write:
 ```bash
-che_write_file_atomic "$GH_STACK_PLAN_PATH" <<'GHSTACK_EOF'
+che write_file_atomic "$GH_STACK_PLAN_PATH" <<'GHSTACK_EOF'
    ... content below ...
 GHSTACK_EOF
 ```
@@ -445,7 +446,7 @@ Rules:
        Options (pick ONE, do NOT default to C):
        (A) Re-group PR tasks: move the leaking files into a DIFFERENT PR whose scope EXCLUSIVELY touches files inside <W.authoritative_path> (i.e. PR = wrapper-only refactor). Best default.
        (B) If the raw import in <path> is INTENTIONAL (rare, e.g. boot-time SDK init in main.ts that is the ONE allowed entrypoint), annotate file-level: add block comment `/* CHE-REV-OVERRIDE: <SDK name> single-entrypoint-boot <reason ≤120 chars> */` on line 1-3 of the leaking file. Then log decision:
-           che_append_decision_jsonl "WRAPPER_LEAK_OVERRIDE" "PR=<order> SDK=${W.sdk_name} files=<comma paths> reason=<from comment safe escaped>"
+           che decision_append "$WORKTREE_ROOT" "WRAPPER_LEAK_OVERRIDE" "PR=<order> SDK=${W.sdk_name} files=<comma paths> reason=<from comment safe escaped>"
        (C) Add literal EXPLICIT_OVERRIDE_REVERSIBILITY in SPEC §2 (or re-run che-spec to insert it) + log. Use ONLY if this PR explicitly is the wrapper creation/extraction PR and boundary is still being bootstrapped.
        ```
      - After user picks A/B/C and situation is resolved → re-run Step B scan. All LEAKS must be 0 (or overridden) before plan is saved.
@@ -462,7 +463,7 @@ If A → set Status APPROVED + user date. Mark session.md: `gh-stack: APPROVED (
 If B → re-plan Step B until A.
 If C → mark: `gh-stack: DECLINED BY USER`. Use OFFICIAL HELPER:
 ```bash
-che_append_decision_jsonl "gh-stack-DECLINED" "user chose single PR for large scope <task-id> (N tasks, X est. files)"
+che decision_append "$WORKTREE_ROOT" "gh-stack-DECLINED" "user chose single PR for large scope <task-id> (N tasks, X est. files)"
 ```
 DO NOT delete file. Rewrite `$GH_STACK_PLAN_PATH` (atomic write) with updated first line: `Status: DECLINED BY USER`.
 
@@ -474,7 +475,7 @@ DO NOT delete file. Rewrite `$GH_STACK_PLAN_PATH` (atomic write) with updated fi
 
 Who does it: SM runs in QA mindset (or invokes che-qa).
 
-Output: `$TEST_SPEC_SMOKE_PATH` (§0.2.1 preflight variable — ONE file per feature/task. Durable area). Use atomic write: `che_write_file_atomic "$TEST_SPEC_SMOKE_PATH" <<'EOF' ... EOF`.
+Output: `$TEST_SPEC_SMOKE_PATH` (§0.2.1 preflight variable — ONE file per feature/task. Durable area). Use atomic write: `che write_file_atomic "$TEST_SPEC_SMOKE_PATH" <<'EOF' ... EOF`.
 
 ### 1.5.1 Content (5 mandatory bullets, ≤15 lines TOTAL):
 
@@ -523,7 +524,7 @@ Proceed to original **Phase 1-6 — Per-Task Serial Execution Loop**.
 1. Write per-task envelopes FIRST (all TODO tasks) for dispatcher.
 2. Write optional overridable dispatcher config to `$DISPATCHER_CONFIG_PATH` (§0.2.1 variable — outside worktree):
    ```bash
-   che_write_file_atomic "$DISPATCHER_CONFIG_PATH" <<'EOF'
+   che write_file_atomic "$DISPATCHER_CONFIG_PATH" <<'EOF'
    {"max_parallel": 3}
    EOF
    ```
@@ -537,7 +538,7 @@ Proceed to original **Phase 1-6 — Per-Task Serial Execution Loop**.
    > Confirm parallel execution via dispatcher? (yes / no → serial)
 4. If NO (serial fallback) → Phase 1-6 serial loop.
 5. If YES → call `che-executor-dispatcher` skill with context (worktree, task-id, task_graph, envelopes, max_parallel, dispatcher.config.json path).
-6. Dispatcher returns (all outside worktree via `che_output_path`):
+6. Dispatcher returns (all outside worktree via `che output_path`):
    - `$DISPATCHER_BATCHES_PATH` (§0.2.1)
    - `$MERGE_AUDIT_PATH_Tn` (per batch, §0.2.1)
    - `$DISPATCHER_BATCH_REPORT_PATH` (§0.2.1)
@@ -558,8 +559,8 @@ For EACH task in dependency order:
 
 Create per-task envelope using `references/TASK_ENVELOPE_TEMPLATE.md`. Construct path ONCE using canonical helper:
 ```bash
-TASK_ENVELOPE_PATH="$(che_output_path "task" "task-envelope" "T${TASK_ID}-${TASK_SLUG}" "workspace" "md")"
-che_write_file_atomic "$TASK_ENVELOPE_PATH" <<'ENVEOF'
+TASK_ENVELOPE_PATH="$(che output_path "task" "task-envelope" "T${TASK_ID}-${TASK_SLUG}" "workspace" "md")"
+che write_file_atomic "$TASK_ENVELOPE_PATH" <<'ENVEOF'
    ... envelope content ...
 ENVEOF
 ```
@@ -615,13 +616,13 @@ Call `che-compliance` with `stage: final`. Scans ENTIRE worktree diff.
 
 ### 3.2 Generate MANUAL_TEST_PLAN.md
 
-Create at `$MANUAL_TEST_PLAN_PATH` (§0.2.1 preflight variable — durable). Use atomic write: `che_write_file_atomic "$MANUAL_TEST_PLAN_PATH" <<'EOF' ... EOF`.
+Create at `$MANUAL_TEST_PLAN_PATH` (§0.2.1 preflight variable — durable). Use atomic write: `che write_file_atomic "$MANUAL_TEST_PLAN_PATH" <<'EOF' ... EOF`.
 Path = `$CHE_WORKSPACE_SHARED/qa/<slug>/YYYYMMDD-HHMMSS-manual-test-plan.md`. NEVER inside worktree.
 Must have: AC sections, GIVEN/WHEN/THEN, expected result per step, rollback/smoke checklist.
 
 ### 3.3 Generate FINAL_SUMMARY.md
 
-Create at `$FINAL_SUMMARY_PATH` (§0.2.1 preflight variable — ephemeral). Use atomic write: `che_write_file_atomic "$FINAL_SUMMARY_PATH" <<'EOF' ... EOF`.
+Create at `$FINAL_SUMMARY_PATH` (§0.2.1 preflight variable — ephemeral). Use atomic write: `che write_file_atomic "$FINAL_SUMMARY_PATH" <<'EOF' ... EOF`.
 Path = `$CHE_SESSION_DIR/summary/<slug>/YYYYMMDD-HHMMSS-session-final.md`. NEVER inside worktree.
 
 ```markdown
@@ -671,7 +672,7 @@ Print concise English summary:
 ## Appendix A: Mandatory checkpoints (never skip)
 
 - [ ] Preflight: worktree path confirmed
-- [ ] Preflight: `che_compute_paths` + `che_ensure_session_dirs` executed WITHOUT CONTRACT VIOLATION (all paths OUTSIDE worktree)
+- [ ] Preflight: `che compute_paths` + `che ensure_dirs` executed WITHOUT CONTRACT VIOLATION (all paths OUTSIDE worktree)
 - [ ] Scope capture: ACs explicit and user-approved
 - [ ] TASK GRAPH: user approved or provided
 - [ ] Per task: ENVELOPE written with blast radius + DONE criteria

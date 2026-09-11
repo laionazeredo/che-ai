@@ -40,7 +40,7 @@ The installer and the CLI target **POSIX bash/zsh userlands only**.
 | OS | Support | Notes |
 | :- | :------ | :---- |
 | **Linux** (any distro, GNU coreutils + bash ≥ 4.4 + python3 ≥ 3.9) | ✅ Fully supported. Primary target. | `apt` / `dnf` / `pacman` / `nix`. |
-| **macOS** (Monterey / 12+, zsh or bash via Homebrew) | ✅ Fully supported. | Use `brew install pipx git python@3.12`. File paths inside `~/.trae` are case-insensitive on APFS by default — don't rely on case-only folder names. |
+| **macOS** (Monterey / 12+, zsh or bash via Homebrew) | ✅ Fully supported. | Use `brew install pipx git python@3.12`. File paths inside `~/.che-ai` are case-insensitive on APFS by default — don't rely on case-only folder names. |
 | **Windows PowerShell / CMD** | ❌ Not supported. | Use **WSL2 with Ubuntu 22.04 LTS** (recommended), then run the installer from inside the WSL Ubuntu shell. Claude Code on Windows supports WSL remotes natively, so the workflow is transparent after setup. |
 
 #### WSL2 walkthrough for Windows users
@@ -55,9 +55,9 @@ The installer and the CLI target **POSIX bash/zsh userlands only**.
    ```
 4. Continue with the Quick Install Script below.
 
-### 1.1 Quick Install Script (recommended, installs `~/.trae` + CLI)
+### 1.1 Quick Install Script (recommended, installs `~/.che-ai` + CLI)
 
-Runs the full installer: backs up any existing `~/.trae`, copies the official whitelist, re-injects the planning-artifacts `.gitignore` snippet into client repos you touch, **and installs the `che` / `che-ai` CLI binaries globally via `pipx`** (fallback `pip install --user` if pipx is not available — with a loud warning telling you to install pipx).
+Runs the full installer: backs up any existing `~/.che-ai`, symlinks the official whitelist into every supported IDE adapter home, re-injects the planning-artifacts `.gitignore` snippet into client repos you touch, **and installs the `che` / `che-ai` CLI binaries globally via `pipx`** (fallback `pip install --user` if pipx is not available — with a loud warning telling you to install pipx).
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.sh | bash -s -- --apply
@@ -71,10 +71,10 @@ curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/in
 
 ### 1.2 CLI-only — pipx (user-level, isolated)
 
-If you already have a `~/.trae` folder from a previous install and just want to install / upgrade the binaries:
+If you already have a `~/.che-ai` folder from a previous install and just want to install / upgrade the binaries:
 
 ```bash
-cd ~/.trae                               # path where che-ai lives
+cd ~/.che-ai                              # path where che-ai lives
 pipx install -e . --force                # editable = updates to source immediately reflected
 
 which che-ai      # → ~/.local/bin/che-ai
@@ -88,7 +88,7 @@ This is the **canonical and safest** install for end-user machines. It creates a
 Only inside Docker, CI runners, or throwaway containers. Do **not** use on your developer workstation.
 
 ```bash
-cd ~/.trae
+cd ~/.che-ai
 pip install -e . --break-system-packages
 ```
 
@@ -98,7 +98,7 @@ pip install -e . --break-system-packages
 pipx uninstall che-ai
 # or
 pip uninstall che-ai
-# Then optionally delete ~/.trae
+# Then optionally delete ~/.che-ai
 ```
 
 ---

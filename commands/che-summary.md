@@ -9,7 +9,7 @@ arguments:
 Lightweight inline command (no Skill needed):
 
 1. If worktree missing → ASK.
-2. Locate active `.trae/<task-id>/` folder.
+2. Locate the active session folder via `eval "$(che compute_paths WORKTREE_ROOT SESSION_ID)"` → `$CHE_SESSION_DIR/` (OUTSIDE the worktree; never `.trae/`).
 3. Assemble interim summary using the final_summary structure:
    - Task context + worktree
    - What's DONE so far (with file references)

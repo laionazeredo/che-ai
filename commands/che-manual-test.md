@@ -5,7 +5,7 @@ arguments:
     description: "Absolute worktree path (REQUIRED). If missing → ASK."
     required: false
   - name: task-id
-    description: "Task slug inside worktree/.trae/. Looks for manual_test_plan.md there. Use this OR --plan-path."
+    description: "Task slug inside $CHE_WORKSPACE_SHARED/tasks/ (resolved via `che compute_paths`). Looks for manual_test_plan.md there. Use this OR --plan-path."
     required: false
   - name: plan-path
     description: "Absolute path to manual_test_plan.md file. Use this OR --task-id."

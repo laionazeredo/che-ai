@@ -1,7 +1,7 @@
 # MANUAL TEST PLAN TEMPLATE
 
 > Created by Scrum Master after all tasks are DONE and both Compliance stages passed.
-> Resolve ALL paths via `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh" && che_compute_paths WORKTREE_ROOT`. NEVER inside `<WORKTREE_ROOT>/.trae/*`.
+> Resolve ALL paths via the `che` CLI: `eval "$(che compute_paths WORKTREE_ROOT SESSION_ID)"`. NEVER inside `<WORKTREE_ROOT>/.trae/*`.
 > File location: `$CHE_WORKSPACE_SHARED/manual_test_plan.md` (durable; shared across sessions for same worktree)
 > Purpose: step-by-step human or automated-click verification of every acceptance criterion.
 > Language: English (per che rules). User communication about this plan is in Portuguese.

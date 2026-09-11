@@ -11,6 +11,7 @@ from che_core.paths import compute_paths, ensure_session_dirs
 
 BLACKLIST_PATTERNS = [
     ".trae/**",
+    ".che-ai/**",
     "decisions.log.jsonl",
     "decisions.log.md",
     "decisions.log",

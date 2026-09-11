@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CLAUDE_HOME="${CLAUDE_HOME:-$HOME/.claude}"
-SKILLS_TARGET="$CLAUDE_HOME/skills"
-COMMANDS_TARGET="$CLAUDE_HOME/commands"
+CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+SKILLS_TARGET="$CLAUDE_CONFIG_DIR/skills"
+COMMANDS_TARGET="$CLAUDE_CONFIG_DIR/commands"
 
 echo "Uninstalling Claude Code Che adapter..."
 
 # Remove AGENTS.md if it's a symlink
-if [ -L "$CLAUDE_HOME/CLAUDE.md" ]; then
-  rm "$CLAUDE_HOME/CLAUDE.md"
-  if [ -e "$CLAUDE_HOME/CLAUDE.md.bak" ]; then
-    mv "$CLAUDE_HOME/CLAUDE.md.bak" "$CLAUDE_HOME/CLAUDE.md"
+if [ -L "$CLAUDE_CONFIG_DIR/CLAUDE.md" ]; then
+  rm "$CLAUDE_CONFIG_DIR/CLAUDE.md"
+  if [ -e "$CLAUDE_CONFIG_DIR/CLAUDE.md.bak" ]; then
+    mv "$CLAUDE_CONFIG_DIR/CLAUDE.md.bak" "$CLAUDE_CONFIG_DIR/CLAUDE.md"
   fi
 fi
 
@@ -26,7 +26,7 @@ if [ -d "$COMMANDS_TARGET" ]; then
 fi
 
 # Remove hooks from settings.json
-SETTINGS_PATH="$CLAUDE_HOME/settings.json"
+SETTINGS_PATH="$CLAUDE_CONFIG_DIR/settings.json"
 if [ -f "$SETTINGS_PATH" ]; then
   python3 - "$SETTINGS_PATH" <<'PY'
 import json
