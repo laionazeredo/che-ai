@@ -7,11 +7,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from che_core.paths import resolve_che_home
+
 CHE_REPO_BLACKLIST_DIRS = ("user_rules", "memory", "node_modules", ".git", "bindings")
 CHE_REPO_BLACKLIST_FILES = ("bindings/registry.jsonl",)
 
 DEFAULT_TRASH_ROOT = Path.home() / ".che-workspaces" / ".trash" / "che-eject"
-CHE_HOME_CANDIDATES = (Path.home() / ".trae",)
 
 GITIGNORE_MARKER_BEGIN = "# >>> CHE PLANNING ARTIFACTS BLACKLIST BEGIN (DO NOT EDIT MANUALLY)"
 GITIGNORE_MARKER_END = "# <<< CHE PLANNING ARTIFACTS BLACKLIST END"
@@ -31,11 +32,16 @@ def _resolve_che_home(che_home: Optional[Path] = None) -> Path:
         if not _is_che_home(che_home):
             raise ValueError(f"Provided che_home is not a valid Che directory: {che_home}")
         return che_home
-    for cand in CHE_HOME_CANDIDATES:
+    # Canonical cascade (single source of truth: che_core.paths.resolve_che_home),
+    # then a last-resort legacy probe so ~/.trae-only installs keep resolving.
+    for cand in (resolve_che_home(), Path.home() / ".trae"):
         cand = cand.expanduser().resolve()
         if _is_che_home(cand):
             return cand
-    raise FileNotFoundError("No Che directory (~/.trae) found. Use --che-home /path/to/.trae to provide it explicitly.")
+    raise FileNotFoundError(
+        "No Che checkout found. Looked at $CHE_HOME, $HARNESS_HOME, ~/.che-ai and ~/.trae. "
+        "Use --che-home /path/to/checkout to provide it explicitly."
+    )
 
 
 def _detect_install_kind(che_home: Path) -> str:
@@ -286,7 +292,7 @@ def eject_plan(
                 "script": str(info["uninstall_script"]),
             }
         )
-    # Step 2: ~/.trae destino (git clone vs copy)
+    # Step 2: Che home destination (git clone vs copy)
     if install_kind == "git-clone":
         if keep_git_repo:
             plan["what_will_happen"].append(
@@ -294,7 +300,7 @@ def eject_plan(
                     "step": "eject-che-home",
                     "kind": "keep-as-regular-repo",
                     "note": (
-                        "Keeping ~/.trae as a regular directory (remains your own git repo). "
+                        f"Keeping {che_home} as a regular directory (remains your own git repo). "
                         "To remove the global Trae hook: Settings → Rules → remove "
                         "references to AGENTS.md and user_rules."
                     ),

@@ -1,7 +1,7 @@
 # BUGFIX SESSION TEMPLATE
 
 > Used by che-debugger-bugfix for a bug fix session.
-> Location: `$CHE_SESSION_DIR/bugfix_session.md` (resolved via `che_compute_paths`; NEVER inside `<WORKTREE_ROOT>/.trae/`)
+> Location: `$CHE_SESSION_DIR/bugfix_session.md` (resolved via `che compute_paths`; NEVER inside `<WORKTREE_ROOT>/.trae/`)
 > Append-only across iterations.
 
 ---
@@ -177,4 +177,4 @@ Before/after comparison (screenshots / HTTP response diffs if applicable):
 
 ### Decision log entries during this session
 
-(Reference decisions appended to `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` — durable shared dir; NEVER inside worktree. Resolve via `che_decisions_path` helper.)
+(Reference decisions appended to `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` — durable shared dir; NEVER inside worktree. Path resolved via `$CHE_DECISIONS_PATH`, exported by `che compute_paths`.)

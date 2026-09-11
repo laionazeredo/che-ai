@@ -29,7 +29,7 @@ If any precondition fails → report exactly which, stop execution, ask user.
 
 ### 0.6 gh-stack mode detection (N4 hierarchical PR stack)
 
-1. Check if file exists: `$CHE_WORKSPACE_SHARED/gh_stack_plan.md` (via `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"`).
+1. Check if file exists: `$CHE_WORKSPACE_SHARED/gh_stack_plan.md` (`$CHE_WORKSPACE_SHARED` is exported by `che compute_paths`; see §0.7.1 preflight).
 2. If it exists:
    - Read it. Validate it has a field `Status: APPROVED` at the top.
    - Check `gh` extension installed: run `gh extension list 2>/dev/null | grep -i "stack"` silently.
@@ -42,11 +42,11 @@ If any precondition fails → report exactly which, stop execution, ask user.
 
 Run BEFORE any `git status / git add / git commit / git push`. PREVENTS wrong-worktree commits.
 
-1. **Level 1 Global Index (AUTHORITY):** Read `che_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `che_current_session_id`. Extract WORKTREE_ROOT from that entry.
+1. **Level 1 Global Index (AUTHORITY):** Read `$CHE_REGISTRY_PATH`. Find LAST STATUS=BOUND entry using the effective session id from `${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}}`. Extract WORKTREE_ROOT from that entry.
    - If NO entry: SHIP BLOCKED NOW. Ask "No Level1 binding for this session. Create before ship? (A = Select worktree; B = Cancel ship)." NEVER ship unbound.
    - If found BOUND entry: confirm WORKTREE_ROOT from registry **MUST EQUAL** WORKTREE_ROOT precondition 1.
    - MISMATCH → **BLOCK SHIP NOW.** Ask: "Level 1 GLOBAL registry binding says worktree = X, ship was invoked on Y. Which one actually ships? (A = X per binding; B = Y override binding + rebind; C = Cancel ship)." Never silent-continue.
-2. **Level 2 Detail File (optional audit):** Verify `$CHE_SESSION_DIR/binding.md` exists (via `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"`). If missing → warn decision.log entry (SM skipped Level 2 write). Do NOT block ship (Level 1 is the authority).
+2. **Level 2 Detail File (optional audit):** Verify `$CHE_SESSION_DIR/binding.md` exists (`$CHE_SESSION_DIR` is exported by `che compute_paths` — see §0.7 preflight). If missing → warn decision.log entry (SM skipped Level 2 write). Do NOT block ship (Level 1 is the authority).
 3. **Scissor check staging + file ops:**
    - EVERY file staged/committed → path MUST start with WORKTREE_ROOT from Level1 registry.
    - Generated files under `$CHE_SESSIONS_ROOT/**` are NEVER staged; they live outside user code by design.
@@ -98,7 +98,7 @@ If the script reports tracked files (exit code 2), present options (A or B) to t
 **Purpose:** Ensure that what is about to be committed (1) delivers EVERYTHING promised in the scope and (2) has no overengineering / bloat / YAGNI violations. Executes the `che-scope-checker` skill in Mode B.
 
 **Internal precondition of this gate:**
-- `$CHE_WORKSPACE_SHARED` resolved via `source "${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che_sessions_contract.sh"`.
+- `$CHE_WORKSPACE_SHARED` is exported by `che compute_paths` (see §0.7.1 preflight).
 
 **Scope source auto-discover order (first match wins — DOES NOT cascade multiple sources):**
 1. **Explicit envelope** → does `$CHE_WORKSPACE_SHARED/tasks/*/envelope.md` exist? (last DONE task in task_graph, take its envelope) → SCOPE_SOURCE=ENVELOPE.
@@ -125,7 +125,7 @@ If the script reports tracked files (exit code 2), present options (A or B) to t
 
 **Output artifacts:**
 - `$SHIP_SCOPE_CHECK_REPORT` — full 6-checks report with SCOPE × LEAN final score. Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-scope-check.md` (sorted by timestamp prefix, grouped by related worktree).
-- Decision log entry via official helper: `che_append_decision_jsonl "SHIP_GATE_0_9_1" "verdict=${verdict} score=${final_score} source=${SCOPE_SOURCE} report=${SHIP_SCOPE_CHECK_REPORT}"`.
+- Decision log entry via official helper: `che decision_append "$WORKTREE_ROOT" "SHIP_GATE_0_9_1" "verdict=${verdict} score=${final_score} source=${SCOPE_SOURCE} report=${SHIP_SCOPE_CHECK_REPORT}"`.
 - NO artifact is created inside `<WORKTREE_ROOT>` (assert outside helper already locks exit 99 if path lands there; §0.8 blacklist ensures redundant cleanup).
 
 ---
@@ -203,7 +203,7 @@ git commit -m "fix(review): auto-remediate code review HIGH findings ($N_FIXED/$
 **2.A.4 — Post-commit:**
 - Decision log entry via official helper:
   ```bash
-  che_append_decision_jsonl "SHIP_GATE_0_9_2" "verdict=AUTO_REMEDIATED_PASSED critical=0 high=${N_TOTAL_HIGH} auto_applied=${N_FIXED} auto_failed=${Y} report=${SHIP_CODE_REVIEW_REPORT}"
+  che decision_append "$WORKTREE_ROOT" "SHIP_GATE_0_9_2" "verdict=AUTO_REMEDIATED_PASSED critical=0 high=${N_TOTAL_HIGH} auto_applied=${N_FIXED} auto_failed=${Y} report=${SHIP_CODE_REVIEW_REPORT}"
   ```
 - **PROCEED IMMEDIATELY TO GATE §0.9.3.** DO NOT RETURN to normal §1 Git Housekeeping. Special commit already done. Normal §1 will run and account only for remaining changes (if any).
 
@@ -239,8 +239,8 @@ If user chooses B (override):
 
 **Output artifacts gate 0.9.2:**
 - `$SHIP_CODE_REVIEW_REPORT` — full findings report. Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-code-review.md` (sorted, grouped).
-- Decision log entries via `che_append_decision_jsonl` helper according to Branch A or B.
-- Branch B: If OVERRIDE, each overridden finding uses: `che_append_decision_jsonl "REVIEW_OVERRIDE" "finding_id=${id} justification=${text}"`.
+- Decision log entries via `che decision_append` helper according to Branch A or B.
+- Branch B: If OVERRIDE, each overridden finding uses: `che decision_append "$WORKTREE_ROOT" "REVIEW_OVERRIDE" "finding_id=${id} justification=${text}"`.
 - Branch A has 1 new commit in worktree prefixed `fix(review): auto-remediate...`.
 
 ---
@@ -273,7 +273,7 @@ If user chooses B (override):
 
 **Output artifacts:**
 - `$SHIP_COMPLIANCE_HEAVY_REPORT` — full scan report. Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-compliance-heavy.md` (sorted, grouped).
-- Decision log entry via official helper: `che_append_decision_jsonl "SHIP_GATE_0_9_3" "verdict=${verdict} critical=${critical_count} high=${high_count} categories=${#scan_categories_ran} report=${SHIP_COMPLIANCE_HEAVY_REPORT}"`.
+- Decision log entry via official helper: `che decision_append "$WORKTREE_ROOT" "SHIP_GATE_0_9_3" "verdict=${verdict} critical=${critical_count} high=${high_count} categories=${#scan_categories_ran} report=${SHIP_COMPLIANCE_HEAVY_REPORT}"`.
 
 ---
 
@@ -288,7 +288,7 @@ If user chooses B (override):
 4. **DEFAULT** (no QA flag) → **PROFILE_MINIMAL** (only affected unit/integ tests, ~30s-2min)
 
 **When skipped (ONLY path 1):**
-- If `--skip-qa` present AND EXPLICIT_OVERRIDE `QA_SKIP` recorded via `che_append_decision_jsonl "SHIP_GATE_0_9_4_OVERRIDE" "verbatim=<user justification>"` → SKIP, proceed to §1.
+- If `--skip-qa` present AND EXPLICIT_OVERRIDE `QA_SKIP` recorded via `che decision_append "$WORKTREE_ROOT" "SHIP_GATE_0_9_4_OVERRIDE" "verbatim=<user justification>"` → SKIP, proceed to §1.
 - **ANY OTHER skip path (without logged override) → BLOCKS SHIP.**
 
 **Profile specs (stack-detect execution):**
@@ -300,7 +300,7 @@ Automatically detects monorepo stack (attempt order):
    | 🟢 **MINIMAL (default)** | `cd "$WORKTREE_ROOT" && corepack pnpm nx affected:test --tui false --exclude=e2e 2>&1` (only unit/integ tests AFFECTED by dirty files — NO typecheck, NO lint, NO playwright/e2e) | ~30s-2min monorepo |
    | 🟡 **NORMAL (--qa=normal)** | `cd "$WORKTREE_ROOT" && { echo "===== QA GATE NORMAL: typecheck $(date -Iseconds) ====="; corepack pnpm nx affected:typecheck --tui false 2>&1; echo "===== QA GATE NORMAL: lint $(date -Iseconds) ====="; corepack pnpm nx affected:lint --tui false 2>&1; echo "===== QA GATE NORMAL: test $(date -Iseconds) ====="; corepack pnpm nx affected:test --tui false --exclude=e2e 2>&1; }` — affected: typecheck + lint + unit/integ tests | ~1-3min monorepo |
    | 🔴 **FULL (--qa=full)** | `cd "$WORKTREE_ROOT" && { echo "===== QA GATE FULL: typecheck $(date -Iseconds) ====="; corepack pnpm nx run-many --target=typecheck --tui false 2>&1; echo "===== QA GATE FULL: lint $(date -Iseconds) ====="; corepack pnpm nx run-many --target=lint --tui false 2>&1; echo "===== QA GATE FULL: unit+integ tests $(date -Iseconds) ====="; corepack pnpm nx run-many --target=test --tui false 2>&1; echo "===== QA GATE FULL: E2E tests $(date -Iseconds) ====="; corepack pnpm nx run-many --target=e2e --tui false 2>&1; }` — all: typecheck+lint+unit+integ+e2e+playwright | ~5-15min monorepo |
-   Every output from any profile is recorded via pipe: `| che_write_file_atomic "$SHIP_QA_GATE_LOG"`
+   Every output from any profile is recorded via pipe: `| che write_file_atomic "$SHIP_QA_GATE_LOG"`
 
 2. **Generic pnpm/npm/yarn (no Nx)** → `package.json` exists:
    - MINIMAL: heuristic find matching test files: `grep` diff paths → run only `*.test.*` / `*.spec.*` files matching changed file dirs via `corepack pnpm vitest run <matched_paths>` (no typecheck, no lint)
@@ -318,8 +318,8 @@ Automatically detects monorepo stack (attempt order):
   - (B) Override (REQUIRE user verbatim EXPLICIT_OVERRIDE text justifying WHY failing typecheck/lint/test MUST SHIP now — recorded in decision.log; override only allowed if (i) failure count is ≤2 known FLAKY tests AND (ii) justification cites an issue/ticket).
 
 **Output artifacts:**
-- `$SHIP_QA_GATE_LOG` — concatenated stdout of selected profile. Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-qa-gate.log` (sortable timestamp, grouped). Atomic write via `che_write_file_atomic` stdin pipe.
-- Decision log entry via helper: `che_append_decision_jsonl "SHIP_GATE_0_9_4" "verdict=${verdict} profile=${MINIMAL|NORMAL|FULL} tc_status=${status} lint_status=${status} test_status=${status} e2e_status=${status|N/A} override_logged=${yes|no} log=${SHIP_QA_GATE_LOG} evidence_manifest_sha256=${QA_EVIDENCE_MANIFEST_SHA:-N/A} evidence_workspace_path=${QA_EVIDENCE_MANIFEST_PATH:-N/A}"`.
+- `$SHIP_QA_GATE_LOG` — concatenated stdout of selected profile. Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-ship-qa-gate.log` (sortable timestamp, grouped). Atomic write via `che write_file_atomic` stdin pipe.
+- Decision log entry via helper: `che decision_append "$WORKTREE_ROOT" "SHIP_GATE_0_9_4" "verdict=${verdict} profile=${MINIMAL|NORMAL|FULL} tc_status=${status} lint_status=${status} test_status=${status} e2e_status=${status|N/A} override_logged=${yes|no} log=${SHIP_QA_GATE_LOG} evidence_manifest_sha256=${QA_EVIDENCE_MANIFEST_SHA:-N/A} evidence_workspace_path=${QA_EVIDENCE_MANIFEST_PATH:-N/A}"`.
 
 ---
 
@@ -334,34 +334,34 @@ Execution steps (fixed order):
 1. **Resolve `effective_domain`:** Read SPEC (same path as gate 0.9.1 scope) YAML `domain:` + fallback project registry `domains[]`. If both null/missing → `effective_domain = engineering`.
 2. **IF `effective_domain === 'engineering'` → **SKIP GATE 5 COMPLETELY AND SILENTLY (0 log lines, 0 extra output).** Old sessions/specs WITHOUT `domain:` field have IDENTICAL behaviour to original v2. 100% backward compat guaranteed.
 3. **IF `effective_domain !== 'engineering':`**
-   a. **Check folder exists:** `${CHE_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/` → MUST exist. Does not exist → **WARN "Domain <slug> has no gates implemented yet (phase 2 rollout). Skip §0.9.5."** Log decision entry helper:
+   a. **Check folder exists:** `${CHE_HOME:-$HOME/.che-ai}/domains/<effective_domain>/gates/` → MUST exist. Does not exist → **WARN "Domain <slug> has no gates implemented yet (phase 2 rollout). Skip §0.9.5."** Log decision entry helper:
       ```bash
-      che_append_decision_jsonl "DOMAIN-GATES-WARN" "domain=${effective_domain} reason=no-gates-folder phase-2-rollout skip=TRUE"
+      che decision_append "$WORKTREE_ROOT" "DOMAIN-GATES-WARN" "domain=${effective_domain} reason=no-gates-folder phase-2-rollout skip=TRUE"
       ```
       Proceed §0.9.6 ALL GATES PASSED normally.
-   b. **Glob + sort alphabetical gate files:** `${CHE_HOME:-$HOME/.trae}/domains/<effective_domain>/gates/*.md`. Execution order = filename alphabetical order (same as G1→G2→G3→G4 convention). UX example: `accessibility-gate.md` executes BEFORE `pixel-check-gate.md`.
+   b. **Glob + sort alphabetical gate files:** `${CHE_HOME:-$HOME/.che-ai}/domains/<effective_domain>/gates/*.md`. Execution order = filename alphabetical order (same as G1→G2→G3→G4 convention). UX example: `accessibility-gate.md` executes BEFORE `pixel-check-gate.md`.
    c. **For EACH gate file (0.9.5.1, 0.9.5.2, ...):**
       - Parse file YAML frontmatter: `threshold_pass`, `retry_policy`, `log_format_decisions`, `tool_official`.
       - If frontmatter missing → FAIL gate immediately: "Gate <filename> has no declared YAML threshold frontmatter. Invalid domain."
       - **Build report path PER gate using helper (one JSON file per gate, sorted, grouped):**
         ```bash
         GATE_BASENAME="$(basename "$gate_file" .md)"
-        DOMAIN_GATE_REPORT="$(che_output_path "${SHIP_DOMAIN_GATE_REPORT_TEMPLATE_TYPE}" "domain-gate-${effective_domain}-${GATE_BASENAME}" "${RELATED_ID}" "${SHIP_DOMAIN_GATE_REPORT_TEMPLATE_SCOPE}" "json")"
+        DOMAIN_GATE_REPORT="$(che output_path "${SHIP_DOMAIN_GATE_REPORT_TEMPLATE_TYPE}" "domain-gate-${effective_domain}-${GATE_BASENAME}" "${RELATED_ID}" "${SHIP_DOMAIN_GATE_REPORT_TEMPLATE_SCOPE}" "json")"
         ```
-      - **Run gate evaluation (automatic):** Follow EXACTLY the steps listed in `domains/<slug>/gates/<name>.md` "Execution" section. Record all gate output in JSON report via `che_write_file_atomic "$DOMAIN_GATE_REPORT"` (atomic write, guaranteed outside worktree). If gate uses an official tool via §21 External Connectors (P1 MCP or P2 CLI): ALWAYS use P1→P2 order channels; NEVER raw curl/fetch.
+      - **Run gate evaluation (automatic):** Follow EXACTLY the steps listed in `domains/<slug>/gates/<name>.md` "Execution" section. Record all gate output in JSON report via `che write_file_atomic "$DOMAIN_GATE_REPORT"` (atomic write, guaranteed outside worktree). If gate uses an official tool via §21 External Connectors (P1 MCP or P2 CLI): ALWAYS use P1→P2 order channels; NEVER raw curl/fetch.
       - `PASS condition`: `threshold_pass` frontmatter satisfied NUMERICALLY (e.g. `score >= 8.0`, `critical_count === 0`). If string → FAIL.
       - Verdict:
         | 1st round gate result | Action |
         |---|---|
-        | 🟢 PASS threshold | ✅ Passes this gate. Decision log helper: `che_append_decision_jsonl "DOMAIN-GATE-EXECUTED" "domain=${effective_domain} gate=${GATE_BASENAME} status=PASS score=${score} duration_ms=${ms} report=${DOMAIN_GATE_REPORT}"`. Next gate. |
-        | 🔴 FAIL threshold (1st time) | **AUTOMATIC FREE Retry = 1 single round:** Apply recommended steps in gate file "Retry Policy" section (e.g. "fix top-3 deviations >4px", "fix missing alt"). Re-run gate 1 NEW time. Decision log helper for retry: `che_append_decision_jsonl "DOMAIN-GATE-RETRY" "domain=${effective_domain} gate=${GATE_BASENAME} score_before=${sb} retry=1"`. |
-        | 🔴 FAIL threshold AFTER automatic retry = 2nd failure | **HARD STOP §0.9.5 DOMAIN GATES.** Does not open PR. Does not commit. Does not proceed to §0.9.6. Decision log HELPER with details: `che_append_decision_jsonl "DOMAIN-GATE-HARD-FAIL" "domain=${effective_domain} gate=${GATE_BASENAME} threshold=${orig} score_now=${sn} report=${DOMAIN_GATE_REPORT}"`. Show standardised message to user. |
-   d. **After all gates PASS or explicit override logged:** All gates passed OR user gave verbatim EXPLICIT_OVERRIDE logged in decisions → Log FINAL gate 5 entry HELPER: `che_append_decision_jsonl "DOMAIN-GATES-ALL-PASSED" "domain=${effective_domain} n_gates=${N} overrides=${COUNT} duration_total_ms=${ms}"`. Proceed §0.9.6.
-4. **EXPLICIT_OVERRIDE rules (same as G2 code-review today):** Threshold is NEVER lowered automatically by agent. ONLY allowed if user LITERALLY typed "EXPLICIT_OVERRIDE domain=<slug> gate=<X> old=<threshold> new=<n> reason=<TEXT>" in chat. In this condition: log HELPER entry `che_append_decision_jsonl "EXPLICIT_OVERRIDE" "domain=${effective_domain} gate=${GATE_BASENAME} old=${OLD} new=${NEW} reason=${TEXT} trace_id=${TRACE_ID}"` and mark gate as "PASS (WITH OVERRIDE)". No other bypass form exists. Do not trust "seems OK".
+        | 🟢 PASS threshold | ✅ Passes this gate. Decision log helper: `che decision_append "$WORKTREE_ROOT" "DOMAIN-GATE-EXECUTED" "domain=${effective_domain} gate=${GATE_BASENAME} status=PASS score=${score} duration_ms=${ms} report=${DOMAIN_GATE_REPORT}"`. Next gate. |
+        | 🔴 FAIL threshold (1st time) | **AUTOMATIC FREE Retry = 1 single round:** Apply recommended steps in gate file "Retry Policy" section (e.g. "fix top-3 deviations >4px", "fix missing alt"). Re-run gate 1 NEW time. Decision log helper for retry: `che decision_append "$WORKTREE_ROOT" "DOMAIN-GATE-RETRY" "domain=${effective_domain} gate=${GATE_BASENAME} score_before=${sb} retry=1"`. |
+        | 🔴 FAIL threshold AFTER automatic retry = 2nd failure | **HARD STOP §0.9.5 DOMAIN GATES.** Does not open PR. Does not commit. Does not proceed to §0.9.6. Decision log HELPER with details: `che decision_append "$WORKTREE_ROOT" "DOMAIN-GATE-HARD-FAIL" "domain=${effective_domain} gate=${GATE_BASENAME} threshold=${orig} score_now=${sn} report=${DOMAIN_GATE_REPORT}"`. Show standardised message to user. |
+   d. **After all gates PASS or explicit override logged:** All gates passed OR user gave verbatim EXPLICIT_OVERRIDE logged in decisions → Log FINAL gate 5 entry HELPER: `che decision_append "$WORKTREE_ROOT" "DOMAIN-GATES-ALL-PASSED" "domain=${effective_domain} n_gates=${N} overrides=${COUNT} duration_total_ms=${ms}"`. Proceed §0.9.6.
+4. **EXPLICIT_OVERRIDE rules (same as G2 code-review today):** Threshold is NEVER lowered automatically by agent. ONLY allowed if user LITERALLY typed "EXPLICIT_OVERRIDE domain=<slug> gate=<X> old=<threshold> new=<n> reason=<TEXT>" in chat. In this condition: log HELPER entry `che decision_append "$WORKTREE_ROOT" "EXPLICIT_OVERRIDE" "domain=${effective_domain} gate=${GATE_BASENAME} old=${OLD} new=${NEW} reason=${TEXT} trace_id=${TRACE_ID}"` and mark gate as "PASS (WITH OVERRIDE)". No other bypass form exists. Do not trust "seems OK".
 
 **Output artifacts gate 0.9.5:**
-- 1 decision.log entry PER executed gate (PASS/FAIL/RETRY/OVERRIDE), **all via official `che_append_decision_jsonl` helper.**
-- Report per gate: `$DOMAIN_GATE_REPORT` (1 JSON file per gate, dynamically built via `che_output_path` inside loop). Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-domain-gate-<dom>-<name>.json` (timestamp prefix = sorted; all files of same ship stay in SAME `report/ship-<wt-slug>/` subfolder → easy to search glob `**/ship-<slug>/*`).
+- 1 decision.log entry PER executed gate (PASS/FAIL/RETRY/OVERRIDE), **all via official `che decision_append` helper.**
+- Report per gate: `$DOMAIN_GATE_REPORT` (1 JSON file per gate, dynamically built via `che output_path` inside loop). Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-domain-gate-<dom>-<name>.json` (timestamp prefix = sorted; all files of same ship stay in SAME `report/ship-<wt-slug>/` subfolder → easy to search glob `**/ship-<slug>/*`).
 
 **Blacklist check:** Reports are 100% in `$CHE_WORKSPACE_SHARED/report/<related_id>/` (helper guaranteed outside assert). §0.8 + §2.2 continue to ensure no report/diff artifact/decisions log enters user commit diff.
 
@@ -379,7 +379,7 @@ Proceeding to Git Housekeeping §1 → atomic conventional commit → push → o
 
 Append FINAL entry via official decision log helper:
 ```bash
-che_append_decision_jsonl "ALL_SHIP_GATES_PASSED" "gates=[0.9.1,0.9.2,0.9.3,0.9.4,0.9.5] scores_scope=${score} effective_domain=${effective_domain} related_id=${RELATED_ID}"
+che decision_append "$WORKTREE_ROOT" "ALL_SHIP_GATES_PASSED" "gates=[0.9.1,0.9.2,0.9.3,0.9.4,0.9.5] scores_scope=${score} effective_domain=${effective_domain} related_id=${RELATED_ID}"
 ```
 
 **Post-gates blacklist reminder:** All reports above were written EXCLUSIVELY in `$CHE_WORKSPACE_SHARED/report/${RELATED_ID}/YYYYMMDD-HHMMSS-*.{md,log,json}` (centralised helper built all paths). §0.8 blacklist stage 1-2 already ran and will continue to run in §2.2 before each commit to ensure NONE of these reports or decision artifacts accidentally enter user diff.
@@ -448,7 +448,7 @@ Run each commit:
 ```
 # BEFORE every commit: unstage ANY blacklisted files that somehow re-entered the index.
 git reset HEAD -- \
-  .trae  decisions.log.jsonl  decisions.log.md  decisions.log \
+  .trae  .che-ai  decisions.log.jsonl  decisions.log.md  decisions.log \
         decision.log.jsonl   decision.log.md   decision.log \
   task_graph.md manual_test_plan.md final_summary.md \
   execution_batches.md batch_execution_report.md \
@@ -532,7 +532,7 @@ Push failure rule same as Path A (per layer; block on first failure, don't conti
 ### Common Step: 4.0 Detect Linear/Jira ticket reference (both paths)
 
 Look in:
-- `.trae/<task-id>/session.md` for field "Ticket URL/ID"
+- `$CHE_SESSION_DIR/session.md` for field "Ticket URL/ID" (resolved via `che compute_paths`; never inside the worktree)
 - Branch name pattern: `feat/PROJ-123-login`, `fix/PROJ-456`, `ticket PROJ-123` anywhere in session/task_graph/envelope files
 - User command args: `/che-ship ticket:PROJ-123`
 
@@ -677,7 +677,7 @@ Ship gates reports (all in che-sessions, sorted by UTC timestamp):
 Related artifacts (same workspace):
   • Manual test plan: referenced in body and available at:
     $MANUAL_TEST_PLAN_PATH
-  • Decision log (all decisions append-safe JSONL, via che_append_decision_jsonl):
+  • Decision log (all decisions append-safe JSONL, via che decision_append):
     $CHE_DECISIONS_PATH
 
 Next steps:
@@ -707,7 +707,7 @@ Ship gates reports (all in che-sessions, sorted by UTC timestamp):
 Related artifacts (same workspace):
   • Original gh-stack plan: $GH_STACK_PLAN_PATH
   • Global manual test plan: $MANUAL_TEST_PLAN_PATH
-  • Decision log (all decisions append-safe JSONL, via che_append_decision_jsonl):
+  • Decision log (all decisions append-safe JSONL, via che decision_append):
     $CHE_DECISIONS_PATH
 
 PR Stack (merge order = base first to top):

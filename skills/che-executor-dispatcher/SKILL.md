@@ -24,34 +24,34 @@ NO work asset (execution_batches, dev_reports, merge_audits, batch_execution_rep
 Execute EXACTLY:
 
 ```bash
-# 1. Canonical session contract source
-source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"
+# 1. Resolve the `che` CLI (owns the 5-tier Che-home cascade)
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. HARD STOP without storage boundary. exit 99"; exit 99; }
 
 # 2. SESSION_ID (via SM or derived)
-SESSION_ID="${SESSION_ID:-$(che_current_session_id 2>/dev/null || echo "dispatcher-$(date -u +%Y%m%d-%H%M%S)")}"
+SESSION_ID="${SESSION_ID:-${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-dispatcher-$(date -u +%Y%m%d-%H%M%S)}}}"
 RELATED_ID="dispatcher-${WORKTREE_SLUG_CANONICAL:-$(basename "$WORKTREE_ROOT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//')}"
 
 # 3. Compute canonical paths + ensure dirs
-che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$(pwd)"
-che_ensure_session_dirs "$WORKTREE_ROOT"
+eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
 
 # 4. DOUBLE-GUARD outside worktree
-che_assert_outside_worktree "$CHE_SESSION_DIR"       "$WORKTREE_ROOT" "CHE_SESSION_DIR"
-che_assert_outside_worktree "$CHE_WORKSPACE_SHARED"  "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
+che assert_outside_worktree "$CHE_SESSION_DIR"       "$WORKTREE_ROOT" --label "CHE_SESSION_DIR"
+che assert_outside_worktree "$CHE_WORKSPACE_SHARED"  "$WORKTREE_ROOT" --label "CHE_WORKSPACE_SHARED"
 
 # ==== SKILL PATHS CONSTRUCTED ONCE (reuse variables below, do not reconstruct) ====
 # INPUTS (durable workspace-shared, produced by SM before dispatcher):
-TASK_GRAPH_PATH="${TASK_GRAPH_PATH:-$(che_output_path "task" "task-graph" "${RELATED_ID}" "workspace" "md")}"  # SM Phase 0 input
+TASK_GRAPH_PATH="${TASK_GRAPH_PATH:-$(che output_path "task" "task-graph" "${RELATED_ID}" "workspace" "md")}"  # SM Phase 0 input
 # DURABLE OUTPUTS (workspace-shared, consultable in future sessions on same worktree):
-EXECUTION_BATCHES_PATH="$(che_output_path "config" "execution-batches" "${RELATED_ID}" "workspace" "md")"
-DISPATCHER_LOCK_DIR="${CHE_WORKSPACE_SHARED}/_locks"                              # canonical subfolder created in ensure_session_dirs LOCK subdir mapping
+EXECUTION_BATCHES_PATH="$(che output_path "config" "execution-batches" "${RELATED_ID}" "workspace" "md")"
+DISPATCHER_LOCK_DIR="${CHE_WORKSPACE_SHARED}/_locks"                              # canonical subfolder created in ensure_dirs LOCK subdir mapping
 DISPATCHER_CONFIG_TEMPLATE_PATH='${CHE_WORKSPACE_SHARED}/tasks/<task-id>/dispatcher.config.json'  # per-task override (DURABLE WORKSPACE_SHARED)
 # EPHEMERAL OUTPUTS (per-session, do not need to survive che restart):
-DEV_REPORT_PATTERN_SUFFIX='<TASK_ID>'                                                 # construct per task via: che_output_path "report" "dev-report" "T${TASK_ID}-${TASK_SLUG}" "session" "md"
+DEV_REPORT_PATTERN_SUFFIX='<TASK_ID>'                                                 # construct per task via: che output_path "report" "dev-report" "T${TASK_ID}-${TASK_SLUG}" "session" "md"
 # MERGE_AUDIT per batch/mini-batch (§4.1 loop below = construct each with related_id="B${BATCH}-MB${MINI}"):
-#   MERGE_AUDIT_Bx_MBy_PATH="$(che_output_path "merge_audit" "merge-audit" "${RELATED_ID}-B${BATCH}-MB${MINI}" "session" "md")"
+#   MERGE_AUDIT_Bx_MBy_PATH="$(che output_path "merge_audit" "merge-audit" "${RELATED_ID}-B${BATCH}-MB${MINI}" "session" "md")"
 # Final BATCH_EXECUTION_REPORT (§5 step 4 below = construct ONCE):
-BATCH_EXECUTION_REPORT_PATH="$(che_output_path "report" "batch-execution-final" "${RELATED_ID}" "session" "md")"
+BATCH_EXECUTION_REPORT_PATH="$(che output_path "report" "batch-execution-final" "${RELATED_ID}" "session" "md")"
 ```
 
 ---
@@ -64,7 +64,7 @@ The SM MUST pass, either as function arguments or in a well-known dispatch confi
 |---|---|---|
 | `WORKTREE_ROOT` | Confirmed by SM preflight | Absolute path |
 | Task graph (DURABLE workspace-shared) → `$TASK_GRAPH_PATH` (via PREFLIGHT above — canonical path helper `task/task-graph/dispatcher-<wt-slug>/*.md`) | SM Phase 0 output | Full task list, deps, status |
-| Task envelope per task TODO/READY → (same structure WORKSPACE_SHARED/tasks/<id>/task_envelope_*.md via che_output_path type=`task` scope=`workspace`, built by SM Section 2.1 before calling dispatcher) | SM Section 2.1 output | Each with **Blast Radius → ALLOWED files** |
+| Task envelope per task TODO/READY → (same structure WORKSPACE_SHARED/tasks/<id>/task_envelope_*.md via `che output_path "task" "<slug>" "<related_id>" "workspace" "md"`, built by SM Section 2.1 before calling dispatcher) | SM Section 2.1 output | Each with **Blast Radius → ALLOWED files** |
 | `max_parallel` (optional, int) | SM or user | Concurrent Devs cap. Default = `min(cpu_cores, 3)`. Hard cap 4. |
 
 If ANY task marked READY-for-parallel does NOT have a fully enumerated `Blast Radius → ALLOWED files` list (with globs resolved to concrete files, not just "src/*") → **REFUSE parallel for that task and fall back to serial.** Blast-radius glob wildcards are not allowed in parallel mode because the lock system cannot validate intent.
@@ -111,7 +111,7 @@ DO NOT manually reconstruct `$CHE_WORKSPACE_SHARED/execution_batches.md`; use th
 Atomic write via helper (avoids half-written files on SIGTERM):
 
 ```bash
-cat <<'EOF' | che_write_file_atomic "$EXECUTION_BATCHES_PATH"
+cat <<'EOF' | che write_file_atomic "$EXECUTION_BATCHES_PATH"
 # EXECUTION BATCHES — <task-id>
 
 ## Strategy
@@ -147,7 +147,7 @@ For every mini-batch about to run:
      - If any exists held → re-queue T into next mini-batch.
 2. On task T start (just before invoking che-developer):
    - Atomically for ALL files in Files(T):
-     - Atomic write via `che_write_file_atomic "${DISPATCHER_LOCK_DIR}/<hash>-<basename>.lock.json"` helper (DURABLE workspace-shared, runtime, NEVER staged/committed — che-ship §0.8 blacklist covers `**/_locks/**` pattern):
+     - Atomic write via `che write_file_atomic "${DISPATCHER_LOCK_DIR}/<hash>-<basename>.lock.json"` helper (DURABLE workspace-shared, runtime, NEVER staged/committed — che-ship §0.8 blacklist covers `**/_locks/**` pattern):
        ```json
        {"task_id": "T1", "batch": "B1", "held_at": "<ISO>", "state": "HELD"}
        ```
@@ -166,7 +166,7 @@ For each task T in current mini-batch:
 1. Mark `task_graph.md` row for T: `Status = IN_PROGRESS (parallel, batch=<B>, mini-batch=<MB>)` (dispatcher/SM is ONLY writer; DO NOT let dev agents write task_graph).
 2. Construct task report path ONCE (outside invocation loop) via helper (ensures timestamp UTC prefix, `reports/T<id>-...` subfolder):
    ```bash
-   DEV_REPORT_T_PATH="$(che_output_path "report" "dev-report" "T${TASK_ID}-${TASK_SLUG:-unnamed}" "session" "md")"
+   DEV_REPORT_T_PATH="$(che output_path "report" "dev-report" "T${TASK_ID}-${TASK_SLUG:-unnamed}" "session" "md")"
    ```
 3. Invoke a **dedicated parallel-execution sub-agent call** for `che-developer` with:
    - Full env variable context: `WORKTREE_ROOT`, `SESSION_ID`, `TASK_ID=T`, envelope path, `DEV_REPORT_OUTPUT_PATH="${DEV_REPORT_T_PATH}"`.
@@ -208,12 +208,12 @@ Algorithm:
 3. **Any file with frequency > 1 written by different tasks in THIS mini-batch → FLAG CONFLICT.**
 4. Conflict severity:
    - `LOW`: different files in same directory (no overlap, coincidence) → ok.
-   - `MEDIUM`: exact same file path but disjoint diff (hunks don't overlap) → SM reviews, applies with explicit decision entry via `che_append_decision_jsonl "MERGE_AUDIT_MEDIUM_CONFLICT_SM_APPROVED" '{"batch":"'${BATCH}'","mini":"'${MINI}'","files_overlap": [...]}'`.
-   - `HIGH`: exact same file path AND overlapping hunks (or file is > 100 lines modified by both) → **HARD FAIL.** Roll back one of the two task's changes (git stash or git checkout HEAD -- <file> for whichever has more LOC committed), re-run task serially, re-apply gates. Append decision log via `che_append_decision_jsonl "MERGE_AUDIT_HIGH_CONFLICT_ROLLBACK" '{"batch":"'"${BATCH}"'","mini":"'"${MINI}"'","rolled_back_task":"<task_id>"}'`.
+   - `MEDIUM`: exact same file path but disjoint diff (hunks don't overlap) → SM reviews, applies with explicit decision entry via `che decision_append "$WORKTREE_ROOT" "MERGE_AUDIT_MEDIUM_CONFLICT_SM_APPROVED" '{"batch":"'${BATCH}'","mini":"'${MINI}'","files_overlap": [...]}'`.
+   - `HIGH`: exact same file path AND overlapping hunks (or file is > 100 lines modified by both) → **HARD FAIL.** Roll back one of the two task's changes (git stash or git checkout HEAD -- <file> for whichever has more LOC committed), re-run task serially, re-apply gates. Append decision log via `che decision_append "$WORKTREE_ROOT" "MERGE_AUDIT_HIGH_CONFLICT_ROLLBACK" '{"batch":"'"${BATCH}"'","mini":"'"${MINI}"'","rolled_back_task":"<task_id>"}'`.
 5. Construct path for this merge-audit (one per BATCH + MINI) via helper + atomic write:
    ```bash
-   MERGE_AUDIT_BATCH_MINI_PATH="$(che_output_path "merge_audit" "merge-audit" "${RELATED_ID}-B${BATCH}-MB${MINI}" "session" "md")"
-   cat <<'MAEOF' | che_write_file_atomic "$MERGE_AUDIT_BATCH_MINI_PATH"
+   MERGE_AUDIT_BATCH_MINI_PATH="$(che output_path "merge_audit" "merge-audit" "${RELATED_ID}-B${BATCH}-MB${MINI}" "session" "md")"
+   cat <<'MAEOF' | che write_file_atomic "$MERGE_AUDIT_BATCH_MINI_PATH"
    # Merge Audit — B${BATCH} / MB${MINI}
    ...
    MAEOF
@@ -232,7 +232,7 @@ If ANY task fails gates OR merge audit reports HIGH conflict → mark mini-batch
 4. When **no more tasks remain** (all in task_graph marked DONE or FAILED_*):
    - Atomic write to `$BATCH_EXECUTION_REPORT_PATH` (constructed PREFLIGHT. EPHEMERAL per-session, `reports/dispatcher-<wt-slug>/` subfolder. Timestamp prefix ensures ordering between future dispatcher runs on same worktree.)
      ```bash
-     cat <<'REOF' | che_write_file_atomic "$BATCH_EXECUTION_REPORT_PATH"
+     cat <<'REOF' | che write_file_atomic "$BATCH_EXECUTION_REPORT_PATH"
      # BATCH EXECUTION REPORT — dispatcher run <UTC iso>
      - Batches run, minibatches, tasks per batch, conflicts caught
      - Per-task status (DONE / FAIL_SCOPE / FAIL_QA / FAIL_COMPLIANCE / CONFLICT_ROLLBACK)

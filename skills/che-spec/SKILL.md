@@ -7,7 +7,7 @@ description: "Generate or validate a Che Execution Specification (SPEC). 4 input
 
 > **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - Full contracts (precedence 1-18, DbC, BDD incremental, etc): `engineering-contracts` skill
-> - Path resolution (WORKSPACE_NAME, WORKTREE_SLUG, CHE_WORKSPACE_SHARED, CHE_SESSION_DIR): `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"`, call `che_compute_paths WT SID CWD`
+> - Path resolution (WORKSPACE_NAME, WORKTREE_SLUG, CHE_WORKSPACE_SHARED, CHE_SESSION_DIR): `che` CLI — `eval "$(che compute_paths WT SID --cwd "$PWD")"`
 > - 2-LEVEL worktree binding (Level1 registry, Level2 sessions dir): engineering-contracts §19
 
 Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~60–120 lines, 7 sections). Replaces project-specific legacy PRD artifacts. Gate before scope capture in `/che-act` and standalone runnable via `/che-spec`.
@@ -30,12 +30,12 @@ On completion this skill **returns to the caller** two values printed in the las
 
 Fail if any step fails. Stop before proceeding with user.
 
-1. **Binding check:** Read `che_registry_path`, find LAST entry with the effective session id from `che_current_session_id` + `STATUS=BOUND`. If missing AND user did not provide `--worktree` → ASK for absolute worktree, perform full §19 binding (Level1 append + Level2 write + FRIENDLY_NAME prompt).
+1. **Binding check:** Read `$CHE_REGISTRY_PATH`, find LAST entry with the effective session id (`"${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-${SESSION_ID:-}}}"`) + `STATUS=BOUND`. If missing AND user did not provide `--worktree` → ASK for absolute worktree, perform full §19 binding (Level1 append + Level2 write + FRIENDLY_NAME prompt).
 2. **Paths:**
    ```bash
-   source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"
-   che_compute_paths "$WORKTREE_ROOT" "$(che_current_session_id)" "$PWD"
-   che_ensure_session_dirs
+   command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Aborting."; exit 98; }
+   eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+   che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
    ```
 3. **Slug:** If user passed `--slug`, use it as-is (sanitise to `[a-z0-9_-]+`). Otherwise derive from `ticket_ref` or `change_class+why`.
 
@@ -107,7 +107,7 @@ fi
 **ONLY PERMITTED EXCEPTION (user VERBATIM override):**
 - ONLY way to bypass Branch B (force mandatory flag WITHOUT detected provider) = user types BEFORE spec generation the EXACT literal: **`EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE`** followed by 1-line justification. User example:
   > `EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE: we're launching this critical feature on a Friday 10pm, I'll create the flags lib manually right now in this PR`
-- If user typed the literal → save as decision.log: `che_append_decision_jsonl "SPEC_PREFLIGHT_OVERRIDE" "preflight=§1.4_feature_flags type=EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE rationale=<1-line user verbatim> risk_level=${risk_level}"`. Then MAY mandate flags in spec sections normally. If NOT typed literal → Branch B is HARD STOP, not discussion.
+- If user typed the literal → save as decision.log: `che decision_append "$WORKTREE_ROOT" "SPEC_PREFLIGHT_OVERRIDE" "preflight=§1.4_feature_flags type=EXPLICIT_OVERRIDE_FEATURE_FLAGS_FORCE rationale=<1-line user verbatim> risk_level=${risk_level}"`. Then MAY mandate flags in spec sections normally. If NOT typed literal → Branch B is HARD STOP, not discussion.
 
 ### §1.5 Strategic Roadmap Preflight (MANDATORY)
 
@@ -509,7 +509,7 @@ This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bila
    ```bash
    # related_id = "" to save at root of $CHE_WORKSPACE_SHARED/specs/
    # scope = workspace → DURABLE
-   SPEC_FINAL_PATH="$(che_output_path "spec" "spec" "${slug}" "workspace" "md" "")"
+   SPEC_FINAL_PATH="$(che output_path "spec" "spec" "${slug}" "workspace" "md" "")"
    ```
    Expected result: `$CHE_WORKSPACE_SHARED/specs/spec_<slug>.md`
    → Note: SM /che-act searches for `$CHE_WORKSPACE_SHARED/spec_*.md`. We will align so the spec is saved directly in the pattern expected by the execution gate.
@@ -517,18 +517,18 @@ This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bila
 4. **Write EXCLUSIVELY via atomic write helper:**
    ```bash
    # Saves at shared workspace root to be visible to /che-act
-   che_write_file_atomic "$CHE_WORKSPACE_SHARED/spec_${slug}.md" <<'SPEC_EOF'
+   che write_file_atomic "$CHE_WORKSPACE_SHARED/spec_${slug}.md" <<'SPEC_EOF'
    ---
    # Full YAML frontmatter here
    ---
    # 7 sections of SPEC here
    SPEC_EOF
    ```
-   (The helper already runs `che_assert_outside_worktree` automatically before writing.)
-5. **Append decision entry via `che_append_decision_jsonl` (DO NOT build path or format JSON manually):**
+   (The helper already runs `che assert_outside_worktree` automatically before writing.)
+5. **Append decision entry via `che decision_append` (DO NOT build path or format JSON manually):**
    ```bash
-   # decisions helper already ensures path outside worktree + atomic append
-   che_append_decision_jsonl "SPEC" "${slug} ${status} saved. Approver=${approver}"
+   # decision_append helper already ensures path outside worktree + atomic append
+   che decision_append "$WORKTREE_ROOT" "SPEC" "${slug} ${status} saved. Approver=${approver}"
    ```
 
 ---

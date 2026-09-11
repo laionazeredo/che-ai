@@ -17,9 +17,9 @@
 ---
 
 ## 📁 THREE CANONICAL FILES — ALWAYS CONSULT THEM
-1. **`/home/laion/.trae/CHE_RULES.md`** → Che flow, worktree-first, SPEC Approved gates, parallelism, ship/gh rules.
-2. **`/home/laion/.trae/skills/engineering-contracts/SKILL.md`** → 18 engineering rules with ordered precedence, DbC, TDD, SOLID, strong typing, security/PII, RLS, conventional commits, BDD agility, code review optimisation, §19 2-LEVEL Worktree Binding.
-3. **`/home/laion/.trae/CHE_COMMANDS.md`** → 14 /che-* commands with syntax + commands vs skills architecture.
+1. **`~/.che-ai/CHE_RULES.md`** → Che flow, worktree-first, SPEC Approved gates, parallelism, ship/gh rules.
+2. **`~/.che-ai/skills/engineering-contracts/SKILL.md`** → 18 engineering rules with ordered precedence, DbC, TDD, SOLID, strong typing, security/PII, RLS, conventional commits, BDD agility, code review optimisation, §19 2-LEVEL Worktree Binding.
+3. **`~/.che-ai/CHE_COMMANDS.md`** → 14 /che-* commands with syntax + commands vs skills architecture.
 
 ---
 
@@ -32,7 +32,7 @@
 ---
 
 ## 🟥 RULE 1: OUTPUT DIRECTORY
-- **DURABLE (multi-session, worktree shared):** task_graph, decisions, manual_test_plan, gh_stack_plan, tasks/<task-id>/envelope → **`$CHE_WORKSPACE_SHARED/`** (outside user worktree, resolved via `che_compute_paths`).
+- **DURABLE (multi-session, worktree shared):** task_graph, decisions, manual_test_plan, gh_stack_plan, tasks/<task-id>/envelope → **`$CHE_WORKSPACE_SHARED/`** (outside user worktree, resolved via `che compute_paths`).
 - **EPHEMERAL (this session only):** Level 2 binding, reports, qa/screenshots, final_summary → **`$CHE_SESSION_DIR/`**.
 - **HARD STOP MORATORIUM:** NOTHING generated goes in `<WORKTREE_ROOT>/.trae/*` (avoids dirty git / accidental commit).
 - **NEVER** in `docs/`, repo root, or package folders unless the user explicitly asks.
@@ -124,15 +124,15 @@
 
 ## 🟢 RULE 7.5: TOKEN REDUCTION (CAVEAN-STYLE 5 HEURISTICS)
 **GOAL:** reduce tokens without losing semantics. Global bypass: `export CHE_FULL_OUTPUT=1`.
-| H# | When to apply | Helper | Action |
-|---|---|---|---|
-| H1 | Large `git diff` / `git show` output | `\| che_tr_diff` | Only changed +/- lines (no ---/+++/@@ headers). Cap CHE_TR_DIFF_MAX_LINES=500. |
-| H2 | Read tool for file >300 lines | `cat file \| che_tr_read TOTAL_LINES` | Truncate at 300 lines + `[...TRUNCATED lines X-Y]` warning. Bypass: pass offset/Limit in Read tool. |
-| H3 | Output with many blank lines / trailing ws | `\| che_tr_collapse_blank` | ≥2 blank lines → 1; strip trailing whitespace. |
-| H4 | VERY long RunCommand stdout/stderr (builds, logs) | `\| che_tr_stdout` | Cap chars CHE_TR_STDOUT_MAX_CHARS=4000 + footer warning. |
-| H5 | Grep default verbose metadata | `che_tr_grep PATTERN PATH [type]` | match lines-only; default context=0. Adjust via CHE_TR_GREP_CONTEXT. |
+| H# | When to apply | Action |
+|---|---|---|
+| H1 | Large `git diff` / `git show` output | Only changed +/- lines (no ---/+++/@@ headers), capped: `git diff \| grep -E '^[+-][^+-]' \| head -n 500`. |
+| H2 | File >300 lines | Use the `Read` tool with `offset`/`limit` instead of dumping the whole file. |
+| H3 | Output with many blank lines / trailing ws | `sed 's/[[:space:]]*$//' \| awk 'NF{print;blank=0;next}!blank{print;blank=1}'`. |
+| H4 | VERY long RunCommand stdout/stderr (builds, logs) | Cap chars + footer note: `... \| head -c 4000`. |
+| H5 | Grep default verbose metadata | Use the `Grep` tool with `output_mode=content` and lines-only (no `-C`). |
 
-**Helpers defined in:** `~/.trae/contracts/che_sessions_contract.sh` (source before use).
+**Canonical path/registry helpers are provided by the `che` CLI** (`che compute_paths`, `che ensure_dirs`, `che output_path`, `che write_file_atomic`, `che assert_outside_worktree`, `che registry_append`, `che registry_lookup`, `che decision_append`) — see the §0 preflight pattern and RULE 7.8 below. **There is no bash helper shim; always call the `che` CLI.**
 
 ---
 
@@ -163,7 +163,7 @@
 
 ## 🟢 RULE 7.8: GLOBAL BINDING REGISTRY IS JSONL (SINGLE SOURCE: REGISTRY.JSONL)
 
-**Canonical REGISTRY_PATH:** `$HOME/.trae/bindings/registry.jsonl` (**registry.md NO longer exists**, deleted on 2026-08-30, no dual-write, no drift).
+**Canonical REGISTRY_PATH:** `$CHE_REGISTRY_PATH` (exported by `che compute_paths`; default `~/.che-ai/bindings/registry.jsonl`) (**registry.md NO longer exists**, deleted on 2026-08-30, no dual-write, no drift).
 
 **1 entry = 1 line JSONL schema v1:**
 ```
@@ -175,8 +175,7 @@
 
 **WRITING (only allowed way — DO NOT use manual Edit/Write):**
 ```bash
-source $HOME/.trae/contracts/che_sessions_contract.sh
-che_registry_append_jsonl "<sess-id>" "BOUND" "/abs/wt"   '{"workspace_name":"Flockr","worktree_slug":"Lumos__x","friendly_name":"feat-abc",
+che registry_append "<sess-id>" "BOUND" "/abs/wt"   '{"workspace_name":"Flockr","worktree_slug":"Lumos__x","friendly_name":"feat-abc",
     "che_session_dir":"/abs/sess","che_workspace_shared":"/abs/ws",
     "workspace_file":"/abs/Flockr.code-workspace","branch":"feat/x","reason":"sm explicit",
     "flags":{"LANG_PT_CHECK":"DISABLED"}}'
@@ -185,12 +184,11 @@ che_registry_append_jsonl "<sess-id>" "BOUND" "/abs/wt"   '{"workspace_name":"Fl
 
 **READING (only way — no manual awk/grep):**
 ```bash
-source che_sessions_contract.sh
-che_registry_lookup_last "sess-abc123"  # → indented full JSON entry
+che registry_lookup "sess-abc123"  # → indented full JSON entry
 # extract field:
-che_registry_lookup_last "sess-abc123" | jq -r .worktree_root
+che registry_lookup "sess-abc123" | jq -r .worktree_root
 # flags.LANG_PT_CHECK:
-che_registry_lookup_last "sess-abc123" | jq -r '.flags.LANG_PT_CHECK // "ENABLED"'
+che registry_lookup "sess-abc123" | jq -r '.flags.LANG_PT_CHECK // "ENABLED"'
 ```
 
 ---

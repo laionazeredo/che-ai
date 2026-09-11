@@ -2,7 +2,7 @@
 
 ⚠️ **ESTA PASTA LOCAL NÃO TEM DADOS NO REPO PÚBLICO.**
 
-O arquivo único de verdade aqui é `registry.jsonl` — ele é **ESCRITO APENAS pelo helper oficial do contracts** `che_registry_append_jsonl` durante sessões de trabalho na SUA máquina.
+O arquivo único de verdade aqui é `registry.jsonl` — ele é **ESCRITO APENAS pelo comando oficial do CLI** `che registry_append` durante sessões de trabalho na SUA máquina.
 
 ## Por que NÃO está versionado (blacklist no `.gitignore`)?
 

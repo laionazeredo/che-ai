@@ -77,5 +77,5 @@ trap 'rm -rf "$TMP"' EXIT
 
 ### Shell script anti-patterns:
 - ❌ Without `set -euo pipefail` = silent errors.
-- ❌ Hardcoded `~/.trae` paths in new scripts. Use `${CHE_HOME:-${CHE_HOME:-$HOME/.trae}}` (helpers in contracts).
+- ❌ Hardcoded `~/.trae` paths in new scripts. Use `${CHE_HOME:-$HOME/.che-ai}` (helpers in contracts).
 - ❌ `rm -rf` path inside $HOME. Only on $TMP (already in trap).

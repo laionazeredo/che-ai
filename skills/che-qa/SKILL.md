@@ -17,8 +17,8 @@ Always returns a **structured, numbered report** so the Developer can fix withou
 ## -0.1 STORAGE BOUNDARY PREFLIGHT (MANDATORY BEFORE FIRST WRITE)
 
 ```bash
-# 1. Load sessions contract
-source ~/.trae/contracts/che_sessions_contract.sh
+# 1. Resolve the `che` CLI (owns the Che-home cascade + canonical path construction)
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Cannot write outputs without storage boundary. Aborting write."; exit 98; }
 
 # 2. Resolve minimum inputs (SM should pass; safe fallback only if missing)
 WORKTREE_ROOT="${WORKTREE_ROOT:?SM must pass WORKTREE_ROOT}"
@@ -27,17 +27,17 @@ TASK_SLUG="${TASK_SLUG:-qa}"
 SESSION_ID="${SESSION_ID:-qa-standalone-$(date -u +%Y%m%d-%H%M%S)}"
 
 # 3. Canonical paths + ensure dirs
-che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-che_ensure_session_dirs "$WORKTREE_ROOT"
+eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
 
 # 4. Double-guard: outputs NEVER in worktree
-che_assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" "CHE_SESSION_DIR"
-che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
+che assert_outside_worktree "$CHE_SESSION_DIR" "$WORKTREE_ROOT" --label "CHE_SESSION_DIR"
+che assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" --label "CHE_WORKSPACE_SHARED"
 
 # 5. Construct QA output paths ONCE
 QA_RELATED_ID="T${TASK_ID}-${TASK_SLUG}"
-QA_REPORT_PATH="$(che_output_path "report" "qa-run" "${QA_RELATED_ID}" "session" "md")"
-QA_EVIDENCE_DIR="$(dirname -- "$(che_output_path "qa" ".keep" "${QA_RELATED_ID}" "session" "tmp")")"
+QA_REPORT_PATH="$(che output_path "report" "qa-run" "${QA_RELATED_ID}" "session" "md")"
+QA_EVIDENCE_DIR="$(dirname -- "$(che output_path "qa" ".keep" "${QA_RELATED_ID}" "session" "tmp")")"
 mkdir -p "$QA_EVIDENCE_DIR"
 ```
 
@@ -66,10 +66,10 @@ mkdir -p "$SESSION_EVIDENCE_DIR/screenshots" "$SESSION_EVIDENCE_DIR/logs" "$SESS
 #   (i)   evidence_manifest_<SHA256_MANIFEST>.json
 #   (ii)  1 FINAL JPEG/PNG thumbnail per AC PASS ≤200KB
 CURRENT_COMMIT_7CHAR="${CURRENT_COMMIT_7CHAR:-$(cd "$WORKTREE_ROOT" && git rev-parse --short=7 HEAD 2>/dev/null || echo "HEAD-detached")}"
-WORKSPACE_EVIDENCE_AUDIT_DIR="$(che_output_path "qa" "audit" "commit-${CURRENT_COMMIT_7CHAR}" "workspace" "tmp")"
+WORKSPACE_EVIDENCE_AUDIT_DIR="$(che output_path "qa" "audit" "commit-${CURRENT_COMMIT_7CHAR}" "workspace" "tmp")"
 WORKSPACE_EVIDENCE_AUDIT_DIR="$(dirname -- "$WORKSPACE_EVIDENCE_AUDIT_DIR")"
 mkdir -p "$WORKSPACE_EVIDENCE_AUDIT_DIR"
-che_assert_outside_worktree "$WORKSPACE_EVIDENCE_AUDIT_DIR" "$WORKTREE_ROOT" "WORKSPACE_EVIDENCE_AUDIT_DIR (durable hash manifest)"
+che assert_outside_worktree "$WORKSPACE_EVIDENCE_AUDIT_DIR" "$WORKTREE_ROOT" --label "WORKSPACE_EVIDENCE_AUDIT_DIR (durable hash manifest)"
 ```
 
 **MANDATORY Manifest JSON Schema (NON-EMPTY fields, except thumbnail_path if no UI):**
@@ -126,12 +126,12 @@ After producing structured report (FAIL Stage A-D-E template or §3 PASS templat
   echo "> Engine: stack detected in §1"
   echo
   # ... paste complete FAIL template OR §3 PASS template content here ...
-} | che_write_file_atomic "$QA_REPORT_PATH"
+} | che write_file_atomic "$QA_REPORT_PATH"
 ```
 
 Then append 1 audit trail line:
 ```bash
-che_append_decision_jsonl "QA_RUN" "{\"related_id\":\"${QA_RELATED_ID}\",\"task_id\":\"${TASK_ID}\",\"passed\":${QA_PASSED:-false},\"report_path\":\"${QA_REPORT_PATH}\",\"evidence_dir\":\"${QA_EVIDENCE_DIR}\"}"
+che decision_append "$WORKTREE_ROOT" "QA_RUN" "{\"related_id\":\"${QA_RELATED_ID}\",\"task_id\":\"${TASK_ID}\",\"passed\":${QA_PASSED:-false},\"report_path\":\"${QA_REPORT_PATH}\",\"evidence_dir\":\"${QA_EVIDENCE_DIR}\"}"
 ```
 
 ### 0.2 FINAL MANDATORY STEP — Generate Evidence Manifest SHA256 (ONDA4 Local 2 Workspace Audit)
@@ -209,11 +209,11 @@ MANIFEST_SHA="$(sha256sum "$MANIFEST_TMP" | awk '{print $1}')"
 MANIFEST_SHORT_SHA="${MANIFEST_SHA:0:16}"
 MANIFEST_FILENAME="evidence_manifest_${MANIFEST_SHORT_SHA}.json"
 MANIFEST_FINAL_PATH="$WORKSPACE_EVIDENCE_AUDIT_DIR/$MANIFEST_FILENAME"
-che_write_file_atomic "$MANIFEST_TMP" "$MANIFEST_FINAL_PATH"
+cat "$MANIFEST_TMP" | che write_file_atomic "$MANIFEST_FINAL_PATH"
 rm -f "$MANIFEST_TMP"
 
 # (f) ONDA4 Decision log entry with hash + paths
-che_append_decision_jsonl "QA_EVIDENCE_MANIFEST" "{\"commit_7char\":\"${CURRENT_COMMIT_7CHAR}\",\"manifest_sha256\":\"${MANIFEST_SHA}\",\"manifest_path\":\"${MANIFEST_FINAL_PATH}\",\"workspace_audit_dir\":\"${WORKSPACE_EVIDENCE_AUDIT_DIR}\",\"session_evidence_dir\":\"${SESSION_EVIDENCE_DIR}\"}"
+che decision_append "$WORKTREE_ROOT" "QA_EVIDENCE_MANIFEST" "{\"commit_7char\":\"${CURRENT_COMMIT_7CHAR}\",\"manifest_sha256\":\"${MANIFEST_SHA}\",\"manifest_path\":\"${MANIFEST_FINAL_PATH}\",\"workspace_audit_dir\":\"${WORKSPACE_EVIDENCE_AUDIT_DIR}\",\"session_evidence_dir\":\"${SESSION_EVIDENCE_DIR}\"}"
 
 # (g) EXPORT to QA success report template (§3):
 QA_EVIDENCE_MANIFEST_SHA="$MANIFEST_SHA"

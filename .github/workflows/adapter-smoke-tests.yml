@@ -25,7 +25,7 @@ jobs:
           chmod +x install.sh
           ./install.sh
         env:
-          CLAUDE_HOME: ${{ github.workspace }}/mock-claude
+          CLAUDE_CONFIG_DIR: ${{ github.workspace }}/mock-claude
 
       - name: Verify Claude Installation
         run: |

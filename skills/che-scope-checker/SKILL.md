@@ -20,7 +20,7 @@ Auditor persona with **2 mutually exclusive modes** (choose EXACTLY 1). **Always
 
 Run BEFORE deciding the mode.
 
-1. **Read Level 1 Global Index FIRST:** Read `che_registry_path`. Find LAST `STATUS=BOUND` entry using the effective session id from `che_current_session_id`. Use its `WORKTREE_ROOT` as the default session.
+1. **Read Level 1 Global Index FIRST:** Read `$CHE_REGISTRY_PATH`. Find LAST `STATUS=BOUND` entry using the effective session id from `${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-$SESSION_ID}}`. Use its `WORKTREE_ROOT` as the default session.
 2. **Mode B mismatch check:** user passed `--worktree <path>` AND Level 1 registry WORKTREE_ROOT exists AND is DIFFERENT → BLOCK. Ask: "Scope check requested in `<path>` but Level 1 global registry BOUND in `<y>`. Options: (A) use `<path>` and override binding temporarily for this audit, (B) switch binding first, (C) cancel audit." **NEVER silent override.**
 3. **Mode A PR URL binding conflict:** PR branch = worktree branch of an existing binding and user also passed `--worktree` pointing elsewhere → BLOCK. Ask which is the target.
 
@@ -101,7 +101,7 @@ Scenarios:
   🔴 [CHECK0-H1] HORIZONTAL ANTI-PATTERN DETECTED — tasks [<comma-sep IDs>] appear to be single-layer / single-top-folder consecutive blocks, no -H-OVERRIDE- suffix, no EXPLICIT_OVERRIDE_HORIZONTAL_PLAN logged.
      Action required (choose 1):
      [ ] Reorder tasks into ≥2-layer vertical slices (F0..FN). Re-run che-plan with decomposition per SPEC §4.5.
-     [ ] Add literal verbatim line to SPEC §2 SCOPE: `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN: <1-linha justificativa ≤120 chars>` + log to decisions.log via che_append_decision_jsonl.
+     [ ] Add literal verbatim line to SPEC §2 SCOPE: `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN: <1-linha justificativa ≤120 chars>` + log to decisions.log via `che decision_append`.
   ```
 - If `F0_FILES_MISSING_FROM_DIFF === true && OVERRIDE_LOGGED === false` →
   ```
@@ -595,13 +595,14 @@ Verdict =                                                              # thresho
 
 Run EXACTLY this block BEFORE constructing any path:
 ```bash
-CHE_HOME="${CHE_HOME:-$HOME/.trae}"
-CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-[ -f "$CONTRACT" ] && source "$CONTRACT" || { echo "❌ Contract $CONTRACT missing — exit 98"; exit 98; }
-SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-scope-session}"
+# Resolve the `che` CLI — it owns the 5-tier Che-home cascade (CHE_HOME → HARNESS_HOME
+# → ~/.che-ai → legacy ~/.trae iff CHE_RULES.md exists → ~/.che-ai fallback), identical
+# to che_core/paths.py resolve_che_home. Skills MUST NOT reimplement this in bash.
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Zero writes without storage boundary. exit 98"; exit 98; }
+SESSION_ID="${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-fallback-scope-session}}"
 if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
-  che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-  che_ensure_session_dirs "$WORKTREE_ROOT"
+  eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+  che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
 fi
 ```
 
@@ -611,7 +612,7 @@ fi
 ```bash
 # SCOPE = workspace-shared (durable, reusable in future sessions of this worktree)
 # related_id = review slug (e.g.: pr-382 or feat-FLO-714 or task-T1)
-SCOPE_CHECK_PATH="$(che_output_path "scope_check" "scope-check" "<related_id>" "workspace" "md")"
+SCOPE_CHECK_PATH="$(che output_path "scope_check" "scope-check" "<related_id>" "workspace" "md")"
 ```
 Example result: `$CHE_WORKSPACE_SHARED/scope_check/pr-382/20260902-140000-scope-check.md`
 → UTC timestamp in prefix = automatic sorting; related_id groups all scope-checks for the same entity.

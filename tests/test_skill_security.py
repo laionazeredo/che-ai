@@ -47,6 +47,19 @@ ALLOWED_COMMANDS = [
     "gh",
 ]
 
+# The `che` CLI is the sanctioned replacement for complex bash logic in skills
+# (it is the CLI-first path-resolution / storage-boundary entry point).
+# These precise patterns allow its canonical idioms without weakening the guard:
+#   - `command -v che >/dev/null 2>&1` (availability preflight)
+#   - `eval "$(che compute_paths ...)"` (canonical path resolution)
+ALLOWED_CLI_PATTERNS = [
+    r"command\s+-v\s+che\b",
+    r"\bche\s+--(?:help|version)\b",
+    r"\bche\s+(?:compute_paths|ensure_dirs|output_path|write_file_atomic|"
+    r"assert_outside_worktree|registry_append|registry_lookup|decision_append|"
+    r"config|export|import)\b",
+]
+
 
 def extract_code_blocks(md_content: str, lang: str) -> list[str]:
     """Extract all code blocks of a specific language from a markdown string."""
@@ -89,8 +102,10 @@ def test_no_forbidden_bash_commands():
                         is_comment_mention = (
                             line.startswith("ARTIFACT_CLEANUP_BACKUP_DIR") and "sed" in forbidden_pattern
                         )
+                        # Canonical `che` CLI idioms (availability preflight, path resolution).
+                        is_cli_allowed = any(re.search(pattern, line) for pattern in ALLOWED_CLI_PATTERNS)
 
-                        if not (is_allowed or is_comment_mention):
+                        if not (is_allowed or is_comment_mention or is_cli_allowed):
                             violations.append(
                                 f"File: {skill_file.relative_to(project_root)}\n"
                                 f"Line {line_idx + 1} of bash block contains forbidden pattern '{forbidden_pattern}':\n"

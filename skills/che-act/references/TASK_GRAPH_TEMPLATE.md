@@ -1,6 +1,6 @@
 # TASK GRAPH TEMPLATE
 
-> Resolve path via `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh" && che_compute_paths WORKTREE_ROOT`. NEVER inside `<WORKTREE_ROOT>/.trae/*`.
+> Resolve path via the `che` CLI: `eval "$(che compute_paths WORKTREE_ROOT SESSION_ID)"`. NEVER inside `<WORKTREE_ROOT>/.trae/*`.
 > File location: `$CHE_WORKSPACE_SHARED/task_graph.md` (durable, shared across sessions for same worktree)
 > Updated by Scrum Master as tasks progress through stages.
 > Language: English.

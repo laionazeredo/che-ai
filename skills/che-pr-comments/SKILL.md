@@ -100,34 +100,27 @@ For HUMAN comments → classify content:
 
 ### 2.9 🔴 STORAGE PREFLIGHT + MANDATORY PATHS (BEFORE FIRST WRITE)
 
-Run EXACTLY this block; then use ONLY the helper `che_output_path`. NEVER construct paths manually.
+Run EXACTLY this block; then use ONLY `che output_path`. NEVER construct paths manually.
 NEVER create `<worktree>/.trae/` or `<worktree>/reports/` or `<worktree>/pr_comments/`. MORATORIUM §20.
 
 ```bash
-CHE_HOME="${CHE_HOME:-$HOME/.trae}"
-CONTRACT="$CHE_HOME/contracts/che_sessions_contract.sh"
-if [ -f "$CONTRACT" ]; then
-  # shellcheck disable=SC1090
-  source "$CONTRACT"
-else
-  echo "❌ FATAL: che_sessions_contract.sh not found at $CONTRACT. Aborting write."
-  exit 98
-fi
+# Resolve the `che` CLI (owns the Che-home cascade + canonical path construction)
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Aborting write."; exit 98; }
 
-SESSION_ID="${CHE_CURRENT_SESSION_ID:-fallback-pr-comments-session}"
+SESSION_ID="${CHE_CURRENT_SESSION_ID:-${CHE_SESSION_ID:-fallback-pr-comments-session}}"
 if [ -n "${WORKTREE_ROOT:-}" ] && [ -d "$WORKTREE_ROOT" ]; then
-  che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$PWD"
-  che_ensure_session_dirs "$WORKTREE_ROOT"
-  che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "WORKSPACE_SHARED"
+  eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+  che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
+  che assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" --label "WORKSPACE_SHARED"
 fi
 
-# Construct UNIQUE path via helper:
+# Construct UNIQUE path via CLI:
 # - type = pr_comments (maps to subfolder pr_comments/)
 # - slug = triage-report
 # - related_id = pr-<ID> (groups everything related to this PR)
 # - scope = workspace (durable: shared between sessions in this worktree, can be reopened tomorrow)
 # - ext = md
-PR_COMMENTS_REPORT_PATH="$(che_output_path "pr_comments" "triage-report" "pr-${PR_ID}" "workspace" "md")"
+PR_COMMENTS_REPORT_PATH="$(che output_path "pr_comments" "triage-report" "pr-${PR_ID}" "workspace" "md")"
 ```
 
 Example result: `$CHE_WORKSPACE_SHARED/pr_comments/pr-382/20260902-111500-triage-report.md`
@@ -137,7 +130,7 @@ Example result: `$CHE_WORKSPACE_SHARED/pr_comments/pr-382/20260902-111500-triage
 **Final file written using atomic write:**
 ```bash
 # pipe the full markdown content to the atomic helper (tmp → mv):
-cat <<'MARKDOWN_EOF' | che_write_file_atomic "$PR_COMMENTS_REPORT_PATH"
+cat <<'MARKDOWN_EOF' | che write_file_atomic "$PR_COMMENTS_REPORT_PATH"
 # ... triage report body here ...
 MARKDOWN_EOF
 ```

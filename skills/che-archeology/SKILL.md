@@ -7,7 +7,7 @@ description: "Infers project Intent and Roadmap from git history and merged PRs.
 
 > **SHARED REFERENCES:**
 > - SDLC Specflow Phase 1 & 2: `engineering-contracts` Rule 15
-> - Path resolution: `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"`
+> - Path resolution: `che` CLI (`che compute_paths`, `che ensure_dirs`)
 
 This skill performs a "historical scan" of a repository to reconstruct its strategic backbone. It bridges the gap between legacy development and the Specflow-driven Che SDLC.
 

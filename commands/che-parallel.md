@@ -11,7 +11,7 @@ arguments:
     description: "Force sequential (one task at a time) — for debugging."
     required: false
   - name: purge-stale-locks
-    description: "Auto-purge .trae/_locks/*.lock.json from aborted runs (asks confirm unless flag set)."
+    description: "Auto-purge $CHE_SESSION_DIR/_locks/*.lock.json from aborted runs (resolved via `che compute_paths`; asks confirm unless flag set)."
     required: false
 ---
 

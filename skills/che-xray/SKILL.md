@@ -7,7 +7,7 @@ description: "X-ray onboarding for NEW repositories. Detects stack, language, mo
 
 > **SHARED REFERENCES (CANONICAL — DO NOT DUPLICATE body here):**
 > - Full engineering contracts (precedence 1-18, DbC, KISS, No Accidental Complexity, Ousterhout): `engineering-contracts` skill
-> - Path resolution + project registry Level 1.5 helpers: `source "${CHE_HOME:-${HARNESS_HOME:-$HOME/.trae}}/contracts/che_sessions_contract.sh"`
+> - Path resolution + project registry Level 1.5 helpers: `che` CLI (`che compute_paths`, `che registry_lookup`)
 > - Knowledge graph AST: `/che-graph refresh` (graphify CLI pipx wrapper: `graphifyy`)
 > - Human product context complement: `/che-onboarding`
 

@@ -11,7 +11,7 @@ arguments:
     description: "Target project slug (L2). REQUIRED. If missing, ASK user for a valid project."
     required: true
   - name: slug
-    description: "Task slug (folder name inside .trae/). Ex: feat-stripe-connect."
+    description: "Task slug identifier. Ex: feat-stripe-connect."
     required: false
   - name: spec
     description: "Path to approved PRD/spec .md. Optional."

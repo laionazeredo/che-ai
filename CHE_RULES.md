@@ -44,32 +44,32 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 >
 > ONLY POSSIBLE EXCEPTION: User explicitly and clearly asks VERBATIM for a SPECIFIC file to be saved inside the worktree. Without this verbal request, default = **OUTSIDE WORKTREE**.
 >
-> - **IMMUTABLE che CODE (skills/commands/hooks/user_rules/contracts):** remains in `$HOME/.trae/`.
+> - **IMMUTABLE che CODE (skills/commands/hooks/user_rules/contracts):** lives in Che home, resolved via 5-tier cascade: `$CHE_HOME` (top precedence, user override) → `$HARNESS_HOME` (compat alias) → `$HOME/.che-ai` (canonical default, Sep 2026+) → `$HOME/.trae` if CHE_RULES.md exists there (legacy pre-Sep-2026, originally inside Trae IDE home folder, historical accident) → final fallback `$HOME/.che-ai`.
 > - **DATA/GENERATED/MUTABLE (specs, plans, decisions, reports, QA evidence, bindings, diff contexts, PR comments):** must go to `$CHE_SESSIONS_ROOT` (default `$HOME/code/che-sessions`), **OUTSIDE USER WORKTREES**, under `<WORKSPACE_NAME>/<WORKTREE_SLUG>/`.
 >
-> Canonical paths SINGLE SOURCE OF TRUTH contract: `source ~/.trae/contracts/che_sessions_contract.sh` + `che_compute_paths WORKTREE_ROOT SESSION_ID CWD`. **Hardcoded path construction is prohibited.**
+> Canonical paths SINGLE SOURCE OF TRUTH: the `che` CLI (`che_core/paths.py`). Resolve with `eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"` then `che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"`. **Hardcoded path construction (e.g. `~/.trae/...`) is prohibited.** The CLI owns the 5-tier Che-home cascade.
 >
-> **🔧 MANDATORY HELPER FOR ALL OUTPUT WRITES:**
-> DO NOT invent paths manually. Always call:
+> **🔧 MANDATORY CLI FOR ALL OUTPUT WRITES:**
+> DO NOT invent paths manually. Always call the `che` CLI:
 >
 > ```bash
-> che_output_path <type> <slug> <related_id> <scope> <ext> [suffix]
+> che output_path <type> <slug> <related_id> <scope> <ext> [suffix]
 > # Examples:
-> che_output_path "review" "che-code-review" "pr-382" "session" "md" "full"
+> che output_path "review" "che-code-review" "pr-382" "session" "md" "full"
 >   # → $CHE_SESSION_DIR/reviews/pr-382/20260902-092405-che-code-review_full.md
-> che_output_path "report" "che-scope-check" "pr-382" "workspace" "md"
+> che output_path "report" "che-scope-check" "pr-382" "workspace" "md"
 >   # → $CHE_WORKSPACE_SHARED/reports/pr-382/20260902-093010-che-scope-check.md
-> che_output_path "diff_context" "diff-summary" "pr-382" "session" "md"
+> che output_path "diff_context" "diff-summary" "pr-382" "session" "md"
 >   # → $CHE_SESSION_DIR/diff_contexts/pr-382/20260902-093500-diff-summary.md
 > ```
 >
-> The helper automatically GUARANTEES: (1) UTC timestamp prefix **AT THE START** of the filename → alphabetical order = chronological creation order (does not depend on OS mtime); (2) Subfolders `<type>/<related_id>/` → all files from the same PR/task are co-located, easy to search with a glob; (3) low-level `che_assert_outside_worktree` → HARD STOP if for any reason the path would resolve inside the worktree; (4) automatically creates parent directories.
+> `che output_path` automatically GUARANTEES: (1) UTC timestamp prefix **AT THE START** of the filename → alphabetical order = chronological creation order (does not depend on OS mtime); (2) Subfolders `<type>/<related_id>/` → all files from the same PR/task are co-located, easy to search with a glob; (3) low-level `che assert_outside_worktree` → HARD STOP if for any reason the path would resolve inside the worktree; (4) automatically creates parent directories.
 >
-> For writing: prefer `che_write_file_atomic <path>` (stdin → tmp → atomic mv, avoids half-written files).
+> For writing: prefer `che write_file_atomic <path>` (stdin → tmp → atomic mv, avoids half-written files).
 
 1. Once `WORKTREE_ROOT` and `SESSION_ID` are determined:
-   - Execute `che_compute_paths` → resolve `CHE_WORKSPACE_NAME` (via `.code-workspace` cwd match, fallback `default`) and `CHE_WORKTREE_SLUG` (standard `RepoName__branch-slug`, canonical separator `__`).
-   - Execute `che_ensure_session_dirs` → create 2-directory structure per worktree **outside user code**:
+   - Execute `che compute_paths` → resolve `CHE_WORKSPACE_NAME` (via `.code-workspace` cwd match, fallback `default`) and `CHE_WORKTREE_SLUG` (standard `RepoName__branch-slug`, canonical separator `__`).
+   - Execute `che ensure_dirs` → create 2-directory structure per worktree **outside user code**:
      - `$CHE_WORKSPACE_SHARED/` — **DURABLE** (shared across multiple sessions):
        - `reports/<related_id>/` — final scope-check, ship-gate reports (durable, searchable by PR/task)
        - `specs/` — (1+ per worktree) **Che Execution Specification (SPEC).** 7 canonical sections + mandatory YAML frontmatter fields. Approved gate in SM §0.5. Replaces legacy PRD.
@@ -90,8 +90,8 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
        - `execution/` — batch logs, execution trace, runtime envelopes.
        - `debugger/` — screenshots, logs, and traces from che-debugger-bugfix.
        - `final_summary.md` — final summary and statistics of this execution.
-2. **NEVER** create these files in other locations (docs/, repo root, package folders, `<WORKTREE_ROOT>/.trae/*`, `<WORKTREE_ROOT>/reports/`) unless the user explicitly asks.
-3. **NEVER** touch `AGENTS.md` or `CLAUDE.md` in the user's worktree (che only modifies ~/.trae + che-sessions).
+2. **NEVER** create these files in other locations (docs/, repo root, package folders, `<WORKTREE_ROOT>/.che-ai/*`, `<WORKTREE_ROOT>/.trae/*`, `<WORKTREE_ROOT>/reports/`) unless the user explicitly asks. Anti-pattern: never nest the Che source checkout inside a user project repo.
+3. **NEVER** touch `AGENTS.md` or `CLAUDE.md` in the user's worktree. Che only modifies files inside its own home folder (resolved via `$CHE_HOME` cascade) + the durable session state in `$CHE_SESSIONS_ROOT`.
 
 ---
 
@@ -138,7 +138,7 @@ For ANY feature implementation / bugfix with more than one step:
 ## 🟡 ALWAYS LOG DECISIONS
 
 Whenever you make a non-trivial decision (trade-off, rule exception, unforeseen files, mutability in hot path, RLS policy on new table, choice of creating multi-PR stack vs single PR, etc.):
-1. **USE OFFICIAL HELPER:** `source ~/.trae/contracts/che_sessions_contract.sh && che_append_decision_jsonl "$WORKTREE_ROOT" "EVENT_TYPE" '{"key":"value"}'`.
+1. **USE OFFICIAL CLI:** `che decision_append "$WORKTREE_ROOT" "EVENT_TYPE" '{"key":"value"}'`.
    - Single point of append (dedup, JSON safe, schema v1). Single source: `$CHE_WORKSPACE_SHARED/decisions.log.jsonl`.
    - DO NOT use manual JSONL Edit/Write (risk of broken quoting / semicolons / no dedup).
 2. To consult human-readable → `/che-decisions` or `che-decisions-query` Skill (English summary / filters / CSV export).
@@ -176,12 +176,12 @@ In ANY loop/iterations between agents, the rule is:
 
 ### Mandatory Preflight (BEFORE any command, file reading, git operation, Glob/Grep):
 
-1. **Read Level 1 GLOBAL INDEX (resolve chicken-and-egg):** Read `$HOME/.trae/bindings/registry.jsonl`. Search for the LAST entry with STATUS=BOUND and SESSION_ID=<current>. Extract WORKTREE_ROOT from this entry.
+1. **Read Level 1 GLOBAL INDEX (resolve chicken-and-egg):** Read the canonical registry at `$CHE_HOME/bindings/registry.jsonl` (use cascade if env var empty: try `$HOME/.che-ai`, else `$HOME/.trae` if CHE_RULES.md exists there, else `$HOME/.che-ai`). Search for the LAST entry with STATUS=BOUND and SESSION_ID=<current>. Extract WORKTREE_ROOT from this entry.
    - If found → use its WORKTREE_ROOT as the ABSOLUTE SCOPE of the session.
    - If NOT found → follow rule §19.2 (precedence order: explicit user mention → open files → env workdirs → AskUserQuestion with ≤2 options. Always ask when ambiguous; NEVER guess).
 
 2. **Write binding at BOTH LEVELS after first approval (atomically):**
-   - **Level 1:** Append via OFFICIAL helper `source che_sessions_contract.sh && che_registry_append_jsonl <sid> BOUND <wt> <payload>` to `registry.jsonl` (DO NOT use manual Edit/Write). Append-only, NEVER overwrite BOUND entries (maintains history). Optional payload fields: `"friendly_name":"short-slug"` (ask 1x before creating CHE_SESSION_DIR; if given, SESSION_DIR gets `--<friendly>` suffix), `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}`, `"workspace_name"`, `"worktree_slug"`, `"branch"`, `"che_session_dir"`, `"che_workspace_shared"`, `"workspace_file"`, `"reason"`.
+   - **Level 1:** Append via OFFICIAL CLI `che registry_append <sid> BOUND <wt> <payload>` to `registry.jsonl` (DO NOT use manual Edit/Write). Append-only, NEVER overwrite BOUND entries (maintains history). Optional payload fields: `"friendly_name":"short-slug"` (ask 1x before creating CHE_SESSION_DIR; if given, SESSION_DIR gets `--<friendly>` suffix), `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}`, `"workspace_name"`, `"worktree_slug"`, `"branch"`, `"che_session_dir"`, `"che_workspace_shared"`, `"workspace_file"`, `"reason"`.
    - **Level 2:** **OUTSIDE USER WORKTREE** → `$CHE_SESSION_DIR/binding.md` (resolved via contract). History/audit re-binding chain + mirror FLAGS + FRIENDLY_NAME for human reading. Mandatory NEW Level 2 fields: `WORKSPACE_NAME`, `WORKTREE_SLUG`, `CHE_SESSION_DIR`, `CHE_WORKSPACE_SHARED`.
    - 2 files created. 1 per SESSION_ID.
    - More details on re-binding contract body are in contracts §19. Only process/enforcement gates here.
@@ -201,10 +201,10 @@ In ANY loop/iterations between agents, the rule is:
    - If draft output has clickable refs from ≥2 DIFFERENT worktrees AND the user did NOT ask for comparison → STOP. Delete incorrect worktree refs. Keep only refs from the BOUND WORKTREE_ROOT.
 
 > **AUTOMATIC GLOBAL ENFORCEMENT (§19 2-LEVEL LAYOUT):**
->   - **Level 1 (GLOBAL INDEX resolve chicken-and-egg + FLAGS + FRIENDLY_NAME per session):** `$HOME/.trae/bindings/registry.jsonl` — entry per SESSION_ID, append-only, NOT per worktree. `SESSION_ID → WORKTREE_ROOT` lookup without needing to know worktree. SINGLE writer = `che_registry_append_jsonl` helper (never manual Edit/Write). Optional payload: `"friendly_name":""`, `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}` (omitted=ENABLED for Hook 3 per session).
->   - **Level 2 (PER-SESSION DETAIL — OUTSIDE USER WORKTREE):** `$CHE_SESSION_DIR/binding.md` (no longer inside `<WORKTREE_ROOT>/.trae/bindings/`) — resolve via `che_compute_paths` contract → `che_level2_binding_path`. History/audit re-binding chain + mirror FLAGS + FRIENDLY_NAME for human reading. Never committed by design.
->   - **Hook 1 (PreToolUse):** [pretooluse-worktree-binding.sh](file:///home/laion/.trae/hooks/pretooluse-worktree-binding.sh) in [hooks.json](file:///home/laion/.trae/hooks.json#L5) — uses ONLY Level 1 for scissor check. **EXCEPTION:** paths in `$CHE_SESSIONS_ROOT/**` are permitted (not user code). Zero lock contention, resolves catch-22, parallel multi-session works.
->   - **Hook 3 (PostToolUse WARN-only):** [posttooluse-lang-pt-check.sh](file:///home/laion/.trae/hooks/posttooluse-lang-pt-check.sh) in [hooks.json](file:///home/laion/.trae/hooks.json#L22) — detects PT-BR text in files written via Edit/Write (4+ PT stopwords OR 2+ lines with accents + 2 stopwords). NEVER fixes automatically, NEVER blocks (always exit 0). Decision=warn + additionalContext instructs agent to **mandatory AskUserQuestion**: (A) Translate to English, (B) Keep confirmed PT, (C) Disable Hook 3 in this session (append `"flags":{"LANG_PT_CHECK":"DISABLED"}` via official helper in Level 1 registry.jsonl + Level 2 mirror).
+>   - **Level 1 (GLOBAL INDEX resolve chicken-and-egg + FLAGS + FRIENDLY_NAME per session):** `${CHE_HOME:-$HOME/.che-ai}/bindings/registry.jsonl` — entry per SESSION_ID, append-only, NOT per worktree. `SESSION_ID → WORKTREE_ROOT` lookup without needing to know worktree. SINGLE writer = `che registry_append` CLI (never manual Edit/Write). Optional payload: `"friendly_name":""`, `"flags":{"LANG_PT_CHECK":"ENABLED"|"DISABLED"}` (omitted=ENABLED for Hook 3 per session).
+>   - **Level 2 (PER-SESSION DETAIL — OUTSIDE USER WORKTREE):** `$CHE_SESSION_DIR/binding.md` (never inside the user project or `<WORKTREE_ROOT>/.che-ai/` or legacy `.trae/`) — resolve via the `che compute_paths` contract → `$CHE_LEVEL2_BINDING`. History/audit re-binding chain + mirror FLAGS + FRIENDLY_NAME for human reading. Never committed by design.
+>   - **Hook 1 (PreToolUse):** [pretooluse-worktree-binding.sh](./hooks/pretooluse-worktree-binding.sh) in [hooks.json](./hooks.json#L5) — uses ONLY Level 1 for scissor check. **EXCEPTION:** paths in `$CHE_SESSIONS_ROOT/**` are permitted (not user code). Zero lock contention, resolves catch-22, parallel multi-session works.
+>   - **Hook 3 (PostToolUse WARN-only):** [posttooluse-lang-pt-check.sh](./hooks/posttooluse-lang-pt-check.sh) in [hooks.json](./hooks.json#L22) — detects PT-BR text in files written via Edit/Write (4+ PT stopwords OR 2+ lines with accents + 2 stopwords). NEVER fixes automatically, NEVER blocks (always exit 0). Decision=warn + additionalContext instructs agent to **mandatory AskUserQuestion**: (A) Translate to English, (B) Keep confirmed PT, (C) Disable Hook 3 in this session (append `"flags":{"LANG_PT_CHECK":"DISABLED"}` via official helper in Level 1 registry.jsonl + Level 2 mirror).
 
 ---
 
@@ -413,7 +413,7 @@ For any `/che-ship` command or similar:
    - Task Graph has ≥3 tasks that form clearly separable PR units.
    - OR: User explicitly asked to "deliver in multiple PRs".
    - OR: A single task has blast radius > 15 files and SM decides to break into 2+ PRs.
-2. **Planning (SM creates file `$CHE_WORKSPACE_SHARED/tasks/<TASK_ID>/gh_stack_plan.md` — OUTSIDE worktree, via `che_compute_paths`) BEFORE Dev starts:**
+2. **Planning (SM creates file `$CHE_WORKSPACE_SHARED/tasks/<TASK_ID>/gh_stack_plan.md` — OUTSIDE worktree, via `che compute_paths`) BEFORE Dev starts:**
    - Ordered list: `PR #N`, title, base branch, head branch, tasks covered, PR ACs, optional reviewers, stack order (base → top).
    - Structure example: `[PR1 (base main)] contracts types → [PR2 (base PR1 branch)] service layer → [PR3 (base PR2 branch)] API + tests`.
    - Show plan to user for approval BEFORE Dev starts.
@@ -517,7 +517,7 @@ description: "Build KW cluster head-body-long-tail + cannibalism check audit."
 
 ### Where to configure (precedence order HIGH → LOW)
 
-1. **Session override (Level 1 registry.jsonl flags entry — BIND_FLAGS_UPDATE event):** Temporary only in this session. `che_registry_append_jsonl $SID FLAGS $WT '{"flags":{"LANG_DOCS":"pt-BR"}}'`.
+1. **Session override (Level 1 registry.jsonl flags entry — BIND_FLAGS_UPDATE event):** Temporary only in this session. `che registry_append $SID FLAGS $WT '{"flags":{"LANG_DOCS":"pt-BR"}}'`.
 2. **Project registry Level 1.5 (.registry/projects/<slug>/product_context.md frontmatter):** `lang_code: en` + `lang_docs: pt-BR` (durable per project, shared worktrees × sessions).
 3. **Default CHE_RULES (this file):** Values in the table above if no project/session defined.
 
@@ -533,8 +533,8 @@ If `LANG_PT_CHECK = DISABLED` legacy exists in session flags → automatically m
 
 | Gate | Rule | Canonical body location | Automatic enforcement |
 |---|---|---|---|
-| ✅ **Test Naming Behavioral** | `describe()/it()/test()` names = observable behaviour. **PROHIBITED** to put task id / AC / § / FLO-XXX / rule / SPEC id DIRECTLY in the title. Traceability allowed **ONLY** via JSDoc comment above OR line comment `// @ac ... | @task ...` INSIDE the block. Suites = grouping by functional DOMAIN/context. | **RULE 7.9** → [REFERENCE_USER_RULES_MINIFIED.md §7.9](file:///home/laion/.trae/REFERENCE_USER_RULES_MINIFIED.md#L247-L305) | **QA Stage E** (lint scan diffs, FAIL ≥10 bad titles) · **Compliance Scan 6.5** (severity gradient 1-9 WARN / ≥10 HIGH) · **CR Cat 4.7** (1-4 LOW / 5-9 MEDIUM / ≥10 HIGH). All validate and allow JSDoc/in-block traceability as an exception. |
-| ✅ **4-Checks Scope Delivery Audit** | **Before Draft PR or when reviewing worktree/PR:** MANDATORY scan of 4 pillars using PRD/ticket/task-graph/scope source: (1) every AC/delivery has file evidence in the diff mapped by behavioural keyword, (2) expected behaviour covered by unit/e2e tests with RULE 7.9 names, (3) mandatory documents updated (README, AGENTS, runbooks, .env.example) when heuristic trigger applies, (4) NO NEW env var used without declaration in parser (zod schema, env.ts, .env.example, terraform/vercel/railway). Report names RULE 7.9: not `well_implemented` but `full_scope_delivery_for_ac_<slug>`. | **RULE 8.2** → [che-scope-checker SKILL §2..§5](file:///home/laion/.trae/skills/che-scope-checker/SKILL.md#L60-L250) · commands: [/che-scope-check](file:///home/laion/.trae/commands/che-scope-check.md) | **GATE SHIP (FAIL-CLOSED):** `/che-ship` automatically invokes before opening Draft PR. 🔴 Verdict blocks PR opening until action items are resolved. Manual audit: standalone `/che-scope-check` at any time. |
+| ✅ **Test Naming Behavioral** | `describe()/it()/test()` names = observable behaviour. **PROHIBITED** to put task id / AC / § / FLO-XXX / rule / SPEC id DIRECTLY in the title. Traceability allowed **ONLY** via JSDoc comment above OR line comment `// @ac ... | @task ...` INSIDE the block. Suites = grouping by functional DOMAIN/context. | **RULE 7.9** → [REFERENCE_USER_RULES_MINIFIED.md §7.9](./REFERENCE_USER_RULES_MINIFIED.md#L247-L305) | **QA Stage E** (lint scan diffs, FAIL ≥10 bad titles) · **Compliance Scan 6.5** (severity gradient 1-9 WARN / ≥10 HIGH) · **CR Cat 4.7** (1-4 LOW / 5-9 MEDIUM / ≥10 HIGH). All validate and allow JSDoc/in-block traceability as an exception. |
+| ✅ **4-Checks Scope Delivery Audit** | **Before Draft PR or when reviewing worktree/PR:** MANDATORY scan of 4 pillars using PRD/ticket/task-graph/scope source: (1) every AC/delivery has file evidence in the diff mapped by behavioural keyword, (2) expected behaviour covered by unit/e2e tests with RULE 7.9 names, (3) mandatory documents updated (README, AGENTS, runbooks, .env.example) when heuristic trigger applies, (4) NO NEW env var used without declaration in parser (zod schema, env.ts, .env.example, terraform/vercel/railway). Report names RULE 7.9: not `well_implemented` but `full_scope_delivery_for_ac_<slug>`. | **RULE 8.2** → [che-scope-checker SKILL §2..§5](./skills/che-scope-checker/SKILL.md#L60-L250) · commands: [/che-scope-check](./commands/che-scope-check.md) | **GATE SHIP (FAIL-CLOSED):** `/che-ship` automatically invokes before opening Draft PR. 🔴 Verdict blocks PR opening until action items are resolved. Manual audit: standalone `/che-scope-check` at any time. |
 
 ---
 
@@ -614,7 +614,7 @@ When `UU | AA | DD | AU | UA | DU | UD` files exist (git status unmerged):
 2. **ALL** task envelopes have **EXPLICIT and ENUMERATED list of permitted files** (DO NOT use globs `src/**/*` or `packages/` — only concrete paths).
 3. At least 2 tasks in the **same Kahn wave (no mutual dependencies)** have **empty file intersection**.
 4. Worktree is **clean of uncommitted changes OUTSIDE the envelopes** (or user gave explicit approval).
-5. No stale `$CHE_SESSION_DIR/_locks/*.lock.json` with `HELD` state from previous aborted session exists (resolve via `che_compute_paths`; NEVER inside worktree — if exists, purge with user approval).
+5. No stale `$CHE_SESSION_DIR/_locks/*.lock.json` with `HELD` state from previous aborted session exists (resolve via `che compute_paths`; NEVER inside worktree — if exists, purge with user approval).
 
 ### ❌ When NEVER to parallelise (FALLBACK to serial)
 1. Any file listed in more than 1 task of the same mini-batch → **break into separate mini-batches via conflict graph colouring**.
@@ -624,7 +624,7 @@ When `UU | AA | DD | AU | UA | DU | UD` files exist (git status unmerged):
 5. Compliance HEAVY, cross-file QA, or HIGH conflict merge-audit → **run SINGLE-THREADED**.
 
 ### 🔒 Lock files & Single-writer rules
-- **Blast-radius file locks:** `$CHE_SESSION_DIR/_locks/<hash>-<basename>.lock.json` (resolve via `che_compute_paths`; NEVER inside worktree) → acquire BEFORE invoking Dev, release AFTER gates pass + LOW/MEDIUM-confirmed merge-audit.
+- **Blast-radius file locks:** `$CHE_SESSION_DIR/_locks/<hash>-<basename>.lock.json` (resolve via `che compute_paths`; NEVER inside worktree) → acquire BEFORE invoking Dev, release AFTER gates pass + LOW/MEDIUM-confirmed merge-audit.
 - **Single writers for shared artifacts:**
   - `task_graph.md` status updates = **ONLY the dispatcher writes**. No parallel Dev touches this file.
   - `session.md` = dispatcher append-only + SM writes start/end.
@@ -695,11 +695,11 @@ KISS always wins. Parallelism is an OPTIMISATION, not a REQUIREMENT.
 
 | ID | Ecosystem Slug | Human Readable Name | Core Frameworks & Libraries (full enumeration NON-NEGOTIABLE — user VERBATIM) | Coverage TODAY (Sep 2026) | Goal AFTER Phase B P0 | Consumed by these L3 gates / skills | Canonical SKILL path |
 |---|---|---|---|---|---|---|---|
-| **E01** | `ts-node-deno` | TypeScript + Node.js + Deno | **Backend:** NestJS, tRPC. **Frontend:** Next.js, Vite + React. **Scripting:** tsx. **Full-stack CMS:** Payload CMS. **E-commerce:** MedusaJS. | **72%** (Gap: MedusaJS 🔴) | **85%** · (close Medusa + Payload modules deep rules) | che-xray §2, che-qa §1 build/test matrix, che-scope-checker lang filters, che-developer Q2-Q3 | [typescript-expert/SKILL.md](file:///home/laion/.trae/skills/typescript-expert/SKILL.md) + [frontend-modern-stack](../skills/frontend-modern-stack/SKILL.md) + [ecommerce-expert](../skills/ecommerce-expert/SKILL.md) + [backend-runtime-expert](../skills/backend-runtime-expert/SKILL.md) |
-| **E02** | `python` | Python | **Backend API:** FastAPI. **Agents AI:** LangChain, LangGraph, LangSmith. **Data / ML:** Jupyter Notebook, asyncio, pyproject.toml ecosystem. **Tooling:** uv (default · beats pip/poetry when uv.lock present). **Testing:** pytest. | **37%** (Gaps: Jupyter DSML 🔴 · LangSmith 🔴 · uv deep 🔴 · asyncio advanced patterns 🔴) | **70%** · (close 4 major gaps above) | same gate consumers as E01 + ai-agent-orchestrator skill Q2 | [python-expert/SKILL.md](file:///home/laion/.trae/skills/python-expert/SKILL.md) + [ai-agent-orchestrator](../skills/ai-agent-orchestrator/SKILL.md) |
-| **E03** | `rust` | Rust | **Backend Web:** axum. **Async Runtime:** tokio. **ORMs / DB:** Diesel, sqlx, SeaORM. **Structured Framework:** loco. **Full-stack SSR + hydration:** Leptos. | **14%** (Gaps: Diesel 🔴 · sqlx 🔴 · SeaORM 🔴 · loco 🔴 ZERO · Leptos exists but shallow) | **45%** · (close 4 ZERO ORM/framework gaps + deepen Leptos) | same gate consumers as E01 + che-qa §1 `cargo test` + `clippy` | [rust-expert/SKILL.md](file:///home/laion/.trae/skills/rust-expert/SKILL.md) |
-| **E04** | `go` | Go (Golang) | **HTTP stdlib + Routers:** net/http standard, Gin · Echo · Fiber · chi. **Database:** database/sql core · sqlx · GORM · sqlc codegen. **RPC:** grpc-go + interceptors chain. **CLI:** cobra + viper + pflag. **Logging:** slog (default 1.21+) + zap (high-performance OTel). **Concurrency:** sync primitives, generics patterns, context propagation best-practices. **Testing:** stdlib table-driven + testify assertions + `-race` + go vet/golangci-lint. | **25%** (Gaps: Routers 🔴 · DB layer 🔴 · gRPC 🔴 · cobra CLI 🔴 · slog/zap OTel structured 🔴 · generics helpers 🔴 · graceful shutdown + healthz 🔴) | **55%** · (close 7 gaps above) | same gate consumers as E01 + che-qa §1 `go test ./...` + `go vet` | [golang-expert/SKILL.md](file:///home/laion/.trae/skills/golang-expert/SKILL.md) |
-| **E05** | `cloud-native-devops-observability` | Cloud Native + DevOps + Observability | **Container & Runtime:** Docker (multi-stage Dockerfile patterns, buildx, non-root USER, HEALTHCHECK, .dockerignore, cache mounts). **Local K8s:** kind. **Kubernetes manifests:** Deployment, StatefulSet, DaemonSet, HPA, PDB, TopologySpreadConstraints, PriorityClass, readiness/liveness/startup probes, resource requests + limits. **K8s packaging + overlays:** Helm charts (templates + _helpers.tpl + values hierarchy {dev,staging,prod} + hooks pre-install migration) · Kustomize (base/ + overlays/ + strategic merge patch + components). **IaC:** Terraform (provider version pinning, module structure variables/outputs/main.tf, remote state backend S3 + DynamoDB lock, tfvars hierarchy). **Observability 3 Pillars + Methodologies:** logs/metrics/traces; USE method (resources), RED metrics (services Rate/Errors/Duration), 4 Golden Signals (Latency/Traffic/Errors/Saturation). **Observability Tools:** OpenTelemetry Collector pipelines (receivers/processors/exporters + sampling) · Prometheus recording rules naming `job:metric:operator` + alertmanager route/inhibition/severity + PromQL patterns `rate()[5m]` / `histogram_quantile(0.95, rate())` · Grafana + Loki (LogQL `{app="x"} |= "error" | json`) + Tempo (TraceQL) · Sentry SDK (beforeSend PII filter + integrations + captureException tags + breadcrumbs + tracesSampleRate env-separated DSNs) · Datadog (unified service tagging env/service/version + dogstatsd + APM dd-trace). | **22%** (Gaps CloudNative: Dockerfile 7 stages 🔴 · Kind cluster config 🔴 · K8s manifest patterns 🔴 · Helm _helpers 🔴 · Kustomize overlays 🔴 · Terraform pin/state/module 🔴. Gaps Observability ZERO TODAY: RED · 4GS · USE formalisms 🔴 ZERO · Prom recording+alert rules 🔴 · OTel Collector pipeline 🔴 · Loki/Tempo query languages 🔴 · Sentry SDK 🔴 · Datadog unified tags 🔴) | **60%** · (close 13 gaps above — split 6 IaC/container + 7 Observability formalisms + tools) | domains/devops playbook, che-xray deploy detection L100, che-scope-checker ENV_USAGE parser, engineering-contracts §20 External SaaSLIST row, che-ci-fixer CI run patterns. Observability subsection is consumed by EVERY skill via engineering-contracts §12 Pointer → §19 Logging Standard → this E05 for tool-specifics. | [devops-infra-expert/SKILL.md](file:///home/laion/.trae/skills/devops-infra-expert/SKILL.md) · (Observability rules live INSIDE this skill under two separate sub-sections) |
+| **E01** | `ts-node-deno` | TypeScript + Node.js + Deno | **Backend:** NestJS, tRPC. **Frontend:** Next.js, Vite + React. **Scripting:** tsx. **Full-stack CMS:** Payload CMS. **E-commerce:** MedusaJS. | **72%** (Gap: MedusaJS 🔴) | **85%** · (close Medusa + Payload modules deep rules) | che-xray §2, che-qa §1 build/test matrix, che-scope-checker lang filters, che-developer Q2-Q3 | [typescript-expert/SKILL.md](file:///home/laion/.che-ai/skills/typescript-expert/SKILL.md) + [frontend-modern-stack](../skills/frontend-modern-stack/SKILL.md) + [ecommerce-expert](../skills/ecommerce-expert/SKILL.md) + [backend-runtime-expert](../skills/backend-runtime-expert/SKILL.md) |
+| **E02** | `python` | Python | **Backend API:** FastAPI. **Agents AI:** LangChain, LangGraph, LangSmith. **Data / ML:** Jupyter Notebook, asyncio, pyproject.toml ecosystem. **Tooling:** uv (default · beats pip/poetry when uv.lock present). **Testing:** pytest. | **37%** (Gaps: Jupyter DSML 🔴 · LangSmith 🔴 · uv deep 🔴 · asyncio advanced patterns 🔴) | **70%** · (close 4 major gaps above) | same gate consumers as E01 + ai-agent-orchestrator skill Q2 | [python-expert/SKILL.md](file:///home/laion/.che-ai/skills/python-expert/SKILL.md) + [ai-agent-orchestrator](../skills/ai-agent-orchestrator/SKILL.md) |
+| **E03** | `rust` | Rust | **Backend Web:** axum. **Async Runtime:** tokio. **ORMs / DB:** Diesel, sqlx, SeaORM. **Structured Framework:** loco. **Full-stack SSR + hydration:** Leptos. | **14%** (Gaps: Diesel 🔴 · sqlx 🔴 · SeaORM 🔴 · loco 🔴 ZERO · Leptos exists but shallow) | **45%** · (close 4 ZERO ORM/framework gaps + deepen Leptos) | same gate consumers as E01 + che-qa §1 `cargo test` + `clippy` | [rust-expert/SKILL.md](file:///home/laion/.che-ai/skills/rust-expert/SKILL.md) |
+| **E04** | `go` | Go (Golang) | **HTTP stdlib + Routers:** net/http standard, Gin · Echo · Fiber · chi. **Database:** database/sql core · sqlx · GORM · sqlc codegen. **RPC:** grpc-go + interceptors chain. **CLI:** cobra + viper + pflag. **Logging:** slog (default 1.21+) + zap (high-performance OTel). **Concurrency:** sync primitives, generics patterns, context propagation best-practices. **Testing:** stdlib table-driven + testify assertions + `-race` + go vet/golangci-lint. | **25%** (Gaps: Routers 🔴 · DB layer 🔴 · gRPC 🔴 · cobra CLI 🔴 · slog/zap OTel structured 🔴 · generics helpers 🔴 · graceful shutdown + healthz 🔴) | **55%** · (close 7 gaps above) | same gate consumers as E01 + che-qa §1 `go test ./...` + `go vet` | [golang-expert/SKILL.md](file:///home/laion/.che-ai/skills/golang-expert/SKILL.md) |
+| **E05** | `cloud-native-devops-observability` | Cloud Native + DevOps + Observability | **Container & Runtime:** Docker (multi-stage Dockerfile patterns, buildx, non-root USER, HEALTHCHECK, .dockerignore, cache mounts). **Local K8s:** kind. **Kubernetes manifests:** Deployment, StatefulSet, DaemonSet, HPA, PDB, TopologySpreadConstraints, PriorityClass, readiness/liveness/startup probes, resource requests + limits. **K8s packaging + overlays:** Helm charts (templates + _helpers.tpl + values hierarchy {dev,staging,prod} + hooks pre-install migration) · Kustomize (base/ + overlays/ + strategic merge patch + components). **IaC:** Terraform (provider version pinning, module structure variables/outputs/main.tf, remote state backend S3 + DynamoDB lock, tfvars hierarchy). **Observability 3 Pillars + Methodologies:** logs/metrics/traces; USE method (resources), RED metrics (services Rate/Errors/Duration), 4 Golden Signals (Latency/Traffic/Errors/Saturation). **Observability Tools:** OpenTelemetry Collector pipelines (receivers/processors/exporters + sampling) · Prometheus recording rules naming `job:metric:operator` + alertmanager route/inhibition/severity + PromQL patterns `rate()[5m]` / `histogram_quantile(0.95, rate())` · Grafana + Loki (LogQL `{app="x"} |= "error" | json`) + Tempo (TraceQL) · Sentry SDK (beforeSend PII filter + integrations + captureException tags + breadcrumbs + tracesSampleRate env-separated DSNs) · Datadog (unified service tagging env/service/version + dogstatsd + APM dd-trace). | **22%** (Gaps CloudNative: Dockerfile 7 stages 🔴 · Kind cluster config 🔴 · K8s manifest patterns 🔴 · Helm _helpers 🔴 · Kustomize overlays 🔴 · Terraform pin/state/module 🔴. Gaps Observability ZERO TODAY: RED · 4GS · USE formalisms 🔴 ZERO · Prom recording+alert rules 🔴 · OTel Collector pipeline 🔴 · Loki/Tempo query languages 🔴 · Sentry SDK 🔴 · Datadog unified tags 🔴) | **60%** · (close 13 gaps above — split 6 IaC/container + 7 Observability formalisms + tools) | domains/devops playbook, che-xray deploy detection L100, che-scope-checker ENV_USAGE parser, engineering-contracts §20 External SaaSLIST row, che-ci-fixer CI run patterns. Observability subsection is consumed by EVERY skill via engineering-contracts §12 Pointer → §19 Logging Standard → this E05 for tool-specifics. | [devops-infra-expert/SKILL.md](file:///home/laion/.che-ai/skills/devops-infra-expert/SKILL.md) · (Observability rules live INSIDE this skill under two separate sub-sections) |
 
 ### TABLE 2: Per-Framework Coverage Matrix (drill-down into each ecosystem's frameworks)
 

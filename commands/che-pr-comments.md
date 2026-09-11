@@ -10,4 +10,4 @@ IMMEDIATELY invoke **`che-pr-comments`** Skill.
 
 Preflight: `gh auth status` OK.
 
-Skill: pull all comments via `gh pr view --json comments,reviews` → classify (CORRECTNESS, SECURITY, ARCHITECTURE, SCOPE CREEP, QUESTION, NIT, PRAISE, DISCUSSION, OUTDATED, DUPLICATE) → save `.trae/pr-<N>-comments_<YYYYMMDD>.md` → deliver 5 buckets (TO IMPLEMENT / DRAFT RESPONSES / DISCUSSION PENDING / NIT / RESOLVED SILENTLY) → user approves → implement fixes + optionally post replies.
+Skill: pull all comments via `gh pr view --json comments,reviews` → classify (CORRECTNESS, SECURITY, ARCHITECTURE, SCOPE CREEP, QUESTION, NIT, PRAISE, DISCUSSION, OUTDATED, DUPLICATE) → save `$CHE_WORKSPACE_SHARED/pr_comments/pr-<N>_<YYYYMMDD>.md` (resolved via `che compute_paths`; NEVER inside the worktree) → deliver 5 buckets (TO IMPLEMENT / DRAFT RESPONSES / DISCUSSION PENDING / NIT / RESOLVED SILENTLY) → user approves → implement fixes + optionally post replies.

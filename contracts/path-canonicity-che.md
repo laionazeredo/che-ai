@@ -13,7 +13,7 @@
 | `CHE_WORKSPACES_ROOT` | `$HOME/.che-workspaces` | Any existing absolute path with write permission | **Root of EVERYTHING** in Che (L1 workspaces). 1-release fallback: if new path DOES NOT exist AND old `$HOME/code/harness-sessions` exists → reuse the old one. |
 | `CHE_HOST_IDE` | `trae` | `trae`, `codex`, `cursor`, `claude-code`, `opencode` | Agnostic IDE host identifier. Future adapters in `adapters/<host_ide>/`. |
 | `CHE_SESSION_ID` | (3-level fallback: `CHE_SESSION_ID` → `HARNESS_SESSION_ID` → `SESSION_ID` → `slug-safe-date`) | UUID / slug-safe session id |agent session UNIQUE identifier. Same value used in Level 1 registry JSONL. |
-| `CHE_HOME` | `$HOME/.trae` | Any absolute path with `skills/` + `contracts/` + `commands/` + `domains/` | **Config repo** root (skills, rules, commands). Not to be confused with CHE_WORKSPACES_ROOT (user data). |
+| `CHE_HOME` | `$HOME/.che-ai` | Any absolute path with `skills/` + `contracts/` + `commands/` + `domains/` | **Config repo** root (skills, rules, commands). Not to be confused with CHE_WORKSPACES_ROOT (user data). Legacy `$HOME/.trae` is honoured only while it still contains `CHE_RULES.md`. |
 
 ---
 
@@ -101,7 +101,7 @@ CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)  ← L1 — WORKSPACE (IDE workspac
 ### 2.2. Python Helper Invariants
 | Function | Precondition | Post-condition |
 |----------|--------------|----------------|
-| `compute_paths WORKTREE_ROOT SESSION_ID CWD` | All 3 args are absolute/slug-safe. | Returns 12 canonical `CHE_L1_*`, `CHE_L2_*`, `CHE_L3_*`, `CHE_L4_*` variables. |
+| `compute_paths WORKTREE_ROOT SESSION_ID [--cwd CWD]` | Worktree root is an absolute path; session ID is slug-safe. `--cwd` optional (defaults to current dir, used to resolve the workspace name). | Returns 17 canonical variables (`CHE_WORKSPACE_DIR`, `CHE_PROJECT_DIR`, `CHE_WORKTREE_DIR`, `CHE_SESSION_DIR`, `CHE_DECISIONS_PATH`, `CHE_REGISTRY_PATH`, `CHE_LEVEL2_BINDING`, `CHE_PROJECT_REGISTRY`, …). |
 | `ensure_session_dirs` | $WORKTREE_ROOT exists. | Creates `.wt/` with 7 subdirs + `sessions/<ID>/` with 6 subdirs. NEVER overwrites anything existing (`mkdir -p`). |
 | `append_decision_jsonl` | Valid $SESSION_ID. | **Append in DUAL LOCATION**: (a) `.wt/decisions.log.jsonl` (shared worktree single writer); (b) `sessions/<ID>/decisions.log.jsonl` (session-specific copy). Fixed v1 schema. |
 

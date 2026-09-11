@@ -8,7 +8,7 @@ description: "Transforms an Approved SPEC into one or more structured tickets (J
 > **SHARED REFERENCES:**
 > - Approved SPEC format: `che-spec` skill
 > - Engineering contracts (BDD, KISS, DbC): `engineering-contracts` skill
-> - Path resolution: `source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"`
+> - Path resolution: `che` CLI (`che compute_paths`, `che ensure_dirs`)
 
 This skill acts as a bridge between technical specification and project management. It ensures that implementation tasks are properly documented, categorized, and linked in external tools.
 

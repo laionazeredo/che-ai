@@ -33,28 +33,28 @@ NO che work asset (decisions, reports, QA evidence, summaries, locks, etc.) is w
 Execute EXACTLY these 4 steps (do not invent, do not skip):
 
 ```bash
-# 1. Canonical session contract source
-source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"
+# 1. Resolve the `che` CLI (owns the 5-tier Che-home cascade: CHE_HOME → HARNESS_HOME → ~/.che-ai → legacy ~/.trae (iff CHE_RULES.md present) → ~/.che-ai fallback)
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Cannot resolve the storage boundary. Aborting write."; exit 98; }
 
-# 2. If SESSION_ID not from SM: derive from che_current_session_id / registry
-SESSION_ID="${SESSION_ID:-$(che_current_session_id 2>/dev/null || echo "dev-$(date -u +%Y%m%d-%H%M%S)")}"
+# 2. If SESSION_ID not from SM: derive from env / registry
+SESSION_ID="${SESSION_ID:-${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-dev-$(date -u +%Y%m%d-%H%M%S)}}}"
 
 # 3. Compute canonical paths ONCE + ensure base dirs
-che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$(pwd)"
-che_ensure_session_dirs "$WORKTREE_ROOT"
+eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
 
 # 4. DOUBLE-GUARD: reaffirm CHE_SESSION_DIR + CHE_WORKSPACE_SHARED are OUTSIDE worktree
-#    (although che_output_path runs this assert internally on every write)
-che_assert_outside_worktree "$CHE_SESSION_DIR"    "$WORKTREE_ROOT" "CHE_SESSION_DIR"
-che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
+#    (although `che output_path` runs this assert internally on every write)
+che assert_outside_worktree "$CHE_SESSION_DIR"      "$WORKTREE_ROOT" --label "CHE_SESSION_DIR"
+che assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" --label "CHE_WORKSPACE_SHARED"
 
 # ==== SKILL PATHS CONSTRUCTED ONCE (reuse below, do not reconstruct) ====
-# — decisions: $CHE_DECISIONS_PATH (calculated in che_compute_paths = che_decisions_path helper)
-#              EVERY decision write ALWAYS uses: che_append_decision_jsonl "<TITLE>" "{json_payload}"
+# — decisions: $CHE_DECISIONS_PATH (exported by `che compute_paths`)
+#              EVERY decision write ALWAYS uses: che decision_append "$WORKTREE_ROOT" "<EVENT_TYPE>" "{json_payload}"
 #              NEVER write decisions.log.jsonl manually cat/echo >> (risk of corruption, non-atomic).
 # — Task envelope: passed by SM as absolute path (WORKSPACE_SHARED/tasks/<id>/...) already in che-sessions.
-#                  If missing → construct via helper:
-#                    TASK_ENVELOPE_PATH="${TASK_ENVELOPE_PATH:-$(che_output_path "task" "task-envelope" "T${TASK_ID}" "workspace" "md")}"
+#                  If missing → construct via CLI:
+#                    TASK_ENVELOPE_PATH="${TASK_ENVELOPE_PATH:-$(che output_path "task" "task-envelope" "T${TASK_ID}" "workspace" "md")}"
 # — Blast-radius exceptions and OUTSIDE BLAST RADIUS (§4 below): same helpers.
 ```
 
@@ -64,14 +64,14 @@ che_assert_outside_worktree "$CHE_WORKSPACE_SHARED" "$WORKTREE_ROOT" "CHE_WORKSP
 
 Run BEFORE touching ANY Glob/Grep/file-write/git command.
 
-1. **Level 1 Global Index (AUTHORITY):** Read `che_registry_path`. Find LAST STATUS=BOUND entry using the effective session id from `che_current_session_id`. Extract `WORKTREE_ROOT` from that entry. If NO entry: binding hasn't been made yet → ABORT. Ask: "No Level 1 binding for this session. Create it? (A = Select worktree now; B = Cancel task). NEVER write without binding created."
+1. **Level 1 Global Index (AUTHORITY):** Read `$CHE_REGISTRY_PATH`. Find LAST STATUS=BOUND entry using the effective session id (`"${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-${SESSION_ID:-}}}"`). Extract `WORKTREE_ROOT` from that entry. If NO entry: binding hasn't been made yet → ABORT. Ask: "No Level 1 binding for this session. Create it? (A = Select worktree now; B = Cancel task). NEVER write without binding created."
    - If found BOUND entry: confirm `WORKTREE_ROOT` from registry **MUST MATCH** the `WORKTREE_ROOT` passed by Scrum Master.
    - If MISMATCH → **ABORT.** Ask: "SM says worktree = X but Level 1 registry (GLOBAL) says BOUND_ROOT=Y. Switch binding first? (A = Switch per §19.3; B = Cancel task)." Never silent proceed.
-2. **Level 2 Detail File (informational only for Dev):** If Level 2 binding detail (resolved via `che_level2_binding_path` contract) does NOT exist → SM preflight didn't create it properly. Warn & create now (append Level 1 if needed, but don't duplicate BOUND entries). Report discrepancy to SM via `che_append_decision_jsonl "BINDING_LEVEL2_MISSING" '{"task_id":"'"${TASK_ID:-?}"'"}'`. Decision log entries APPEND-SAFE via `che_append_decision_jsonl` helper (SINGLE shared file per worktree-slug via `$CHE_DECISIONS_PATH`, not one per task-id — DO NOT write manually).
+2. **Level 2 Detail File (informational only for Dev):** If Level 2 binding detail (resolved via `$CHE_LEVEL2_BINDING`) does NOT exist → SM preflight didn't create it properly. Warn & create now (append Level 1 if needed, but don't duplicate BOUND entries). Report discrepancy to SM via `che decision_append "$WORKTREE_ROOT" "BINDING_LEVEL2_MISSING" '{"task_id":"'"${TASK_ID:-?}"'"}'`. Decision log entries APPEND-SAFE via `che decision_append` (SINGLE shared file per worktree-slug via `$CHE_DECISIONS_PATH`, not one per task-id — DO NOT write manually).
 3. **Per-operation scissor check (before every file write, Glob/Grep, git cmd):**
    - Target path prefix within `WORKTREE_ROOT`? If not → BLOCK.
-   - Cross-worktree ops only allowed two outcomes: (A) user confirms one-off out-of-scope write, log decision via `che_append_decision_jsonl`; OR (B) ask user to switch worktree first per §19.3.
-   - **Every non-code file write (reports, decisions, QA, summaries) must pass through `che_output_path` + `che_write_file_atomic`. No relative paths, no `./`.**
+   - Cross-worktree ops only allowed two outcomes: (A) user confirms one-off out-of-scope write, log decision via `che decision_append`; OR (B) ask user to switch worktree first per §19.3.
+   - **Every non-code file write (reports, decisions, QA, summaries) must pass through `che output_path` + `che write_file_atomic`. No relative paths, no `./`.**
 4. **Never silent cross-worktree reads = violation (even "just a quick grep"). Hook 1 pretooluse also enforces this independently via Level 1 registry (double guard).**
 5. **If at any point agent thinks "maybe this code is also in worktree B" → DO NOT TOUCH B. Ask user explicitly: "Task linked to worktree X. Switch to Y first? (A = Switch, B = Continue in X)". Never silent swap.**
 
@@ -241,7 +241,7 @@ Count all files you:
 1. **STOP. DO NOT PROCEED.**
 2. Append a SAFE entry via helper (NEVER manual Edit/Write decisions.log.jsonl):
    ```bash
-   che_append_decision_jsonl "BLAST_RADIUS_OVER_10_FILES_SELF_REVIEW" \
+   che decision_append "$WORKTREE_ROOT" "BLAST_RADIUS_OVER_10_FILES_SELF_REVIEW" \
      '{"task_id":"'"${TASK_ID}"'","files_count":'"${COUNT}"',"justification_per_file":[...]}'
    ```
    — Canonical entry title format = `[${TASK_ID}] BLAST RADIUS > 10 FILES — self-review` (`title` field in JSONL).
@@ -255,7 +255,7 @@ Also validate:
 - Every file touched is in the TASK ENVELOPE's `Blast radius` list.
   If you touched a file NOT in the list → append via helper:
   ```bash
-  che_append_decision_jsonl "OUTSIDE_BLAST_RADIUS_FILE_TOUCHED" \
+  che decision_append "$WORKTREE_ROOT" "OUTSIDE_BLAST_RADIUS_FILE_TOUCHED" \
     '{"task_id":"'"${TASK_ID}"'","filepath":"'"${FILEPATH}"'","justification":"<why it was necessary to touch outside list>"}'
   ```
   — Canonical title = `[${TASK_ID}] OUTSIDE BLAST RADIUS: <filepath>`.

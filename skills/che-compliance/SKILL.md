@@ -23,11 +23,11 @@ Security/PII/security pattern scanner. Two stages:
 NO compliance report is written to the USER WORKTREE by default. All reports land in che-sessions via centralized helper. UNIQUE exception: user explicitly asks VERBATIM to save a specific report there.
 
 ```bash
-# 1. Source contract (if not inherited from SM/ship)
-source "${CHE_HOME:-$HOME/.trae}/contracts/che_sessions_contract.sh"
+# 1. Resolve the `che` CLI (owns the 5-tier Che-home cascade)
+command -v che >/dev/null 2>&1 || { echo "❌ FATAL: 'che' CLI not found on PATH. Aborting write."; exit 98; }
 
 # 2. SESSION_ID + RELATED_ID (per-task = T<id>; final = worktree slug)
-SESSION_ID="${SESSION_ID:-$(che_current_session_id 2>/dev/null || echo "compliance-$(date -u +%Y%m%d-%H%M%S)")}"
+SESSION_ID="${SESSION_ID:-${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-compliance-$(date -u +%Y%m%d-%H%M%S)}}}"
 if [[ "${stage}" == "final" ]]; then
   COMPLIANCE_RELATED_ID="compliance-final-${WORKTREE_SLUG_CANONICAL:-$(basename "$WORKTREE_ROOT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//')}"
 else
@@ -36,23 +36,23 @@ fi
 
 # 3. Canonical paths + dirs (if not inherited)
 if [[ -z "${CHE_SESSION_DIR}" ]]; then
-  che_compute_paths "$WORKTREE_ROOT" "$SESSION_ID" "$(pwd)"
-  che_ensure_session_dirs "$WORKTREE_ROOT"
+  eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"
+  che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"
 fi
 
 # 4. Double-guard outside worktree
-che_assert_outside_worktree "${CHE_SESSION_DIR}"      "$WORKTREE_ROOT" "CHE_SESSION_DIR"
-che_assert_outside_worktree "${CHE_WORKSPACE_SHARED}" "$WORKTREE_ROOT" "CHE_WORKSPACE_SHARED"
+che assert_outside_worktree "${CHE_SESSION_DIR}"      "$WORKTREE_ROOT" --label "CHE_SESSION_DIR"
+che assert_outside_worktree "${CHE_WORKSPACE_SHARED}" "$WORKTREE_ROOT" --label "CHE_WORKSPACE_SHARED"
 
 # ==== OUTPUT PATH OF THIS SKILL (constructed ONCE) ====
 # stage = final     → scope=workspace (durable: cross-session comparison)
 # stage = per-task  → scope=session   (ephemeral: this session only)
 COMPLIANCE_SCOPE="session"
 [[ "${stage}" == "final" ]] && COMPLIANCE_SCOPE="workspace"
-COMPLIANCE_REPORT_PATH="$(che_output_path "report" "compliance-${stage}" "${COMPLIANCE_RELATED_ID}" "${COMPLIANCE_SCOPE}" "md")"
+COMPLIANCE_REPORT_PATH="$(che output_path "report" "compliance-${stage}" "${COMPLIANCE_RELATED_ID}" "${COMPLIANCE_SCOPE}" "md")"
 # → per-task example:  $CHE_SESSION_DIR/reports/T2-refund/20260902-143000-compliance-per-task.md
 # → final example:     $CHE_WORKSPACE_SHARED/report/compliance-final-wt-feat-X/20260902-143000-compliance-final.md
-# → Intrinsic ordering by UTC timestamp prefix. Atomic write via: cat <<EOF | che_write_file_atomic "$COMPLIANCE_REPORT_PATH"
+# → Intrinsic ordering by UTC timestamp prefix. Atomic write via: cat <<EOF | che write_file_atomic "$COMPLIANCE_REPORT_PATH"
 ```
 
 ---
@@ -295,7 +295,7 @@ Always use path and atomic write from PREFLIGHT. NEVER construct `$CHE_*` manual
 
 ```bash
 # Generate markdown report in memory and atomic write:
-cat <<'EOF' | che_write_file_atomic "$COMPLIANCE_REPORT_PATH"
+cat <<'EOF' | che write_file_atomic "$COMPLIANCE_REPORT_PATH"
 # Compliance Report — <TASK-ID> — Stage: <per-task | final>
 ... (§7 structure above)
 EOF
@@ -308,7 +308,7 @@ EOF
 
 If stage=`final` (cross-session durable): decision-log via helper for audit trail:
 ```bash
-che_append_decision_jsonl "COMPLIANCE_HEAVY_RUN"   '{"report_path":"'"${COMPLIANCE_REPORT_PATH}"'","total_findings":<N>,"critical":<N>,"high":<N>}'
+che decision_append "$WORKTREE_ROOT" "COMPLIANCE_HEAVY_RUN"   '{"report_path":"'"${COMPLIANCE_REPORT_PATH}"'","total_findings":<N>,"critical":<N>,"high":<N>}'
 ```
 DO NOT manual append (`cat >> $CHE_DECISIONS_PATH`) — non-atomic + JSONL corruption risk.
 
