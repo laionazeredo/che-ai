@@ -461,7 +461,7 @@ def init_project(
 
     worktree_slug = resolve_worktree_slug(str(wt))
 
-    paths = compute_paths(str(wt), session_id, cwd_override=str(wt))
+    paths = compute_paths(str(wt), session_id, cwd_override=str(wt), workspace_name_override=workspace)
     project_dir = Path(paths["CHE_PROJECT_DIR"])
     project_dir.mkdir(parents=True, exist_ok=True)
 
@@ -509,6 +509,23 @@ def init_project(
         reg_file.touch()
         created_files.append(str(reg_file))
 
+    # L2 registry is append-only: seed it once with the PROJECT_INIT event.
+    if reg_file.stat().st_size == 0:
+        init_entry = {
+            "ts": ts,
+            "event": "PROJECT_INIT",
+            "project_slug": project_slug,
+            "workspace": workspace,
+            "friendly_name": friendly_name,
+            "domain": domain,
+            "worktree_root": str(wt),
+            "worktree_slug": worktree_slug,
+            "stack": fmt_vars["stack"],
+            "origin": fmt_vars["origin"],
+        }
+        with open(reg_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(init_entry, ensure_ascii=False, sort_keys=True) + "\n")
+
     db_dir = project_dir.parent / "_db"
     db_dir.mkdir(parents=True, exist_ok=True)
     readme_db = db_dir / "README.txt"
@@ -516,7 +533,7 @@ def init_project(
         readme_db.write_text(DB_README_TXT, encoding="utf-8")
         created_files.append(str(readme_db))
 
-    ensure_session_dirs(str(wt), session_id, cwd_override=str(wt))
+    ensure_session_dirs(str(wt), session_id, cwd_override=str(wt), workspace_name_override=workspace)
 
     return {
         "initialised": True,
