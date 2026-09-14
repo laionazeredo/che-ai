@@ -1,0 +1,48 @@
+{
+  "$schema": "./tokens.schema.json",
+  "version": 1,
+  "created_at": "{{created_at}}",
+  "sub_product": "{{sub_product}}",
+  "colors": {
+    "primary": "{{primary_color}}",
+    "secondary": "{{secondary_color}}",
+    "surface": "{{surface_color}}",
+    "on_surface": "{{on_surface_color}}"
+  },
+  "spacing": {
+    "base": 4,
+    "scale": [4, 8, 12, 16, 24, 32, 48, 64, 96, 128]
+  },
+  "rounded": {
+    "sm": 2,
+    "md": 8,
+    "lg": 16,
+    "xl": 24,
+    "full": 9999
+  },
+  "typography": {
+    "font_family_sans": "Inter, system-ui, sans-serif",
+    "font_family_serif": "Georgia, serif",
+    "scale": "1.250",
+    "weights": [400, 500, 600, 700]
+  },
+  "elevation": {
+    "e0": "none",
+    "e1": "0 1px 2px rgba(0,0,0,.06)",
+    "e2": "0 4px 12px rgba(0,0,0,.08)",
+    "e3": "0 12px 32px rgba(0,0,0,.12)"
+  },
+  "components": {
+    "button": {
+      "radius": "{{button_radius}}",
+      "height": "{{button_height}}",
+      "padding_x": 16,
+      "padding_y": 8
+    },
+    "card": {
+      "radius": "{{card_radius}}",
+      "padding": "{{card_padding}}",
+      "elevation": "e1"
+    }
+  }
+}
