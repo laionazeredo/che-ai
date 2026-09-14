@@ -25,6 +25,29 @@ _CANONICAL_SECTIONS = (
     "Do's and Don'ts",
 )
 
+# Image magic-byte signatures (stdlib only — no Pillow in the che runtime).
+# AB-4: a provider that returns an HTML error page / 403 / placeholder MUST be
+# rejected before any file is written under design/assets/.
+_IMAGE_MAGIC = (
+    (b"\x89PNG\r\n\x1a\n", ".png"),
+    (b"\xff\xd8\xff", ".jpg"),
+    (b"GIF87a", ".gif"),
+    (b"GIF89a", ".gif"),
+    (b"RIFF", ".webp"),
+    (b"<?xml", ".svg"),
+    (b"<svg", ".svg"),
+)
+
+# HTML/placeholder markers — anything starting with these is a non-image payload.
+_PLACEHOLDER_MARKERS = (
+    b"<!DOCTYPE",
+    b"<!doctype",
+    b"<html",
+    b"<head",
+    b"<body",
+    b"<title",
+)
+
 
 def _che_home_root() -> Path:
     """Locate the che_core package root (where domains/, skills/, templates/ live)."""
@@ -320,6 +343,87 @@ def run_validate(design_md_path: str) -> int:
     return 0 if not issues else 1
 
 
+def _is_real_image(data: bytes) -> bool:
+    """True if `data` looks like an image, False if it is HTML/placeholder/empty.
+
+    AB-4: a provider returning an HTML error page / 403 / placeholder must be
+    discarded BEFORE any file is written under design/assets/.
+    """
+    stripped = data.lstrip()
+    if any(stripped.startswith(m) for m in _PLACEHOLDER_MARKERS):
+        return False
+    return any(data.startswith(m) for m, _ in _IMAGE_MAGIC)
+
+
+def run_stock_add(
+    worktree_root: str,
+    asset_path: str,
+    provider: str,
+    license_id: str,
+    source_url: str,
+) -> int:
+    """F4 Stock asset — copy a downloaded asset into design/assets/ + record provenance.
+
+    SPEC §4.2 B-5 (positive): accepted asset lands under design/assets/ and
+    design/assets/CREDITS.md gains one entry with provider= / license= / source_url=.
+    SPEC §4.3 AB-4 (negative): an HTML/placeholder payload writes NOTHING and
+    appends NO CREDITS entry; the pipeline advances to the next provider.
+
+    PRE: worktree_root valid dir; asset_path exists; provider/license/source_url non-empty.
+    POST: asset copied to design/assets/<basename>; CREDITS.md contains the entry; returns 0.
+    ABORTS (sys.exit(2)): asset is not a real image; no files written.
+    """
+    if not isinstance(worktree_root, str) or not worktree_root:
+        print("ERROR: worktree_root is required", file=sys.stderr)
+        sys.exit(2)
+    if not isinstance(asset_path, str) or not asset_path:
+        print("ERROR: asset_path is required", file=sys.stderr)
+        sys.exit(2)
+    for label, value in (("provider", provider), ("license", license_id), ("source_url", source_url)):
+        if not isinstance(value, str) or not value.strip():
+            print(f"ERROR: {label} is required", file=sys.stderr)
+            sys.exit(2)
+
+    wt_root = Path(worktree_root).resolve()
+    if not wt_root.is_dir():
+        print(f"ERROR: worktree_root {wt_root} is not a valid directory", file=sys.stderr)
+        sys.exit(2)
+
+    asset = Path(asset_path).resolve()
+    if not asset.is_file():
+        print(f"ERROR: asset file not found at {asset}", file=sys.stderr)
+        sys.exit(2)
+
+    data = asset.read_bytes()
+    if not _is_real_image(data):
+        print(
+            f"ERROR: AB-4 — asset {asset.name} is not a real image (HTML/placeholder payload); discarded.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    assets_dir = wt_root / "design" / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    dest = assets_dir / asset.name
+    dest.write_bytes(data)
+
+    credits = assets_dir / "CREDITS.md"
+    entry = (
+        f"- {dest.name} | provider={provider.strip()} | "
+        f"license={license_id.strip()} | source_url={source_url.strip()}\n"
+    )
+    header = "# design/assets/CREDITS.md\n\nThird-party asset provenance (R3). "
+    header += "Every asset under design/assets/ MUST have a matching entry here.\n\n"
+    if credits.is_file():
+        credits.write_text(credits.read_text(encoding="utf-8") + entry, encoding="utf-8")
+    else:
+        credits.write_text(header + entry, encoding="utf-8")
+
+    print(f"CHE_ASSET_FILE={dest}")
+    print(f"CHE_CREDITS_FILE={credits}")
+    return 0
+
+
 def run_bootstrap(worktree_root: str, session_id: str, mode: str, slug: str):
     wt_root = Path(worktree_root).resolve()
 
@@ -381,6 +485,21 @@ def main():
     )
     p_tokens_render.add_argument("worktree_root", help="Absolute path to the user worktree")
 
+    p_stock = subparsers.add_parser(
+        "stock",
+        help="F4 Stock — subcommands to record third-party asset provenance (B-5 + AB-4 + R3).",
+    )
+    p_stock_sub = p_stock.add_subparsers(dest="stock_cmd", required=True)
+    p_stock_add = p_stock_sub.add_parser(
+        "add",
+        help="F4 Add — copy a downloaded image into design/assets/ + append CREDITS.md entry (B-5 + AB-4).",
+    )
+    p_stock_add.add_argument("worktree_root", help="Absolute path to the user worktree")
+    p_stock_add.add_argument("asset_path", help="Absolute path to the downloaded asset file")
+    p_stock_add.add_argument("--provider", required=True, help="Provider name (e.g. unsplash)")
+    p_stock_add.add_argument("--license", required=True, dest="license_id", help="Licence identifier (e.g. CC0)")
+    p_stock_add.add_argument("--source-url", required=True, help="Source URL of the asset")
+
     args = parser.parse_args()
 
     if args.cmd == "bootstrap":
@@ -397,6 +516,16 @@ def main():
 
     if args.cmd == "tokens" and args.tokens_cmd == "render":
         rc = run_tokens_render(args.worktree_root)
+        sys.exit(rc)
+
+    if args.cmd == "stock" and args.stock_cmd == "add":
+        rc = run_stock_add(
+            args.worktree_root,
+            args.asset_path,
+            args.provider,
+            args.license_id,
+            args.source_url,
+        )
         sys.exit(rc)
 
 
