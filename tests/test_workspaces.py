@@ -206,6 +206,64 @@ def test_project_remove_and_restore_safety():
         assert d4["restored"] is True
 
 
+def test_project_create_honours_explicit_workspace_override(tmp_path, monkeypatch):
+    """`project create --workspace X` must scaffold L2 under X even when the legacy
+    workspace resolution (e.g. a .code-workspace covering the cwd) would pick another."""
+    _run_cli("workspace", "create", "target-ws")
+    _run_cli("workspace", "create", "other-ws")
+
+    # A .code-workspace covering tmp_path makes resolve_workspace_name() return
+    # "other-ws" for any cwd inside it — the exact legacy mis-resolution.
+    cw_dir = tmp_path / "code-workspaces"
+    cw_dir.mkdir()
+    (cw_dir / "other-ws.code-workspace").write_text(
+        json.dumps({"folders": [{"path": str(tmp_path)}]}), encoding="utf-8"
+    )
+    monkeypatch.setenv("CHE_CODE_WORKSPACES_DIR", str(cw_dir))
+
+    wt = tmp_path / "escola"
+    wt.mkdir()
+    (wt / ".git").mkdir()
+    (wt / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+
+    code, out, err = _run_cli("project", "create", str(wt), "--workspace", "target-ws")
+    assert code == 0, f"exit={code} stderr={err} stdout={out}"
+    d = _parse_json(out)
+    assert d["initialised"] is True
+
+    ws_root = Path(os.environ["CHE_WORKSPACES_ROOT"])
+    expected_ws_dir = ws_root / "workspaces" / "target-ws"
+    assert Path(d["paths"]["CHE_WORKSPACE_DIR"]) == expected_ws_dir
+    assert expected_ws_dir in Path(d["project_dir"]).parents
+    assert (Path(d["project_dir"]) / "architecture.md").is_file()
+
+
+def test_project_create_seeds_registry_init_entry(tmp_path):
+    """`project create` seeds the append-only L2 registry with a single PROJECT_INIT event (idempotent)."""
+    _run_cli("workspace", "create", "seed-ws")
+
+    wt = tmp_path / "seedproj"
+    wt.mkdir()
+    (wt / ".git").mkdir()
+
+    code, out, err = _run_cli("project", "create", str(wt), "--workspace", "seed-ws")
+    assert code == 0, f"exit={code} stderr={err} stdout={out}"
+    d = _parse_json(out)
+
+    reg = Path(d["project_dir"]) / "registry.jsonl"
+    lines = [ln for ln in reg.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    assert len(lines) == 1
+    entry = json.loads(lines[0])
+    assert entry["event"] == "PROJECT_INIT"
+    assert entry["workspace"] == "seed-ws"
+    assert entry["friendly_name"] == "seed-ws--seedproj"
+
+    # Re-running must not duplicate the seed event (append-only + idempotent).
+    _run_cli("project", "create", str(wt), "--workspace", "seed-ws")
+    lines_after = [ln for ln in reg.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    assert len(lines_after) == 1
+
+
 # --- HOOK TESTS (posttooluse_git_worktree) ------------------------------------
 
 

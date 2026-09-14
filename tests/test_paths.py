@@ -21,12 +21,17 @@ def test_slugify_basic():
     assert _slugify("a___b") == "a___b"  # Allows underscores
 
 
-def test_resolve_worktree_slug(tmp_path):
+def test_resolve_worktree_slug(tmp_path, monkeypatch):
     """Test standard repo resolution"""
     # Create a mock git repo structure
     repo_dir = tmp_path / "my-repo"
     repo_dir.mkdir()
     (repo_dir / ".git").mkdir()
+
+    # Hermetic: git exports GIT_DIR/GIT_WORK_TREE to hooks, which would otherwise
+    # leak the real repository into the subprocess and defeat the fallback tested here.
+    monkeypatch.delenv("GIT_DIR", raising=False)
+    monkeypatch.delenv("GIT_WORK_TREE", raising=False)
 
     # We mock the git branch resolution since we can't easily mock subprocess here
     # without pytest-mock, but we can test the fallback

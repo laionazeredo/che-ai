@@ -269,12 +269,23 @@ def get_che_home() -> Path:
     return new_default.resolve()
 
 
-def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[str] = None) -> Dict[str, str]:
-    """Translates che_compute_paths and returns dictionary of variables"""
+def compute_paths(
+    worktree_root: str,
+    session_id: str,
+    cwd_override: Optional[str] = None,
+    *,
+    workspace_name_override: Optional[str] = None,
+) -> Dict[str, str]:
+    """Translates che_compute_paths and returns dictionary of variables.
+
+    ``workspace_name_override`` keeps an explicitly requested workspace (e.g. the
+    ``che project create --workspace`` flag) authoritative over heuristic
+    resolution from the cwd.
+    """
     wt_root = Path(worktree_root).resolve()
 
     project_slug = project_slug_from_git_origin(str(wt_root))
-    workspace_name = resolve_workspace_name(cwd_override, project_slug_hint=project_slug)
+    workspace_name = workspace_name_override or resolve_workspace_name(cwd_override, project_slug_hint=project_slug)
     worktree_slug = resolve_worktree_slug(str(wt_root))
 
     workspaces_root = get_workspaces_root()
@@ -328,9 +339,15 @@ def compute_paths(worktree_root: str, session_id: str, cwd_override: Optional[st
     return paths
 
 
-def ensure_session_dirs(worktree_root: str, session_id: str, cwd_override: Optional[str] = None):
+def ensure_session_dirs(
+    worktree_root: str,
+    session_id: str,
+    cwd_override: Optional[str] = None,
+    *,
+    workspace_name_override: Optional[str] = None,
+):
     """Translates che_ensure_session_dirs"""
-    paths = compute_paths(worktree_root, session_id, cwd_override)
+    paths = compute_paths(worktree_root, session_id, cwd_override, workspace_name_override=workspace_name_override)
 
     # Create directories
     dirs_to_create = [
