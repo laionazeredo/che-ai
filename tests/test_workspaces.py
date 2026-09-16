@@ -27,7 +27,7 @@ from che_core.workspaces import (
     remove_project,
     restore_project,
 )
-from che_core.worktrees import add_worktree, list_worktrees, worktree_exists
+from che_core.worktrees import add_worktree, find_worktree_by_path, list_worktrees, worktree_exists
 from tests.conftest import isolated_git_env, make_git_repo
 
 CHE_CLI_CMD = [sys.executable, "-m", "che_core.cli"]
@@ -290,6 +290,28 @@ def test_hook_git_worktree_add_binds_a_matching_project(tmp_path):
     assert result["decision"] == "allow"
     assert "AUTO" in result["additionalContext"]
     assert [w["name"] for w in list_worktrees("acme")] == ["repo"]
+
+
+def test_list_worktrees_skips_a_non_conforming_dir_name(tmp_path):
+    """A legacy `<repo>__<branch>` folder must not take the whole CLI down.
+
+    Such a folder cannot be a worktree (`get_worktree_dir` refuses the name), but
+    `list_projects` and `find_worktree_by_path` both iterate through
+    `list_worktrees`, so raising on it made `che project list` die with a
+    traceback for the entire machine and left every path lookup in the project
+    unresolvable.
+    """
+    repo = make_git_repo(tmp_path / "repo")
+    init_project(str(repo), slug="acme")
+    add_worktree("acme", str(repo), "main")
+
+    legacy = get_project_dir("acme") / "worktrees" / "repo__feat-something"
+    legacy.mkdir(parents=True)
+    (legacy / ".binding.json").write_text("{}")
+
+    assert [w["name"] for w in list_worktrees("acme")] == ["main"]
+    assert [p["worktrees"] for p in list_projects()] == [["main"]]
+    assert [m["name"] for m in find_worktree_by_path(str(repo))] == ["main"]
 
 
 def test_cleanup_worktree_l3_reports_the_bound_worktree(tmp_path):
