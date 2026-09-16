@@ -141,7 +141,7 @@ Two complementary hierarchies: one **3-layer** for the rulebook, one **project �
 ### Project Memory (what lives inside `~/.che-workspaces`)
 
 1. **Project** — `~/.che-workspaces/<project-slug>/` — durable Markdown (`architecture.md`, `project_profile.md`, `product_context.md`, `roadmap.md`, `roles/index.md`), the per-project `_db/` SQLite store and one folder per canonical domain. Identified by an explicit slug; it does **not** bind a repository path. Lifetime of the product.
-2. **Worktree** — `<project>/worktrees/<name>/` — the only level that binds a git checkout (`path`, `branch` and `origin` in `.binding.json`), holding `decisions.log.jsonl`, `specs/`, `tasks/`, `qa/`, `reports/`. Shared by every session bound to it. Lifetime of the binding.
+2. **Worktree** — `<project>/worktrees/<name>/` — the only level that binds a git checkout (`path`, `branch` and `origin` in `.binding.json`). Born empty: artifact folders are created lazily by `che output_path` on first write, never pre-created. Holds `decisions.log.jsonl`, `specs/`, `tasks/`, `qa/evidence/`, `reports/`. Shared by every session bound to it. Lifetime of the binding.
 3. **Session** — `<project>/.sessions/<SESSION_ID>/` — ephemeral logs, single writer, isolated, deliberately outside the worktree. Hours → days. (Pragmatic Programmer §7: "localize state with short lifetime.")
 
 Session → worktree → project bindings are recorded in `~/.che-workspaces/.state/registry.jsonl`.

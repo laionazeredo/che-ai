@@ -39,7 +39,10 @@ _OUTPUT_SUBFOLDERS = {
     "debugger": "debugger",
     "architecture": "architecture",
     "adr": "architecture",
-    "gh_stack": "gh_stack",
+    # The TYPE key stays `gh_stack` because every skill passes that literal to
+    # `che output_path`; only the folder is renamed, to describe the artifact
+    # (a plan for stacked PRs) rather than the CLI tool that consumes it.
+    "gh_stack": "pr_plans",
     "other": "other",
 }
 
@@ -371,15 +374,19 @@ def ensure_session_dirs(
     project_slug: Optional[str] = None,
     worktree_name: Optional[str] = None,
 ) -> Dict[str, str]:
-    """Materialise every directory a Che session needs (flat layout).
+    """Materialise the two roots a Che session needs (flat layout).
 
     Creates the project skeleton (8 domain folders + ``worktrees/`` + ``_db/`` +
-    ``roles/``), the bound worktree's shared subfolders, and the ephemeral session
+    ``roles/``) plus the bound worktree's folder and the ephemeral session
     folder. The session folder lives under ``<project>/.sessions/<id>/`` — outside
     the worktree folder on purpose, so one worktree stays reusable across sessions
     instead of accumulating one ``sessions/`` subtree per run.
+
+    Artifact subfolders are deliberately NOT pre-created: ``output_path`` makes
+    the parent of every artifact at write time, so pre-creating them only
+    littered the tree with empty directories.
     """
-    from che_core.worktrees import WORKTREE_SUBDIRS, ensure_project_skeleton
+    from che_core.worktrees import ensure_project_skeleton
 
     paths = compute_paths(
         worktree_root,
@@ -391,15 +398,8 @@ def ensure_session_dirs(
 
     ensure_project_skeleton(paths["CHE_PROJECT_SLUG"])
 
-    worktree_dir = Path(paths["CHE_WORKTREE_DIR"])
-    worktree_dir.mkdir(parents=True, exist_ok=True)
-    for sub in WORKTREE_SUBDIRS:
-        (worktree_dir / sub).mkdir(parents=True, exist_ok=True)
-
-    session_dir = Path(paths["CHE_SESSION_DIR"])
-    session_dir.mkdir(parents=True, exist_ok=True)
-    for sub in ("execution", "debugger", "temp"):
-        (session_dir / sub).mkdir(parents=True, exist_ok=True)
+    Path(paths["CHE_WORKTREE_DIR"]).mkdir(parents=True, exist_ok=True)
+    Path(paths["CHE_SESSION_DIR"]).mkdir(parents=True, exist_ok=True)
 
     registry_file = Path(paths["CHE_PROJECT_REGISTRY"])
     registry_file.parent.mkdir(parents=True, exist_ok=True)

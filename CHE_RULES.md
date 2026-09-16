@@ -69,7 +69,10 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 
 1. Once `WORKTREE_ROOT` and `SESSION_ID` are determined:
    - Execute `che compute_paths` → resolve `CHE_WORKSPACE_NAME` (via `.code-workspace` cwd match, fallback `default`) and `CHE_WORKTREE_SLUG` (standard `RepoName__branch-slug`, canonical separator `__`).
-   - Execute `che ensure_dirs` → create 2-directory structure per worktree **outside user code**:
+   - Execute `che ensure_dirs` → materialise the two ROOTS per worktree **outside user code**.
+     It creates the roots, not the artifact subfolders: a worktree is born empty and each
+     folder below appears the first time `che output_path` writes into it (that function is
+     the single creator of artifact directories — never `mkdir` a subfolder by hand):
      - `$CHE_WORKSPACE_SHARED/` — **DURABLE** (shared across multiple sessions):
        - `reports/<related_id>/` — final scope-check, ship-gate reports (durable, searchable by PR/task)
        - `specs/` — (1+ per worktree) **Che Execution Specification (SPEC).** 7 canonical sections + mandatory YAML frontmatter fields. Approved gate in SM §0.5. Replaces legacy PRD.
@@ -77,8 +80,11 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
        - `tasks/<TASK_ID>/` — envelope/scope/ac, ONE subdirectory per task.
        - `decisions.log.jsonl` — append on every non-obvious decision / trade-off (1 per worktree, not 1 per task).
        - `manual_test_plan.md` — at the end, when all tasks are DONE.
-       - `gh_stack_plan.md` — (OPTIONAL, if multiple PRs) gh-stack hierarchical plan.
-       - `legacy_binding_cleanup/<ISO-ts>/` — automatic backup of old buggy artifacts moved from worktree during binding.
+       - `pr_plans/<related_id>/` — (OPTIONAL, if multiple PRs) gh-stack hierarchical plan.
+         Resolved by `che output_path "gh_stack" … "workspace" "md"`: the TYPE key stays
+         `gh_stack` (every skill passes that literal), only the folder names the artifact.
+       - `.quarantine/` — planning artifacts moved OUT of a user repository by the ship
+         blacklist check. Dotted on purpose: dotted = system-internal, plain = user artifact.
      - `$CHE_SESSION_DIR/` — **EPHEMERAL** (this session only):
        - `binding.md` — Level 2 detail (outside user worktree, never committed).
        - `session.md` — session metadata.
