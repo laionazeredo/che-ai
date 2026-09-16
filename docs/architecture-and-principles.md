@@ -306,10 +306,10 @@ Writing down anti-goals is as important as goals — they tell you which PRs to 
 | :--------------- | :------------ |
 | **Harness** | The full Che installation: rulebook + skills + `che_core/` Python + CLI. |
 | **Tenant** | A real team using Che (e.g., "Acme", "My Company", "Big Client"). |
-| **L1 Workspace** | The top-level grouping folder under `~/.che-workspaces/workspaces/`. One per tenant usually. |
-| **L2 Project** | One product or system inside a workspace. Owns `architecture.md`, etc. |
-| **L3 Worktree** | Shared memory for a specific git branch. Shared across sessions, not projects. |
-| **L4 Session** | One agent run, one writer, ephemeral. |
+| **State Level** | `~/.che-workspaces/.state/registry.jsonl` — session → worktree → project bindings. Never inside the Che source package. |
+| **Project Level** | One product or system, directly under `~/.che-workspaces/<project-slug>/`. Owns `architecture.md`, `roadmap.md`, `roles/`, `_db/`, the canonical domain folders. Identified by an **explicit slug** and binds **no** filesystem path. |
+| **Worktree Level** | Shared memory for a specific git branch. The **only** level that binds a repository path (in `.binding.json`), and it requires git. Reusable across sessions. |
+| **Session Level** | One agent run, one writer, ephemeral. Lives at `<project>/.sessions/<session_id>/`, deliberately outside the worktree folder. |
 | **Skill** | Declarative `.md` file under `skills/<id>/SKILL.md`, the smallest unit of reusable Che behaviour. |
 | **Router (L2 of the rulebook)** | `CHE_RULES.md` / `CHE_COMMANDS.md`. Titles + links only. No body text. |
 | **CDJ** | Context / Decision / Justification — the canonical three-paragraph commit body format. |
