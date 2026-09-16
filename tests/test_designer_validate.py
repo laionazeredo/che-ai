@@ -137,7 +137,7 @@ def subprocess_run_validate(design_md_path: str):
     import subprocess
 
     return subprocess.run(
-        [sys.executable, "-m", "che_core.designer", "validate", design_md_path],
+        [sys.executable, "-m", "che_core.cli", "designer", "validate", design_md_path],
         capture_output=True,
         text=True,
         check=False,

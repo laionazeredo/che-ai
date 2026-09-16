@@ -37,7 +37,18 @@ def _build_filters_from_args(args) -> dict:
     return filters
 
 
-def main():
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+
+    # `che designer …` is forwarded verbatim to the domain sub-CLI before argparse
+    # runs, because argparse's REMAINDER does not forward leading optionals
+    # (e.g. `che designer --help`) — see bpo-17050.
+    if argv and argv[0] == "designer":
+        from che_core.designer import main as designer_main
+
+        designer_main(argv[1:])
+        return
+
     parser = argparse.ArgumentParser(description="Che Core CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -80,6 +91,13 @@ def main():
     parser_assert.add_argument("candidate_path")
     parser_assert.add_argument("worktree_root")
     parser_assert.add_argument("--label", default="path")
+
+    # designer is dispatched before argparse (see top of main); registered here
+    # only so it stays discoverable in `che --help`.
+    subparsers.add_parser(
+        "designer",
+        help="Che Designer — git-native design tree (init, validate, tokens, stock).",
+    )
 
     # append_registry
     parser_reg_app = subparsers.add_parser("registry_append")
@@ -411,7 +429,7 @@ def main():
         help="Mandatory safety gate to apply the restore.",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.command == "compute_paths":
         paths = compute_paths(args.worktree_root, args.session_id, args.cwd)

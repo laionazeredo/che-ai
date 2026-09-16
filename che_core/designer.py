@@ -446,8 +446,13 @@ def run_bootstrap(worktree_root: str, session_id: str, mode: str, slug: str):
     print("\nBootstrap complete. Export these variables to use in the subsequent design gates.")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Che Social UI Designer Helper")
+def main(argv=None):
+    """Entry point for the `che designer` subcommand.
+
+    ``argv`` is forwarded from ``che_core.cli`` verbatim; ``None`` falls back to
+    ``sys.argv[1:]`` so ``python -m che_core.designer`` keeps working standalone.
+    """
+    parser = argparse.ArgumentParser(prog="che designer", description="Che Social UI Designer Helper")
     subparsers = parser.add_subparsers(dest="cmd", required=True)
 
     p_boot = subparsers.add_parser("bootstrap")
@@ -500,7 +505,7 @@ def main():
     p_stock_add.add_argument("--license", required=True, dest="license_id", help="Licence identifier (e.g. CC0)")
     p_stock_add.add_argument("--source-url", required=True, help="Source URL of the asset")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.cmd == "bootstrap":
         run_bootstrap(args.worktree_root, args.session_id, args.mode, args.slug)
