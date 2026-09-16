@@ -5,11 +5,11 @@ import pytest
 from che_core.paths import (
     _slugify,
     assert_outside_worktree,
-    compute_paths,
     output_path,
     resolve_worktree_slug,
     write_file_atomic,
 )
+from che_core.project_layout import get_state_registry_path
 
 
 def test_slugify_basic():
@@ -81,19 +81,15 @@ def test_assert_outside_worktree_blocks_root_itself(tmp_path):
     assert exc.value.code == 99
 
 
-def test_compute_paths_exposes_decisions_and_registry(tmp_path, monkeypatch):
-    wt = tmp_path / "wt"
-    wt.mkdir()
-    workspaces_root = tmp_path / "workspaces-root"
-    che_home = tmp_path / "che-home"
-    monkeypatch.setenv("CHE_WORKSPACES_ROOT", str(workspaces_root))
-    monkeypatch.setenv("CHE_HOME", str(che_home))
-
-    paths = compute_paths(str(wt), "sid-1")
+def test_compute_paths_exposes_decisions_and_registry(bound_worktree):
+    _repo, paths = bound_worktree
 
     # New keys replacing the orphan bash helpers che_decisions_path / che_registry_path.
+    # The worktree folder itself is the shared/tactical area (legacy alias).
+    assert paths["CHE_WORKSPACE_SHARED"] == paths["CHE_WORKTREE_DIR"]
     assert paths["CHE_DECISIONS_PATH"] == str(Path(paths["CHE_WORKSPACE_SHARED"]) / "decisions.log.jsonl")
-    assert paths["CHE_REGISTRY_PATH"] == str((che_home / "bindings" / "registry.jsonl").resolve())
+    assert paths["CHE_REGISTRY_PATH"] == str(get_state_registry_path())
+    assert paths["CHE_REGISTRY_PATH"] == str(Path(paths["CHE_STATE_DIR"]) / "registry.jsonl")
     # Reused existing key (replaces che_level2_binding_path).
     assert paths["CHE_LEVEL2_BINDING"] == str(Path(paths["CHE_SESSION_DIR"]) / "binding.md")
 

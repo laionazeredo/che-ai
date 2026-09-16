@@ -3,19 +3,15 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 from che_core.task_engine import list_tasks, set_status_task, show_task
+from tests.conftest import bind_worktree
 
 
 def _mk_worktree(tmp_path: Path):
-    wt = tmp_path / "wt"
-    wt.mkdir()
-    ws_root = tmp_path / "ws"
-    ws_root.mkdir()
-    os.environ["CHE_WORKSPACES_ROOT"] = str(ws_root)
-    return wt
+    repo, _paths = bind_worktree(tmp_path)
+    return repo
 
 
 def test_list_tasks_empty_returns_serializable(tmp_path: Path):

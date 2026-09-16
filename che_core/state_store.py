@@ -15,7 +15,7 @@ def _get_state_db_path(worktree_root: Optional[str] = None, paths: Optional[Dict
         if worktree_root is None:
             raise ValueError("worktree_root or paths must be provided")
         paths = compute_paths(worktree_root, "state-store-fallback")
-    return Path(paths["CHE_PROJECT_DIR"]) / "che_state.sqlite"
+    return Path(paths["CHE_DB_DIR"]) / "che_state.sqlite"
 
 
 def _connect(db_path: Path, read_only: bool = False) -> sqlite3.Connection:

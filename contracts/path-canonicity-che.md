@@ -1,7 +1,9 @@
 # PATH CANONICITY CONTRACT — CHE
 
-> Single source of truth for the L1→L2→L3→L4 hierarchical structure of `CHE_WORKSPACES_ROOT`.
-> Corresponding python helpers: `compute_paths` + `ensure_session_dirs` in `che_core/paths.py`.
+> Single source of truth for the **flat** project/worktree storage layout under `CHE_WORKSPACES_ROOT`.
+> Corresponding python helpers: `compute_paths` + `ensure_session_dirs` in `che_core/paths.py`, built on the
+> canonical primitives in `che_core/project_layout.py` (paths, domains, JSONL append) and `che_core/worktrees.py`
+> (worktree lifecycle — the only concept that binds a filesystem path).
 > Invariants: NEVER break these contracts. If you need to evolve, update this file FIRST, THEN the python helpers, FINALLY the skills.
 
 ---
@@ -10,174 +12,248 @@
 
 | Env | Default | Valid Values | Purpose |
 |-----|---------|--------------|---------|
-| `CHE_WORKSPACES_ROOT` | `$HOME/.che-workspaces` | Any existing absolute path with write permission | **Root of EVERYTHING** in Che (L1 workspaces). 1-release fallback: if new path DOES NOT exist AND old `$HOME/code/harness-sessions` exists → reuse the old one. |
+| `CHE_WORKSPACES_ROOT` | `$HOME/.che-workspaces` | Any existing absolute path with write permission | **Root of EVERYTHING** (projects, `.state/`, `.trash/`). The legacy `HARNESS_SESSIONS_ROOT` is honoured as a fallback name, and the pre-2026 `$HOME/code/harness-sessions` tree is reused only while it is the only one present. |
+| `CHE_HOME` | `$HOME/.che-ai` | Any absolute path with `skills/` + `contracts/` + `commands/` + `domains/` | **Config repo** root (skills, rules, commands). Never mixed with `CHE_WORKSPACES_ROOT` (user data). Legacy `$HOME/.trae` is honoured only while it still contains `CHE_RULES.md`. |
 | `CHE_HOST_IDE` | `trae` | `trae`, `codex`, `cursor`, `claude-code`, `opencode` | Agnostic IDE host identifier. Future adapters in `adapters/<host_ide>/`. |
-| `CHE_SESSION_ID` | (3-level fallback: `CHE_SESSION_ID` → `HARNESS_SESSION_ID` → `SESSION_ID` → `slug-safe-date`) | UUID / slug-safe session id |agent session UNIQUE identifier. Same value used in Level 1 registry JSONL. |
-| `CHE_HOME` | `$HOME/.che-ai` | Any absolute path with `skills/` + `contracts/` + `commands/` + `domains/` | **Config repo** root (skills, rules, commands). Not to be confused with CHE_WORKSPACES_ROOT (user data). Legacy `$HOME/.trae` is honoured only while it still contains `CHE_RULES.md`. |
+| `CHE_SESSION_ID` | (3-level fallback: `CHE_SESSION_ID` → `HARNESS_SESSION_ID` → `SESSION_ID` → `slug-safe-date`) | UUID / slug-safe session id | Agent session UNIQUE identifier. It names the ephemeral session folder, **not** a folder inside the worktree. |
 
 ---
 
-## 1. L1→L2→L3→L4 HIERARCHY (DIAGRAM)
+## 1. THE FLAT LAYOUT (DIAGRAM)
 
 ```
-CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)  ← L1 — WORKSPACE (IDE workspace = set of repos)
+CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)   ← storage root — CLI, hooks and skills resolve every path from here
 │
-├─ manifesto48/                                 ← L1 EXAMPLE: workspace name (a set of projects/repos)
-│  │
-│  ├─ vc-educar-corp-website/                  ← L2 — PROJECT (1 git repo, slug-safe name)
-│  │  │
-│  │  ├─ project/                              ← L2-DURABLE: EVERYTHING that lasts BETWEEN worktrees and BETWEEN sessions
-│  │  │  ├─ xray.md                             ←   project X-ray (stack, entrypoints, languages, tests, CI, DB)
-│  │  │  ├─ architecture.md                     ←   architectural diagram + durable decisions (Out of RADAR)
-│  │  │  ├─ roles.md                            ←   roles, stakeholders, PM, design, dev, GitHub/Linear owner
-│  │  │  ├─ decisions/                          ←   architectural ADRs (Out of RADAR registry)
-│  │  │  ├─ onboarding.md                       ←   new dev onboarding step-by-step (setup, seeds, login)
-│  │  │  ├─ product/                            ←   product docs, PRDs, roadmap (Out of RADAR)
-│  │  │  └─ _legacy_uncategorized/              ←   ⛑️ UNCATEGORIZED ITEMS (old harness-sessions origin
-│  │  │                                            DO NOT DELETE. Keep for 1 release, then human review.)
-│  │  │
-│  │  ├─ __main/                                ← L3 — WORKTREE (default branch = main). Always __ prefix for branches.
-│  │  │  │
-│  │  │  ├─ .wt/                                ← L3-SHARED: EVERYTHING shared BETWEEN sessions IN THE SAME worktree
-│  │  │  │  ├─ decisions.log.jsonl              ←   this worktree's decision log (single append, via helper)
-│  │  │  │  ├─ envelopes/                       ←   TASK ENVELOPES (SM→Dev templates) for this worktree
-│  │  │  │  ├─ gh_stack/                        ←   gh-stack plan + PRs (#1,#2,#3 hierarchical stack)
-│  │  │  │  ├─ reports/                         ←   shared reports (QA, scope-check, code-review audit,
-│  │  │  │  │                                     compliance scan, merge audit) with YYYY-MM-DD prefix
-│  │  │  │  ├─ specs/                           ←   Approved SPEC files (.md + machine-parsable YAML frontmatter)
-│  │  │  │  ├─ state.jsonl                      ←   pointer "which session is active in this worktree"
-│  │  │  │  ├─ qa/                              ←   shared QA fixtures, seed data, durable evidence
-│  │  │  │  └─ designs/                         ←   shared design artifacts (OpenPencil export, tokens)
-│  │  │  │
-│  │  │  └─ sessions/                           ← L4 — SESSIONS (each folder = 1 agent session)
-│  │  │     │
-│  │  │     ├─ 6a981dc48684a64a52ebd487/       ← L4 EXAMPLE: 1 session id (slug-safe UUID/date)
-│  │  │     │  ├─ manifest.json                  ←   METADATA: session_id, worktree_path, user_prompt,
-│  │  │     │  │                                   started_at, status, CHE_HOST_IDE, start/end commit hash
-│  │  │     │  ├─ debugger/                      ←   debugger: stack traces, reproductions, hypotheses
-│  │  │     │  ├─ diffs_context/                 ←   diffs conversation brief, extracted PR context
-│  │  │     │  ├─ execution/                     ←   executed shell commands + outputs + exit codes
-│  │  │     │  ├─ gh_stack/                      ←   this session's gh_stack artifacts (if any)
-│  │  │     │  ├─ qa/                            ←   this session's QA: ephemeral evidence, screenshots
-│  │  │     │  │                                    (TTL 30d policy: harness/qa skill policies)
-│  │  │     │  ├─ reports/                       ←   this session's reports (ephemeral, copied to .wt if durable)
-│  │  │     │  └─ decisions.log.jsonl            ←   this session's decisions (append; also duplicated
-│  │  │                                             in .wt/decisions.log.jsonl via helper = single writer)
-│  │  │
-│  │  └─ feat-FLO-513--Process-a-refund/        ← L3 EXAMPLE: feature branch worktree (same __main structure above)
-│  │     ├─ .wt/                                 ← L3-SHARED for this specific worktree (decisions, envelopes, reports)
-│  │     └─ sessions/                           ← L4 sessions ONLY for this worktree
-│  │
-│  ├─ other-project-xyz/                        ← L2 ANOTHER PROJECT within the same manifesto48 workspace
-│  │  ├─ project/                               ← L2-DURABLE
-│  │  └─ __main/                                 ← L3 + L4
-│  │
-│  └─ .migration_reports/                       ← L1-OPTIONAL: migration reports from when this workspace was moved
-│     └─ 2026-09-03_migration_manifesto48.md
+├─ .state/
+│  └─ registry.jsonl                           ← session → worktree → project bindings (append-only JSONL, v2 schema)
 │
-└─ flockr/                                       ← L1 ANOTHER workspace: set of Flockr repos (Lumos etc.)
-   └─ Lumos/                                     ← L2 PROJECT Flockr Lumos git repo
-      ├─ project/
-      ├─ __main/
-      └─ feat-FLO-732--Create-dedicated-S3/
+├─ .trash/                                     ← every destructive operation lands here (never `rm -rf`)
+│  ├─ project--<slug>--<ts>/
+│  └─ worktree--<project>--<name>--<ts>/
+│
+└─ acme/                                       ← PROJECT (stable slug, owns no filesystem binding of its own)
+   ├─ _db/                                     ← per-project SQLite (durable across branch / worktree switches)
+   │  ├─ che_state.sqlite                      ← FTS5 state store (rebuildable: `che state rebuild-index`)
+   │  ├─ che_rag.sqlite                        ← optional sqlite-vec RAG store (rebuildable: `che rag build-index`)
+   │  └─ README.txt
+   ├─ roles/
+   │  └─ index.md                              ← role / owner table for the project
+   ├─ architecture.md                          ← durable project docs (C4, ADR index, quality attributes)
+   ├─ project_profile.md                       ← stack, deployment, patterns
+   ├─ product_context.md                       ← pitch, personas, success metrics, constraints
+   ├─ roadmap.md                               ← Now / Next / Later
+   ├─ registry.jsonl                           ← project-level append-only event log (`PROJECT_INIT`, …)
+   ├─ business/ product/ design/ engineering/  ← one folder per canonical domain (see §7), for handoff docs
+   ├─ devops/ copywriting/ social/ seo-analytics/
+   ├─ .sessions/
+   │  └─ 6a981dc48684a64a52ebd487/             ← ephemeral, single-writer session data (`CHE_SESSION_DIR`)
+   │     ├─ execution/ debugger/ temp/
+   │     └─ binding.md                         ← `CHE_LEVEL2_BINDING`
+   └─ worktrees/
+      └─ main/                                 ← WORKTREE — the ONLY thing that binds a filesystem path
+         ├─ .binding.json                      ← {project, name, path, branch, origin, is_git, created_at, updated_at}
+         ├─ decisions.log.jsonl                ← this worktree's decision log (`CHE_DECISIONS_PATH`)
+         ├─ specs/ tasks/ reports/ reviews/
+         ├─ architecture/ gh_stack/
+         ├─ qa/ qa/evidence/ qa/screenshots/
+         ├─ design/ diff_contexts/ pr_comments/
+         └─ merge_audits/ debugger/
 ```
+
+Level-by-level reading of the tree:
+
+| Level | Path | What it is | Lifetime |
+|-------|------|------------|----------|
+| Root | `<root>/` | The whole Che storage. Resolved by `CHE_WORKSPACES_ROOT`. | Permanent |
+| State | `<root>/.state/registry.jsonl` | Session → worktree → project bindings. User state, deliberately **outside** the Che source package (`$CHE_HOME`). | Permanent, append-only |
+| Trash | `<root>/.trash/` | Destination of every removal. Restored with `che project restore` / `che worktree remove --dry-run` plan reversal. | Until a human cleans it |
+| Project | `<root>/<project-slug>/` | An organising abstraction: slug + folder. It groups durable documents, domain folders, the per-project DB and its worktrees. | Lifetime of the product |
+| Durable docs | `<project>/*.md`, `<project>/roles/index.md`, `<project>/registry.jsonl` | Human-written, version-able project memory. Never inside a worktree, so it survives worktree deletion. | Lifetime of the product |
+| Domain folders | `<project>/<canonical-domain>/` | Canonical handoff documents per domain (PRD, architecture handoffs, copy, SEO, …). | Lifetime of the product |
+| DB | `<project>/_db/` | `che_state.sqlite` (FTS5) + optional `che_rag.sqlite`. The filesystem is the SSoT; both DBs are rebuildable. | Lifetime of the product |
+| Sessions | `<project>/.sessions/<session_id>/` | Ephemeral, isolated, single-writer session state. **Outside** the worktree on purpose. | Hours → days |
+| Worktrees | `<project>/worktrees/<worktree-name>/` | Shared tactical memory of every session bound to one git checkout. | Lifetime of the binding |
+| Binding | `<worktree>/.binding.json` | The record that makes a directory a Che worktree: absolute repo path, branch, origin, git flag. | Lifetime of the binding |
 
 ---
 
-## 2. INVARIANTS (NON-NEGOTIABLE — HARD FAIL)
+## 2. PROJECT vs WORKTREE
 
-### 2.1. Layer Invariants
-| # | Invariant | VIOLATION Example (prohibited) |
+These are two different concepts and the flattening made the split explicit:
+
+- A **project** is an organising abstraction with a **stable slug** and a folder. It does **not** bind a filesystem path.
+  Creating a project for a repository never means "Che now owns your checkout" — it only means "this slug owns the durable memory".
+- A **worktree** is the **only** concept that binds a path. It is created on demand by
+  `che worktree add <repo_path> --project <slug> --name <name>` and recorded in
+  `<project>/worktrees/<name>/.binding.json`.
+
+Consequences:
+
+- Every worktree-scoped artifact (specs, tasks, reports, reviews, QA evidence, decisions, …) lives under
+  `<project>/worktrees/<name>/`, and every session bound to that worktree shares the same tree. **There are no per-session folders inside a worktree anymore.**
+- Durable artifacts live one level up, under `<project>/`, so removing a worktree never destroys project memory.
+- The reverse lookup (`find_worktree_by_path`) answers "which (project, worktree) pair binds this repository path?" without
+  ever falling back to `os.getcwd()`.
+
+---
+
+## 3. CREATION RULES (EXPLICIT SLUG · GIT · IDEMPOTENT REUSE)
+
+| Rule | Behaviour | Failure mode |
+|------|-----------|--------------|
+| **Explicit slug** | The project slug is mandatory (`--slug`). It is **never** inferred from the git origin, the folder name or the current working directory. `slug_from_origin()` exists only to *suggest* a slug, never to decide one. | Missing/invalid slug → exit `2`, nothing created. Blank slug reaching a creating command raises `AssertionError` (`assert_project_slug`). |
+| **Git required** | Both `che project init` and `che worktree add` require the target to be inside a git working tree (contract R4, `is_git_repo`). | Non-git path → exit `2`, nothing created. |
+| **Idempotent worktree reuse** | Re-adding the same `project + name` **reuses** the existing `<project>/worktrees/<name>/`, refreshes the recorded branch/origin and reports `reused: true` (`added: false`). It never creates a duplicate tree and never forks one folder per session. | A directory that exists without a `.binding.json` is refused (`exit 2`) unless `--force` is passed to adopt it. |
+| **Slug format** | `^[a-z0-9][a-z0-9-]*$`, max 63 characters (`validate_slug`). Applies to project slugs, worktree names and canonical domains. | Invalid slug → `ValueError` at the boundary; creating commands convert it into exit `2`. |
+| **Trash-safe removal** | `project remove` and `worktree remove` are `shutil.move` into `<root>/.trash/`, never `rm -rf`, and they never touch the bound repository. `--dry-run` is the default; applying requires `--no-dry-run --confirm`. | Missing `--confirm` → exit `2`. Unknown target → exit `3`. |
+
+---
+
+## 4. SINGLE-FORMULA RULE (`compute_paths` IS THE ONLY PATH RESOLVER)
+
+`che_core/paths.py::compute_paths` is the **only** place in Che where a storage path may be computed.
+
+- `che_core/decisions.py` **must** delegate (`get_decisions_path` → `compute_paths(...)["CHE_DECISIONS_PATH"]`).
+- `che_core/portability.py` **must** delegate (`export_project` → `compute_paths(...)` for `CHE_PROJECT_DIR`,
+  `CHE_WORKSPACE_SHARED` and `CHE_DB_DIR`; `import_project` resolves through `get_project_dir` / `get_worktree_dir`).
+- Every other module, hook, skill and shell snippet **must** consume the variables printed by
+  `che compute_paths` (or call the same helper) rather than rebuild the layout by hand.
+
+**A second path formula is a bug.** This is precisely the regression the flat layout fixed: `decisions.py` used to
+carry its own formula (`<root>/<workspace>/<worktree-slug>/.wt/`) that resolved the workspace from `os.getcwd()`,
+while `paths.py` computed another one. The two disagreed, so a worktree's decision history and its artifacts
+silently landed in different trees — the memory of a project never met itself.
+
+Resolution is **argument-driven only**:
+
+- `compute_paths <worktree_root> <session_id> [--cwd ...]` never reads `os.getcwd()` to pick a project.
+  `--cwd` is accepted for backward compatibility with existing skills and is deliberately ignored for resolution.
+- If the path is not bound, `compute_paths` prints an actionable message to stderr
+  (`che worktree add …`, `che project list`) and exits `3`. It never guesses.
+- `assert_no_cwd_dependency` crashes when a resolved storage path is not absolute — a relative path means some caller
+  let the current directory leak into the layout.
+
+Canonical keys returned by `compute_paths`:
+
+| Key | Resolves to |
+|-----|-------------|
+| `CHE_PROJECT_SLUG` | Project slug. |
+| `CHE_WORKTREE_NAME` | Worktree name. |
+| `CHE_PROJECT_DIR` | `<root>/<project-slug>`. |
+| `CHE_WORKTREE_DIR` | `<project>/worktrees/<name>`. |
+| `CHE_STATE_DIR` | `<root>/.state`. |
+| `CHE_DB_DIR` | `<project>/_db`. |
+| `CHE_ROLES_DIR` | `<project>/roles`. |
+| `CHE_DECISIONS_PATH` | `<worktree>/decisions.log.jsonl`. |
+| `CHE_SESSION_DIR` | `<project>/.sessions/<session_id>`. |
+| `CHE_REGISTRY_PATH` | `<root>/.state/registry.jsonl`. |
+| `CHE_ARCHITECTURE_DOC`, `CHE_PROJECT_PROFILE`, `CHE_PRODUCT_CONTEXT`, `CHE_ROADMAP_DOC` | The four durable project docs at `<project>/`. |
+| `CHE_PROJECT_REGISTRY` | `<project>/registry.jsonl`. |
+| `CHE_DOMAIN_<NAME>_DIR` | `<project>/<canonical-domain>` (one per domain, dashes become underscores). |
+| `CHE_PROJECT_GRAPH_DIR` | `<project>/graphify`. |
+| `CHE_LEVEL2_BINDING` | `<session>/binding.md`. |
+
+Deprecated aliases are still exported so existing skills keep resolving while the L1 "workspace" concept is retired:
+`CHE_WORKSPACE_NAME` (= project slug), `CHE_WORKSPACE_DIR` (= project dir), `CHE_WORKSPACE_SHARED` (= worktree dir),
+`CHE_WORKTREE_SLUG` (= worktree name).
+
+`ensure_session_dirs` is the materialising counterpart: it creates the project skeleton (8 domain folders +
+`worktrees/` + `_db/` + `roles/`), the worktree's shared subfolders, and the ephemeral session folder. It is
+idempotent (`mkdir -p` semantics) and never overwrites an existing file.
+
+---
+
+## 5. STORAGE-BOUNDARY INVARIANT
+
+Che artifacts are **never** written inside the user's repository. If they were, they would be accidentally committed
+into PRs (`decisions.log`, task graphs, manual test plans, specs, QA reports, …).
+
+- `assert_outside_worktree(candidate_path, worktree_root, label)` is the hard-stop guard. When the candidate falls
+  inside the worktree it prints the violation report to stderr and **exits `99`**.
+- `output_path(...)` and `write_file_atomic(...)` call the guard before every write.
+- `compute_paths` itself asserts that `CHE_PROJECT_DIR`, `CHE_WORKTREE_DIR` and `CHE_SESSION_DIR` are outside the
+  bound worktree.
+- An empty candidate path or worktree root is a silent no-op (matching the legacy bash contract).
+
+The fix is always the same: never build a path from `$PWD` or `<worktree>/.che/`; resolve it once with
+`eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID")"` and write to `$CHE_WORKSPACE_SHARED` / `$CHE_SESSION_DIR`.
+
+---
+
+## 6. SESSION MODEL
+
+- A session **no longer owns a folder inside a worktree**. The old `<worktree>/sessions/<id>/` level is gone, which is
+  what lets one worktree accumulate memory across many sessions instead of one subtree per run.
+- Ephemeral session data lives in `<project>/.sessions/<session_id>/` (`CHE_SESSION_DIR`), with the `execution/`,
+  `debugger/` and `temp/` subfolders created on demand. This folder is outside the worktree, so it is also outside the
+  user's repository.
+- The binding of a session to a worktree and of that worktree to a project lives in `<root>/.state/registry.jsonl`
+  (`CHE_REGISTRY_PATH`), an append-only JSONL written through `append_line_atomic` (one atomic `O_APPEND` write per
+  record; oversized records are refused rather than truncated). The registry used to live inside the Che source
+  package; it is user state and now belongs to the storage root.
+- Worktree-scoped artifacts are shared by every session bound to that worktree, and are written under
+  `<project>/worktrees/<name>/`.
+
+---
+
+## 7. CANONICAL DOMAINS
+
+Eight canonical domains name both the harness playbooks (`domains/<slug>/`) and the per-project artifact folders
+(`<project>/<slug>/`):
+
+`business` · `product` · `design` · `engineering` · `devops` · `copywriting` · `social` · `seo-analytics`
+
+Legacy input aliases are accepted and normalised by `normalise_domain()`:
+
+| Input alias | Canonical domain |
+|-------------|------------------|
+| `ux` | `design` |
+| `operation`, `ops` | `devops` |
+| `dev`, `eng` | `engineering` |
+
+The `ux` → `design` rename of the harness playbook folder (`domains/ux/`) is **deliberately deferred**: we alias on
+input instead of breaking the playbook tree.
+
+---
+
+## 8. INVARIANTS (NON-NEGOTIABLE — HARD FAIL)
+
+| # | Invariant | Violation example (prohibited) |
 |---|-----------|--------------------------------|
-| I1 | **Sessions ALWAYS stay within an L3 worktree.** | Creating `sessions/` directly inside L2 project or L1 workspace = FAIL. |
-| I2 | **Durable info (xray, architecture, roles) stays in L2 `project/` OUTSIDE any worktree.** | Placing `architecture.md` inside `__main/.wt/` = FAIL (it will disappear if worktree is deleted). |
-| I3 | **Shared info IN THE SAME worktree stays in L3 `.wt/`.** | Placing `decisions.log.jsonl` inside a specific session = FAIL (other sessions won't see it). |
-| I4 | **Worktree branch name = `__<branch-slug-safe>` (TWO underscores prefix).** Branch `main` → `__main`. Branch `feat/FLO-513/refund` → `feat-FLO-513--refund` (with TWO dashes replacing `/`, TWO underscores prefix). | Creating `main/` folder without `__` prefix = FAIL. |
-| I5 | **NO folder named `workspace/` (IDE L1 workspace semantic collision).** Durable worktree assets use `.wt/`. | Any path with literal name `workspace/` at L2/L3 level = FAIL. |
-| I6 | **NEVER delete `project/_legacy_uncategorized/` (1 release minimum retention).** | `rm -rf` uncategorized items automatically = FAIL. Requires human review. |
-| I7 | **Migration ALWAYS NON-DESTRUCTIVE (only `mv -n`, never `cp -r` then `rm -rf`).** | Copying everything, then deleting the old folder all at once = FAIL. Zero loss principle. |
-| I8 | **Paths never have spaces or unicode characters.** Always slug-safe: `[a-z0-9._-]`, space → `-`, uppercase → lowercase. | Folder name `My Proposal/` with space = FAIL. |
-
-### 2.2. Python Helper Invariants
-| Function | Precondition | Post-condition |
-|----------|--------------|----------------|
-| `compute_paths WORKTREE_ROOT SESSION_ID [--cwd CWD]` | Worktree root is an absolute path; session ID is slug-safe. `--cwd` optional (defaults to current dir, used to resolve the workspace name). | Returns 17 canonical variables (`CHE_WORKSPACE_DIR`, `CHE_PROJECT_DIR`, `CHE_WORKTREE_DIR`, `CHE_SESSION_DIR`, `CHE_DECISIONS_PATH`, `CHE_REGISTRY_PATH`, `CHE_LEVEL2_BINDING`, `CHE_PROJECT_REGISTRY`, …). |
-| `ensure_session_dirs` | $WORKTREE_ROOT exists. | Creates `.wt/` with 7 subdirs + `sessions/<ID>/` with 6 subdirs. NEVER overwrites anything existing (`mkdir -p`). |
-| `append_decision_jsonl` | Valid $SESSION_ID. | **Append in DUAL LOCATION**: (a) `.wt/decisions.log.jsonl` (shared worktree single writer); (b) `sessions/<ID>/decisions.log.jsonl` (session-specific copy). Fixed v1 schema. |
+| I1 | **Only a worktree binds a filesystem path.** A project is a slug + a folder. | Storing a repo path on the project record, or teaching a command to "find the project" from a path. |
+| I2 | **The project slug is explicit and mandatory** (`--slug`). | Deriving the slug from git origin or `os.getcwd()` on a creating command. |
+| I3 | **Projects and worktrees require git.** | Creating a project/worktree for a non-git directory (must exit `2` and create nothing). |
+| I4 | **`che worktree add` is idempotent.** Same `project + name` reuses the existing tree. | Creating a second folder for the same worktree, or one folder per session. |
+| I5 | **`compute_paths` never reads `os.getcwd()`.** Resolution is argument-driven only. | Any code path where the current directory influences which project is selected. |
+| I6 | **There is exactly one path formula.** Every module delegates to `compute_paths`. | A second formula (historical: `<root>/<workspace>/<worktree-slug>/.wt/` in `decisions.py`). |
+| I7 | **Nothing Che writes lands inside the user repository.** | `decisions.log`, task graphs, specs or QA evidence under the bound repo (must exit `99`). |
+| I8 | **No per-session folders inside a worktree.** Ephemeral state lives under `<project>/.sessions/<id>/`. | Re-introducing `<worktree>/sessions/<id>/`. |
+| I9 | **Slugs are lowercase and slug-safe** (`^[a-z0-9][a-z0-9-]*$`, ≤ 63 chars). | Folder names with spaces, uppercase or unicode. |
+| I10 | **Removals are trash-safe moves** (`shutil.move` into `.trash/`), and the bound repo is never touched. | `rm -rf` of a project or worktree, or deleting the user checkout. |
+| I11 | **Canonical domains are data.** Adding a domain is a `DOMAIN_SLUGS` change, never an inline string in a skill. | Hardcoding `domains/ux/` or `"product"` where `DOMAIN_SLUGS` is the source of truth. |
+| I12 | **JSONL records are atomic and bounded** (`MAX_JSONL_LINE_BYTES = 8192`). | Appending a truncated line that would corrupt every later reader. |
 
 ---
 
-## 3. SLUG-SAFE CONVERSION FOR NAMES (PYTHON HELPER: `_slugify`)
+## 9. MIGRATING FROM THE PRE-FLATTENING LAYOUT
 
-Algorithm (12 rules, idempotent):
-1. Unicode → ASCII translit (if available, otherwise remove)
-2. All lowercase
-3. Space ` ` → `-`
-4. Slash `/` → `--` (TWO dashes = indicates branch hierarchy)
-5. `_` → maintain (except system reserved initial underscore)
-6. Any character outside `[a-z0-9._-]` → remove
-7. `--+` multiple → reduce to 1 `--`
-8. `-+` multiple → reduce to 1 `-`
-9. Remove `-` `.` at the beginning and end
-10. Default `main` branch ALWAYS converts to `__main` (TWO underscores prefix, I4)
-11. Workspace name: if from IDE (TRAE workspace name), applies slug safe
-12. Project name: if from git repo `owner/repo` → extracts `repo` + applies slug safe
+The pre-flattening hierarchy had an extra "workspace" grouping level and per-session folders inside worktrees:
 
-Examples:
-| Input | Slug-safe Output |
-|-------|------------------|
-| Workspace "Manifesto 48 Projetos" | `manifesto-48-projetos` |
-| Repo `vc-educar/corp-website` | `vc-educar--corp-website` |
-| Branch `main` | `__main` |
-| Branch `feat/FLO-513/process refund` | `feat-FLO-513--process-refund` |
+| Legacy path (no longer read) | Current equivalent |
+|------------------------------|--------------------|
+| `<root>/<workspace>/<project>/` | `<root>/<project>/` |
+| `<root>/<workspace>/<project>/project/` | `<root>/<project>/` (durable docs now at the project root) |
+| `<root>/<workspace>/<worktree>/.wt/` | `<root>/<project>/worktrees/<name>/` |
+| `<root>/<worktree>/sessions/<id>/` (inside a worktree) | `<root>/<project>/.sessions/<id>/` |
+| `<root>/.registry/projects/` | `<root>/.state/registry.jsonl` |
+| `<project>/che_state.sqlite` (at the project root) | `<project>/_db/che_state.sqlite` |
 
----
+Rules for the transition:
 
-## 4. BACKWARD COMPATIBILITY (MINIMUM 1 RELEASE)
-
-### 4.1. Root CHE_WORKSPACES_ROOT Fallback
-Logic in helper (`che_core/paths.py`):
-```python
-if not os.environ.get("CHE_WORKSPACES_ROOT"):
-    old_default = Path.home() / "code" / "harness-sessions"
-    new_default = Path.home() / ".che-workspaces"
-    if old_default.is_dir() and not new_default.is_dir():
-        return old_default
-    return new_default
-```
-
-### 4.2. "Spurious" Old Structure (harness-sessions) — How it's read
-If the user hasn't migrated a workspace yet (e.g.: `manifesto48/` is in the `$HOME/code/harness-sessions` fallback with the old MESSY structure):
-- Skills first **TRY** to read from the NEW L1-L4 structure (`project/`, `.wt/`, `sessions/<ID>/`).
-- If it fails (new structure doesn't exist), **IT FALLS BACK TO READING THE OLD STRUCTURE** (compat mode).
-- **NEVER write to the old structure** in compat mode — first execute the G3 item-by-item migration (ask for user confirmation if old structure is detected).
-
-### 4.3. Legacy JSONL Registry Keys (dual-read)
-In Level 1 registry (`registry_append_jsonl`), **both keys are written and read**:
-```json
-{
-  "che_session_dir": "/home/laion/.che-workspaces/manifesto48/proj/__main/sessions/123",
-  "harness_session_dir": "/home/laion/code/harness-sessions/manifesto48/proj/sessions/123"   // legacy compat
-}
-```
-Reading: tries `che_*` first, if it doesn't exist tries `harness_*` (1 release).
-
----
-
-## 5. MIGRATION (G3 manifesto48 — OFFICIAL PROCESS)
-
-NON-NEGOTIABLE order (0 loss, simple rollback):
-
-| Step | Action | Command / Log |
-|------|--------|---------------|
-| M1 | Deep LS of old workspace → text file. | `find /harness-sessions/manifesto48 -maxdepth 6 \| sort > /tmp/pre-migration-filelist.txt` |
-| M2 | CSV Classification A/B/C for each item: | 3 columns: `original_path \| CATEGORY \| new_destination_path` |
-| | **A = project (L2 durable)** | xray.md, architecture.md, roles/, product/, durable decisions/, onboarding.md |
-| | **B = .wt (L3 shared worktree)** | decisions.log.jsonl, envelopes/, gh_stack/, SHARED reports, specs/, designs/, durable qa |
-| | **C = session-specific (L4)** | everything inside sessions/<ID>/, debugger, diffs_context, execution, ephemeral reports |
-| | **UNCATEGORIZED** | item that doesn't fall into any A/B/C → `project/_legacy_uncategorized/<original-path-maintained>` |
-| M3 | mkdir NEW EMPTY structure. | `mkdir -p` L1→L2→L3→L4 (project + __main/.wt + __main/sessions — NO file moving yet) |
-| M4 | CSV loop for each line → `mv -n SOURCE DESTINATION`. | Log in `.migration_reports/2026-09-03_migration_manifesto48.csv` for each item (status: OK/ALREADY_EXISTED/SKIP). |
-| M5 | `rmdir` (EMPTY directories only) in old folders (`workspace/`, `sessions/` of the old project). | If `rmdir` FAILS (there are files no one classified in M2) → **EVERYTHING that remains** moves to `project/_legacy_uncategorized/` with ORIGINAL subdirectory structure intact. |
-| M6 | Write final md report with A/B/C/UNCAT counts + rollback command. | File: `.migration_reports/YYYY-MM-DD_migration_<workspace-name>_report.md` |
-| M7 | Documented ROLLBACK command (if things go wrong): | `rsync -a --remove-source-files $NEW $OLD` (1 command, undoes everything — item-by-item back to original). |
+1. **Legacy folders are left untouched on disk.** Che never reads, rewrites or removes them on its own.
+2. `che project list` detects them heuristically (a flat project always carries a `registry.jsonl` and/or a
+   `worktrees/` folder; legacy leftovers carry neither) and reports them under a `legacy_untouched` entry with a
+   remediation note, so nothing is silently ignored.
+3. To adopt a legacy tree, re-create the project explicitly (`che project init <repo> --slug <slug>`) and bind its
+   checkout (`che worktree add <repo> --project <slug> --name <name>`), then move the old folder to `.trash/` once you
+   are satisfied with the new one. Trash, never delete.

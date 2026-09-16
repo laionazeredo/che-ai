@@ -54,13 +54,13 @@
 #   ./scripts/install-che.sh --source ~/Downloads/che-ai-export --apply
 #   ./scripts/install-che.sh -h
 #
-# WHAT ABOUT THE IDE SLASH COMMANDS (/che-workspace, /che-spec, /che-act, /che-ship, ...)?
+# WHAT ABOUT THE IDE SLASH COMMANDS (/che-project, /che-worktree, /che-spec, /che-act, /che-ship, ...)?
 #   THEY CONTINUE TO EXIST AND ARE THE RECOMMENDED ENTRY POINT FOR AGENTIC / CREATIVE WORK.
-#   The `che-ai` CLI is the structural ADMINISTRATIVE SIDECAR for team bootstrap, workspace setup,
-#   trash-safe removal, structural ops (workspace/project/config/state/task/rag/export/eject), CI
+#   The `che-ai` CLI is the structural ADMINISTRATIVE SIDECAR for team bootstrap, project/worktree setup,
+#   trash-safe removal, structural ops (project/worktree/config/state/task/rag/export/eject), CI
 #   wiring, and offline work.
 #   You use IDE slash-commands inside Claude Code for agent-driven creative tasks (LLM calls, spec
-#   writing, code review, PR bodies) and the terminal `che-ai` CLI for team admin, workspace setup,
+#   writing, code review, PR bodies) and the terminal `che-ai` CLI for team admin, project setup,
 #   listings/exports, and structural operations (deterministic, works offline).
 #
 # WHITELIST (what is synchronised from source → target):
@@ -575,7 +575,7 @@ else
   echo "  2. Confirm ${TARGET}/README.md exists."
   echo "  3. Smoke : bash $TARGET/scripts/install-che.sh -h"
   echo "  4. CLI   : che --help   (or che-ai --help)"
-  echo "  5. IDE slash-commands (/che-workspace, /che-project, /che-spec, /che-act,"
+  echo "  5. IDE slash-commands (/che-project, /che-worktree, /che-spec, /che-act,"
   echo "     /che-ship, /che-review, [examples of community custom skills:"
   echo "     /figma-pixel-check, /flockr-*, /my-company-*, etc.])"
   echo "     → CONTINUE TO EXIST inside the IDE as the primary path for agentic/creative work."

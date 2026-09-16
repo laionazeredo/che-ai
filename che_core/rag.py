@@ -286,7 +286,7 @@ def _get_rag_db_path(worktree_root: Optional[str] = None, paths: Optional[Dict[s
         if worktree_root is None:
             raise ValueError("worktree_root or paths must be provided")
         paths = compute_paths(worktree_root, "rag-store-fallback")
-    return Path(paths["CHE_PROJECT_DIR"]) / RAG_DB_FILENAME
+    return Path(paths["CHE_DB_DIR"]) / RAG_DB_FILENAME
 
 
 def _try_load_sqlite_vec(conn: sqlite3.Connection) -> Tuple[bool, Optional[str]]:

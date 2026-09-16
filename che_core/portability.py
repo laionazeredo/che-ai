@@ -6,7 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from che_core.paths import compute_paths, get_workspaces_root
+from che_core.paths import compute_paths
+from che_core.project_layout import get_db_dir, get_project_dir, get_worktree_dir
 
 STATE_DB_FILENAME = "che_state.sqlite"
 RAG_DB_FILENAME = "che_rag.sqlite"
@@ -62,8 +63,9 @@ def export_project(
             "db_skipped": None,
         }
 
+        db_dir = Path(paths["CHE_DB_DIR"])
         if include_db:
-            sizes = _db_sizes(project_dir)
+            sizes = _db_sizes(db_dir)
             db_total_bytes = sum(sizes.values())
             limit_bytes = db_size_limit_mb * 1024 * 1024
             metadata["db_total_bytes"] = db_total_bytes
@@ -79,7 +81,7 @@ def export_project(
                 db_folder = tmp_path / "_db"
                 db_folder.mkdir(parents=True, exist_ok=True)
                 for name, size in sizes.items():
-                    shutil.copy2(project_dir / name, db_folder / name)
+                    shutil.copy2(db_dir / name, db_folder / name)
                     db_files_incl[name] = f"{size} bytes"
 
         if db_skipped_reason:
@@ -134,8 +136,13 @@ def import_project(
     include_db: bool = False,
 ) -> Dict[str, Any]:
     """
-    Import project data from a tar.gz archive.
+    Import project data from a tar.gz archive into the flat layout
+    (``<root>/<project-slug>/`` and ``<root>/<project-slug>/worktrees/<name>/``).
     Handles naming conflicts by appending a timestamp suffix.
+
+    The project is taken from the archive metadata (``project_slug``), so
+    ``target_workspace`` is accepted for backward compatibility only and is
+    ignored — the L1 "workspace" grouping level no longer exists.
 
     If include_db=True and archive contains _db/*.sqlite files → they are
     moved into the target CHE_PROJECT_DIR with --import suffix if a file with
@@ -144,8 +151,6 @@ def import_project(
     archive_path = Path(archive_path).resolve()
     if not archive_path.exists():
         raise FileNotFoundError(f"Archive not found: {archive_path}")
-
-    workspaces_root = get_workspaces_root()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
@@ -162,27 +167,27 @@ def import_project(
 
         project_slug = metadata["project_slug"]
         worktree_slug = metadata["worktree_slug"]
-        workspace_name = target_workspace or metadata["workspace_name"]
         archive_include_db: bool = bool(metadata.get("include_db", False))
         archive_db_skipped = metadata.get("db_skipped", None)
 
-        target_project_dir = workspaces_root / ".registry" / "projects" / project_slug
+        # Flat layout: <root>/<project-slug>/ and <root>/<project-slug>/worktrees/<name>/.
+        target_project_dir = get_project_dir(project_slug)
         if target_project_dir.exists():
             suffix = datetime.now().strftime("%Y%m%d-%H%M")
             project_slug = f"{project_slug}--import-{suffix}"
-            target_project_dir = workspaces_root / ".registry" / "projects" / project_slug
+            target_project_dir = get_project_dir(project_slug)
 
-        target_workspace_dir = workspaces_root / workspace_name / worktree_slug
-        if target_workspace_dir.exists():
+        target_worktree_dir = get_worktree_dir(project_slug, worktree_slug)
+        if target_worktree_dir.exists():
             suffix = datetime.now().strftime("%Y%m%d-%H%M")
             worktree_slug = f"{worktree_slug}--import-{suffix}"
-            target_workspace_dir = workspaces_root / workspace_name / worktree_slug
+            target_worktree_dir = get_worktree_dir(project_slug, worktree_slug)
 
         target_project_dir.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(tmp_path / "project"), str(target_project_dir))
 
         imported_shared_path = tmp_path / "worktree_shared"
-        target_shared_path = target_workspace_dir / ".wt"
+        target_shared_path = target_worktree_dir
         if imported_shared_path.exists():
             target_shared_path.mkdir(parents=True, exist_ok=True)
             for item in imported_shared_path.iterdir():
@@ -196,16 +201,17 @@ def import_project(
 
         db_imported: Dict[str, str] = {}
         db_skipped: Dict[str, str] = {}
+        target_db_dir = get_db_dir(project_slug)
         db_folder = tmp_path / "_db"
         if include_db and archive_include_db and db_folder.exists():
             for db_name in (STATE_DB_FILENAME, RAG_DB_FILENAME):
                 src = db_folder / db_name
                 if not src.exists():
                     continue
-                dest = target_project_dir / db_name
+                dest = target_db_dir / db_name
                 if dest.exists():
                     suffix = datetime.now().strftime("%Y%m%d-%H%M")
-                    dest = target_project_dir / f"{Path(db_name).stem}--import-{suffix}{Path(db_name).suffix}"
+                    dest = target_db_dir / f"{Path(db_name).stem}--import-{suffix}{Path(db_name).suffix}"
                 shutil.move(str(src), str(dest))
                 db_imported[db_name] = str(dest)
             skipped_note = db_folder / "SKIPPED.txt"
@@ -221,9 +227,8 @@ def import_project(
         result: Dict[str, Any] = {
             "project_slug": project_slug,
             "worktree_slug": worktree_slug,
-            "workspace_name": workspace_name,
             "project_dir": str(target_project_dir),
-            "worktree_dir": str(target_workspace_dir),
+            "worktree_dir": str(target_worktree_dir),
         }
         if include_db:
             result["db"] = {

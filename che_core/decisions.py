@@ -4,20 +4,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from che_core.paths import get_workspaces_root, resolve_workspace_name, resolve_worktree_slug
+from che_core.paths import compute_paths
+from che_core.project_layout import append_line_atomic
 
 
 def get_decisions_path(worktree_root: str, cwd_override: Optional[str] = None) -> Path:
+    """Resolve ``decisions.log.jsonl`` for a bound worktree.
+
+    Delegates to :func:`che_core.paths.compute_paths` so the decisions log lives in
+    exactly the same tree as every other artifact of that worktree.
+
+    Historically this module carried its own duplicate formula
+    (``<root>/<workspace>/<worktree-slug>/.wt/``) that resolved the workspace from
+    ``os.getcwd()``. The two formulas disagreed, so a worktree's decision history
+    and its artifacts silently landed in different trees — the memory of a project
+    never met itself.
+    """
     if not worktree_root:
         print("get_decisions_path: worktree_root empty", file=sys.stderr)
         sys.exit(2)
 
-    hwn = resolve_workspace_name(cwd_override)
-    sl = resolve_worktree_slug(worktree_root)
-    workspaces_root = get_workspaces_root()
-
-    out_path = workspaces_root / hwn / sl / ".wt" / "decisions.log.jsonl"
-    return out_path
+    paths = compute_paths(worktree_root, "decisions", cwd_override)
+    return Path(paths["CHE_DECISIONS_PATH"])
 
 
 def append_decision_jsonl(
@@ -27,13 +35,18 @@ def append_decision_jsonl(
     ts_override: Optional[str] = None,
     session_id: Optional[str] = None,
     spec_id: Optional[str] = None,
-):
+) -> None:
+    """Append one decision record to the worktree's ``decisions.log.jsonl``.
+
+    Preconditions: ``worktree_root`` is bound and ``event_type`` is non-empty.
+    Postcondition: the log grows by at most one complete, parseable JSONL line
+    (duplicate suppression is best-effort and never rewrites existing content).
+    """
     if not worktree_root or not event_type:
         print("append_decision_jsonl: worktree_root and event_type are required.", file=sys.stderr)
         sys.exit(2)
 
     out_path = get_decisions_path(worktree_root)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
 
     ts = ts_override or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -61,11 +74,19 @@ def append_decision_jsonl(
 
     line = json.dumps(entry, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
+    # Best-effort duplicate suppression. This read is not transactional (two
+    # writers can both miss and both append); a duplicate line is harmless because
+    # the log is append-only and every consumer tolerates repeats.
     if out_path.exists():
-        with open(out_path, "rb") as f:
-            existing = f.read()
+        try:
+            existing = out_path.read_bytes()
+        except OSError:
+            existing = b""
         if (line + "\n").encode() in existing:
             return
 
-    with open(out_path, "a", encoding="utf-8") as f:
-        f.write(line + "\n")
+    try:
+        append_line_atomic(out_path, line)
+    except ValueError as exc:
+        print(f"append_decision_jsonl: {exc}", file=sys.stderr)
+        sys.exit(2)

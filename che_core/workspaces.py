@@ -1,3 +1,13 @@
+"""Project lifecycle for the flat Che layout.
+
+A **project** is an organising abstraction with a stable slug and a folder under
+``~/.che-workspaces/<slug>/``. It deliberately does NOT bind a filesystem path —
+only a **worktree** does (see :mod:`che_core.worktrees`). The L1 "workspace"
+grouping level was retired in Sep 2026: projects live directly under the storage
+root, and each project owns a folder per canonical domain plus a ``worktrees/``
+folder.
+"""
+
 import json
 import shutil
 import sys
@@ -5,14 +15,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from che_core.paths import (
-    _slugify,
-    compute_paths,
-    ensure_session_dirs,
-    get_workspaces_root,
-    project_slug_from_git_origin,
-    resolve_workspace_name,
-    resolve_worktree_slug,
+from che_core.paths import _slugify, get_workspaces_root
+from che_core.project_layout import (
+    DOMAIN_SLUGS,
+    get_db_dir,
+    get_project_dir,
+    get_roles_dir,
+    get_trash_dir,
+    git_origin,
+    is_git_repo,
+    normalise_domain,
+    validate_slug,
+)
+from che_core.worktrees import (
+    add_worktree,
+    ensure_project_skeleton,
+    list_worktrees,
 )
 
 ARCHITECTURE_MD_TEMPLATE = """# Architecture — {project_slug}
@@ -54,9 +72,8 @@ PROJECT_PROFILE_MD_TEMPLATE = """# Project Profile — {project_slug}
 
 - Slug: `{project_slug}`
 - Detected stack: `{stack}`
-- Primary domain (Politburo default): `{domain}`
+- Primary domain (default): `{domain}`
 - Source repository (git): `{origin}`
-- Source workspace: `{workspace}`
 
 ## Stack / Patterns
 
@@ -78,10 +95,7 @@ PROJECT_PROFILE_MD_TEMPLATE = """# Project Profile — {project_slug}
 
 ## Roles / Policies
 
-- Product Owner (PM): <!-- @user -->
-- Head Engineer: <!-- @user -->
-- Design / UX owner: <!-- @user -->
-- GitHub Codeowner: <!-- @user (mandatory for CODEOWNERS) -->
+See `roles/index.md` for the authoritative owner.
 """
 
 
@@ -93,13 +107,13 @@ ROLES_MD_TEMPLATE = """# Roles & Codeowners — {project_slug}
 |---|---|---|
 | Product Owner | <!-- @handle --> | PRD, roadmap, AC sign-off |
 | Tech Lead | <!-- @handle --> | Architecture, ADRs, code review |
-| UX Designer | <!-- @handle --> | Figma, accessibility (WCAG 2.2 AA) |
-| DevOps / Infra | <!-- @handle --> | CI, variables, Vercel/Railway |
+| Design Owner | <!-- @handle --> | Design system, accessibility (WCAG 2.2 AA) |
+| DevOps / Infra | <!-- @handle --> | CI, variables, deploy targets |
 | QA Owner | <!-- @handle --> | Playwright, regression, release gate |
 
-## Politburo default domain
+## Default domain
 
-Default domain for task graph when the envelope does not explicitly declare one: `{domain}`
+Default domain for the task graph when an envelope does not declare one: `{domain}`
 """
 
 
@@ -153,17 +167,17 @@ PRODUCT_CONTEXT_MD_TEMPLATE = """# Product Context — {project_slug}
 
 DB_README_TXT = """SQLite files managed by Che (FTS5 state store + RAG vector store).
 
-THIS FOLDER IS L2 DURABLE: survives branch / worktree switches within the same project.
+THIS FOLDER IS PROJECT-DURABLE: it survives branch / worktree switches within the same project.
 
 - che_state.sqlite  → FTS5 full-text index over decisions.log + task_graph + specs + envelopes.
-                    SSOT is the filesystem in L2 (docs) + L3 (worktree shared).
-                    Rebuildable at any time: `che state rebuild-index`.
+                    SSOT is the filesystem (project docs + worktree shared docs).
+                    Rebuildable at any time: `che state rebuild-index --worktree-root <path>`.
 
 - che_rag.sqlite    → (optional) RAG embeddings vector store (sqlite-vec).
-                    Rebuildable at any time: `che rag build-index --provider=none`.
+                    Rebuildable at any time: `che rag build-index <path> --provider=none`.
 
 Portability rules:
-  Export by default DOES NOT include databases. To include: `che-export --include-db`.
+  Export by default DOES NOT include databases. To include: `che export <path> <out> --include-db`.
   Default limit 250MB for the sum of both; above: generates a SKIPPED.txt file in this folder.
 """
 
@@ -176,10 +190,10 @@ def _ts_slug() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
 
-def _detect_stack(worktree_root: Optional[str]) -> str:
-    if not worktree_root:
+def _detect_stack(repo_root: Optional[str]) -> str:
+    if not repo_root:
         return "unknown"
-    wt = Path(worktree_root).resolve()
+    wt = Path(repo_root).expanduser().resolve()
     probes = {
         "Next.js/React (monorepo pnpm)": ["pnpm-workspace.yaml", "pnpm-lock.yaml"],
         "Node.js/npm": ["package-lock.json"],
@@ -189,79 +203,22 @@ def _detect_stack(worktree_root: Optional[str]) -> str:
         "Go": ["go.mod"],
         "Rust": ["Cargo.toml"],
     }
-    founds: List[str] = []
+    found: List[str] = []
     for label, files in probes.items():
         for f in files:
             if (wt / f).exists():
-                founds.append(label)
+                found.append(label)
                 break
-    if not founds:
+    if not found:
         return "generic"
-    return ", ".join(sorted(set(founds)))
+    return ", ".join(sorted(set(found)))
 
 
-def _git_origin_of(worktree_root: Optional[str]) -> str:
-    import subprocess
-
-    if not worktree_root:
-        return "local-only (no git)"
-    try:
-        res = subprocess.run(
-            ["git", "-C", worktree_root, "remote", "get-url", "origin"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if res.returncode == 0 and res.stdout.strip():
-            return res.stdout.strip()
-    except Exception:
-        pass
-    return "local-only (no git origin)"
-
-
-def list_workspaces() -> List[Dict[str, Any]]:
-    ws_root = get_workspaces_root() / "workspaces"
-    if not ws_root.is_dir():
-        return []
-    out = []
-    for d in sorted(ws_root.iterdir()):
-        if not d.is_dir():
-            continue
-        # Only list top-level directories in 'workspaces/' as workspace names
-        projects = sorted([p.name for p in d.iterdir() if p.is_dir() and (p / "project").is_dir()])
-        out.append(
-            {
-                "name": d.name,
-                "path": str(d),
-                "projects_count": len(projects),
-                "projects": projects[:20],
-            }
-        )
-    return out
-
-
-def add_workspace(name: str, *, worktree_root: Optional[str] = None) -> Dict[str, Any]:
-    if not name:
-        print("add_workspace: `name` is required.", file=sys.stderr)
-        sys.exit(2)
-    slug = _slugify(name) or "default"
-    ws_root = get_workspaces_root() / "workspaces"
-    ws_dir = ws_root / slug
-    created = False
-    if not ws_dir.is_dir():
-        ws_dir.mkdir(parents=True, exist_ok=True)
-        created = True
-    return {
-        "name": slug,
-        "path": str(ws_dir),
-        "created": created,
-        "workspace_dir_exists": ws_dir.is_dir(),
-        "hint_if_first_project": "Now run `che project init <worktree>` inside a repo to create L2.",
-    }
+# --- Trash (shared by project + worktree removals) ---------------------------
 
 
 def _trash_dir() -> Path:
-    t = get_workspaces_root() / ".trash"
+    t = get_trash_dir()
     t.mkdir(parents=True, exist_ok=True)
     return t
 
@@ -272,7 +229,7 @@ def _write_manifest(trash_target: Path, *, kind: str, original_path: str, slug: 
         "slug": slug,
         "original_path": original_path,
         "moved_at": _timestamp(),
-        "restore_hint": f"che workspace restore {slug} (or `che project restore {slug}`)",
+        "restore_hint": f"che project restore {slug}",
     }
     with open(trash_target / "_MANIFEST.json", "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
@@ -302,362 +259,319 @@ def list_trash() -> List[Dict[str, Any]]:
     return out
 
 
-def remove_workspace(name: str, *, dry_run: bool = True, confirmed: bool = False) -> Dict[str, Any]:
-    if not name:
-        print("remove_workspace: `name` is required.", file=sys.stderr)
-        sys.exit(2)
-    slug = _slugify(name) or "default"
-    ws_root = get_workspaces_root() / "workspaces"
-    ws_dir = ws_root / slug
-    if not ws_dir.is_dir():
-        return {"error": f"Workspace '{slug}' does not exist in {ws_root}", "dry_run": dry_run}
-
-    items = sorted(p.name for p in ws_dir.iterdir())
-    total_bytes = sum(p.stat().st_size for p in ws_dir.rglob("*") if p.is_file())
-    ts = _ts_slug()
-    trash_name = f"workspace--{slug}--{ts}"
-    trash_target = _trash_dir() / trash_name
-
-    if dry_run:
-        return {
-            "dry_run": True,
-            "action_would_be": "MOVE (not delete) to trash .trash/",
-            "workspace": slug,
-            "from": str(ws_dir),
-            "to": str(trash_target),
-            "items_inside": items,
-            "total_bytes_approx": total_bytes,
-            "gate": "Confirmation pending. Re-run WITHOUT --dry-run AND with confirmed=True.",
-            "restore_command": f"che workspace restore {trash_name}",
-        }
-
-    if not confirmed:
-        return {
-            "dry_run": False,
-            "aborted": True,
-            "reason": "Gate §2 safety: confirmed=False. Re-execute with confirmed=True after dry-run review.",
-            "dry_run_above_command": f"che workspace remove {slug} --dry-run",
-        }
-
-    trash_target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(ws_dir), str(trash_target))
-    _write_manifest(trash_target, kind="workspace", original_path=str(ws_dir), slug=trash_name)
-    return {
-        "dry_run": False,
-        "moved": True,
-        "workspace": slug,
-        "from": str(ws_dir),
-        "to": str(trash_target),
-        "restore_command": f"che workspace restore {trash_name}",
-    }
-
-
-def restore_workspace(trash_slug: str) -> Dict[str, Any]:
-    if not trash_slug:
-        print("restore_workspace: `trash_slug` is required.", file=sys.stderr)
-        sys.exit(2)
-    trash_target = _trash_dir() / trash_slug
-    if not trash_target.is_dir():
-        return {"error": f"Trash entry not found: {trash_slug}"}
-    mf = _read_manifest(trash_target)
-    orig = mf.get("original_path")
-    if not orig:
-        return {"error": f"Corrupted trash manifest: missing original_path in {trash_target}"}
-    orig_p = Path(orig)
-    if orig_p.exists():
-        ts = _ts_slug()
-        return {
-            "error": f"Original path already exists, will not overwrite: {orig}. Rename manually to avoid conflict (suggested suffix --{ts}).",
-            "suggested_rename": f"mv {orig} {orig}--conflict--{ts}",
-        }
-    orig_p.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(trash_target), str(orig_p))
-    manifest_bak = orig_p / "_MANIFEST.json"
-    if manifest_bak.is_file():
-        manifest_bak.unlink(missing_ok=True)
-    return {
-        "restored": True,
-        "kind": mf.get("kind"),
-        "from": str(trash_target),
-        "to": str(orig_p),
-    }
-
-
-def list_projects(workspace_name: Optional[str] = None) -> List[Dict[str, Any]]:
-    ws_root = get_workspaces_root() / "workspaces"
-    if not ws_root.is_dir():
-        return []
-
-    out = []
-    # If workspace_name is provided, only scan that workspace
-    # Else scan all workspaces
-    workspaces_to_scan = [ws_root / workspace_name] if workspace_name else ws_root.iterdir()
-
-    for ws_dir in workspaces_to_scan:
-        if not ws_dir.is_dir():
-            continue
-
-        for d in sorted(ws_dir.iterdir()):
-            if not d.is_dir():
-                continue
-
-            project_l2 = d / "project"
-            if not project_l2.is_dir():
-                continue
-
-            has_arch = (project_l2 / "architecture.md").is_file()
-            has_profile = (project_l2 / "project_profile.md").is_file()
-            db_dir = d / "_db"
-            db_files = sorted([p.name for p in db_dir.glob("*.sqlite")]) if db_dir.is_dir() else []
-
-            out.append(
-                {
-                    "slug": d.name,
-                    "workspace": ws_dir.name,
-                    "path": str(d),
-                    "architecture_exists": has_arch,
-                    "project_profile_exists": has_profile,
-                    "db_files": db_files,
-                }
-            )
-    return out
+# --- Project lifecycle -------------------------------------------------------
 
 
 def init_project(
-    worktree_root: str,
+    repo_path: str,
     *,
-    workspace_name: Optional[str] = None,
+    slug: str,
     domain: str = "engineering",
     friendly_name: Optional[str] = None,
-    session_id: str = "project-init-session",
 ) -> Dict[str, Any]:
-    if not worktree_root:
-        print("init_project: `worktree_root` is required.", file=sys.stderr)
+    """Create (or refresh) a flat project for a git repository.
+
+    Preconditions:
+      - ``slug`` is an explicit valid slug (never inferred from ambient state).
+      - ``repo_path`` is a directory inside a git working tree.
+
+    Postcondition: ``~/.che-workspaces/<slug>/`` holds one folder per canonical
+    domain plus ``worktrees/``, ``_db/`` and ``roles/``; the durable project docs
+    exist; the project registry has a ``PROJECT_INIT`` entry. Idempotent — existing
+    documents are never overwritten.
+    """
+    if not repo_path:
+        print("init_project: `repo_path` is required.", file=sys.stderr)
         sys.exit(2)
-    wt = Path(worktree_root).resolve()
-    if not wt.is_dir():
-        print(f"init_project: worktree_root={wt} is not a directory.", file=sys.stderr)
+
+    try:
+        validate_slug(slug, label="--slug")
+    except ValueError as exc:
+        print(f"init_project: {exc}", file=sys.stderr)
         sys.exit(2)
 
-    project_slug = project_slug_from_git_origin(str(wt))
-    workspace = workspace_name or resolve_workspace_name(str(wt))
+    try:
+        canonical_domain = normalise_domain(domain)
+    except ValueError as exc:
+        print(f"init_project: {exc}", file=sys.stderr)
+        sys.exit(2)
 
-    # Validate workspace existence
-    ws_root = get_workspaces_root() / "workspaces"
-    ws_dir = ws_root / workspace
-    if not ws_dir.is_dir():
-        return {
-            "initialised": False,
-            "error": f"Workspace '{workspace}' does not exist.",
-            "suggestion": f"Create the workspace first with `che workspace create {workspace}` or check the name.",
-            "workspace_missing": True,
-            "requested_workspace": workspace,
-        }
+    repo = Path(repo_path).expanduser().resolve()
+    if not repo.is_dir():
+        print(f"init_project: repo_path={repo} is not a directory.", file=sys.stderr)
+        sys.exit(2)
 
-    # Fallback name logic: <workspace>--<folder>
-    if not friendly_name:
-        folder_name = wt.name
-        friendly_name = f"{workspace}--{folder_name}"
+    if not is_git_repo(str(repo)):
+        print(
+            f"init_project: {repo} is not a git repository. "
+            "Che projects require git (contract R4); nothing was created.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
-    worktree_slug = resolve_worktree_slug(str(wt))
+    project_dir = get_project_dir(slug)
+    already_existed = project_dir.is_dir()
 
-    paths = compute_paths(str(wt), session_id, cwd_override=str(wt), workspace_name_override=workspace)
-    project_dir = Path(paths["CHE_PROJECT_DIR"])
-    project_dir.mkdir(parents=True, exist_ok=True)
-
+    skeleton = ensure_project_skeleton(slug)
     created_files: List[str] = []
 
     ts = _timestamp()
     fmt_vars = {
-        "project_slug": friendly_name,
+        "project_slug": slug,
         "ts": ts,
-        "stack": _detect_stack(str(wt)),
-        "domain": domain,
-        "origin": _git_origin_of(str(wt)),
-        "workspace": workspace,
+        "stack": _detect_stack(str(repo)),
+        "domain": canonical_domain,
+        "origin": git_origin(str(repo)) or f"local/{repo.name}",
     }
 
-    arch_file = project_dir / "architecture.md"
-    if not arch_file.is_file():
-        arch_file.write_text(ARCHITECTURE_MD_TEMPLATE.format(**fmt_vars), encoding="utf-8")
-        created_files.append(str(arch_file))
+    for filename, template in (
+        ("architecture.md", ARCHITECTURE_MD_TEMPLATE),
+        ("project_profile.md", PROJECT_PROFILE_MD_TEMPLATE),
+        ("product_context.md", PRODUCT_CONTEXT_MD_TEMPLATE),
+        ("roadmap.md", ROADMAP_MD_TEMPLATE),
+    ):
+        target = project_dir / filename
+        if not target.is_file():
+            target.write_text(template.format(**fmt_vars), encoding="utf-8")
+            created_files.append(str(target))
 
-    prof_file = project_dir / "project_profile.md"
-    if not prof_file.is_file():
-        prof_file.write_text(PROJECT_PROFILE_MD_TEMPLATE.format(**fmt_vars), encoding="utf-8")
-        created_files.append(str(prof_file))
-
-    pc_file = project_dir / "product_context.md"
-    if not pc_file.is_file():
-        pc_file.write_text(PRODUCT_CONTEXT_MD_TEMPLATE.format(**fmt_vars), encoding="utf-8")
-        created_files.append(str(pc_file))
-
-    road_file = project_dir / "roadmap.md"
-    if not road_file.is_file():
-        road_file.write_text(ROADMAP_MD_TEMPLATE.format(**fmt_vars), encoding="utf-8")
-        created_files.append(str(road_file))
-
-    roles_dir = project_dir / "roles"
-    roles_dir.mkdir(parents=True, exist_ok=True)
-    roles_file = roles_dir / "index.md"
+    roles_file = get_roles_dir(slug) / "index.md"
     if not roles_file.is_file():
         roles_file.write_text(ROLES_MD_TEMPLATE.format(**fmt_vars), encoding="utf-8")
         created_files.append(str(roles_file))
 
-    reg_file = project_dir / "registry.jsonl"
-    if not reg_file.is_file():
-        reg_file.touch()
-        created_files.append(str(reg_file))
+    db_readme = get_db_dir(slug) / "README.txt"
+    if not db_readme.is_file():
+        db_readme.write_text(DB_README_TXT, encoding="utf-8")
+        created_files.append(str(db_readme))
 
-    # L2 registry is append-only: seed it once with the PROJECT_INIT event.
-    if reg_file.stat().st_size == 0:
-        init_entry = {
+    registry_file = project_dir / "registry.jsonl"
+    if not registry_file.is_file():
+        registry_file.touch()
+        created_files.append(str(registry_file))
+
+    if registry_file.stat().st_size == 0:
+        entry = {
             "ts": ts,
             "event": "PROJECT_INIT",
-            "project_slug": project_slug,
-            "workspace": workspace,
-            "friendly_name": friendly_name,
-            "domain": domain,
-            "worktree_root": str(wt),
-            "worktree_slug": worktree_slug,
-            "stack": fmt_vars["stack"],
+            "project_slug": slug,
+            "friendly_name": friendly_name or slug,
+            "domain": canonical_domain,
+            "repo_root": str(repo),
             "origin": fmt_vars["origin"],
+            "stack": fmt_vars["stack"],
         }
-        with open(reg_file, "a", encoding="utf-8") as f:
-            f.write(json.dumps(init_entry, ensure_ascii=False, sort_keys=True) + "\n")
-
-    db_dir = project_dir.parent / "_db"
-    db_dir.mkdir(parents=True, exist_ok=True)
-    readme_db = db_dir / "README.txt"
-    if not readme_db.is_file():
-        readme_db.write_text(DB_README_TXT, encoding="utf-8")
-        created_files.append(str(readme_db))
-
-    ensure_session_dirs(str(wt), session_id, cwd_override=str(wt), workspace_name_override=workspace)
+        with open(registry_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
 
     return {
         "initialised": True,
-        "project_slug": project_slug,
-        "workspace": workspace,
-        "worktree_slug": worktree_slug,
+        "already_existed": already_existed,
+        "project_slug": slug,
+        "friendly_name": friendly_name or slug,
+        "domain": canonical_domain,
         "project_dir": str(project_dir),
-        "worktree_root": str(wt),
-        "friendly_name": friendly_name,
-        "domain": domain,
-        "files_created_count": len(created_files),
+        "repo_root": str(repo),
+        "domains": list(DOMAIN_SLUGS),
+        "skeleton_created": skeleton["created"],
         "files_created": created_files,
-        "already_existed_skipped": any(not (Path(p).is_file() and False) for p in created_files),
-        "paths": {
-            "CHE_PROJECT_DIR": paths["CHE_PROJECT_DIR"],
-            "CHE_WORKSPACE_DIR": paths["CHE_WORKSPACE_DIR"],
-            "CHE_WORKTREE_DIR": paths["CHE_WORKTREE_DIR"],
-            "CHE_WORKSPACE_SHARED": paths["CHE_WORKSPACE_SHARED"],
-        },
         "next_steps": [
-            "1. Edit architecture.md / product_context.md / roadmap.md in CHE_PROJECT_DIR.",
-            "2. Run `/che-onboarding` to add human context.",
-            "3. Run `/che-architect` if designing a new system.",
-            "4. When specs are ready: `/che-act` to raise multi-domain task graph.",
+            f"1. Fill in the durable docs under {project_dir}.",
+            f"2. Bind your checkout: che worktree add {repo} --project {slug} --name main",
+            "3. Edit the domain handoff docs under the matching domain folder.",
         ],
     }
 
 
+def _looks_like_project(project_dir: Path) -> bool:
+    """Heuristic guard so pre-flattening leftovers are not reported as projects.
+
+    A flat project always carries a ``registry.jsonl`` and/or a ``worktrees/``
+    folder at its root. Legacy workspace folders (``<root>/<workspace>/<project>/``
+    and ``<root>/<workspace>/<worktree>/.wt/``) carry neither, so they are skipped
+    instead of being silently misread as projects.
+    """
+    return (project_dir / "registry.jsonl").is_file() or (project_dir / "worktrees").is_dir()
+
+
+def list_projects() -> List[Dict[str, Any]]:
+    """Every flat project folder, with its docs, worktrees and DB files.
+
+    Folders under the storage root that are not flat projects (legacy workspace
+    leftovers) are reported separately under ``legacy_untouched`` so nothing is
+    silently ignored — Che never removes them on its own.
+    """
+    root = get_workspaces_root()
+    if not root.is_dir():
+        return []
+
+    out: List[Dict[str, Any]] = []
+    legacy: List[str] = []
+    for project_dir in sorted(root.iterdir()):
+        if not project_dir.is_dir() or project_dir.name.startswith("."):
+            continue
+        slug = project_dir.name
+        try:
+            validate_slug(slug)
+        except ValueError:
+            # Uppercase / otherwise invalid folder names cannot be project slugs.
+            legacy.append(slug)
+            continue
+
+        if not _looks_like_project(project_dir):
+            legacy.append(slug)
+            continue
+
+        db_dir = project_dir / "_db"
+        out.append(
+            {
+                "slug": slug,
+                "path": str(project_dir),
+                "architecture_exists": (project_dir / "architecture.md").is_file(),
+                "project_profile_exists": (project_dir / "project_profile.md").is_file(),
+                "db_files": sorted(p.name for p in db_dir.glob("*")) if db_dir.is_dir() else [],
+                "worktrees": [w.get("name") for w in list_worktrees(slug)],
+                "domains": sorted(d.name for d in project_dir.iterdir() if d.is_dir() and d.name in DOMAIN_SLUGS),
+            }
+        )
+
+    if legacy:
+        out.append(
+            {
+                "legacy_untouched": legacy,
+                "note": (
+                    "These folders do not look like flat projects (no registry.jsonl / worktrees/). "
+                    "They are pre-flattening leftovers and were left untouched. "
+                    "Re-create them with `che project init <repo> --slug <slug>` and move the old "
+                    "folder to `.trash/` once you are satisfied."
+                ),
+            }
+        )
+    return out
+
+
 def remove_project(
-    project_slug: str, workspace_name: str, *, dry_run: bool = True, confirmed: bool = False
+    project_slug: str,
+    *,
+    dry_run: bool = True,
+    confirmed: bool = False,
 ) -> Dict[str, Any]:
-    if not project_slug:
-        print("remove_project: `project_slug` is required.", file=sys.stderr)
-        sys.exit(2)
-    if not workspace_name:
-        print("remove_project: `workspace_name` is required.", file=sys.stderr)
-        sys.exit(2)
+    """Trash-safe removal of a project folder (never ``rm -rf``)."""
+    project_dir = get_project_dir(project_slug)
+    bound = list_worktrees(project_slug)
 
-    slug = _slugify(project_slug) or project_slug
-    ws_root = get_workspaces_root() / "workspaces"
-    project_dir = ws_root / workspace_name / slug
+    plan = {
+        "action": "move-to-trash",
+        "project": project_slug,
+        "from": str(project_dir),
+        "bound_worktrees": [w.get("path") for w in bound],
+        "repos_untouched": True,
+        "dry_run": dry_run,
+    }
+
     if not project_dir.is_dir():
-        return {"error": f"Project L2 '{slug}' does not exist in {project_dir.parent}", "dry_run": dry_run}
-
-    items = sorted(p.name for p in project_dir.iterdir())
-    total_bytes = sum(p.stat().st_size for p in project_dir.rglob("*") if p.is_file())
-    ts = _ts_slug()
-    trash_name = f"project--{slug}--{ts}"
-    trash_target = _trash_dir() / trash_name
+        print(f"remove_project: project {project_slug!r} does not exist.", file=sys.stderr)
+        sys.exit(3)
 
     if dry_run:
-        return {
-            "dry_run": True,
-            "action_would_be": "MOVE (not delete) to trash .trash/",
-            "project": slug,
-            "from": str(project_dir),
-            "to": str(trash_target),
-            "items_inside": items,
-            "total_bytes_approx": total_bytes,
-            "gate": "Confirmation pending. Re-run WITHOUT --dry-run AND with confirmed=True.",
-            "restore_command": f"che project restore {trash_name}",
-        }
+        plan["applied"] = False
+        plan["next"] = "Re-run with --no-dry-run --confirm to apply."
+        return plan
 
     if not confirmed:
-        return {
-            "dry_run": False,
-            "aborted": True,
-            "reason": "Gate §2 safety: confirmed=False. Re-execute with confirmed=True after dry-run review.",
-            "dry_run_above_command": f"che project remove {slug} --dry-run",
-        }
+        print("remove_project: refusing to apply without --confirm.", file=sys.stderr)
+        sys.exit(2)
 
-    trash_target.parent.mkdir(parents=True, exist_ok=True)
+    trash_root = _trash_dir()
+    trash_slug = f"project--{project_slug}--{_ts_slug()}"
+    trash_target = trash_root / trash_slug
     shutil.move(str(project_dir), str(trash_target))
-    _write_manifest(trash_target, kind="project", original_path=str(project_dir), slug=trash_name)
-    return {
-        "dry_run": False,
-        "moved": True,
-        "project": slug,
-        "from": str(project_dir),
-        "to": str(trash_target),
-        "restore_command": f"che project restore {trash_name}",
-    }
+    _write_manifest(trash_target, kind="project", original_path=str(project_dir), slug=trash_slug)
+
+    plan.update({"applied": True, "trash_path": str(trash_target), "trash_slug": trash_slug})
+    return plan
 
 
 def restore_project(trash_slug: str) -> Dict[str, Any]:
-    return restore_workspace(trash_slug)
+    """Move a trashed project back to its original flat location."""
+    trash_target = _trash_dir() / trash_slug
+    if not trash_target.is_dir():
+        print(f"restore_project: trash entry {trash_slug!r} not found.", file=sys.stderr)
+        sys.exit(3)
+
+    manifest = _read_manifest(trash_target)
+    original = manifest.get("original_path")
+    if not original:
+        print(f"restore_project: no original_path in manifest of {trash_slug!r}.", file=sys.stderr)
+        sys.exit(3)
+
+    target = Path(original)
+    if target.exists():
+        print(f"restore_project: target {target} already exists — refusing to overwrite.", file=sys.stderr)
+        sys.exit(3)
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(trash_target), str(target))
+    return {"restored": True, "trash_slug": trash_slug, "restored_to": str(target)}
+
+
+# --- Hook helpers (git worktree add/remove) ----------------------------------
 
 
 def ensure_worktree_l3_dirs(worktree_root: str, *, session_id: str = "auto-worktree-bootstrap") -> Dict[str, Any]:
-    if not worktree_root:
-        print("ensure_worktree_l3_dirs: worktree_root required.", file=sys.stderr)
-        sys.exit(2)
-    wt = Path(worktree_root).resolve()
-    paths = ensure_session_dirs(str(wt), session_id, cwd_override=str(wt))
+    """React to ``git worktree add`` by binding the new checkout when we can infer it.
+
+    Inference is intentionally conservative: the repo's ``origin`` must match a
+    project that already exists. Otherwise we return a note telling the user to run
+    ``che worktree add`` explicitly, rather than guessing a project.
+    """
+    del session_id  # sessions no longer own folders; kept for call-site compatibility
+    repo = Path(worktree_root).expanduser().resolve()
+
+    origin = git_origin(str(repo))
+    if not origin:
+        return {"bound": False, "note": f"{repo} has no git origin — cannot infer a project."}
+
+    candidates = {p["slug"] for p in list_projects() if "slug" in p}
+    for slug in candidates:
+        project_dir = get_project_dir(slug)
+        registry_file = project_dir / "registry.jsonl"
+        if not registry_file.is_file():
+            continue
+        try:
+            lines = registry_file.read_text(encoding="utf-8").strip().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                entry = json.loads(line)
+            except Exception:
+                continue
+            if entry.get("event") == "PROJECT_INIT" and entry.get("origin") == origin:
+                name = _slugify(repo.name) or "main"
+                result = add_worktree(slug, str(repo), name)
+                return {"bound": True, "project": slug, "worktree": name, **result}
+
     return {
-        "bootstrapped": True,
-        "worktree_root": str(wt),
-        "worktree_slug": resolve_worktree_slug(str(wt)),
-        "CHE_WORKSPACE_SHARED": paths.get("CHE_WORKSPACE_SHARED"),
-        "CHE_WORKTREE_DIR": paths.get("CHE_WORKTREE_DIR"),
+        "bound": False,
+        "note": (
+            f"No Che project matches origin={origin}. "
+            f"Bind explicitly: che worktree add {repo} --project <project> --name <name>"
+        ),
     }
 
 
 def cleanup_worktree_l3(worktree_root: str) -> Dict[str, Any]:
-    if not worktree_root:
-        print("cleanup_worktree_l3: worktree_root required.", file=sys.stderr)
-        sys.exit(2)
-    wt = Path(worktree_root).resolve()
-    worktree_slug = resolve_worktree_slug(str(wt))
-    workspace_name = resolve_workspace_name(str(wt))
-    project_slug = project_slug_from_git_origin(str(wt))
-    ws_root = get_workspaces_root()
-    wt_l3_parent = ws_root / "workspaces" / workspace_name / project_slug / "worktrees" / worktree_slug
-    if not wt_l3_parent.is_dir():
-        return {"nothing_to_clean": True, "expected_l3_path": str(wt_l3_parent)}
-    ts = _ts_slug()
-    trash_name = f"worktree--{worktree_slug}--{ts}"
-    trash_target = _trash_dir() / trash_name
-    shutil.move(str(wt_l3_parent), str(trash_target))
-    _write_manifest(trash_target, kind="worktree", original_path=str(wt_l3_parent), slug=trash_name)
+    """Report the Che worktrees bound to a checkout being removed (no destructive action)."""
+    from che_core.worktrees import find_worktree_by_path
+
+    matches = find_worktree_by_path(worktree_root)
     return {
-        "moved_to_trash": True,
-        "worktree_slug": worktree_slug,
-        "from": str(wt_l3_parent),
-        "to": str(trash_target),
-        "restore_command": f"che workspace restore {trash_name}",
+        "unbound": False,
+        "found": [{"project": m.get("project"), "worktree": m.get("name")} for m in matches],
+        "note": (
+            "Run `che worktree remove <project> <name> --no-dry-run --confirm` to retire the Che side."
+            if matches
+            else "No Che worktree bound to this path."
+        ),
     }

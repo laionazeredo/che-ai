@@ -533,11 +533,13 @@ try { ... } catch(e) { throw new Error("failed") /* LOST stack and root cause */
 
 ### 20. 🔴 WORKTREE SESSION BINDING — Specflow & Tactical Clarity.
 
-> **Hierarchy (Specflow Aligned):**
-> 1. **L1 Workspace**: `~/.che-workspaces/workspaces/<ws-slug>/` (Organisation/Team).
-> 2. **L2 Project (Strategic)**: `<L1>/<project-slug>/project/` (Intent, Roadmap, Durable Memory).
-> 3. **L3 Worktree (Tactical)**: `<L1>/<project-slug>/worktrees/<wt-slug>/` (Shared history, Specs, Graph, Designs).
-> 4. **L4 Session (Ephemeral)**: `<L3>/sessions/<sid>/` (Execution logs, Debug state).
+> **Hierarchy (flat, Sep 2026):**
+> 1. **State Level**: `~/.che-workspaces/.state/registry.jsonl` (session → worktree → project bindings).
+> 2. **Project Level (Strategic)**: `~/.che-workspaces/<project-slug>/` (Intent, Roadmap, Durable Memory). Identified by an explicit slug; binds **no** path.
+> 3. **Worktree Level (Tactical)**: `<project>/worktrees/<worktree-name>/` (Shared history, Specs, Graph, Designs). The **only** level that binds a repository path, and it requires git.
+> 4. **Session Level (Ephemeral)**: `<project>/.sessions/<session_id>/` (Execution logs, Debug state) — deliberately outside the worktree folder so the worktree stays reusable.
+>
+> The L1 "workspace" grouping level was retired: projects live directly under the storage root.
 
 #### 20.1 Path Contract — One Worktree = One Base of Truth.
 

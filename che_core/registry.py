@@ -4,12 +4,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from che_core.paths import get_che_home
+from che_core.project_layout import append_line_atomic, get_state_registry_path
 
 
 def get_registry_path() -> Path:
-    che_home = get_che_home()
-    return che_home / "bindings" / "registry.jsonl"
+    """``~/.che-workspaces/.state/registry.jsonl``.
+
+    This used to live inside the Che source package (``~/.che-ai/bindings/``),
+    which mixed user/session state into the harness checkout — contrary to the
+    contract that team state lives outside repositories. Session/worktree/project
+    bindings are user state, so they belong to the workspace root.
+    """
+    return get_state_registry_path()
 
 
 def _clean_payload(payload_s: str) -> Dict[str, Any]:
@@ -99,8 +105,11 @@ def registry_append_jsonl(
         if (line + "\n").encode() in existing:
             return
 
-    with open(out_path, "a", encoding="utf-8") as f:
-        f.write(line + "\n")
+    try:
+        append_line_atomic(out_path, line)
+    except ValueError as exc:
+        print(f"registry_append_jsonl: {exc}", file=sys.stderr)
+        sys.exit(2)
 
 
 def registry_lookup_last(session_id: str) -> Optional[Dict[str, Any]]:

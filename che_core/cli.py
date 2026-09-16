@@ -12,6 +12,7 @@ from che_core.paths import (
     write_file_atomic,
 )
 from che_core.portability import export_project, import_project
+from che_core.project_layout import DOMAIN_SLUGS
 from che_core.registry import registry_append_jsonl, registry_lookup_last
 from che_core.task_engine import (
     graph_summary,
@@ -267,64 +268,25 @@ def main(argv=None):
         help="Hybrid search BM25 + vector rerank (default True).",
     )
 
-    # WORKSPACE MGMT SUBCOMMANDS (L1) =============================================
-    parser_ws = subparsers.add_parser("workspace", help="Manage Che workspaces (L1 workspaces root).")
-    ws_subs = parser_ws.add_subparsers(dest="ws_cmd", required=True)
-
-    # create (primary)
-    pw_create = ws_subs.add_parser("create", help="Create a new L1 workspace.")
-    pw_create.add_argument("name", help="Workspace name (will be slugified).")
-    pw_create.add_argument("--worktree-root", default=None, help="Optional worktree to define primary workspace.")
-
-    ws_subs.add_parser("list", help="List existing workspaces + projects count.")
-
-    pw_remove = ws_subs.add_parser("remove")
-    pw_remove.add_argument("name", help="Workspace slug to move to trash (DOES NOT delete, moves to .trash/).")
-    pw_remove.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=True,
-        help="Default: only show, DO NOT move. Set --no-dry-run to apply.",
-    )
-    pw_remove.add_argument(
-        "--no-dry-run", dest="dry_run", action="store_false", help="Effectively move. Requires --confirm as well."
-    )
-    pw_remove.add_argument(
-        "--confirm",
-        dest="confirmed",
-        action="store_true",
-        default=False,
-        help="Mandatory safety gate after reviewing --dry-run.",
-    )
-
-    pw_restore = ws_subs.add_parser("restore")
-    pw_restore.add_argument("trash_slug", help="Trash entry slug (e.g. workspace--foo--20260904-235959).")
-
-    ws_subs.add_parser("trash-list", help="Contents of the .trash/ folder.")
-
-    # PROJECT MGMT SUBCOMMANDS (L2) =============================================
-    parser_proj = subparsers.add_parser("project", help="Manage L2 projects (.registry/projects/<slug>).")
+    # PROJECT MGMT SUBCOMMANDS (flat layout) ====================================
+    parser_proj = subparsers.add_parser("project", help="Manage flat projects (~/.che-workspaces/<slug>/).")
     proj_subs = parser_proj.add_subparsers(dest="proj_cmd", required=True)
 
     # create (primary), add and init (aliases)
-    pj_create = proj_subs.add_parser("create", aliases=["add", "init"], help="Create/Add an L2 project to a workspace.")
-    pj_create.add_argument("worktree_root", help="Project worktree root to add.")
-    pj_create.add_argument("--workspace", required=True, help="Target workspace name (MANDATORY).")
+    pj_create = proj_subs.add_parser("create", aliases=["add", "init"], help="Create/refresh a project for a git repo.")
+    pj_create.add_argument("repo_path", help="Path to the git checkout this project tracks.")
+    pj_create.add_argument("--slug", required=True, help="Project slug (MANDATORY, e.g. acme).")
     pj_create.add_argument(
         "--domain",
         default="engineering",
-        help="Default Politburo domain: engineering|ux|product|devops|copywriting|social|seo-analytics.",
+        help=f"Default domain: {'|'.join(DOMAIN_SLUGS)} (legacy aliases: ux→design, operation→devops).",
     )
-    pj_create.add_argument(
-        "--name", dest="friendly_name", default=None, help="Friendly name (default: <workspace>--<folder>)."
-    )
-    pj_create.add_argument("--session-id", default="project-create-cli", help="Session ID to create initial L3 dirs.")
+    pj_create.add_argument("--name", dest="friendly_name", default=None, help="Friendly name (default: the slug).")
 
-    proj_subs.add_parser("list", help="List L2 projects + existing architecture/profile/db.")
+    proj_subs.add_parser("list", help="List flat projects + docs, worktrees and DB files.")
 
     pj_remove = proj_subs.add_parser("remove")
-    pj_remove.add_argument("project_slug", help="Project slug to move to trash (DOES NOT delete, moves to .trash/).")
-    pj_remove.add_argument("workspace_name", help="Name of the workspace containing the project.")
+    pj_remove.add_argument("project_slug", help="Project slug to move to trash (never deleted).")
     pj_remove.add_argument("--dry-run", action="store_true", default=True, help="Default: only show, DO NOT move.")
     pj_remove.add_argument(
         "--no-dry-run", dest="dry_run", action="store_false", help="Effectively move. Requires --confirm as well."
@@ -335,6 +297,36 @@ def main(argv=None):
 
     pj_restore = proj_subs.add_parser("restore")
     pj_restore.add_argument("trash_slug", help="Trash entry slug.")
+
+    proj_subs.add_parser("trash-list", help="Contents of the .trash/ folder.")
+
+    # WORKTREE MGMT SUBCOMMANDS (the only thing that binds a filesystem path) ====
+    parser_wt = subparsers.add_parser("worktree", help="Bind a checkout to a project (~/<project>/worktrees/<name>/).")
+    wt_subs = parser_wt.add_subparsers(dest="wt_cmd", required=True)
+
+    wt_add = wt_subs.add_parser("add", help="Bind a git checkout to a project. Idempotent — reuses an existing tree.")
+    wt_add.add_argument("repo_path", help="Absolute path to the git checkout.")
+    wt_add.add_argument("--project", required=True, help="Owning project slug.")
+    wt_add.add_argument("--name", required=True, help="Worktree name (e.g. main, feat-checkout).")
+    wt_add.add_argument("--force", action="store_true", default=False, help="Adopt a directory without a binding.")
+
+    wt_list = wt_subs.add_parser("list", help="List the worktrees bound to a project.")
+    wt_list.add_argument("--project", required=True, help="Project slug.")
+
+    wt_show = wt_subs.add_parser("show", help="Show one worktree binding.")
+    wt_show.add_argument("project_slug", help="Project slug.")
+    wt_show.add_argument("worktree_name", help="Worktree name.")
+
+    wt_remove = wt_subs.add_parser("remove", help="Trash-safe removal of a worktree folder (never the repo).")
+    wt_remove.add_argument("project_slug", help="Project slug.")
+    wt_remove.add_argument("worktree_name", help="Worktree name.")
+    wt_remove.add_argument("--dry-run", action="store_true", default=True, help="Default: only show, DO NOT move.")
+    wt_remove.add_argument(
+        "--no-dry-run", dest="dry_run", action="store_false", help="Effectively move. Requires --confirm as well."
+    )
+    wt_remove.add_argument(
+        "--confirm", dest="confirmed", action="store_true", default=False, help="Mandatory safety gate."
+    )
 
     # EJECT SUBCOMMANDS (safe Che uninstallation) ============================
     parser_eject = subparsers.add_parser(
@@ -599,44 +591,48 @@ def main(argv=None):
             _print_json(res)
         return
 
-    if args.command == "workspace":
-        from che_core.workspaces import add_workspace, list_trash, list_workspaces, remove_workspace, restore_workspace
-
-        if args.ws_cmd == "create":
-            res = add_workspace(args.name, worktree_root=args.worktree_root)
-        elif args.ws_cmd == "list":
-            res = list_workspaces()
-        elif args.ws_cmd == "remove":
-            res = remove_workspace(args.name, dry_run=args.dry_run, confirmed=args.confirmed)
-        elif args.ws_cmd == "restore":
-            res = restore_workspace(args.trash_slug)
-        elif args.ws_cmd == "trash-list":
-            res = list_trash()
-        else:
-            parser.error(f"Unknown workspace subcommand: {args.ws_cmd}")
-            return
-        _print_json(res)
-        return
-
     if args.command == "project":
-        from che_core.workspaces import init_project, list_projects, remove_project, restore_project
+        from che_core.workspaces import init_project, list_projects, list_trash, remove_project, restore_project
 
         if args.proj_cmd in ["create", "add", "init"]:
             res = init_project(
-                args.worktree_root,
-                workspace_name=args.workspace,
+                args.repo_path,
+                slug=args.slug,
                 domain=args.domain,
                 friendly_name=args.friendly_name,
-                session_id=args.session_id,
             )
         elif args.proj_cmd == "list":
             res = list_projects()
         elif args.proj_cmd == "remove":
-            res = remove_project(args.project_slug, args.workspace_name, dry_run=args.dry_run, confirmed=args.confirmed)
+            res = remove_project(args.project_slug, dry_run=args.dry_run, confirmed=args.confirmed)
         elif args.proj_cmd == "restore":
             res = restore_project(args.trash_slug)
+        elif args.proj_cmd == "trash-list":
+            res = list_trash()
         else:
             parser.error(f"Unknown project subcommand: {args.proj_cmd}")
+            return
+        _print_json(res)
+        return
+
+    if args.command == "worktree":
+        from che_core.worktrees import add_worktree, list_worktrees, remove_worktree, show_worktree
+
+        if args.wt_cmd == "add":
+            res = add_worktree(args.project, args.repo_path, args.name, force=args.force)
+        elif args.wt_cmd == "list":
+            res = list_worktrees(args.project)
+        elif args.wt_cmd == "show":
+            res = show_worktree(args.project_slug, args.worktree_name)
+        elif args.wt_cmd == "remove":
+            res = remove_worktree(
+                args.project_slug,
+                args.worktree_name,
+                dry_run=args.dry_run,
+                confirmed=args.confirmed,
+            )
+        else:
+            parser.error(f"Unknown worktree subcommand: {args.wt_cmd}")
             return
         _print_json(res)
         return

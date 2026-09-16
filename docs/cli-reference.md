@@ -9,11 +9,11 @@
 ## Table of Contents
 
 1. [Installation](#1-installation)
-2. [Command Map](#2-command-map-by-layer)
-3. [Layered Commands (L1 → L4)](#3-layered-commands-l1--l4)
-   1. [L1 Workspaces](#31-l1-workspace-cli)
-   2. [L2 Projects](#32-l2-project-cli)
-   3. [L3 / L4 Session & Config](#33-l3--l4-session--config)
+2. [Command Map](#2-command-map)
+3. [Project & Worktree Commands](#3-project--worktree-commands)
+   1. [Worktrees](#31-worktree-cli)
+   2. [Projects](#32-project-cli)
+   3. [Session & Config](#33-session--config)
 4. [State & Memory (SQLite FTS5)](#4-state--memory-sqlite-fts5)
 5. [Task Graph Engine](#5-task-graph-engine)
 6. [RAG (Hybrid Search)](#6-rag-hybrid-search)
@@ -29,9 +29,9 @@
 
 > ⚠️ **This CLI does NOT replace in-IDE slash commands. It is the structural administrative sidecar that complements them.**
 >
-> `/che-workspace`, `/che-project`, `/che-spec`, `/che-act`, `/che-ship`, `/che-review`, `/che-prd`, `/che-tasks`, `/che-notes`, `/che-graph` **(built-in) plus community custom skills (examples: `/figma-pixel-check`, `/flockr-*`, `/my-company-*`) continue to exist and are maintained**. They remain the recommended entry point for flows that require LLM reasoning (spec authoring, implementation loops, code review, PR gating) — **used inside Claude Code by default**.
+> `/che-project`, `/che-spec`, `/che-act`, `/che-ship`, `/che-review`, `/che-prd`, `/che-tasks`, `/che-notes`, `/che-graph` **(built-in) plus community custom skills (examples: `/figma-pixel-check`, `/flockr-*`, `/my-company-*`) continue to exist and are maintained**. They remain the recommended entry point for flows that require LLM reasoning (spec authoring, implementation loops, code review, PR gating) — **used inside Claude Code by default**.
 >
-> Use **this `che-ai` CLI** for team bootstrap, workspace admin, CI wiring, trash-safe operations, offline state work, bulk listing, and portable export/import. A standard team flow is: `che workspace create` (terminal or CI setup) → `/che-spec` (IDE agent) → `/che-act` (IDE agent) → `/che-ship` (IDE agent).
+> Use **this `che-ai` CLI** for team bootstrap, project & worktree admin, CI wiring, trash-safe operations, offline state work, bulk listing, and portable export/import. A standard team flow is: `che project init <repo> --slug <slug>` + `che worktree add <repo> --project <slug> --name main` (terminal or CI setup) → `/che-spec` (IDE agent) → `/che-act` (IDE agent) → `/che-ship` (IDE agent).
 
 ### 1.0 Platform Compatibility
 
@@ -103,20 +103,20 @@ pip uninstall che-ai
 
 ---
 
-## 2. Command Map (by Layer)
+## 2. Command Map
 
-| Group        | Subcommands                                                         | Layer | Surface |
-| :----------- | :------------------------------------------------------------------ | :---- | :------ |
-| `workspace`  | `create`, `list`, `remove`, `restore`, `trash-list`               | L1    | Terminal CLI |
-| `project`    | `create` (`add`, `init`), `list`, `remove`, `restore`             | L2    | Terminal CLI |
-| `config`     | (flags: `--lang-chat`, `--lang-docs`, `--lang-report`, `--pt-check`, `--flags`) | L3/L4 | Terminal CLI |
-| `task`       | `list`, `show`, `resume`, `set-status`, `graph-summary`           | L3    | Terminal CLI |
-| `state`      | `rebuild-index`, `query`, `search`, `sanitize`                     | L3    | Terminal CLI |
-| `rag`        | `build`, `search`, `list`, `prune`                                 | L3    | Terminal CLI |
-| `export`     | (project → portable `.tar.gz`)                                     | L2    | Terminal CLI |
-| `import`     | (portable `.tar.gz` → project)                                     | L2    | Terminal CLI |
-| `eject`      | `plan`, `execute`, `restore`                                       | All   | Terminal CLI |
-| plumbing     | `compute_paths`, `ensure_dirs`, `registry_append`, `registry_lookup`, `decision_append` | Any | Terminal CLI |
+| Group        | Subcommands                                                         | Scope    | Surface |
+| :----------- | :------------------------------------------------------------------ | :------- | :------ |
+| `project`    | `create` (`add`, `init`), `list`, `remove`, `restore`, `trash-list` | Project  | Terminal CLI |
+| `worktree`   | `add`, `list`, `show`, `remove`                                     | Worktree | Terminal CLI |
+| `config`     | (flags: `--lang-chat`, `--lang-docs`, `--lang-report`, `--pt-check`, `--flags`) | Session | Terminal CLI |
+| `task`       | `list`, `show`, `resume`, `set-status`, `graph-summary`           | Worktree | Terminal CLI |
+| `state`      | `rebuild-index`, `query`, `search`, `sanitize`                     | Project  | Terminal CLI |
+| `rag`        | `build`, `search`, `list`, `prune`                                 | Project  | Terminal CLI |
+| `export`     | (project → portable `.tar.gz`)                                     | Project  | Terminal CLI |
+| `import`     | (portable `.tar.gz` → project)                                     | Project  | Terminal CLI |
+| `eject`      | `plan`, `execute`, `restore`                                       | All      | Terminal CLI |
+| plumbing     | `compute_paths`, `ensure_dirs`, `output_path`, `write_file_atomic`, `assert_outside_worktree`, `registry_append`, `registry_lookup`, `decision_append` | Any | Terminal CLI |
 
 ### 2.1 Help Discovery
 
@@ -124,138 +124,173 @@ Every group and subcommand responds to `--help`:
 
 ```bash
 che --help
-che workspace --help
-che workspace create --help
+che project --help
+che worktree --help
+che worktree add --help
 che config --help
 che eject plan --help
 ```
 
 ---
 
-## 3. Layered Commands (L1 → L4)
+## 3. Project & Worktree Commands
 
-### 3.1 L1 Workspace CLI
+### 3.1 Worktree CLI
 
-Workspaces are the **highest-level grouping** in Che. They live under `~/.che-workspaces/workspaces/<slug>/`.
+Worktrees are the **only** Che concept that binds a filesystem path. Every worktree lives at
+`~/.che-workspaces/<project-slug>/worktrees/<worktree-name>/`, holds that worktree's shared artifacts
+(`decisions.log.jsonl`, `specs/`, `tasks/`, `qa/`, …) and is described by a `.binding.json` record.
 
-#### `che workspace create <name>`
+A worktree requires git: binding a non-git path exits `2` and creates nothing. `add` is idempotent — re-adding
+the same project + name reuses the existing tree, so one worktree accumulates the memory of every session bound
+to it instead of one subtree per session.
 
-Creates a new empty L1 workspace.
+#### `che worktree add <repo_path> --project <slug> --name <name> [--force]`
+
+Binds a git checkout to a project.
+
+| Argument / flag | Required | Meaning |
+| :-------------- | :------: | :------ |
+| `repo_path` | yes | Path to the git checkout (resolved to an absolute path). |
+| `--project` | yes | Owning project slug (the project must already exist). |
+| `--name` | yes | Worktree name, e.g. `main`, `feat-checkout`. Slug-safe, ≤ 63 chars. |
+| `--force` | no | Adopt a directory that exists but holds no `.binding.json`. |
 
 ```bash
-che workspace create acme
-che workspace create my-company
+# First bind — creates ~/.che-workspaces/web-app/worktrees/main/ + .binding.json
+che worktree add ~/code/my-company/web-app --project web-app --name main
+
+# Second run with the same project + name → REUSED, no duplicate tree
+che worktree add ~/code/my-company/web-app --project web-app --name main
+# { "added": false, "reused": true, "project": "web-app", "worktree": "main", ... }
 ```
 
-Output is JSON with the absolute path and next-step hint.
+Output JSON: `added`, `reused`, `project`, `worktree`, `path`, `branch`, `worktree_dir`, `decisions_path`.
 
-#### `che workspace list`
+Exit codes: `0` bound/reused; `2` `repo_path` missing or not a directory, a non-git path, or an existing
+unmanaged directory without `--force`; `3` the project does not exist.
 
-Prints every L1 workspace + project count.
+#### `che worktree list --project <slug>`
 
-```json
-[
-  {
-    "name": "acme",
-    "path": "/home/laion/.che-workspaces/workspaces/acme",
-    "projects_count": 2,
-    "projects": ["web-app", "github-com-acme-web-app"]
-  }
-]
+Prints every binding of a project, sorted by worktree name (`[]` when the project has none).
+
+```bash
+che worktree list --project web-app | jq -r '.[] | "\(.name)\t\(.branch)\t\(.path)"'
 ```
 
-#### `che workspace remove <name> [--dry-run | --no-dry-run --confirm]`
+Exit codes: `0` (possibly with an empty array); `2` when `--project` is omitted.
 
-**Never does `rm -rf`.** Always **moves** the workspace to `~/.che-workspaces/.trash/workspace--<slug>--<timestamp>` with a deterministic restore command.
+#### `che worktree show <project_slug> <worktree_name>`
+
+Prints a single binding, including the resolved `worktree_dir`.
+
+```bash
+che worktree show web-app main | jq '.path, .branch, .worktree_dir'
+```
+
+Exit codes: `0` found; `3` no worktree with that name in that project.
+
+#### `che worktree remove <project_slug> <worktree_name> [--dry-run | --no-dry-run --confirm]`
+
+**Never touches the bound repository.** Moves `<project>/worktrees/<name>/` to
+`.trash/worktree--<project>--<name>--<timestamp>/` with a `_MANIFEST.json` restore hint. `--dry-run` is the default.
 
 **SAFETY FIRST.** Always dry-run before any destructive action:
 
 ```bash
-# Step 1 — inspect what will happen
-che workspace remove acme --dry-run
+# Step 1 — inspect the plan (default)
+che worktree remove web-app main --dry-run
 
-# Step 2 — confirm when you are sure
-che workspace remove acme --no-dry-run --confirm
+# Step 2 — apply when you are sure
+che worktree remove web-app main --no-dry-run --confirm
 ```
 
-#### `che workspace restore <trash-slug>`
-
-Undoes a remove. The exact `<trash-slug>` is printed by both `remove --dry-run` and `trash-list` (see below).
-
-```bash
-che workspace restore workspace--acme--20260909-190810
-```
-
-#### `che workspace trash-list`
-
-Lists every currently-restorable workspace and project sitting in `.trash/`:
-
-```bash
-che workspace trash-list | jq -r '.[] | "\(.kind)\t\(.slug)\t\(.restore_hint)"'
-```
+Exit codes: `0` plan returned / move applied; `2` `--no-dry-run` without `--confirm`; `3` no worktree with that
+name in that project.
 
 ---
 
-### 3.2 L2 Project CLI
+### 3.2 Project CLI
 
-An L2 project is the durable home for strategy, architecture, product context, roles, roadmap, and the shared shared DB folder. Every project **must** be attached to exactly one L1 workspace.
+A project is the durable home for strategy, architecture, product context, roles, roadmap, the per-project SQLite
+DB and its worktrees. It is identified by an **explicit slug** and it does **not** bind a filesystem path — only a
+worktree does. There is no workspace argument anywhere in this group.
 
-The L2 directory for a project of slug `s` in workspace `w` is:
+The flat directory for a project of slug `<s>` is:
 
 ```
-~/.che-workspaces/workspaces/<w>/<s>/
-  ├─ project/         (version-able templates, human-writable)
-  │    ├─ architecture.md
-  │    ├─ project_profile.md
-  │    ├─ product_context.md
-  │    ├─ roadmap.md
-  │    ├─ roles/index.md
-  │    └─ registry.jsonl
-  ├─ worktrees/       (one per git branch / repo copy)
-  │    └─ <wt-slug>/  ← L3 shared memory
-  └─ _db/             (SQLite files, CSVs, other shared data blobs)
-       └─ README.txt
+~/.che-workspaces/<s>/
+  ├─ architecture.md            (durable, human-writable)
+  ├─ project_profile.md
+  ├─ product_context.md
+  ├─ roadmap.md
+  ├─ roles/index.md
+  ├─ registry.jsonl             (project-level append-only event log)
+  ├─ _db/                       (SQLite: che_state.sqlite + optional che_rag.sqlite + README.txt)
+  ├─ <domain>/                  (one folder per canonical domain: business, product, design, engineering,
+  │                              devops, copywriting, social, seo-analytics)
+  └─ worktrees/<name>/          (one per bound git checkout — see §3.1)
 ```
 
-#### `che project init <worktree-path> --workspace <ws> --domain <domain> --name "<f.name>" --session-id <id>`
+#### `che project init <repo_path> --slug <slug> [--domain <domain>] [--name "<friendly name>"]`
 
-Canonical first-run. Given a local git repository path, bootstraps the seven standard L2 files.
+Canonical first-run. Given a path inside a git repository, creates/refreshes the project skeleton and the four
+durable documents. `--slug` is **mandatory** and never inferred; there is no `--workspace` and no `--session-id`.
 
 ```bash
-# Inside or outside your repo. Worktree must be a valid git repo (at least one commit).
-cd ~/code/my-company/web-app
-che project init . \
-    --workspace acme \
+# Inside or outside your repo. The path must be inside a git working tree.
+che project init ~/code/my-company/web-app \
+    --slug web-app \
     --domain product \
-    --name "My Company Web App" \
-    --session-id onboarding-001
+    --name "My Company Web App"
 ```
 
-Output JSON lists `files_created_count`, the `paths` env-vars dictionary, and four human-readable `next_steps`.
+`create`, `add` and `init` are aliases of the same subcommand.
+
+Output JSON: `initialised`, `already_existed`, `project_slug`, `friendly_name`, `domain`, `project_dir`,
+`repo_root`, `domains`, `skeleton_created`, `files_created`, plus human-readable `next_steps`.
+
+Exit codes: `0` created/refreshed; `2` `repo_path` missing, invalid `--slug` or `--domain`, path not a directory,
+or a non-git path (nothing is created in any of those cases).
 
 > **Tip:** If you have a fresh new repo with zero commits, run `git commit --allow-empty -m "chore: initial empty commit"` first.
 
-#### `che project create` / `che project add` / `che project init`
+#### `che project list`
 
-All three are aliases. Behaviour is identical. Use whichever mnemonic you prefer.
+Lists every flat project with `architecture_exists`, `project_profile_exists`, `db_files` (the contents of `_db/`),
+`worktrees` and `domains`. There is no `--workspace` filter: projects live directly under the storage root. Legacy
+pre-flattening folders (no `registry.jsonl` / no `worktrees/`) are reported in a trailing `legacy_untouched` entry
+and are left untouched on disk.
 
-#### `che project list [--workspace <ws>]`
+```bash
+che project list | jq '.[] | select(.slug) | .slug'
+```
 
-Lists all known L2 projects with `architecture_exists`, `project_profile_exists`, and `db_files` (files under `_db/`). Filter to one workspace with `--workspace`.
+#### `che project remove <slug> [--dry-run | --no-dry-run --confirm]`
 
-#### `che project remove <slug> <workspace> --dry-run | --no-dry-run --confirm`
+Same trash-safe pattern as worktrees. Moves `<root>/<slug>/` to `.trash/project--<slug>--<ts>/`. Does **not**
+touch any repository bound to the project's worktrees, and never deletes the worktrees' `.binding.json` records
+from the bound checkouts.
 
-Same trash-safe pattern as workspaces. Moves the whole L2 tree to `.trash/project--<slug>--<ts>`. Does **not** touch the original git repo.
+Exit codes: `0` plan returned / move applied; `2` `--no-dry-run` without `--confirm`; `3` unknown project.
 
 #### `che project restore <trash-slug>`
 
-Restores a previously-removed project.
+Restores a previously-removed project to its original flat location. Exit `3` when the trash entry is missing, its
+`_MANIFEST.json` has no `original_path`, or the destination already exists (it never overwrites).
+
+#### `che project trash-list`
+
+Prints the manifest of every entry sitting in `.trash/`.
 
 ---
 
-### 3.3 L3 / L4 Session & Config
+### 3.3 Session & Config
 
-Every AI session against a worktree is addressed by a **stable `session_id`**. Session flags and bindings are append-only JSONL written to the project `registry.jsonl` and never mutated in-place.
+Every AI session against a worktree is addressed by a **stable `session_id`**. A session no longer owns a folder
+inside the worktree: its ephemeral data lives in `<project>/.sessions/<session_id>/`, while the session → worktree
+→ project bindings are append-only JSONL written to `<root>/.state/registry.jsonl` (`CHE_REGISTRY_PATH`) and never
+mutated in-place.
 
 #### `che config <session_id> <worktree_root> [flags]`
 
@@ -289,10 +324,12 @@ The canonical flags enum lives in `che_core/constants.py`. Always treat that fil
 
 ## 4. State & Memory (SQLite FTS5)
 
-Che ships a built-in **append-only** state store on SQLite FTS5, one `.db` per worktree (L3). It is **not** a general-purpose database — the primary workload is full-text search over structured decisions, task graphs, and QA evidence.
+Che ships a built-in **append-only** state store on SQLite FTS5, one `che_state.sqlite` per **project**, kept in
+`<project>/_db/` so it survives worktree and branch switches. It is **not** a general-purpose database — the primary
+workload is full-text search over structured decisions, task graphs, and QA evidence.
 
 ```bash
-che state rebuild-index ~/code/my-company/web-app   # re-indexes L3 artefacts
+che state rebuild-index ~/code/my-company/web-app   # indexes the bound worktree into <project>/_db/che_state.sqlite
 che state query ~/code/my-company/web-app 'SELECT key, json_extract(body,"$.owner") FROM kv WHERE key LIKE "task:%";'
 che state search ~/code/my-company/web-app "stripe webhook signature"
 che state sanitize ~/code/my-company/web-app         # PII + secrets scrubbing pass
@@ -329,13 +366,23 @@ che rag prune  ~/code/my-company/web-app     # removes stale chunks
 
 ## 7. Portability: Export / Import
 
-Any L2 project can be snapshotted into a self-contained `.tar.gz` and moved between machines, or between workspaces on the same machine. The exporter never copies `.git/` and never copies the worktree code — **only** the durable L2 directory plus the L3 shared folder.
+Any project can be snapshotted into a self-contained `.tar.gz` and moved between machines. The exporter never copies
+`.git/` and never copies the worktree code — **only** the durable project directory plus the worktree's shared folder,
+and by default it does **not** include the SQLite databases.
 
 ```bash
-che export web-app --workspace acme --out ~/Desktop/acme-web-app-20260909.tar.gz
-# ...move file to another machine...
-che import ~/Downloads/acme-web-app-20260909.tar.gz --workspace acme
+# Export the project bound to this checkout (positional: worktree_root, output_file)
+che export ~/code/my-company/web-app ~/Desktop/web-app-20260909.tar.gz
+
+# ...move the file to another machine...
+
+# Import: the project slug and worktree name come from the archive metadata
+che import ~/Downloads/web-app-20260909.tar.gz
 ```
+
+`che import` still accepts `--workspace`, but the flag is **deprecated and ignored**: the slug comes from the archive
+(`metadata.json`) and the flat layout has no workspace level. `--include-db` (on both commands) opts the SQLite files
+in; the default limit is 250 MB, above which a `_db/SKIPPED.txt` note is written instead.
 
 See `che export --help` and `che import --help` for the full blacklist.
 
@@ -357,36 +404,49 @@ We intentionally do not provide a "hard delete" command. Everything is trash + r
 
 These commands exist for agent skills and shell integrations. Humans rarely need them but they are stable and public.
 
-### `che compute_paths <worktree> <session_id>`
+### `che compute_paths <worktree> <session_id> [--cwd ...]`
 
-Prints the canonical L1–L4 paths as shell-exportable variables. Use this from bash or from `$()` scripts instead of hard-coding `~/.che-workspaces`:
+Prints the canonical flat-layout paths as shell-exportable variables. Use this from bash or from `$()` scripts
+instead of hard-coding `~/.che-workspaces`. Resolution is argument-driven: if the path is not bound yet, the command
+prints how to bind it and exits `3`.
 
 ```bash
 eval "$(che compute_paths ~/code/my-company/web-app onboarding-003)"
-echo "$CHE_PROJECT_DIR"     # L2 project/templates dir
-echo "$CHE_WORKSPACE_DIR"   # L1 workspace dir
-echo "$CHE_WORKTREE_DIR"    # L3 shared dir
-echo "$CHE_SESSION_DIR"     # L4 ephemeral dir
+echo "$CHE_PROJECT_DIR"     # <root>/<project-slug> — durable project dir
+echo "$CHE_WORKTREE_DIR"    # <project>/worktrees/<name> — shared worktree dir
+echo "$CHE_SESSION_DIR"     # <project>/.sessions/<id> — ephemeral session dir
+echo "$CHE_DB_DIR"          # <project>/_db — SQLite state + RAG
+echo "$CHE_REGISTRY_PATH"   # <root>/.state/registry.jsonl
 ```
 
-### `che ensure_dirs <worktree> <session_id>`
+`--cwd` is accepted for backward compatibility with existing skills and is ignored for resolution (it is never used
+to guess which project the path belongs to).
 
-Creates every missing directory in the L1–L4 hierarchy. Idempotent, safe to re-run.
+### `che ensure_dirs <worktree> <session_id> [--cwd ...]`
+
+Creates every missing directory for a bound worktree: the project skeleton (8 domain folders + `worktrees/` + `_db/`
++ `roles/`), the worktree's shared subfolders, and the ephemeral session folder. Idempotent, safe to re-run.
+
+### `che output_path` / `che write_file_atomic` / `che assert_outside_worktree`
+
+Storage-boundary plumbing. `output_path` resolves the canonical path for an artifact under `$CHE_SESSION_DIR`
+(scope `session`) or `$CHE_WORKSPACE_SHARED` (scope `workspace`) and creates its parent directory.
+`write_file_atomic` writes stdin to a target through a sibling temp file + rename. `assert_outside_worktree` is the
+hard-stop guard: a candidate path inside the worktree prints the violation report and exits `99`.
 
 ### `che registry_append` / `che registry_lookup <session_id>`
 
-Append-only JSONL registry. `registry_append` takes the same flags as `config` plus arbitrary event JSON. `registry_lookup` returns the last known FLAGS + BINDING row for a session.
+Append-only JSONL registry at `<root>/.state/registry.jsonl`. `registry_append <session_id> <status> <worktree_root> [payload]` takes the same flags as `config` plus arbitrary event JSON; `registry_lookup` returns the last row for a session (exit `1` when there is none).
 
-### `che decision_append`
+### `che decision_append <worktree_root> <event_type> [payload] [--session-id <id>] [--spec-id <id>]`
 
-Writes one structured row to the canonical `decisions.log.jsonl` for the worktree (L3). Required by the engineering contracts before every non-trivial refactor.
+Writes one structured row to the worktree's `decisions.log.jsonl` (`<project>/worktrees/<name>/decisions.log.jsonl`).
+Required by the engineering contracts before every non-trivial refactor.
 
 ```bash
-che decision_append ~/code/my-company/web-app \
-    --kind ARCH \
-    --title "Move analytics storage to dedicated S3 bucket" \
-    --body-file /tmp/WEB-42-body.md \
-    --tags WEB-42,storage,RLS
+che decision_append ~/code/my-company/web-app ARCH \
+    '{"title":"Move analytics storage to dedicated S3 bucket","tags":["WEB-42","storage","RLS"]}' \
+    --session-id onboarding-003 --spec-id WEB-42
 ```
 
 ---
@@ -395,12 +455,19 @@ che decision_append ~/code/my-company/web-app \
 
 | Code | Meaning                                           |
 | :--: | :------------------------------------------------ |
-|  0   | OK, JSON on stdout for read commands              |
-|  2   | argparse usage error / missing flags              |
-|  3   | Safety gate not passed (e.g. `--confirm` missing) |
-|  4   | Workspace / project / session not found           |
-|  5   | Worktree path is not a valid git repo             |
-|  130 | Interrupted (SIGINT)                              |
+|  0   | Success. JSON on stdout for commands that report a result. |
+|  2   | Usage / precondition failure: bad argument, non-git path, missing required `--slug` / `--project` / `--name`, refused oversized write, or a destructive operation applied without `--confirm`. |
+|  3   | Unknown project / worktree, or a worktree path that is not bound to any project. |
+|  98  | Fatal missing dependency: the `che` CLI is not on `PATH` (guard raised by the skills before any write). |
+|  99  | Storage-boundary violation: a Che artifact would land inside the user's repository. |
+
+Notes:
+
+- `0`, `2`, `3` and `99` are raised by the CLI itself; `2` is also argparse's default for an unknown flag or a
+  missing argument.
+- `98` is not raised by `che_core`: it is the guard the skills run (`command -v che >/dev/null 2>&1 || exit 98`) so
+  that nothing is written without a resolved storage boundary.
+- `che registry_lookup` exits `1` when the session has no registry row yet.
 
 All successful structured output is **line-delimited JSON** on `stdout`. All human-readable progress is on `stderr`. Safe to `| jq` everything.
 
@@ -422,15 +489,17 @@ pipx reinstall-all
 
 This is **intentional on Debian/Ubuntu**. Do **not** use `--break-system-packages`. Use `pipx` instead.
 
-### 11.3 Project create wrote templates to `default/` workspace instead of the one I asked
+### 11.3 `che compute_paths` exits 3: the path is not bound
 
-A known one-line bug in some pre-release versions of `che_core.workspaces.init_project`. Workaround before the fix:
+Flat-layout commands never guess a project from the current directory. Bind the checkout to a project first, then re-run:
 
 ```bash
-# Move manually + re-register
-mv ~/.che-workspaces/workspaces/default/my-slug ~/.che-workspaces/workspaces/target-ws/my-slug
-che project list --workspace target-ws
+che worktree add ~/code/my-company/web-app --project web-app --name main
+che compute_paths ~/code/my-company/web-app onboarding-003
 ```
+
+If the project itself does not exist yet, create it first with an explicit slug:
+`che project init ~/code/my-company/web-app --slug web-app`.
 
 ### 11.4 Decision logs or task graphs appear in `git status` inside my repo
 
@@ -444,4 +513,4 @@ The installer only appends missing lines — idempotent.
 
 ---
 
-_Full rationale for the L1–L4 hierarchy and the trash-safe design lives in [docs/architecture-and-principles.md](./architecture-and-principles.md)._
+_Full rationale for the flat project/worktree layout and the trash-safe design lives in [docs/architecture-and-principles.md](./architecture-and-principles.md) and [contracts/path-canonicity-che.md](../contracts/path-canonicity-che.md)._

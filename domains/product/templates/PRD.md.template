@@ -1,0 +1,152 @@
+---
+template: PRD
+domain: product
+version: 1
+scope: project
+consumers: [design, engineering, copywriting, social, seo-analytics]
+---
+
+# PRD — {{feature_or_product_name}}
+
+> **What this document is.** A product decision record: the problem, the people it
+> affects, and how the experience changes. It is the input to design and
+> engineering — not a design or engineering document.
+>
+> **What it is NOT.** No architecture, no data model, no API shapes, no migration
+> plan, no file paths, no acceptance criteria. Those belong to `ARCHITECTURE.md`,
+> `DESIGN.md` and the per-change execution spec. If you are writing them here,
+> stop: you are in the wrong document.
+>
+> **Tag every claim with its provenance:** `[data]` (measured), `[research]`
+> (user interview / usability session), `[hunch]` (belief, not yet validated).
+> Write `[needs input]` instead of inventing a number. A guessed metric presented
+> as a fact is worse than an honest gap.
+
+| | |
+|---|---|
+| **Status** | Draft · In review · Approved |
+| **Owner** | <!-- PM / product owner handle --> |
+| **Date** | <!-- YYYY-MM-DD --> |
+| **Roadmap phase** | <!-- link to the phase in roadmap.md --> |
+
+---
+
+## 1. Problem
+
+<!-- 2-3 sentences. Who has what problem, when, and what it costs them to live with it.
+     NO solution language — not a single feature may be named in this section. -->
+
+**Who:** <!-- the specific person, in their context of use -->
+
+**Problem:** <!-- what is painful, in their words if you have quotes -->
+
+**Cost of leaving it unsolved:** <!-- time lost, money lost, users lost, risk taken -->
+
+**Evidence:** <!-- support tickets, analytics, interviews, churn data. If you only have a hunch, say so: [hunch] -->
+
+**Why now:** <!-- what changed that makes this worth doing this quarter -->
+
+> **Done when:** a stranger can read this section and tell you what "solved" would mean,
+> without you naming a single feature.
+
+---
+
+## 2. Users
+
+<!-- Be explicit about who this is NOT for. That column prevents most scope creep. -->
+
+| Segment | Who they are (role, context, what they are trying to get done) | Priority |
+|---|---|---|
+| **Primary** | <!-- benefits most; the design target --> | Must serve |
+| **Secondary** | <!-- benefits partially; must not be broken --> | Should serve |
+| **Explicitly not for** | <!-- who this is NOT for, and why --> | Out of scope |
+
+**Jobs to be done**
+
+- When <!-- situation -->, I want to <!-- motivation -->, so I can <!-- outcome -->.
+- When <!-- situation -->, I want to <!-- motivation -->, so I can <!-- outcome -->.
+
+---
+
+## 3. Experience
+
+<!-- The heart of a product PRD: what is different for the user once this exists.
+     Describe the experience and the journey, NOT the interface or the screens. -->
+
+**Today** — <!-- how the user accomplishes (or fails to accomplish) this now, step by step -->
+
+**After** — <!-- the same journey, shorter / clearer / possible at all -->
+
+**What must feel effortless:** <!-- the moment most likely to frustrate users, and why it won't -->
+
+**Journey touchpoints:** <!-- where in their day this shows up; what they see before/after -->
+
+**Outcomes for the user (not for us):**
+
+- <!-- e.g. "knows within seconds whether a refund went through" -->
+- <!-- e.g. "stops keeping a parallel spreadsheet" -->
+
+---
+
+## 4. Scope
+
+<!-- Write the OUT column before the IN column. What you cut defines the product. -->
+
+| In scope | Out of scope (and why) |
+|---|---|
+| <!-- capability --> | <!-- capability — reason it is excluded --> |
+| <!-- capability --> | <!-- capability — reason it is excluded --> |
+| <!-- capability --> | <!-- deferred: linked follow-up --> |
+
+**Constraints that are fixed** <!-- contractual, regulatory, market, brand — not technical -->
+
+- <!-- e.g. UK market: GBP, DD/MM/YYYY, Europe/London -->
+- <!-- e.g. GDPR: what personal data may exist and for how long -->
+
+---
+
+## 5. Success metrics
+
+<!-- One primary metric that proves the PROBLEM got solved. It must have a current
+     baseline, or be explicitly marked un-baselined. Activity metrics are not outcomes. -->
+
+| Type | Metric | Baseline | Target | How it is measured |
+|---|---|---|---|---|
+| **Primary** | <!-- the one number that proves the problem shrank --> | <!-- current value, or "un-baselined" --> | <!-- target --> | <!-- source --> |
+| Secondary | <!-- supporting signal --> | | | |
+| **Guardrail** | <!-- must NOT get worse: e.g. support load, conversion, p95 latency --> | | Must not regress | |
+
+**Explicit non-metric:** <!-- what we deliberately will not optimise for in this iteration -->
+
+---
+
+## 6. Open questions
+
+<!-- Anything unresolved. Use [needs input] rather than guessing. -->
+
+| # | Question | Owner | Needed by |
+|---|---|---|---|
+| Q1 | <!-- question --> | <!-- who answers it --> | <!-- when --> |
+
+---
+
+## 7. Handoff
+
+<!-- One line per downstream domain. Keep it to a pointer — never duplicate their work here. -->
+
+- **Design** consumes: <!-- the user journey, the problem, the segments -->
+- **Engineering** consumes: <!-- → `ARCHITECTURE.md` + the execution spec, per change -->
+- **Copywriting / Social / SEO** consume: <!-- the positioning problem and the audience -->
+- **Metrics owner** consumes: <!-- the primary metric + baseline to instrument -->
+
+---
+
+<!--
+CHECKLIST BEFORE APPROVAL
+- [ ] §1 names no feature.
+- [ ] §2 has an "explicitly not for" row that is actually filled in.
+- [ ] §4 out-of-scope column is longer than the in-scope column.
+- [ ] §5 primary metric has a baseline, or says "un-baselined".
+- [ ] No architecture, schema, API, migration or file path anywhere in this document.
+- [ ] Every number carries [data] / [research] / [hunch] / [needs input].
+-->

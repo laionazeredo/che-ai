@@ -6,6 +6,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
 
+from che_core.project_layout import (
+    DOMAIN_SLUGS,
+    PROJECT_DOCS,
+    assert_no_cwd_dependency,
+    get_db_dir,
+    get_domain_dir,
+    get_project_dir,
+    get_roles_dir,
+    get_state_dir,
+    get_state_registry_path,
+    get_workspaces_root,
+    get_worktree_dir,
+    validate_slug,
+)
+from che_core.worktrees import find_worktree_by_path
+
 # Maps an output "type" to the subfolder inside the storage root where the
 # artifact must live. Single source of truth for every Che write.
 _OUTPUT_SUBFOLDERS = {
@@ -233,20 +249,6 @@ def project_slug_from_git_origin(worktree_root: str) -> str:
     return safe_raw
 
 
-def get_workspaces_root() -> Path:
-    """Resolves CHE_WORKSPACES_ROOT fallback logic"""
-    env_root = os.environ.get("CHE_WORKSPACES_ROOT") or os.environ.get("HARNESS_SESSIONS_ROOT")
-    if env_root:
-        return Path(env_root).resolve()
-
-    old_default = Path.home() / "code" / "harness-sessions"
-    new_default = Path.home() / ".che-workspaces"
-
-    if old_default.is_dir() and not new_default.is_dir():
-        return old_default
-    return new_default
-
-
 def get_che_home() -> Path:
     """Resolve the Che home using the canonical cascade.
 
@@ -274,66 +276,88 @@ def compute_paths(
     session_id: str,
     cwd_override: Optional[str] = None,
     *,
-    workspace_name_override: Optional[str] = None,
+    project_slug: Optional[str] = None,
+    worktree_name: Optional[str] = None,
 ) -> Dict[str, str]:
-    """Translates che_compute_paths and returns dictionary of variables.
+    """Resolve every Che storage path for a bound worktree (flat layout).
 
-    ``workspace_name_override`` keeps an explicitly requested workspace (e.g. the
-    ``che project create --workspace`` flag) authoritative over heuristic
-    resolution from the cwd.
+    Resolution is **argument-driven only**. ``cwd_override`` is accepted for
+    backward compatibility with existing skills but is deliberately NOT used to
+    guess the project: historically that guess (``os.getcwd()`` ->
+    ``resolve_workspace_name``) silently selected the wrong workspace and split
+    ``decisions.log.jsonl`` away from the artifacts of the same worktree.
+
+    Preconditions:
+      - ``worktree_root`` is a non-empty absolute path.
+      - Either (``project_slug`` + ``worktree_name``) are given, or the path is
+        already bound via ``che worktree add``.
+
+    Postcondition: returns the variable map. Exits 2 on a bad argument and 3 with
+    an actionable message when the path is not bound yet.
     """
-    wt_root = Path(worktree_root).resolve()
+    if not worktree_root:
+        print("compute_paths: worktree_root is required.", file=sys.stderr)
+        sys.exit(2)
 
-    project_slug = project_slug_from_git_origin(str(wt_root))
-    workspace_name = workspace_name_override or resolve_workspace_name(cwd_override, project_slug_hint=project_slug)
-    worktree_slug = resolve_worktree_slug(str(wt_root))
+    wt_root = Path(worktree_root).expanduser().resolve()
+    assert_no_cwd_dependency(wt_root)
 
-    workspaces_root = get_workspaces_root()
+    if project_slug and worktree_name:
+        resolved_project = project_slug
+        resolved_worktree = worktree_name
+    else:
+        matches = find_worktree_by_path(str(wt_root))
+        if not matches:
+            print(
+                f"compute_paths: {wt_root} is not bound to any Che worktree.\n"
+                f"  Bind it:        che worktree add {wt_root} --project <project> --name <name>\n"
+                f"  List projects:  che project list",
+                file=sys.stderr,
+            )
+            sys.exit(3)
+        resolved_project = matches[0]["project"]
+        resolved_worktree = matches[0]["name"]
 
-    # New Specflow-aligned Hierarchy
-    # L1: Workspace Level
-    workspace_dir = workspaces_root / "workspaces" / workspace_name
+    validate_slug(resolved_project, label="project_slug")
+    validate_slug(resolved_worktree, label="worktree_name")
 
-    # L2: Project Level (Strategic - Intent, Roadmap)
-    project_dir = workspace_dir / project_slug / "project"
-    project_graph_dir = project_dir / "graphify"
-
-    # L3: Worktree Level (Tactical - Implementation)
-    worktrees_base = workspace_dir / project_slug / "worktrees"
-    worktree_dir = worktrees_base / worktree_slug
-
-    # Shared Tactical Assets (Live directly in the worktree folder for clarity)
-    workspace_shared = worktree_dir
-
-    # L4: Session Level (Ephemeral - Logs, Debug)
-    session_dir = worktree_dir / "sessions" / session_id
+    project_dir = get_project_dir(resolved_project)
+    worktree_dir = get_worktree_dir(resolved_project, resolved_worktree)
+    session_dir = project_dir / ".sessions" / (session_id or "unbound-session")
 
     paths = {
-        "CHE_WORKSPACE_NAME": workspace_name,
-        "CHE_WORKTREE_SLUG": worktree_slug,
-        "CHE_PROJECT_SLUG": project_slug,
+        # Canonical (Sep 2026 flat layout)
+        "CHE_PROJECT_SLUG": resolved_project,
+        "CHE_WORKTREE_NAME": resolved_worktree,
         "CHE_PROJECT_DIR": str(project_dir),
-        "CHE_PROJECT_GRAPH_DIR": str(project_graph_dir),
-        "CHE_WORKSPACE_DIR": str(workspace_dir),
         "CHE_WORKTREE_DIR": str(worktree_dir),
-        "CHE_WORKSPACE_SHARED": str(workspace_shared),
-        "CHE_DECISIONS_PATH": str(workspace_shared / "decisions.log.jsonl"),
+        "CHE_STATE_DIR": str(get_state_dir()),
+        "CHE_DB_DIR": str(get_db_dir(resolved_project)),
+        "CHE_ROLES_DIR": str(get_roles_dir(resolved_project)),
+        "CHE_DECISIONS_PATH": str(worktree_dir / "decisions.log.jsonl"),
         "CHE_SESSION_DIR": str(session_dir),
-        "CHE_LEVEL2_BINDING": str(session_dir / "binding.md"),
-        "CHE_PROJECT_PROFILE": str(project_dir / "project_profile.md"),
-        "CHE_PRODUCT_CONTEXT": str(project_dir / "product_context.md"),
-        "CHE_ARCHITECTURE_DOC": str(project_dir / "architecture.md"),
-        "CHE_ROADMAP_DOC": str(project_dir / "roadmap.md"),
+        "CHE_REGISTRY_PATH": str(get_state_registry_path()),
+        # Deprecated aliases — kept so existing skills/hooks keep resolving while
+        # the L1 "workspace" concept is retired. CHE_WORKSPACE_* now maps onto the
+        # project, and the shared tactical area is the worktree folder itself.
+        "CHE_WORKSPACE_NAME": resolved_project,
+        "CHE_WORKSPACE_DIR": str(project_dir),
+        "CHE_WORKSPACE_SHARED": str(worktree_dir),
+        "CHE_WORKTREE_SLUG": resolved_worktree,
+        "CHE_PROJECT_GRAPH_DIR": str(project_dir / "graphify"),
         "CHE_PROJECT_REGISTRY": str(project_dir / "registry.jsonl"),
-        "CHE_REGISTRY_PATH": str(get_che_home() / "bindings" / "registry.jsonl"),
+        "CHE_LEVEL2_BINDING": str(session_dir / "binding.md"),
     }
 
-    # Assert outside worktree logic
+    for key, filename in PROJECT_DOCS.items():
+        paths[key] = str(project_dir / filename)
+
+    for slug in DOMAIN_SLUGS:
+        paths[f"CHE_DOMAIN_{slug.upper().replace('-', '_')}_DIR"] = str(get_domain_dir(resolved_project, slug))
+
+    # Storage-boundary contract: never write Che state into the user repository.
     assert_outside_worktree(project_dir, str(wt_root), "CHE_PROJECT_DIR")
-    assert_outside_worktree(project_graph_dir, str(wt_root), "CHE_PROJECT_GRAPH_DIR")
-    assert_outside_worktree(workspace_dir, str(wt_root), "CHE_WORKSPACE_DIR")
     assert_outside_worktree(worktree_dir, str(wt_root), "CHE_WORKTREE_DIR")
-    assert_outside_worktree(workspace_shared, str(wt_root), "CHE_WORKSPACE_SHARED")
     assert_outside_worktree(session_dir, str(wt_root), "CHE_SESSION_DIR")
 
     return paths
@@ -344,48 +368,41 @@ def ensure_session_dirs(
     session_id: str,
     cwd_override: Optional[str] = None,
     *,
-    workspace_name_override: Optional[str] = None,
-):
-    """Translates che_ensure_session_dirs"""
-    paths = compute_paths(worktree_root, session_id, cwd_override, workspace_name_override=workspace_name_override)
+    project_slug: Optional[str] = None,
+    worktree_name: Optional[str] = None,
+) -> Dict[str, str]:
+    """Materialise every directory a Che session needs (flat layout).
 
-    # Create directories
-    dirs_to_create = [
-        Path(paths["CHE_PROJECT_DIR"]),
-        Path(paths["CHE_PROJECT_GRAPH_DIR"]),
-        Path(paths["CHE_WORKSPACE_DIR"]),
-        Path(paths["CHE_WORKTREE_DIR"]),
-        Path(paths["CHE_WORKSPACE_SHARED"]),
-        # Tactical Assets (Shared across sessions in the same worktree)
-        Path(paths["CHE_WORKSPACE_SHARED"]) / "design",
-        Path(paths["CHE_WORKSPACE_SHARED"]) / "tasks",
-        Path(paths["CHE_WORKSPACE_SHARED"]) / "specs",
-        Path(paths["CHE_WORKSPACE_SHARED"]) / "reports",
-        Path(paths["CHE_WORKSPACE_SHARED"]) / "architecture",
-        Path(paths["CHE_WORKSPACE_SHARED"]) / "gh_stack",
-        Path(paths["CHE_WORKSPACE_SHARED"]) / "legacy_binding_cleanup",
-        Path(paths["CHE_WORKSPACE_SHARED"]) / "qa",
-        Path(paths["CHE_WORKSPACE_SHARED"]) / "qa" / "screenshots",
-        Path(paths["CHE_WORKSPACE_SHARED"]) / "qa" / "evidence",
-        # Ephemeral Assets (Per-session isolation)
-        Path(paths["CHE_SESSION_DIR"]),
-        Path(paths["CHE_SESSION_DIR"]) / "execution",
-        Path(paths["CHE_SESSION_DIR"]) / "debugger",
-        Path(paths["CHE_SESSION_DIR"]) / "temp",
-    ]
+    Creates the project skeleton (8 domain folders + ``worktrees/`` + ``_db/`` +
+    ``roles/``), the bound worktree's shared subfolders, and the ephemeral session
+    folder. The session folder lives under ``<project>/.sessions/<id>/`` — outside
+    the worktree folder on purpose, so one worktree stays reusable across sessions
+    instead of accumulating one ``sessions/`` subtree per run.
+    """
+    from che_core.worktrees import WORKTREE_SUBDIRS, ensure_project_skeleton
 
-    # Ensure the parent 'worktrees' directory exists
-    worktrees_base = Path(paths["CHE_WORKTREE_DIR"]).parent
-    worktrees_base.mkdir(parents=True, exist_ok=True)
+    paths = compute_paths(
+        worktree_root,
+        session_id,
+        cwd_override,
+        project_slug=project_slug,
+        worktree_name=worktree_name,
+    )
 
-    for d in dirs_to_create:
-        d.mkdir(parents=True, exist_ok=True)
+    ensure_project_skeleton(paths["CHE_PROJECT_SLUG"])
 
-    # Ensure the project-level _db directory exists
-    db_dir = Path(paths["CHE_PROJECT_DIR"]).parent / "_db"
-    db_dir.mkdir(parents=True, exist_ok=True)
+    worktree_dir = Path(paths["CHE_WORKTREE_DIR"])
+    worktree_dir.mkdir(parents=True, exist_ok=True)
+    for sub in WORKTREE_SUBDIRS:
+        (worktree_dir / sub).mkdir(parents=True, exist_ok=True)
+
+    session_dir = Path(paths["CHE_SESSION_DIR"])
+    session_dir.mkdir(parents=True, exist_ok=True)
+    for sub in ("execution", "debugger", "temp"):
+        (session_dir / sub).mkdir(parents=True, exist_ok=True)
 
     registry_file = Path(paths["CHE_PROJECT_REGISTRY"])
+    registry_file.parent.mkdir(parents=True, exist_ok=True)
     if not registry_file.exists():
         registry_file.touch()
 

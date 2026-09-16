@@ -2,7 +2,7 @@
 
 **Che** is an **opinionated, pragmatic, end-to-end Agentic Engineering Harness built to scale entire product delivery teams** — from early creative discovery and spec writing, through code implementation and quality gates, all the way to PR gating and ship. It orchestrates AI coding agents inside **Claude Code**, **Codex**, **Cursor**, **Trae** and other code editors, giving 3–30 person teams a *single shared operating system* for software and creative product delivery.
 
-Instead of each engineer keeping their own prompt library and each designer re-explaining the brand from scratch, Che installs a **shared team brain** with a 3-Layer Rulebook (Domains → Routers → Skills, inspired by [SpecFlow](https://www.specflow.com/) and a 4-Level Memory Model that survives IDE restarts, agent turnovers, and onboarding of new team members.
+Instead of each engineer keeping their own prompt library and each designer re-explaining the brand from scratch, Che installs a **shared team brain** with a 3-Layer Rulebook (Domains → Routers → Skills, inspired by [SpecFlow](https://www.specflow.com/) and a project → worktree memory model that survives IDE restarts, agent turnovers, and onboarding of new team members.
 
 The stack of ideas behind Che comes from four battle-tested methodologies we do not pretend to have invented:
 
@@ -20,7 +20,7 @@ The result is a harness that:
   4. **L4 — Source-of-Truth Rule Package Checkout (pipx feed, IDE-agnostic):** The Che package root directory — the folder containing `pyproject.toml`, `domains/`, `skills/` and `che_core/` from where `pipx install -e .` was run, and where the IDE adapter installers (`adapters/*/install.sh`) live. By default the quick installer clones it into `~/.che-ai/` for convenience, but it can live anywhere on disk. *This* folder is the single source of truth that feeds all symlinks of the L2 IDE adapter layer; Claude Code (or any other supported IDE) **never reads L4 directly** — it only ever sees the adapter symlinks in L2. (Pragmatic Programmer orthogonality: keep the *agent source package* and the *running IDE wiring* in separate layers so either can move without breaking the other).
   (Pragmatic Programmer orthogonality: *team process state* does not live inside the *shipped artifact*; *adapter IDE wiring* does not pollute *rule package source*).
 - **Never deletes anything permanently.** Every `remove` is a **move to trash** with a printed one-line restore command (Design by Contract postcondition: "after `remove X`, the state of X is recoverable in one deterministic command"). Hard-delete commands do not exist, and will not be added.
-- **Runs structural/admin operations deterministically as a terminal CLI.** Project onboarding, workspace creation, session config, task listing, state indexing, export/import portability, and safe eject are exposed as a zero-dependency stdlib Python CLI (`che-ai` / `che`), installed once and callable from any shell or CI. This is a feature for predictability and cost discipline, not the product's headline.
+- **Runs structural/admin operations deterministically as a terminal CLI.** Project onboarding, worktree binding, session config, task listing, state indexing, export/import portability, and safe eject are exposed as a zero-dependency stdlib Python CLI (`che-ai` / `che`), installed once and callable from any shell or CI. This is a feature for predictability and cost discipline, not the product's headline.
 - **Single-Source-of-Truth (SSoT), everywhere.** Every rule, score, playbook, template lives in exactly one canonical file. If you see the same body twice anywhere in the repo — that is a bug, report it. (DRY, The Pragmatic Programmer ch. 2.)
 
 ***
@@ -29,7 +29,7 @@ The result is a harness that:
 
 | Path | Audience | Content |
 | :--- | :------- | :------ |
-| **[AGENTS.md](./AGENTS.md)** | AI coding agents + core contributors | Technical contracts, 3-layer rulebook, 4-level memory, Python-only core rule. |
+| **[AGENTS.md](./AGENTS.md)** | AI coding agents + core contributors | Technical contracts, 3-layer rulebook, project → worktree memory, Python-only core rule. |
 | **[docs/cli-reference.md](./docs/cli-reference.md)** | End users, DevOps, terminal-first engineers | Full `che-ai` / `che` binary reference, 15 commands, exit codes, troubleshooting. |
 | **[docs/architecture-and-principles.md](./docs/architecture-and-principles.md)** | Architects, curious users, future maintainers | The **why** of Che: positioning, 8 opinionated stances, 5 anti-goals, methodology citations (Pragmatic, DbC, SBE, SpecFlow). |
 | **[CHE_RULES.md](./CHE_RULES.md)** | Everyone (3-Layer router, L2 SpecFlow-style) | Titles + links only — routes to all domain playbooks and skills. |
@@ -87,9 +87,9 @@ che --help            # 15 subcommands, 0 tokens, 0 network
 
 ```bash
 che --help                                            # CLI surface
-che workspace list                                    # List L1 workspaces
+che project list                                      # List flat projects
 che config --help                                     # Session flags (LANG_CHAT etc)
-python3 -m pytest tests/ -q                           # 52 unit tests (core harness)
+python3 -m pytest tests/ -q                           # 114 unit tests (core harness)
 ```
 
 ***
@@ -97,17 +97,12 @@ python3 -m pytest tests/ -q                           # 52 unit tests (core harn
 ## ⚡ 60-second Quickstart (no tokens, no agents, no API keys)
 
 ```bash
-# 1) Create an L1 workspace. Repeat for each separate tenant/concern.
-che workspace create acme
+# 1) Create a project for your repo. Repeat for each product you track.
+che project init ~/code/my-company/web-app --slug web-app
 
-# 2) Bootstrap L2 project inside an existing git repo.
-#    Writes 7 canonical files to ~/.che-workspaces/workspaces/acme/<slug>/
-cd ~/code/my-company/web-app                # any valid git repo, any branch
-che project init . \
-    --workspace acme \
-    --domain product \
-    --name "My Company Web App" \
-    --session-id onboarding-001
+# 2) Bind the checkout to that project. Idempotent — re-running reuses
+#    ~/.che-workspaces/<slug>/worktrees/<name>/ instead of duplicating it.
+che worktree add ~/code/my-company/web-app --project web-app --name main
 
 # 3) Configure session language flags once, not in 800 prompts.
 che config onboarding-001 "$PWD" \
@@ -116,8 +111,8 @@ che config onboarding-001 "$PWD" \
     --lang-report en
 
 # 4) Inspect what was created (zero tokens burned).
-che workspace list | jq
-che project list --workspace acme | jq
+che project list | jq
+che worktree list --project web-app | jq
 che registry_lookup onboarding-001 | jq '.flags'
 ```
 
@@ -133,7 +128,7 @@ The full command reference, including `task`, `state` (SQLite FTS5), `rag`, `exp
 
 ## 🏗️ Core Architecture (Executive Summary)
 
-Two complementary hierarchies, one **3-layer** for the rulebook, one **4-level** for project memory.
+Two complementary hierarchies: one **3-layer** for the rulebook, one **project → worktree** for project memory.
 
 ### 3-Layer Rulebook (what ships inside `~/.che-ai`) — topology inspired by SpecFlow / Cucumber BDD
 
@@ -143,12 +138,13 @@ Two complementary hierarchies, one **3-layer** for the rulebook, one **4-level**
 
 > Why SpecFlow instead of "just a folder structure with docs"? Because this exact topology has shipped enterprise BDD for 15+ years. We're not inventing a new rulebook layout — we're reusing one that already survives 500-person release trains. See [docs/architecture-and-principles.md §4](./docs/architecture-and-principles.md#4-3-layer-rule-framework-structure) for full rationale.
 
-### 4-Level Project Memory (what lives inside `~/.che-workspaces`)
+### Project Memory (what lives inside `~/.che-workspaces`)
 
-1. **L1 (Workspace)** — `~/.che-workspaces/workspaces/<slug>/` — one tenant (My Company / Acme / Big Client), many projects. Months → years.
-2. **L2 (Project)** — `<L1>/<project>/project/` — durable Markdown: `architecture.md`, `project_profile.md`, `product_context.md`, `roadmap.md`, `roles/index.md`, plus the shared `_db/` folder. Lifetime of the product.
-3. **L3 (Worktree Shared)** — `<L2>/worktrees/<branch-slug>/` — `decisions.log.jsonl`, `qa/`, `designs/`. Shared across sessions on the same git branch. Lifetime of the branch.
-4. **L4 (Session)** — `<L3>/sessions/<SESSION_ID>/` — ephemeral logs, single writer, isolated. Hours → days. (Pragmatic Programmer §7: "localize state with short lifetime.")
+1. **Project** — `~/.che-workspaces/<project-slug>/` — durable Markdown (`architecture.md`, `project_profile.md`, `product_context.md`, `roadmap.md`, `roles/index.md`), the per-project `_db/` SQLite store and one folder per canonical domain. Identified by an explicit slug; it does **not** bind a repository path. Lifetime of the product.
+2. **Worktree** — `<project>/worktrees/<name>/` — the only level that binds a git checkout (`path`, `branch` and `origin` in `.binding.json`), holding `decisions.log.jsonl`, `specs/`, `tasks/`, `qa/`, `reports/`. Shared by every session bound to it. Lifetime of the binding.
+3. **Session** — `<project>/.sessions/<SESSION_ID>/` — ephemeral logs, single writer, isolated, deliberately outside the worktree. Hours → days. (Pragmatic Programmer §7: "localize state with short lifetime.")
+
+Session → worktree → project bindings are recorded in `~/.che-workspaces/.state/registry.jsonl`.
 
 The full rationale, 8 opinionated stances, 5 anti-goals and methodology references live in [docs/architecture-and-principles.md](./docs/architecture-and-principles.md). Do **not** propose a core change without having read it first — the document explicitly lists the trade-offs we deliberately refuse to revisit.
 
@@ -158,16 +154,16 @@ The full rationale, 8 opinionated stances, 5 anti-goals and methodology referenc
 
 | Command / Group        | Layer | Runs in… | Purpose |
 | :--------------------- | :---- | :-------- | :------ |
-| `che workspace {create,list,remove,restore,trash-list}` | L1 | Terminal CLI | L1 workspace management (trash-safe remove — DbC postcondition: recoverable). |
-| `che project {create,init,add,list,remove,restore}` | L2 | Terminal CLI | L2 project bootstrap + 7 canonical templates. |
-| `che config <sid> <wt>` | L3/L4 | Terminal CLI | Session flags: `--lang-chat` / `--lang-docs` / `--pt-check` etc. |
-| `/che-spec` (IDE)      | L2→L3 | Agent slash-command (Claude Code) | SBE (Specification-by-Example) specs from PRD / ticket / description. |
-| `/che-act` (IDE)       | L3 | Agent slash-command (Claude Code) | Multi-domain parallel implementation loop. |
+| `che project {create,init,add,list,remove,restore,trash-list}` | Project | Terminal CLI | Flat project bootstrap + durable docs (trash-safe remove — DbC postcondition: recoverable). |
+| `che worktree {add,list,show,remove}` | Worktree | Terminal CLI | Binds a git checkout to a project — the only level that binds a filesystem path. |
+| `che config <sid> <wt>` | Session | Terminal CLI | Session flags: `--lang-chat` / `--lang-docs` / `--pt-check` etc. |
+| `/che-spec` (IDE)      | Project → Worktree | Agent slash-command (Claude Code) | SBE (Specification-by-Example) specs from PRD / ticket / description. |
+| `/che-act` (IDE)       | Worktree | Agent slash-command (Claude Code) | Multi-domain parallel implementation loop. |
 | `/che-ship` (IDE)      | Delivery | Agent slash-command (Claude Code) + ✅ CLI gates | Four DbC precondition gates (scope → review → compliance → QA), then Draft PR. |
-| `che task {list,show,resume,set-status,graph-summary}` | L3 | Terminal CLI | Task graph read-only inspection. |
-| `che state {rebuild-index,query,search,sanitize}` | L3 | Terminal CLI | SQLite FTS5 append-only memory. |
-| `che rag {build,search,list,prune}` | L3 | Terminal CLI | Local sqlite-vec hybrid search. |
-| `che export` / `che import` | L2 | Terminal CLI | Portable project `.tar.gz` — no `.git`, no code, only memory. |
+| `che task {list,show,resume,set-status,graph-summary}` | Worktree | Terminal CLI | Task graph read-only inspection. |
+| `che state {rebuild-index,query,search,sanitize}` | Project | Terminal CLI | SQLite FTS5 append-only memory (`<project>/_db/`). |
+| `che rag {build,search,list,prune}` | Project | Terminal CLI | Local sqlite-vec hybrid search. |
+| `che export` / `che import` | Project | Terminal CLI | Portable project `.tar.gz` — no `.git`, no code, only memory. |
 | `che eject {plan,execute,restore}` | All | Terminal CLI | Two-gated safe uninstall. Always trash, never rm. |
 
 > **Full command reference with examples, exit codes and troubleshooting → [docs/cli-reference.md](./docs/cli-reference.md).**
@@ -213,7 +209,7 @@ It will print copy-pasteable install commands for **exactly what's missing on yo
 | Tool | Kind | Why Che needs it | Quick install (pick one method) |
 | :--- | :---: | :--------------- | :------------------------------ |
 | `python3` (≥ 3.9) | **Required** | Che's core language (`pyproject.toml` requires-python). | System package manager: `sudo apt install -y python3 python3-venv python3-pip` (Ubuntu) / `brew install python` (macOS) |
-| `pytest` (Python module) | **Required** | 52 unit tests. CI step `python-ci` step 5 runs it. | Venv (isolated): `python3 -m venv .venv && . .venv/bin/activate && pip install pytest ruff`<br>— or user-level: `python3 -m pip install --user pytest ruff` |
+| `pytest` (Python module) | **Required** | 114 unit tests. CI step `python-ci` step 5 runs it. | Venv (isolated): `python3 -m venv .venv && . .venv/bin/activate && pip install pytest ruff`<br>— or user-level: `python3 -m pip install --user pytest ruff` |
 | `ruff` | **Required** | Linter + formatter in a single binary. Replaces flake8 + isort + black. CI step `python-ci` steps 3+4. | Pipx: `pipx install ruff`<br>— or inside a venv: `pip install ruff` |
 | `npx` / Node.js (LTS) | *Optional* | Runs `markdownlint-cli2` (CI job `markdown-ci`). Without it the **markdown lint gates are SKIPPED locally** (CI still catches them — you just waste one CI roundtrip). | NodeSource (Ubuntu): `curl -fsSL https://deb.nodesource.com/setup_lts.x \| sudo -E bash - && sudo apt install -y nodejs`<br>— or `brew install node` (macOS). |
 
@@ -248,7 +244,7 @@ bash scripts/install-git-hooks.sh
 | Hook       | Budget | What it gates (exactly mirrors GitHub Actions CI) | Bypass once (real emergencies only) |
 | :--------- | :----: | :------------------------------------------------ | :---------------------------------- |
 | pre-commit | ~ 3 s  | `ruff check` + `ruff format --check` on staged `.py` only → offline regex secret scan (GitHub PAT, AWS key, PEM, JWT) → markdownlint on the 4 canonical docs if touched → smoke pytest (only when `che_core/` or `tests/` changed). | `git commit --no-verify` or `CHE_SKIP_PRE_COMMIT=1` |
-| pre-push   | ~ 30 s | **Full repo** `ruff check .` + `ruff format --check .` + `pytest tests/` (39) + `markdownlint-cli2` with exact CI globs + push-diff offline regex secret scan. | `git push --no-verify` or `CHE_SKIP_PRE_PUSH=1` |
+| pre-push   | ~ 30 s | **Full repo** `ruff check .` + `ruff format --check .` + `pytest tests/` (114) + `markdownlint-cli2` with exact CI globs + push-diff offline regex secret scan. | `git push --no-verify` or `CHE_SKIP_PRE_PUSH=1` |
 
 The `pre-push` hook is calibrated so that **if it passes, GitHub Actions CI will pass too** (99 % of cases) — no more "30 s wait, click red X, fix typo" loops.
 

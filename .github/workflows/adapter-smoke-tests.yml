@@ -31,7 +31,7 @@ jobs:
         run: |
           CLAUDE_MOCK="$GITHUB_WORKSPACE/mock-claude"
           echo "Verifying symlinks in $CLAUDE_MOCK/commands..."
-          [ -L "$CLAUDE_MOCK/commands/che-workspace.md" ] || { echo "Missing che-workspace.md symlink"; exit 1; }
+          [ -L "$CLAUDE_MOCK/commands/che-worktree.md" ] || { echo "Missing che-worktree.md symlink"; exit 1; }
           [ -L "$CLAUDE_MOCK/commands/che-project.md" ] || { echo "Missing che-project.md symlink"; exit 1; }
           
           echo "Verifying hooks in $CLAUDE_MOCK/settings.json..."
@@ -63,7 +63,7 @@ jobs:
           AGENTS_MOCK="$GITHUB_WORKSPACE/mock-agents"
           
           echo "Verifying symlinks in $CODEX_MOCK/commands..."
-          [ -L "$CODEX_MOCK/commands/che-workspace.md" ] || { echo "Missing che-workspace.md symlink in codex"; exit 1; }
+          [ -L "$CODEX_MOCK/commands/che-worktree.md" ] || { echo "Missing che-worktree.md symlink in codex"; exit 1; }
           
           echo "Verifying symlinks in $AGENTS_MOCK/skills..."
           [ -L "$AGENTS_MOCK/skills/che-act" ] || { echo "Missing che-act skill symlink"; exit 1; }
