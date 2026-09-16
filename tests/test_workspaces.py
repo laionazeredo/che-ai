@@ -1,37 +1,52 @@
+"""Tests for the flat project/worktree layout (Sep 2026 flattening).
+
+The L1 "workspace" grouping level was retired: a project lives directly under
+``CHE_WORKSPACES_ROOT`` and only a *worktree* binds a filesystem path. These tests
+cover the new project lifecycle plus the CLI acceptance criteria.
+"""
+
+from __future__ import annotations
+
 import json
 import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
 
 from che_core.hooks import posttooluse_git_worktree
-from che_core.paths import project_slug_from_git_origin, resolve_workspace_name, resolve_worktree_slug
-from che_core.workspaces import ensure_worktree_l3_dirs
+from che_core.paths import _slugify, project_slug_from_git_origin, resolve_workspace_name, resolve_worktree_slug
+from che_core.project_layout import DOMAIN_SLUGS, get_project_dir, get_trash_dir, get_workspaces_root
+from che_core.workspaces import (
+    cleanup_worktree_l3,
+    ensure_worktree_l3_dirs,
+    init_project,
+    list_projects,
+    list_trash,
+    remove_project,
+    restore_project,
+)
+from che_core.worktrees import add_worktree, list_worktrees, worktree_exists
+from tests.conftest import isolated_git_env, make_git_repo
 
 CHE_CLI_CMD = [sys.executable, "-m", "che_core.cli"]
 
+PROJECT_DOCS = ("architecture.md", "project_profile.md", "product_context.md", "roadmap.md")
+
 
 @pytest.fixture(autouse=True)
-def _isolate_workspaces_root(tmp_path, monkeypatch):
-    """Override CHE_WORKSPACES_ROOT for EVERYTHING within tmp_path — DOES NOT touch real ~/.che-workspaces."""
+def _isolate_workspaces_root(tmp_path, monkeypatch) -> Path:
+    """Pin CHE_WORKSPACES_ROOT to a tmp dir — never touch the real ~/.che-workspaces."""
     isolated = tmp_path / "che-ws-test"
     isolated.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("CHE_WORKSPACES_ROOT", str(isolated))
-    yield isolated
+    return isolated
 
 
 def _run_cli(*args):
-    """Runs Che CLI and returns (exit_code, stdout, stderr)."""
-    proc = subprocess.run(
-        CHE_CLI_CMD + list(args),
-        capture_output=True,
-        text=True,
-        env={**os.environ},
-        check=False,
-    )
+    """Runs the Che CLI and returns (exit_code, stdout, stderr)."""
+    proc = subprocess.run(CHE_CLI_CMD + list(args), capture_output=True, text=True, env={**os.environ}, check=False)
     return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
 
 
@@ -42,275 +57,289 @@ def _parse_json(s):
         return None
 
 
-# --- WORKSPACE TESTS (L1) -----------------------------------------------------
-
-
-def test_workspace_create_and_list_cli():
-    """che workspace create foo → creates dir; che workspace list → returns entry."""
-    code, out, _ = _run_cli("workspace", "create", "Test WS")
-    assert code == 0, out
-    data = _parse_json(out)
-    assert data is not None
-    assert data.get("created") is True
-    assert "name" in data
-    slug = data["name"]
-    assert slug
-
-    code2, out2, _ = _run_cli("workspace", "list")
-    assert code2 == 0
-    lst = _parse_json(out2)
-    assert isinstance(lst, list)
-    assert any(w["name"] == slug for w in lst)
-
-
-def test_workspace_remove_3_safety_gates():
-    """remove follows 3 gates: (1) dry-run default (2) mandatory confirmed (3) move to trash, no delete."""
-    _run_cli("workspace", "create", "yolo-deleteme")
-
-    # Gate 1: dry-run default → DOES NOT move
-    code, out, _ = _run_cli("workspace", "remove", "yolo-deleteme")
-    assert code == 0
-    data = _parse_json(out)
-    assert data["dry_run"] is True
-    assert "action_would_be" in data
-    assert "to" in data
-
-    # Gate 2: no dry-run but also no confirmed → aborted=True
-    code2, out2, _ = _run_cli("workspace", "remove", "yolo-deleteme", "--no-dry-run")
-    assert code2 == 0
-    d2 = _parse_json(out2)
-    assert d2["aborted"] is True
-    assert d2["dry_run"] is False
-
-    _, out_list, _ = _run_cli("workspace", "list")
-    assert "yolo-deleteme" in out_list
-
-    # Gate 3: with double flag → move to trash (no delete)
-    code3, out3, _ = _run_cli("workspace", "remove", "yolo-deleteme", "--no-dry-run", "--confirm")
-    assert code3 == 0
-    d3 = _parse_json(out3)
-    assert d3["moved"] is True
-    trash_target = Path(d3["to"])
-    assert trash_target.is_dir()
-
-    _, out_list2, _ = _run_cli("workspace", "list")
-    lst2 = _parse_json(out_list2)
-    assert not any("yolo-deleteme" in str(w.get("name", "")) for w in lst2)
-
-
-def test_workspace_trash_list_and_restore():
-    """remove → trash-list shows → restore brings back, conflict-safe."""
-    _run_cli("workspace", "create", "restore-me")
-    _, out_rm, _ = _run_cli("workspace", "remove", "restore-me", "--no-dry-run", "--confirm")
-    rm = _parse_json(out_rm)
-    trash_slug = Path(rm["to"]).name
-
-    _, out_tl, _ = _run_cli("workspace", "trash-list")
-    tl = _parse_json(out_tl)
-    assert isinstance(tl, list)
-    assert any(t["slug"] == trash_slug for t in tl)
-
-    _, out_r, _ = _run_cli("workspace", "restore", trash_slug)
-    r = _parse_json(out_r)
-    assert r["restored"] is True
-
-    _, out_list, _ = _run_cli("workspace", "list")
-    names = str(out_list).lower()
-    assert "restore-me" in names
-
-
-# --- PROJECT TESTS (L2) -------------------------------------------------------
-
-
-def test_project_create_scaffold_8_files_and_ensure_l3(tmp_path):
-    """che project create → scaffold 8 L2 + L3 artifacts in CHE_WORKSPACE_SHARED (outside worktree, contractual §4)."""
-    # Create a workspace first
-    _run_cli("workspace", "create", "my-ws")
-
-    wt = tmp_path / "myproj"
-    wt.mkdir()
-    (wt / ".git").mkdir()
-    (wt / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
-
-    # project create now requires --workspace
-    code, out, err = _run_cli("project", "create", str(wt), "--workspace", "my-ws")
-    assert code == 0, f"exit={code} stderr={err} stdout={out}"
-    d = _parse_json(out)
-    assert d["initialised"] is True
-    assert d["files_created_count"] >= 7
-
-    project_dir = Path(d["project_dir"])
-    expected_files = [
-        "architecture.md",
-        "project_profile.md",
-        "product_context.md",
-        "roadmap.md",
-        "roles/index.md",
-        "registry.jsonl",
-    ]
-    for rel in expected_files:
-        p = project_dir / rel
-        assert p.is_file(), f"Missing scaffold file: {rel} in {project_dir}"
-
-    # _db/README.txt is now a neighbor of project
-    db_readme = project_dir.parent / "_db" / "README.txt"
-    assert db_readme.is_file(), f"Missing scaffold file: _db/README.txt in {project_dir.parent}"
-
-    arch_content = (project_dir / "architecture.md").read_text()
-    assert "C4 L1" in arch_content or "System Context" in arch_content
-
-    # L3 worktree shared dir is OUTSIDE the worktree (canonical paths.py contract):
-    # it is now the worktree directory itself within the che hierarchy
-    ws_shared = Path(d["paths"]["CHE_WORKSPACE_SHARED"])
-    assert ws_shared.is_dir(), f"L3 CHE_WORKSPACE_SHARED should exist: {ws_shared}"
-    assert ws_shared.name == resolve_worktree_slug(str(wt))
-
-
-def test_project_remove_and_restore_safety():
-    """project remove follows same 3 safety gates + restore ok."""
-    # Create a workspace first
-    _run_cli("workspace", "create", "safety-ws")
-
-    with tempfile.TemporaryDirectory() as td:
-        tmpd = Path(td)
-        (tmpd / ".git").mkdir()
-        _run_cli("project", "create", str(tmpd), "--workspace", "safety-ws")
-        _, out_list, _ = _run_cli("project", "list")
-        lst = _parse_json(out_list)
-        assert isinstance(lst, list) and len(lst) >= 1
-        slug = lst[0]["slug"]
-        workspace = lst[0]["workspace"]
-
-        # dry-run default
-        code, out, _ = _run_cli("project", "remove", slug, workspace)
-        assert code == 0, f"exit={code} stdout={out}"
-        dr = _parse_json(out)
-        assert dr["dry_run"] is True
-        assert "action_would_be" in dr
-
-        # no-dry-run sem confirm = aborted
-        code2, out2, _ = _run_cli("project", "remove", slug, workspace, "--no-dry-run")
-        d2 = _parse_json(out2)
-        assert d2["aborted"] is True
-
-        # com dupla flag = moved
-        code3, out3, _ = _run_cli("project", "remove", slug, workspace, "--no-dry-run", "--confirm")
-        d3 = _parse_json(out3)
-        assert d3["moved"] is True
-        trash_target = Path(d3["to"])
-        trash_slug = trash_target.name
-
-        # restore traz de volta
-        code4, out4, _ = _run_cli("project", "restore", trash_slug)
-        d4 = _parse_json(out4)
-        assert d4["restored"] is True
-
-
-def test_project_create_honours_explicit_workspace_override(tmp_path, monkeypatch):
-    """`project create --workspace X` must scaffold L2 under X even when the legacy
-    workspace resolution (e.g. a .code-workspace covering the cwd) would pick another."""
-    _run_cli("workspace", "create", "target-ws")
-    _run_cli("workspace", "create", "other-ws")
-
-    # A .code-workspace covering tmp_path makes resolve_workspace_name() return
-    # "other-ws" for any cwd inside it — the exact legacy mis-resolution.
-    cw_dir = tmp_path / "code-workspaces"
-    cw_dir.mkdir()
-    (cw_dir / "other-ws.code-workspace").write_text(
-        json.dumps({"folders": [{"path": str(tmp_path)}]}), encoding="utf-8"
+def _add_origin(repo: Path, url: str) -> None:
+    subprocess.run(
+        ["git", "-C", str(repo), "remote", "add", "origin", url],
+        check=True,
+        capture_output=True,
+        env=isolated_git_env(),
     )
-    monkeypatch.setenv("CHE_CODE_WORKSPACES_DIR", str(cw_dir))
-
-    wt = tmp_path / "escola"
-    wt.mkdir()
-    (wt / ".git").mkdir()
-    (wt / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
-
-    code, out, err = _run_cli("project", "create", str(wt), "--workspace", "target-ws")
-    assert code == 0, f"exit={code} stderr={err} stdout={out}"
-    d = _parse_json(out)
-    assert d["initialised"] is True
-
-    ws_root = Path(os.environ["CHE_WORKSPACES_ROOT"])
-    expected_ws_dir = ws_root / "workspaces" / "target-ws"
-    assert Path(d["paths"]["CHE_WORKSPACE_DIR"]) == expected_ws_dir
-    assert expected_ws_dir in Path(d["project_dir"]).parents
-    assert (Path(d["project_dir"]) / "architecture.md").is_file()
 
 
-def test_project_create_seeds_registry_init_entry(tmp_path):
-    """`project create` seeds the append-only L2 registry with a single PROJECT_INIT event (idempotent)."""
-    _run_cli("workspace", "create", "seed-ws")
-
-    wt = tmp_path / "seedproj"
-    wt.mkdir()
-    (wt / ".git").mkdir()
-
-    code, out, err = _run_cli("project", "create", str(wt), "--workspace", "seed-ws")
-    assert code == 0, f"exit={code} stderr={err} stdout={out}"
-    d = _parse_json(out)
-
-    reg = Path(d["project_dir"]) / "registry.jsonl"
-    lines = [ln for ln in reg.read_text(encoding="utf-8").splitlines() if ln.strip()]
-    assert len(lines) == 1
-    entry = json.loads(lines[0])
-    assert entry["event"] == "PROJECT_INIT"
-    assert entry["workspace"] == "seed-ws"
-    assert entry["friendly_name"] == "seed-ws--seedproj"
-
-    # Re-running must not duplicate the seed event (append-only + idempotent).
-    _run_cli("project", "create", str(wt), "--workspace", "seed-ws")
-    lines_after = [ln for ln in reg.read_text(encoding="utf-8").splitlines() if ln.strip()]
-    assert len(lines_after) == 1
+# --- CLI acceptance criteria --------------------------------------------------
 
 
-# --- HOOK TESTS (posttooluse_git_worktree) ------------------------------------
+def test_cli_project_init_creates_flat_skeleton(tmp_path, _isolate_workspaces_root):
+    # @ac B-1
+    """`che project init <git-repo> --slug acme` → exit 0 and the flat skeleton + durable docs."""
+    repo = make_git_repo(tmp_path / "repo")
+    code, out, err = _run_cli("project", "init", str(repo), "--slug", "acme")
+    assert code == 0, f"exit={code} stderr={err}"
+    data = _parse_json(out)
+    assert data["initialised"] is True
+
+    project_dir = _isolate_workspaces_root / "acme"
+    assert Path(data["project_dir"]) == project_dir
+    for domain in DOMAIN_SLUGS:
+        assert (project_dir / domain).is_dir(), f"missing domain folder: {domain}"
+    assert (project_dir / "worktrees").is_dir()
+    assert (project_dir / "_db").is_dir()
+    for doc in PROJECT_DOCS:
+        assert (project_dir / doc).is_file(), f"missing durable doc: {doc}"
 
 
-def test_hook_worktree_add_payload_creates_l3(tmp_path):
-    """Hook detects RunCommand with 'git worktree add <path>' → calls ensure_worktree_l3_dirs."""
-    target = tmp_path / "wt-feature-x"
-    target.mkdir()
-    (target / ".git").mkdir(exist_ok=True)
+def test_cli_worktree_add_reuses_existing_tree_on_second_run(tmp_path, _isolate_workspaces_root):
+    # @ac B-2
+    """`che worktree add` is idempotent: the second run reports reused=true and does not duplicate."""
+    repo = make_git_repo(tmp_path / "repo")
+    assert _run_cli("project", "init", str(repo), "--slug", "acme")[0] == 0
 
-    # Payload follows schema the hook expects: toolName + toolArgs.command
-    payload = {
-        "toolName": "RunCommand",
-        "toolArgs": {"command": f"cd /tmp && git worktree add {target} feat/x"},
-    }
+    code, out, err = _run_cli("worktree", "add", str(repo), "--project", "acme", "--name", "main")
+    assert code == 0, f"exit={code} stderr={err}"
+    first = _parse_json(out)
+    assert first["added"] is True
+    assert first["reused"] is False
+
+    worktree_dir = _isolate_workspaces_root / "acme" / "worktrees" / "main"
+    assert worktree_dir.is_dir()
+    assert Path(first["worktree_dir"]) == worktree_dir
+
+    code2, out2, err2 = _run_cli("worktree", "add", str(repo), "--project", "acme", "--name", "main")
+    assert code2 == 0, f"exit={code2} stderr={err2}"
+    second = _parse_json(out2)
+    assert second["reused"] is True
+    assert second["added"] is False
+    assert Path(second["worktree_dir"]) == worktree_dir
+    # The same tree was reused, not duplicated.
+    assert sorted(p.name for p in worktree_dir.parent.iterdir()) == ["main"]
+
+
+def test_cli_worktree_list_lists_bound_worktree_without_sessions_folder(tmp_path, _isolate_workspaces_root):
+    # @ac B-3
+    """`che worktree list --project acme` → exit 0, lists the binding, no sessions/ inside it."""
+    repo = make_git_repo(tmp_path / "repo")
+    assert _run_cli("project", "init", str(repo), "--slug", "acme")[0] == 0
+    assert _run_cli("worktree", "add", str(repo), "--project", "acme", "--name", "main")[0] == 0
+
+    code, out, err = _run_cli("worktree", "list", "--project", "acme")
+    assert code == 0, f"exit={code} stderr={err}"
+    listed = _parse_json(out)
+    assert isinstance(listed, list)
+    assert [w["name"] for w in listed] == ["main"]
+
+    worktree_dir = Path(listed[0]["worktree_dir"])
+    assert worktree_dir == _isolate_workspaces_root / "acme" / "worktrees" / "main"
+    # Sessions live under <project>/.sessions/<id>, never inside the reusable worktree folder.
+    assert not (worktree_dir / "sessions").exists()
+
+
+def test_cli_worktree_add_refuses_non_git_path(tmp_path, _isolate_workspaces_root):
+    # @ac AB-1
+    """A non-git path is a usage error (exit 2) and must not create the worktree folder."""
+    repo = make_git_repo(tmp_path / "repo")
+    assert _run_cli("project", "init", str(repo), "--slug", "acme")[0] == 0
+
+    not_a_repo = tmp_path / "not-a-git-repo"
+    not_a_repo.mkdir()
+    code, _out, err = _run_cli("worktree", "add", str(not_a_repo), "--project", "acme", "--name", "x")
+    assert code == 2, f"expected usage exit 2, got {code}: {err}"
+    assert not (_isolate_workspaces_root / "acme" / "worktrees" / "x").exists()
+
+
+def test_cli_project_init_twice_preserves_edited_roadmap(tmp_path, _isolate_workspaces_root):
+    # @ac AB-2
+    """Re-running `che project init` must not rewrite an already-edited roadmap.md."""
+    repo = make_git_repo(tmp_path / "repo")
+    assert _run_cli("project", "init", str(repo), "--slug", "acme")[0] == 0
+
+    roadmap = _isolate_workspaces_root / "acme" / "roadmap.md"
+    edited = "# Roadmap — hand edited\n\nNow: ship the flat layout.\n"
+    roadmap.write_text(edited, encoding="utf-8")
+
+    assert _run_cli("project", "init", str(repo), "--slug", "acme")[0] == 0
+    assert roadmap.read_text(encoding="utf-8") == edited
+
+
+# --- Project lifecycle (in-process) -------------------------------------------
+
+
+def test_init_project_refuses_non_git_path(tmp_path, _isolate_workspaces_root):
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    with pytest.raises(SystemExit) as exc:
+        init_project(str(plain), slug="acme")
+    assert exc.value.code == 2
+    assert not (_isolate_workspaces_root / "acme").exists()
+
+
+@pytest.mark.parametrize("bad_slug", ["", "   ", "Acme", "with space", "a" * 64])
+def test_init_project_refuses_invalid_slug(tmp_path, bad_slug):
+    repo = make_git_repo(tmp_path / "repo")
+    with pytest.raises(SystemExit) as exc:
+        init_project(str(repo), slug=bad_slug)
+    assert exc.value.code == 2
+
+
+def test_list_projects_reports_docs_domains_and_worktrees(tmp_path, _isolate_workspaces_root):
+    repo = make_git_repo(tmp_path / "repo")
+    init_project(str(repo), slug="acme")
+    add_worktree("acme", str(repo), "main")
+
+    projects = list_projects()
+    assert len(projects) == 1
+    entry = projects[0]
+    assert entry["slug"] == "acme"
+    assert Path(entry["path"]) == _isolate_workspaces_root / "acme"
+    assert entry["architecture_exists"] is True
+    assert entry["project_profile_exists"] is True
+    assert entry["worktrees"] == ["main"]
+    assert set(entry["domains"]) == set(DOMAIN_SLUGS)
+    assert "README.txt" in entry["db_files"]
+
+
+def test_remove_project_is_dry_run_by_default_then_trashes_with_manifest(tmp_path):
+    repo = make_git_repo(tmp_path / "repo")
+    init_project(str(repo), slug="acme")
+    project_dir = get_project_dir("acme")
+
+    plan = remove_project("acme")
+    assert plan["dry_run"] is True
+    assert plan["applied"] is False
+    assert project_dir.is_dir()
+
+    # Applying without --confirm is refused (usage exit 2) and changes nothing.
+    with pytest.raises(SystemExit) as exc:
+        remove_project("acme", dry_run=False, confirmed=False)
+    assert exc.value.code == 2
+    assert project_dir.is_dir()
+
+    applied = remove_project("acme", dry_run=False, confirmed=True)
+    assert applied["applied"] is True
+    assert not project_dir.exists()
+
+    trash_path = Path(applied["trash_path"])
+    assert trash_path.is_dir()
+    assert trash_path.parent == get_trash_dir()
+    manifest = json.loads((trash_path / "_MANIFEST.json").read_text(encoding="utf-8"))
+    assert manifest["kind"] == "project"
+    assert manifest["original_path"] == str(project_dir)
+    assert any(entry["slug"] == applied["trash_slug"] for entry in list_trash())
+
+
+def test_restore_project_moves_the_flat_folder_back(tmp_path):
+    repo = make_git_repo(tmp_path / "repo")
+    init_project(str(repo), slug="acme")
+    project_dir = get_project_dir("acme")
+    (project_dir / "roadmap.md").write_text("edited roadmap\n", encoding="utf-8")
+
+    moved = remove_project("acme", dry_run=False, confirmed=True)
+    assert not project_dir.exists()
+
+    result = restore_project(moved["trash_slug"])
+    assert result["restored"] is True
+    assert Path(result["restored_to"]) == project_dir
+    assert (project_dir / "roadmap.md").read_text(encoding="utf-8") == "edited roadmap\n"
+
+
+def test_restore_project_refuses_to_overwrite_existing_target(tmp_path):
+    repo = make_git_repo(tmp_path / "repo")
+    init_project(str(repo), slug="acme")
+    moved = remove_project("acme", dry_run=False, confirmed=True)
+
+    init_project(str(repo), slug="acme")  # recreates the target folder -> conflict
+    with pytest.raises(SystemExit) as exc:
+        restore_project(moved["trash_slug"])
+    assert exc.value.code == 3
+    # The trashed copy is left untouched.
+    assert (Path(moved["trash_path"]) / "_MANIFEST.json").is_file()
+
+
+# --- Hook helpers -------------------------------------------------------------
+
+
+def test_ensure_worktree_l3_dirs_reports_unbound_note_without_guessing(tmp_path):
+    repo = make_git_repo(tmp_path / "repo")
+    _add_origin(repo, "git@github.com:acme/ghost.git")
+
+    result = ensure_worktree_l3_dirs(str(repo))
+    assert result["bound"] is False
+    assert "che worktree add" in result["note"]
+    # No project was guessed into existence.
+    assert list(get_workspaces_root().glob("*/worktrees/*")) == []
+
+
+def test_ensure_worktree_l3_dirs_binds_repo_whose_origin_matches_a_project(tmp_path):
+    repo = make_git_repo(tmp_path / "repo")
+    _add_origin(repo, "git@github.com:acme/repo.git")
+    init_project(str(repo), slug="acme")
+
+    result = ensure_worktree_l3_dirs(str(repo))
+    assert result["bound"] is True
+    assert result["project"] == "acme"
+    assert result["worktree"] == "repo"
+    assert worktree_exists("acme", "repo")
+
+
+def test_hook_git_worktree_add_binds_a_matching_project(tmp_path):
+    repo = make_git_repo(tmp_path / "repo")
+    _add_origin(repo, "git@github.com:acme/repo.git")
+    init_project(str(repo), slug="acme")
+
+    payload = {"toolName": "RunCommand", "toolArgs": {"command": f"cd /tmp && git worktree add {repo} feat/x"}}
     result = posttooluse_git_worktree(payload)
-    assert result.get("decision") in ("allow", None)
-    ctx = result.get("additionalContext", "")
-    assert "L3" in ctx or "AUTO" in ctx or "created" in ctx or "CHE_WORKSPACE_SHARED" in ctx
-
-    # L3 shared dir exists in CHE_WORKSPACES_ROOT/workspaces/<workspace>/<project>/worktrees/<worktree_slug>
-    ws_name = resolve_workspace_name(str(target))
-    wt_slug = resolve_worktree_slug(str(target))
-    project_slug = project_slug_from_git_origin(str(target))
-    ws_root = Path(os.environ["CHE_WORKSPACES_ROOT"])
-    l3_shared = ws_root / "workspaces" / ws_name / project_slug / "worktrees" / wt_slug
-    assert l3_shared.is_dir(), f"L3 shared should exist in {l3_shared}"
+    assert result["decision"] == "allow"
+    assert "AUTO" in result["additionalContext"]
+    assert [w["name"] for w in list_worktrees("acme")] == ["repo"]
 
 
-def test_hook_worktree_remove_payload_moves_to_trash(tmp_path):
-    """Hook detects 'git worktree remove' → cleanup l3 moves to trash."""
-    target = tmp_path / "wt-old-feature"
-    target.mkdir()
-    (target / ".git").mkdir(exist_ok=True)
-    ensure_worktree_l3_dirs(str(target))
+def test_cleanup_worktree_l3_reports_the_bound_worktree(tmp_path):
+    repo = make_git_repo(tmp_path / "repo")
+    init_project(str(repo), slug="acme")
+    add_worktree("acme", str(repo), "main")
 
-    # BEFORE: confirm L3 shared exists (via canonical paths)
-    ws_name = resolve_workspace_name(str(target))
-    wt_slug = resolve_worktree_slug(str(target))
-    project_slug = project_slug_from_git_origin(str(target))
-    ws_root = Path(os.environ["CHE_WORKSPACES_ROOT"])
-    l3_parent = ws_root / "workspaces" / ws_name / project_slug / "worktrees" / wt_slug
-    assert l3_parent.is_dir(), f"L3 parent should exist BEFORE remove: {l3_parent}"
+    result = cleanup_worktree_l3(str(repo))
+    assert result["found"] == [{"project": "acme", "worktree": "main"}]
 
-    payload = {
-        "toolName": "Bash",
-        "toolArgs": {"cwd": str(target), "command": "git worktree remove old-feat"},
-    }
-    result = posttooluse_git_worktree(payload)
-    assert "additionalContext" in result
-    assert "AUTO" in result["additionalContext"] or "L3" in result["additionalContext"]
+
+# --- Backward-compatible path helpers -----------------------------------------
+
+
+def test_slugify_is_stable_for_legacy_paths():
+    assert _slugify("Manifesto 48 Projetos") == "Manifesto-48-Projetos"
+    assert _slugify("feat/FLO-513/process refund") == "feat--FLO-513--process-refund"
+    assert _slugify("vc-educar/corp-website") == "vc-educar--corp-website"
+    assert _slugify("") == ""
+
+
+def test_resolve_worktree_slug_falls_back_to_main_branch(tmp_path, monkeypatch):
+    monkeypatch.delenv("GIT_DIR", raising=False)
+    monkeypatch.delenv("GIT_WORK_TREE", raising=False)
+    repo = tmp_path / "my-repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    assert resolve_worktree_slug(str(repo)) == "my-repo__main"
+
+
+def test_resolve_workspace_name_prefers_explicit_env_override(monkeypatch):
+    monkeypatch.setenv("CHE_WORKSPACE_NAME_OVERRIDE", "explicit-ws")
+    assert resolve_workspace_name("/tmp/whatever") == "explicit-ws"
+
+
+def test_resolve_workspace_name_defaults_when_nothing_matches(tmp_path, monkeypatch):
+    for var in (
+        "CHE_WORKSPACE_NAME_OVERRIDE",
+        "HARNESS_WORKSPACE_NAME_OVERRIDE",
+        "CHE_WORKSPACE_NAME",
+        "HARNESS_WORKSPACE_NAME",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("CHE_CODE_WORKSPACES_DIR", str(tmp_path / "missing"))
+    assert resolve_workspace_name(str(tmp_path)) == "default"
+
+
+def test_project_slug_from_git_origin_derives_slug_from_remote(tmp_path, monkeypatch):
+    monkeypatch.delenv("GIT_DIR", raising=False)
+    monkeypatch.delenv("GIT_WORK_TREE", raising=False)
+    repo = make_git_repo(tmp_path / "repo")
+    _add_origin(repo, "git@github.com:acme/shop.git")
+    assert project_slug_from_git_origin(str(repo)) == "acme-shop"

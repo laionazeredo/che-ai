@@ -3,23 +3,17 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-from che_core.paths import ensure_session_dirs
 from che_core.state_store import query_state_db, rebuild_state_index, sanitize_state, search_state
+from tests.conftest import bind_worktree
 
 
 def _setup_wt_with_content(tmp_path: Path):
-    wt = tmp_path / "wt"
-    wt.mkdir()
-    ws_root = tmp_path / "ws_root"
-    ws_root.mkdir()
-    os.environ["CHE_WORKSPACES_ROOT"] = str(ws_root)
-    paths = ensure_session_dirs(str(wt), "smoke-state-idx")
+    repo, paths = bind_worktree(tmp_path)
     shared = Path(paths["CHE_WORKSPACE_SHARED"])
 
     (shared / "task_graph.md").write_text(
@@ -54,7 +48,7 @@ def _setup_wt_with_content(tmp_path: Path):
                 {
                     "ts": ts,
                     "event": f"TEST_{i}",
-                    "worktree_root": str(wt),
+                    "worktree_root": str(repo),
                     "task_id": f"T{i % 2 + 1}",
                     "payload": {"dec_num": i, "note": f"old decision {i}"},
                 }
@@ -67,7 +61,7 @@ def _setup_wt_with_content(tmp_path: Path):
         "---\ntitle: UI Spec\nstatus: Approved\ndomain: ux\n---\n\nThis is the interface spec containing UX flows and payment details.",
         encoding="utf-8",
     )
-    return wt
+    return repo
 
 
 def test_rebuild_index_creates_db_and_counts(tmp_path: Path):
@@ -80,7 +74,7 @@ def test_rebuild_index_creates_db_and_counts(tmp_path: Path):
     from che_core.paths import compute_paths
 
     paths = compute_paths(str(wt), "x")
-    db_path = Path(paths["CHE_PROJECT_DIR"]) / "che_state.sqlite"
+    db_path = Path(paths["CHE_DB_DIR"]) / "che_state.sqlite"
     assert db_path.is_file()
 
 

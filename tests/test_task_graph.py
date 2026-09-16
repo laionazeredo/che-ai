@@ -2,23 +2,17 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-from che_core.paths import ensure_session_dirs
 from che_core.task_graph import build_dag, kahn_waves, parse_task_graph, summarize_graph
+from tests.conftest import bind_worktree
 
 
 def _setup(tmp_path: Path):
-    """Cria worktree fake + cria CHE_WORKSPACE_SHARED com task_graph.md e envelopes."""
-    wt = tmp_path / "wt"
-    wt.mkdir()
-    ws_root = tmp_path / "ws"
-    ws_root.mkdir()
-    os.environ["CHE_WORKSPACES_ROOT"] = str(ws_root)
-    paths = ensure_session_dirs(str(wt), "tg-smoke")
+    """Bind a real worktree + return (repo_root, worktree-shared dir) for task_graph.md/envelopes."""
+    repo, paths = bind_worktree(tmp_path)
     shared = Path(paths["CHE_WORKSPACE_SHARED"])
-    return wt, shared
+    return repo, shared
 
 
 def test_parse_empty_task_graph(tmp_path: Path):

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import json
 import math
-import os
 from pathlib import Path
 
-from che_core.paths import ensure_session_dirs
 from che_core.rag import NoneBM25Provider, build_rag_index, get_provider, search_rag
+from tests.conftest import bind_worktree
 
 
 def test_none_provider_always_encodes():
@@ -34,12 +33,7 @@ def test_get_provider_unknown_falls_back_to_none():
 
 
 def _setup_content(tmp_path: Path):
-    wt = tmp_path / "wt"
-    wt.mkdir()
-    ws_root = tmp_path / "ws"
-    ws_root.mkdir()
-    os.environ["CHE_WORKSPACES_ROOT"] = str(ws_root)
-    paths = ensure_session_dirs(str(wt), "rag-smoke")
+    repo, paths = bind_worktree(tmp_path)
 
     (Path(paths["CHE_PROJECT_DIR"]) / "architecture.md").write_text(
         """
@@ -73,7 +67,7 @@ and store reference in DB. Refunds require admin role and record in audit log.
 """.strip(),
         encoding="utf-8",
     )
-    return wt
+    return repo
 
 
 def test_build_rag_index_none_provider_succeeds(tmp_path: Path):
