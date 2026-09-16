@@ -56,7 +56,11 @@ def _setup_wt_with_content(tmp_path: Path):
         )
     dec_file.write_text("\n".join(lines), encoding="utf-8")
 
+    # Che creates artifact folders lazily (output_path makes the parent at write
+    # time), so a fixture seeding content must create its own directory — as the
+    # `tasks/T1` block above already does.
     specs_dir = shared / "specs"
+    specs_dir.mkdir(parents=True, exist_ok=True)
     (specs_dir / "spec-ui.md").write_text(
         "---\ntitle: UI Spec\nstatus: Approved\ndomain: ux\n---\n\nThis is the interface spec containing UX flows and payment details.",
         encoding="utf-8",

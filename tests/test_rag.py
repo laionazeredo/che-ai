@@ -54,7 +54,9 @@ for event creators, and scanner app for staff at entrance. Currency GBP.
 """.strip(),
         encoding="utf-8",
     )
+    # Artifact folders are created lazily by Che, so the fixture makes its own.
     specs = Path(paths["CHE_WORKSPACE_SHARED"]) / "specs"
+    specs.mkdir(parents=True, exist_ok=True)
     (specs / "payment.md").write_text(
         """---
 title: Payment

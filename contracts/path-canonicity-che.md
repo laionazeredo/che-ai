@@ -47,18 +47,28 @@ CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)   ← storage root — CLI, hooks a
    ├─ devops/ copywriting/ social/ seo-analytics/
    ├─ .sessions/
    │  └─ 6a981dc48684a64a52ebd487/             ← ephemeral, single-writer session data (`CHE_SESSION_DIR`)
-   │     ├─ execution/ debugger/ temp/
-   │     └─ binding.md                         ← `CHE_LEVEL2_BINDING`
+   │     ├─ binding.md                         ← `CHE_LEVEL2_BINDING`
+   │     └─ execution/ debugger/ temp/         ← on demand, same rule as the worktree
    └─ worktrees/
       └─ main/                                 ← WORKTREE — the ONLY thing that binds a filesystem path
          ├─ .binding.json                      ← {project, name, path, branch, origin, is_git, created_at, updated_at}
+         │
+         │  A worktree is BORN with nothing but the binding above — zero
+         │  directories. Every folder below materialises the first time
+         │  `che output_path` resolves a target inside it; that function is the
+         │  single creator of artifact directories (there is no eager list).
+         │
+         ├─ specs/ tasks/ reports/ reviews/ design/ architecture/
+         ├─ pr_plans/ diff_contexts/ pr_comments/ merge_audits/
+         ├─ qa/evidence/ execution/ graph/ debugger/ other/
          ├─ decisions.log.jsonl                ← this worktree's decision log (`CHE_DECISIONS_PATH`)
-         ├─ specs/ tasks/ reports/ reviews/
-         ├─ architecture/ gh_stack/
-         ├─ qa/ qa/evidence/ qa/screenshots/
-         ├─ design/ diff_contexts/ pr_comments/
-         └─ merge_audits/ debugger/
+         └─ .quarantine/                       ← planning artifacts moved OUT of a user repo
 ```
+
+> Folder names at this level come from `_OUTPUT_SUBFOLDERS` in `che_core/paths.py` (the
+> map is the single source of truth, keyed by the artifact `type` every skill passes to
+> `che output_path`). Dotted names (`.binding.json`, `.quarantine/`) are system-internal;
+> a non-dotted folder is a user artifact.
 
 Level-by-level reading of the tree:
 
@@ -72,7 +82,7 @@ Level-by-level reading of the tree:
 | Domain folders | `<project>/<canonical-domain>/` | Canonical handoff documents per domain (PRD, architecture handoffs, copy, SEO, …). | Lifetime of the product |
 | DB | `<project>/_db/` | `che_state.sqlite` (FTS5) + optional `che_rag.sqlite`. The filesystem is the SSoT; both DBs are rebuildable. | Lifetime of the product |
 | Sessions | `<project>/.sessions/<session_id>/` | Ephemeral, isolated, single-writer session state. **Outside** the worktree on purpose. | Hours → days |
-| Worktrees | `<project>/worktrees/<worktree-name>/` | Shared tactical memory of every session bound to one git checkout. | Lifetime of the binding |
+| Worktrees | `<project>/worktrees/<worktree-name>/` | Shared tactical memory of every session bound to one git checkout. Born empty — artifact folders are created lazily by `che output_path`, never pre-created. | Lifetime of the binding |
 | Binding | `<worktree>/.binding.json` | The record that makes a directory a Che worktree: absolute repo path, branch, origin, git flag. | Lifetime of the binding |
 
 ---
@@ -158,8 +168,9 @@ Deprecated aliases are still exported so existing skills keep resolving while th
 `CHE_WORKTREE_SLUG` (= worktree name).
 
 `ensure_session_dirs` is the materialising counterpart: it creates the project skeleton (8 domain folders +
-`worktrees/` + `_db/` + `roles/`), the worktree's shared subfolders, and the ephemeral session folder. It is
-idempotent (`mkdir -p` semantics) and never overwrites an existing file.
+`worktrees/` + `_db/` + `roles/`), the worktree folder, and the ephemeral session folder — the two roots, not
+their artifact subfolders. Those are created lazily by `output_path` on first write, so a freshly bound worktree
+holds nothing but `.binding.json`. It is idempotent (`mkdir -p` semantics) and never overwrites an existing file.
 
 ---
 

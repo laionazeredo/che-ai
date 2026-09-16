@@ -424,8 +424,10 @@ to guess which project the path belongs to).
 
 ### `che ensure_dirs <worktree> <session_id> [--cwd ...]`
 
-Creates every missing directory for a bound worktree: the project skeleton (8 domain folders + `worktrees/` + `_db/`
-+ `roles/`), the worktree's shared subfolders, and the ephemeral session folder. Idempotent, safe to re-run.
+Creates the missing roots for a bound worktree: the project skeleton (8 domain folders + `worktrees/` + `_db/` +
+`roles/`), the worktree folder, and the ephemeral session folder. It does **not** pre-create artifact subfolders
+(`specs/`, `tasks/`, `reports/`, …): `che output_path` creates the parent of every artifact on first write, so a
+freshly bound worktree holds nothing but `.binding.json`. Idempotent, safe to re-run.
 
 ### `che output_path` / `che write_file_atomic` / `che assert_outside_worktree`
 

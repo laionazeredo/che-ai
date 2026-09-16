@@ -8,6 +8,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from che_core.paths import compute_paths, ensure_session_dirs
+from che_core.project_layout import hermetic_git_env
+
+#: Where `run_blacklist_check` moves planning artifacts that leaked into the
+#: user's repository. Dotted on purpose: a leading dot marks system-internal
+#: state, so it is never mistaken for something the workflow produced. Replaces
+#: `legacy_binding_cleanup/artifact-cleanup-backup`, a name that described a
+#: migration already finished and nested two names for a single concept.
+QUARANTINE_DIRNAME = ".quarantine"
 
 BLACKLIST_PATTERNS = [
     ".trae/**",
@@ -90,7 +98,7 @@ def run_preflight(worktree_root: str, session_id: str):
     ship_compliance_heavy_report = get_report_path("ship-compliance-heavy", "md")
     ship_qa_gate_log = get_report_path("ship-qa-gate", "log")
 
-    backup_dir = Path(paths["CHE_WORKSPACE_SHARED"]) / "legacy_binding_cleanup" / "artifact-cleanup-backup"
+    backup_dir = Path(paths["CHE_WORKSPACE_SHARED"]) / QUARANTINE_DIRNAME
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"SHIP_SCOPE_CHECK_REPORT={ship_scope_check_report}")
@@ -114,7 +122,7 @@ def run_blacklist_check(worktree_root: str, session_id: str):
     wt_root = Path(worktree_root).resolve()
 
     paths = compute_paths(str(wt_root), session_id)
-    backup_dir = Path(paths["CHE_WORKSPACE_SHARED"]) / "legacy_binding_cleanup" / "artifact-cleanup-backup"
+    backup_dir = Path(paths["CHE_WORKSPACE_SHARED"]) / QUARANTINE_DIRNAME
 
     # Find all files
     all_files = []
@@ -136,13 +144,28 @@ def run_blacklist_check(worktree_root: str, session_id: str):
     untracked_moved = []
     tracked_found = []
 
+    # Hermetic on purpose: when Che runs from a git hook, git exports GIT_DIR /
+    # GIT_INDEX_FILE into this process. `git -C <worktree>` would then answer
+    # about the OUTER repository, so a COMMITTED artifact would be misreported
+    # as untracked and silently deleted instead of aborting the run — a
+    # fail-open in the one check that guards the user's git history.
+    git_env = hermetic_git_env()
+
     for bf in blacklisted:
         full_path = wt_root / bf
         # Stage 1: unstage
-        subprocess.run(["git", "-C", str(wt_root), "reset", "HEAD", "--", bf], capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(wt_root), "reset", "HEAD", "--", bf],
+            capture_output=True,
+            env=git_env,
+        )
 
         # Check if tracked
-        res = subprocess.run(["git", "-C", str(wt_root), "ls-files", "--error-unmatch", bf], capture_output=True)
+        res = subprocess.run(
+            ["git", "-C", str(wt_root), "ls-files", "--error-unmatch", bf],
+            capture_output=True,
+            env=git_env,
+        )
         if res.returncode != 0:
             # Untracked
             backup_path = backup_dir / bf

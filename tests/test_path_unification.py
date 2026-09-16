@@ -233,13 +233,17 @@ def test_oversized_decision_payload_is_refused_without_corrupting_the_log(bound_
 def test_readding_a_worktree_reuses_the_existing_tree(bound_worktree, tmp_path: Path):
     # @ac B-2
     repo, paths = bind_worktree(tmp_path)
-    (Path(paths["CHE_WORKTREE_DIR"]) / "specs" / "keep.md").write_text("keep me\n", encoding="utf-8")
+    # Che creates artifact folders lazily, so the seed makes its own — a fixture
+    # must not depend on production code having pre-created it.
+    specs_dir = Path(paths["CHE_WORKTREE_DIR"]) / "specs"
+    specs_dir.mkdir(parents=True, exist_ok=True)
+    (specs_dir / "keep.md").write_text("keep me\n", encoding="utf-8")
 
     result = add_worktree("acme", str(repo), "main")
 
     assert result["reused"] is True
     assert result["added"] is False
-    assert (Path(paths["CHE_WORKTREE_DIR"]) / "specs" / "keep.md").read_text(encoding="utf-8") == "keep me\n"
+    assert (specs_dir / "keep.md").read_text(encoding="utf-8") == "keep me\n"
 
 
 def test_list_projects_skips_legacy_workspace_leftovers(che_ws_root: Path):

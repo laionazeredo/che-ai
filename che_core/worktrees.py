@@ -44,23 +44,12 @@ from che_core.project_layout import (
 
 BINDING_FILENAME = ".binding.json"
 
-#: Subfolders created inside every worktree (shared by all sessions bound to it).
-WORKTREE_SUBDIRS = (
-    "specs",
-    "tasks",
-    "reports",
-    "reviews",
-    "architecture",
-    "gh_stack",
-    "qa",
-    "qa/evidence",
-    "qa/screenshots",
-    "design",
-    "diff_contexts",
-    "pr_comments",
-    "merge_audits",
-    "debugger",
-)
+# Artifact subfolders are NOT pre-created. `output_path` already creates the
+# parent directory of every artifact on demand (see che_core/paths.py), so an
+# eager list here only produced empty directories and — worse — a second list
+# that had to stay in sync with `_OUTPUT_SUBFOLDERS` and did not. A worktree is
+# born with nothing but its binding, and grows a folder the first time it has
+# something to put in it.
 
 
 def _timestamp() -> str:
@@ -86,11 +75,6 @@ def read_binding(project_slug: str, worktree_name: str) -> Optional[Dict[str, An
 
 def worktree_exists(project_slug: str, worktree_name: str) -> bool:
     return binding_path(project_slug, worktree_name).is_file()
-
-
-def _ensure_worktree_subdirs(worktree_dir: Path) -> None:
-    for sub in WORKTREE_SUBDIRS:
-        (worktree_dir / sub).mkdir(parents=True, exist_ok=True)
 
 
 def add_worktree(
@@ -159,7 +143,6 @@ def add_worktree(
         sys.exit(2)
 
     worktree_dir.mkdir(parents=True, exist_ok=True)
-    _ensure_worktree_subdirs(worktree_dir)
 
     now = _timestamp()
     binding = {
@@ -174,6 +157,15 @@ def add_worktree(
     }
     with open(worktree_dir / BINDING_FILENAME, "w", encoding="utf-8") as f:
         json.dump(binding, f, ensure_ascii=False, indent=2, sort_keys=True)
+
+    # A-2 (SPEC lean-worktree-layout §4.7). With the artifact subfolders now
+    # created lazily by `output_path`, the binding is the ONLY thing this
+    # function produces — so if it is missing the worktree is unusable and the
+    # success report below would be a lie. Impossible in correct code: crash.
+    if not (worktree_dir / BINDING_FILENAME).is_file():
+        raise AssertionError(
+            f"INVARIANT VIOLATED: {worktree_dir / BINDING_FILENAME} missing after write; the worktree was never bound."
+        )
 
     return {
         "added": not reused,
