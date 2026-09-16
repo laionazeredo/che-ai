@@ -142,11 +142,15 @@ def run_init(worktree_root: str, session_id: str, sub_product: str) -> int:
     sub_design_md.write_text(sub_md_text, encoding="utf-8")
     sub_tokens_json.write_text(sub_json_text, encoding="utf-8")
 
-    # Bootstrap any session dirs the user may need (cheap, idempotent).
+    # Bootstrap any session dirs the user may need (cheap, idempotent, NON-FATAL).
+    # The design tree is the F0 deliverable; session scaffolding is opportunistic.
+    # NOTE: `compute_paths` signals an unbound worktree with `sys.exit(3)`, i.e. a
+    # `SystemExit` — which is a BaseException and therefore NOT caught by
+    # `except Exception`. Catching it explicitly is what makes the "non-fatal"
+    # contract above actually hold.
     try:
         ensure_session_dirs(str(wt_root), session_id)
-    except Exception:
-        # Non-fatal — the design tree is the F0 deliverable.
+    except (Exception, SystemExit):
         pass
 
     print(f"CHE_DESIGN_DIR={design_root}")
