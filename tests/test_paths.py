@@ -122,6 +122,26 @@ def test_output_path_maps_unknown_type_to_itself(tmp_path, monkeypatch):
     assert p.startswith(str(shared / "custom_kind"))
 
 
+def test_spec_lands_in_specs_folder_grouped_by_slug(tmp_path, monkeypatch):
+    """The SPEC's one canonical home: `specs/<slug>/<ts>-spec.md`.
+
+    `/che-spec` used to resolve this path and then ignore it, writing
+    `$CHE_WORKSPACE_SHARED/spec_<slug>.md` at the root instead — while `/che-act`
+    and `/che-ship` looked for the SPEC where `che-act` documents it (`specs/`).
+    Writer and reader disagreed, so a fresh SPEC could be invisible to the gate.
+    This pins the resolution both sides must agree on.
+    """
+    shared = tmp_path / "shared"
+    monkeypatch.setenv("CHE_WORKSPACE_SHARED", str(shared))
+    monkeypatch.delenv("WORKTREE_ROOT", raising=False)
+
+    p = output_path("spec", "spec", "my-feature", "workspace", "md")
+
+    assert Path(p).parent == shared / "specs" / "my-feature"
+    assert Path(p).name.endswith("-spec.md")
+    assert not (shared / "spec_my-feature.md").exists(), "the legacy root path must never be the target"
+
+
 def test_output_path_rejects_bad_scope(tmp_path, monkeypatch):
     monkeypatch.setenv("CHE_WORKSPACE_SHARED", str(tmp_path))
     with pytest.raises(ValueError):

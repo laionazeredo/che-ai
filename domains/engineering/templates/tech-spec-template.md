@@ -7,7 +7,7 @@
 ## 1. 🔴 MANDATORY Metadata
 | Field | Value |
 |---|---|
-| Approved Spec Slug | `spec_<slug>.md` (absolute link) |
+| Approved Spec Slug | `specs/<slug>/<ts>-spec.md` (absolute link) |
 | Feature / Ticket URL | |
 | Domain | `engineering` |
 | Author | |
