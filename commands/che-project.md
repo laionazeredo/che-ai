@@ -1,40 +1,64 @@
 ---
-description: "Manage Che projects (L2 .registry/projects/<slug>/). 4 subcommands: create WTPATH (aliases: add, init) | list | remove SLUG [--dry-run|--no-dry-run --confirm] | restore TRASH_SLUG. Initializes deterministic scaffold: architecture.md + project_profile.md + product_context.md + roadmap.md + roles/ + registry.jsonl + _db/ and ensures L3 .wt/__<branch>/."
+description: "Manage flat Che projects (<CHE_WORKSPACES_ROOT>/<slug>/). 5 subcommands: init|create|add REPO_PATH --slug SLUG [--domain D] [--name N] | list | remove SLUG [--dry-run|--no-dry-run --confirm] | restore TRASH_SLUG | trash-list. Scaffolds 8 domain folders + worktrees/ + _db/ + roles/ + the durable docs. Requires an explicit slug and a git path."
 arguments:
-  - name: worktree
-    description: "Absolute worktree path (mandatory for `create`). For list/remove/restore, uses current bindings if omitted."
+  - name: repo_path
+    description: "Absolute path to the git checkout this project tracks. Mandatory for init|create|add."
     required: false
   - name: subcommand
-    description: "Required positional: create <WORKTREE_ROOT> (aliases: add, init) --workspace <WS> [--domain engineering] [--name FRIENDLY] [--session-id SID] | list | remove <PROJECT_SLUG> [--no-dry-run --confirm] | restore <TRASH_SLUG>. Valid Politburo domains: engineering | ux | product | devops | copywriting | social | seo-analytics. Default=engineering."
+    description: "Required positional: init <REPO_PATH> --slug <SLUG> [--domain D] [--name N] (aliases: create, add) | list | remove <SLUG> [--no-dry-run --confirm] | restore <TRASH_SLUG> | trash-list. Canonical domains: business | product | design | engineering | devops | copywriting | social | seo-analytics. Legacy aliases normalised on input: ux → design, operation|ops → devops, dev|eng → engineering. Default = engineering."
     required: true
 ---
 
-Manages the **L2 layer (Project Durable Registry)** of the Che 4-level hierarchy. Projects live in:
-- **Che registry path**: `~/.che-workspaces/<workspace-slug>/.registry/projects/<project-slug>/` — durable, cross-worktree, contains the 8 canonical artifacts.
-- **In the worktree**: `.wt/__<branch-slug>/` folder (L3 shared per branch) created/guaranteed during `create`.
+Manages the **project** layer of the flat Che storage layout. A project is an
+organising abstraction with a stable slug and a folder — it deliberately does
+**not** bind a filesystem path. Only a **worktree** does (see `/che-worktree`).
 
-**Scaffold `create` initializes 8 deterministic artifacts** in `.registry/projects/<slug>/`:
-1. `architecture.md` (C4 L1/L2 + ADR index + Data Model + QA)
-2. `project_profile.md` (auto-detected stack via file probe: pnpm/uv/go/Cargo/etc + git origin + workspace + deployment roles)
-3. `product_context.md` (pitch, personas placeholder, roadmap skeleton)
-4. `roadmap.md` (milestones placeholder, epic templates)
-5. `roles/index.md` (PO/TechLead/UX/DevOps/QA ownership table + CODEOWNERS placeholder)
-6. `registry.jsonl` (Level 2 registry, append-only. First entry = `PROJECT_INIT`.)
-7. `_db/README.txt` (location for SQLite state+rag; rebuild/backup/purge instructions)
-8. **In the target worktree**: guarantees existence of `.wt/__<branch>/sessions/` (L3) + `.che-export-manifest.json`.
+**Location:** `<CHE_WORKSPACES_ROOT>/<project-slug>/` (default root `~/.che-workspaces`).
+The `workspaces/<workspace>/<project>/` grouping level was retired in Sep 2026.
 
-**DESTRUCTIVE safety gates (remove = same rules as workspace):**
-1. `--dry-run` DEFAULT.
-2. Apply = `--no-dry-run` + `--confirm` (double flag).
-3. Destination = `~/.che-workspaces/.trash/project--<slug>--<ts>/` + `_MANIFEST.json`.
+**Skeleton created by `init`:**
+
+```
+<root>/<slug>/
+├── _db/                       # che_state.sqlite (FTS5) + che_rag.sqlite (optional)
+├── roles/index.md             # ownership table (project level)
+├── architecture.md
+├── project_profile.md
+├── product_context.md
+├── roadmap.md
+├── registry.jsonl             # first entry = PROJECT_INIT
+├── business/ product/ design/ engineering/ devops/ copywriting/ social/ seo-analytics/
+└── worktrees/                 # one folder per bound worktree
+```
+
+**Hard preconditions (fail fast, no partial state):**
+
+1. A **git** `repo_path` is mandatory — a non-git directory exits `2` and creates nothing.
+2. `--slug` is **mandatory and explicit**; it is never inferred from the git origin
+   or from the current working directory.
+3. `init` is idempotent: existing documents are never overwritten, so re-running it
+   will not clobber hand-edited `roadmap.md`, `architecture.md`, etc.
+
+**DESTRUCTIVE safety gates (`remove`):**
+
+1. `--dry-run` is the DEFAULT and prints the plan (including the bound worktrees and
+   the reminder that the repositories themselves are untouched).
+2. Apply = `--no-dry-run` **plus** `--confirm` (double flag).
+3. Destination = `<root>/.trash/project--<slug>--<timestamp>/` + `_MANIFEST.json`.
 
 **Subcommand dispatch:**
 
 | Subcommand | CLI invocation | Expected agent action after |
 |---|---|---|
-| `create <WT> --workspace <WS> [--domain D] [--name N] [--session-id S]` | `python3 -m che_core.cli project create "<WT>" --workspace "<WS>" [flags] --json` | **Recommended entry for onboarding:** run `che project create` BEFORE che-xray/che-onboarding. Agent: (1) validates if workspace `<WS>` exists; if not, asks whether to create a new one; (2) shows default domain=engineering and asks whether to change (only lists 7 valid Politburo); (3) detects stack via file probe + git remote origin; (4) defines `friendly_name` as `<workspace>--<folder>` if omitted; (5) scaffold 8 files + ensure L3 dirs; (6) report `{project_slug, workspace, domain, stack, origin, files_created: 8, l3_created: true}`. |
-| `add <WT> --workspace <WS>` | `python3 -m che_core.cli project add "<WT>" --workspace "<WS>" --json` | Alias for `create`. |
-| `init <WT> --workspace <WS>` | `python3 -m che_core.cli project init "<WT>" --workspace "<WS>" --json` | Alias for `create`. |
-| `list` | `python3 -m che_core.cli project list --json` | Table: `Slug │ Workspace │ Domain │ Stack │ Has arch? │ Has profile? │ Has DB?` |
-| `remove <SLUG> [flags]` | `python3 -m che_core.cli project remove "<SLUG>" [flags] --json` | Same 2-pass protocol as `/che-workspace remove`: 1) dry-run → show plan to user; 2) user confirms → run with `--no-dry-run --confirm`. |
-| `restore <TRASH_SLUG>` | `python3 -m che_core.cli project restore "<TRASH_SLUG>" --json` | Restores project from trash. Slug conflict → `--restored-<ts>` suffix. |
+| `init <REPO> --slug <S> [--domain D] [--name N]` | `che project init "<REPO>" --slug "<S>" [flags]` | Recommended first step of onboarding. Agent: (1) asks for the slug if the user did not give one — never invents it; (2) shows the default domain `engineering` and asks whether to change it, listing the 8 canonical domains; (3) reports `{project_slug, project_dir, domains, skeleton_created, files_created}`; (4) then tells the user the next step is `che worktree add`. |
+| `create` / `add` | same as `init` | Aliases. |
+| `list` | `che project list` | Table: `Slug │ Worktrees │ Domains │ Has arch? │ Has profile? │ DB files`. If the output carries a `legacy_untouched` entry, surface it: those folders are pre-flattening leftovers, were left untouched, and should be re-created with `che project init` before being moved to `.trash/` manually. |
+| `remove <SLUG> [flags]` | `che project remove "<SLUG>" [flags]` | Two-pass protocol: 1) dry-run → show the plan to the user; 2) only after explicit confirmation → `--no-dry-run --confirm`. |
+| `restore <TRASH_SLUG>` | `che project restore "<TRASH_SLUG>"` | Moves the folder back to its original path. Refuses (exit 3) if the target already exists — never overwrites. |
+| `trash-list` | `che project trash-list` | Lists `.trash/` entries with their manifests. |
+
+**Exit codes:** `0` success · `2` usage/precondition failure (non-git path, missing or
+invalid slug, missing `--confirm`) · `3` unknown project or trash entry.
+
+**Never do this:** pass `--workspace` (removed), hand-edit `registry.jsonl`, or create
+the project folder with `mkdir` instead of this command.
