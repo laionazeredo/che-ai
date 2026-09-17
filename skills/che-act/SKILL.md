@@ -79,7 +79,7 @@ If ANY check below fails, **STOP and resolve with user before proceeding.**
 $CHE_WORKSPACE_SHARED  (durable, multi-session, OUTSIDE worktree)
   ├── decisions.log.jsonl
   ├── task_graph.md
-  ├── spec_<slug>.md
+  ├── specs/<slug>/<ts>-spec.md
   ├── gh_stack_plan.md
   ├── manual_test_plan.md
   ├── design/
@@ -221,7 +221,7 @@ Execution logic (no breaking change — adds 2 more reads only):
 
 This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and `che ensure_dirs`, **BEFORE** any §1 scope capture questions.
 
-1. **Glob existing specs:** Look in `$CHE_WORKSPACE_SHARED/spec_*.md`. Parse `status` YAML frontmatter of each.
+1. **Glob existing specs:** Look in `$CHE_WORKSPACE_SHARED/specs/**/*.md` (canonical; if empty, fall back to the legacy `$CHE_WORKSPACE_SHARED/spec_*.md`). Parse `status` YAML frontmatter of each.
 2. **Count Approved specs:**
    - **Exactly 1 Approved:** Ask user: "Found 1 Approved SPEC. Use this existing SPEC? (A) Yes, skip generation / (B) Generate new SPEC".
    - **≥2 Approved:** List slugs and ask user to pick 1, OR "Generate new".

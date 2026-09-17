@@ -103,7 +103,7 @@ If the script reports tracked files (exit code 2), present options (A or B) to t
 **Scope source auto-discover order (first match wins — DOES NOT cascade multiple sources):**
 1. **Explicit envelope** → does `$CHE_WORKSPACE_SHARED/tasks/*/envelope.md` exist? (last DONE task in task_graph, take its envelope) → SCOPE_SOURCE=ENVELOPE.
 2. **Local task graph** → does `<WORKTREE_ROOT>/task_graph.md` exist? → SCOPE_SOURCE=TASK_GRAPH. Reads list of Acceptance Criteria + Tasks marked DONE.
-3. **Local/global che spec** → does `spec_*.md` exist in `$CHE_WORKSPACE_SHARED/spec_*.md` OR `<WORKTREE_ROOT>/spec_*.md`? → SCOPE_SOURCE=SPEC. Extracts §5 Acceptance Criteria section.
+3. **Local/global che spec** → does a SPEC exist in `$CHE_WORKSPACE_SHARED/specs/**/*.md` (canonical), the legacy `$CHE_WORKSPACE_SHARED/spec_*.md`, OR `<WORKTREE_ROOT>/spec_*.md`? → SCOPE_SOURCE=SPEC. Extracts §5 Acceptance Criteria section.
 4. **GitHub PR body (if PR URL provided via `--pr-url` flag)** → use `gh pr view <URL> --json body,title` → parse Acceptance Criteria bullet points. SCOPE_SOURCE=PR_BODY.
 5. **No source found** → ⚠️ WARN + ASK user: "No scope source located. (A) Inform spec/envelope path manually; (B) Proceed WITHOUT scope validation (risk: shipping out of scope); (C) Cancel ship." If user chooses B → log EXPLICIT_OVERRIDE in decision.log, SKIP this gate, go to 0.9.2.
 

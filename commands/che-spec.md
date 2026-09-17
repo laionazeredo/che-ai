@@ -11,7 +11,7 @@ arguments:
     description: "Target project slug (L2). REQUIRED. If missing, ASK user for a valid project from the current workspace."
     required: true
   - name: slug
-    description: "Short slug for spec filename (used in spec_<slug>.md). Ex: api-authn-fail-closed. Optional, derived if missing."
+    description: "Short slug for the SPEC folder (used in specs/<slug>/<ts>-spec.md). Ex: api-authn-fail-closed. Optional, derived if missing."
     required: false
 ---
 
