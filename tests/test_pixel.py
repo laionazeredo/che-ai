@@ -701,6 +701,24 @@ def test_a_single_critical_deviation_over_8px_fails_despite_a_high_score() -> No
     assert "critical deviation" in report.reason
 
 
+def test_a_critical_colour_mismatch_is_a_deviation_not_only_a_flag() -> None:
+    """A ×2 row measured in ΔE still owns condition 3.
+
+    `fg_color` carries `MAX_DELTA_E`, not a pixel budget, so it is absent from
+    `critical_categorical_misses` — that set is the rows carrying *no* tolerance.
+    The critical-deviation budget is therefore its only escalation, and a version of
+    it that aggregated just the px-tolerance rows let a white heading on a dark hero
+    keep its score.
+    """
+    actual = dict(_design(fg="#FFFFFF"))
+    report = build_report({"cta": _design()}, {"cta": actual}, backend="openpencil")
+
+    assert [m.passed for m in report.measurements if m.category == "fg_color"] == [False]
+    assert report.max_critical_deviation_px is not None
+    assert report.max_critical_deviation_px > PASS_CRITICAL_MAX_DEVIATION_PX
+    assert report.verdict == VERDICT_FAIL
+
+
 def test_many_small_deviations_fail_the_within_tolerance_ratio() -> None:
     actual = _design(
         font_size=21.0,  # 3px: outside the 2px tolerance

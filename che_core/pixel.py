@@ -1059,11 +1059,13 @@ def build_report(
     passed = sum(1 for m in verified if m.passed)
     within = round(passed / len(verified), 4)
 
-    critical_deviations = [
-        m.deviation or 0.0
-        for m in verified
-        if m.weight == WEIGHT_CRITICAL and m.category in {"padding", "font_size"}
-    ]
+    #: Condition 3 covers every ×2 category that reports a deviation, not only the
+    #: px-tolerance ones. `fg_color` carries a ΔE tolerance rather than a pixel
+    #: budget, so it is absent from `critical_categorical_misses` below — that set
+    #: is the rows carrying *no* tolerance — which makes this budget its only
+    #: escalation. Filtering it down to `padding` and `font_size` therefore removed
+    #: the gate's only way to fail a wrong foreground on a critical element.
+    critical_deviations = [m.deviation or 0.0 for m in verified if m.weight == WEIGHT_CRITICAL]
     max_critical = round(max(critical_deviations), 2) if critical_deviations else 0.0
 
     #: §3 condition 3 is written as an 8px budget, which only describes the px
