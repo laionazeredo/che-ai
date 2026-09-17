@@ -167,6 +167,11 @@ _OP_PROPERTY_MAP = {
 def _op_node_facts(node: Dict[str, Any]) -> Dict[str, Any]:
     facts: Dict[str, Any] = {}
     node_type = node.get("type")
+    # `kind` is an annotation, not a category: it tells the comparator whether
+    # typography applies, so a frame's missing font is "not applicable" instead of
+    # an unverified ×2 gap. No CATEGORIES row measures it.
+    if isinstance(node_type, str) and node_type:
+        facts["kind"] = node_type.lower()
 
     width, height = _px(node.get("width")), _px(node.get("height"))
     box_size = {k: v for k, v in (("width", width), ("height", height)) if v is not None}
@@ -424,6 +429,13 @@ def _resolve(node_attrs: Dict[str, Any], globals_: Dict[str, Any], elements: Dic
 def _figma_node_facts(node: Dict[str, Any]) -> Dict[str, Any]:
     facts: Dict[str, Any] = {}
     layout = node.get("layout") if isinstance(node.get("layout"), dict) else {}
+
+    # See `_op_node_facts`: `kind` gates applicability, it is not measured. Figma
+    # spells it in caps ("TEXT"), the .op side in lower case, so it is normalised
+    # here to keep `_is_text` from having to know either vendor's convention.
+    node_type = node.get("type")
+    if isinstance(node_type, str) and node_type:
+        facts["kind"] = node_type.lower()
 
     dimensions = layout.get("dimensions") if isinstance(layout.get("dimensions"), dict) else {}
     box_size = {

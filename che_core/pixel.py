@@ -34,7 +34,8 @@ this module testable offline.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 # --- Contract constants (mirror the gate §1 tolerances + §2 weights) ---------
 
@@ -59,6 +60,9 @@ VERDICT_INCONCLUSIVE = "INCONCLUSIVE"
 
 #: The design source could not be read at all (access, bad node id, no engine).
 OUTCOME_SOURCE_UNAVAILABLE = "DESIGN_SOURCE_UNAVAILABLE"
+
+#: Process exit status per verdict, so a caller can branch without parsing text.
+_EXIT_CODES = {VERDICT_PASS: 0, VERDICT_FAIL: 1, VERDICT_INCONCLUSIVE: 3}
 
 _KIND_PX = "px"
 _KIND_EXACT = "exact"
@@ -114,6 +118,14 @@ CATEGORIES: Tuple[CategorySpec, ...] = (
 
 #: Categories whose unverifiability forces INCONCLUSIVE instead of PASS.
 CRITICAL_CATEGORY_KEYS = frozenset(spec.key for spec in CATEGORIES if spec.critical)
+
+#: Categories that only a text element can have.
+#:
+#: A frame has no font, so its typography rows are absent for a legitimate reason.
+#: Treating that as "the design source withheld the property" made every realistic
+#: run INCONCLUSIVE — a graphic frame cannot have a `font-weight`, and escalating
+#: on it would permanently block the gate it is supposed to make usable.
+TYPOGRAPHY_CATEGORY_KEYS = frozenset({"font_size", "font_weight", "line_height", "letter_spacing", "fg_color"})
 
 
 # --- Colour maths (§1 #10/#11: ΔE 1976 CIE76) --------------------------------
@@ -328,6 +340,20 @@ def _shadow_axes(design: Any, actual: Any) -> Optional[List[Tuple[str, float, fl
 _SHADOW_TOLERANCE = {"x": 2.0, "y": 2.0, "blur": 4.0, "spread": 4.0, "alpha": 0.04}
 
 
+def _is_text(design: Dict[str, Any]) -> bool:
+    """Whether typography applies to this element.
+
+    Both extractors annotate their facts with the design node's `kind`. When the
+    kind is unknown — a hand-written facts file, or a future backend — the answer
+    is "yes, typography applies", so a missing font stays a real gap. Guessing
+    "not applicable" would silently excuse an unmeasured ×2 category.
+    """
+    kind = design.get("kind")
+    if isinstance(kind, str) and kind:
+        return kind.lower() == "text"
+    return True
+
+
 def compare_element(
     key: str,
     design: Dict[str, Any],
@@ -477,6 +503,14 @@ def compare_element(
 
         emit(spec, "", design[spec.prop], actual.get(spec.prop), spec.tolerance)
 
+    # Reclassify typography absences on a non-text element. Done here, once, rather
+    # than at each of the absent-value branches above: the rule is about the
+    # element, not about which category shape happened to detect the absence.
+    if not _is_text(design):
+        for entry in skipped:
+            if entry["reason"] == "absent_from_design" and entry["category"] in TYPOGRAPHY_CATEGORY_KEYS:
+                entry["reason"] = "not_applicable"
+
     return measurements, skipped
 
 
@@ -542,8 +576,19 @@ def build_report(
     critical_deviations = [m.deviation or 0.0 for m in verified if m.weight == WEIGHT_CRITICAL]
     max_critical = round(max(critical_deviations), 2) if critical_deviations else 0.0
 
+    # A critical category is only "unverified" if the run never measured it on ANY
+    # element. Per-element absence is normal — a text node has no explicit padding
+    # row, a frame has no font — and escalating on that made every realistic run
+    # INCONCLUSIVE, which would block ships the gate exists to let through.
+    verified_categories = {m.category for m in verified}
     unverified_critical = sorted(
-        {s["category"] for s in skipped if s["category"] in CRITICAL_CATEGORY_KEYS and s["reason"].startswith("absent")}
+        {
+            s["category"]
+            for s in skipped
+            if s["category"] in CRITICAL_CATEGORY_KEYS
+            and s["reason"] == "absent_from_design"
+            and s["category"] not in verified_categories
+        }
     )
 
     report = Report(
@@ -556,6 +601,27 @@ def build_report(
         elements=len([k for k in design_elements if k in dom_elements]),
         backend=backend,
     )
+
+    missing_from_dom = sorted({s["element"] for s in skipped if s["reason"] == "missing_from_dom"})
+    if missing_from_dom:
+        # The design declares an element the page does not render. It contributes no
+        # measurement, so it cannot drag the score down — without this rule it would
+        # sail through every numeric condition and the run would report PASS while
+        # missing a component the designer specified.
+        report.verdict = VERDICT_FAIL
+        report.reason = "element(s) present in the design but absent from the DOM: " + ", ".join(missing_from_dom)
+        return report
+
+    missing_from_design = sorted({s["element"] for s in skipped if s["reason"] == "missing_from_design"})
+    if missing_from_design:
+        # Nothing at all was verified for these: the reference could not be read, so
+        # neither PASS nor FAIL is earned. Usually a stale node id or the wrong
+        # `--design-backend`, and worth surfacing loudly rather than scoring around.
+        report.verdict = VERDICT_INCONCLUSIVE
+        report.reason = "element(s) declared in design-map.json but absent from the design source: " + ", ".join(
+            missing_from_design
+        )
+        return report
 
     if unverified_critical:
         # A critical property was never measured. PASS here would claim a
@@ -603,6 +669,94 @@ def summarise(report: Report) -> str:
         f"score={score} within_4px_pct={within} deviation_max_px={worst} "
         f"elements={report.elements} backend={report.backend or 'n/a'}"
     )
+
+
+# --- Gate runner (the join §3.3 exists for) ---------------------------------
+
+
+def resolve_design_source(source: Path, backend: str, node_ids: Sequence[str]) -> Dict[str, Dict[str, Any]]:
+    """Extract per-node facts from a raw design artefact.
+
+    `source` is a `get_figma_data` response for `figma`, or a `.op` document for
+    `openpencil`. The backend is never inferred from the file's shape: guessing
+    would silently pick the wrong extractor and produce plausible-but-wrong
+    numbers, and §3's backend contract is fail-closed for the same reason.
+    """
+    if backend == "figma":
+        from che_core.pixel_sources import parse_figma_facts
+
+        return parse_figma_facts(Path(source).read_text(encoding="utf-8"), node_ids)
+    if backend == "openpencil":
+        from che_core.pixel_sources import parse_op_facts
+
+        return parse_op_facts(Path(source), node_ids)
+    raise ValueError(f"unknown design backend {backend!r}: expected 'figma' or 'openpencil'")
+
+
+def join_by_map(
+    design_map: Dict[str, Any],
+    design_facts: Dict[str, Any],
+    dom_facts: Dict[str, Any],
+) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+    """Re-key both sides by element key, using the map as the only join.
+
+    Design nodes and DOM elements cannot be matched by inference (§3.3), so the
+    map is the sole source of truth: `{element_key: {design_node, selector}}`.
+
+    An element is placed in a side's dict **only if that side has facts for it**.
+    Emitting an empty bag instead would send `build_report` down the per-category
+    path and report every category as `absent_from_design`, when the truth is
+    that the element is missing from the DOM entirely — a different, and more
+    actionable, diagnosis.
+    """
+    design_out: Dict[str, Dict[str, Any]] = {}
+    dom_out: Dict[str, Dict[str, Any]] = {}
+
+    for element, entry in design_map.items():
+        if not isinstance(entry, dict) or not entry.get("design_node") or not entry.get("selector"):
+            raise ValueError(
+                f"design-map entry {element!r} must declare both `design_node` and `selector` "
+                "(§3.3); without them the two sides cannot be joined"
+            )
+        node = entry["design_node"]
+        selector = entry["selector"]
+        if node in design_facts:
+            design_out[element] = design_facts[node]
+        if selector in dom_facts:
+            dom_out[element] = dom_facts[selector]
+
+    return design_out, dom_out
+
+
+def exit_code(report: Report) -> int:
+    """Process exit status for the runner.
+
+    INCONCLUSIVE deliberately does not share 0 with PASS: a caller that only
+    checks the exit code must never read "could not verify" as "verified".
+    """
+    return _EXIT_CODES.get(report.verdict, 1)
+
+
+def run_check(
+    design_map: Dict[str, Any],
+    design_facts: Dict[str, Any],
+    dom_facts: Dict[str, Any],
+    *,
+    backend: str = "",
+    breakpoint: str = "",
+) -> Report:
+    """Run the gate end to end: join both sides and apply §1/§2's rules.
+
+    `design_facts` is keyed by design node id, `dom_facts` by CSS selector; both
+    are the flat per-node form the extractors emit (not the §3.1 nested document,
+    which is the human-facing record). `breakpoint` is carried into the report as
+    provenance only — the viewpoint is fixed by whoever extracted the facts.
+    """
+    design_elements, dom_elements = join_by_map(design_map, design_facts, dom_facts)
+    report = build_report(design_elements, dom_elements, backend=backend)
+    if breakpoint:
+        report.reason = f"[{breakpoint}] {report.reason}".strip()
+    return report
 
 
 def iter_categories() -> Iterable[CategorySpec]:

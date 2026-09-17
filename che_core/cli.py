@@ -27,6 +27,16 @@ def _print_json(obj):
     print(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
 
 
+def _load_json(path: str):
+    """Read a JSON artefact, surfacing a path-bearing error instead of a bare traceback."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"cannot read {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path} is not valid JSON: {exc}") from exc
+
+
 def _build_filters_from_args(args) -> dict:
     filters = {}
     if args.status:
@@ -421,6 +431,39 @@ def main(argv=None):
         help="Mandatory safety gate to apply the restore.",
     )
 
+    # PIXEL GATE SUBCOMMANDS (the §3.4 comparator of ux-pixel-check-gate) =======
+    parser_pixel = subparsers.add_parser(
+        "pixel",
+        help="Run the ux-pixel-check gate: join design + DOM facts and score them numerically.",
+    )
+    pixel_subs = parser_pixel.add_subparsers(dest="pixel_cmd", required=True)
+
+    px_check = pixel_subs.add_parser(
+        "check",
+        help="Compare design facts against DOM facts. Exit 0=PASS, 1=FAIL, 3=INCONCLUSIVE, 2=bad input.",
+    )
+    px_check.add_argument(
+        "--map",
+        required=True,
+        help="design-map.json: {element: {design_node, selector}} — the only join between the two sides.",
+    )
+    px_check.add_argument("--dom", required=True, help="dom-facts.json, keyed by CSS selector.")
+    design_group = px_check.add_mutually_exclusive_group(required=True)
+    design_group.add_argument("--design", help="design-facts.json already keyed by design node id.")
+    design_group.add_argument(
+        "--design-source",
+        help="Raw design artefact to extract from: a get_figma_data response, or an OpenPencil .op file.",
+    )
+    px_check.add_argument(
+        "--design-backend",
+        choices=("figma", "openpencil"),
+        default=None,
+        help="Extractor for --design-source. Never inferred from the file's shape.",
+    )
+    px_check.add_argument("--breakpoint", default="", help="Breakpoint label, recorded as report provenance.")
+    px_check.add_argument("--out", default=None, help="Write the JSON report here (atomic, outside-worktree safe).")
+    px_check.add_argument("--json", action="store_true", default=False, help="Print the full JSON report.")
+
     args = parser.parse_args(argv)
 
     if args.command == "compute_paths":
@@ -614,6 +657,56 @@ def main(argv=None):
             return
         _print_json(res)
         return
+
+    if args.command == "pixel":
+        from che_core.pixel import (
+            exit_code,
+            remediation_steps,
+            resolve_design_source,
+            run_check,
+            summarise,
+        )
+
+        if args.pixel_cmd != "check":
+            parser.error(f"Unknown pixel subcommand: {args.pixel_cmd}")
+            return
+
+        if args.design_source and not args.design_backend:
+            print("Error: --design-source requires --design-backend (figma|openpencil).", file=sys.stderr)
+            sys.exit(2)
+
+        try:
+            design_map = _load_json(args.map)
+            dom_facts = _load_json(args.dom)
+            if args.design:
+                design_facts = _load_json(args.design)
+                backend = args.design_backend or ""
+            else:
+                node_ids = [
+                    entry["design_node"]
+                    for entry in design_map.values()
+                    if isinstance(entry, dict) and isinstance(entry.get("design_node"), str)
+                ]
+                design_facts = resolve_design_source(Path(args.design_source), args.design_backend, node_ids)
+                backend = args.design_backend
+            if not isinstance(design_map, dict) or not isinstance(dom_facts, dict):
+                raise ValueError("--map and --dom must each contain a JSON object at the root")
+            report = run_check(design_map, design_facts, dom_facts, backend=backend, breakpoint=args.breakpoint)
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(2)
+
+        payload = report.to_json()
+        payload["summary"] = summarise(report)
+        if args.out:
+            write_file_atomic(args.out, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
+        if args.json:
+            _print_json(payload)
+        else:
+            print(summarise(report))
+            for step in remediation_steps(report):
+                print(f"  fix: {step}")
+        sys.exit(exit_code(report))
 
     if args.command == "worktree":
         from che_core.worktrees import add_worktree, list_worktrees, remove_worktree, show_worktree
