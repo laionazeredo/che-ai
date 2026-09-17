@@ -180,7 +180,16 @@ def add_worktree(
 
 
 def list_worktrees(project_slug: str) -> List[Dict[str, Any]]:
-    """Every bound worktree of a project, sorted by name."""
+    """Every bound worktree of a project, sorted by name.
+
+    A child whose name is not a valid slug is **skipped**, not rejected. Such a
+    folder cannot be a worktree — ``get_worktree_dir`` refuses it — but raising
+    here would take the whole machine down: ``list_projects`` and
+    ``find_worktree_by_path`` both iterate through this function, so a single
+    pre-flattening leftover (`<repo>__<branch>`, uppercase, underscore) made
+    ``che project list`` die with a traceback and left every path lookup in
+    that project unresolvable.
+    """
     assert_project_slug(project_slug)
     wt_root = get_worktrees_dir(project_slug)
     if not wt_root.is_dir():
@@ -189,6 +198,10 @@ def list_worktrees(project_slug: str) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for child in sorted(wt_root.iterdir()):
         if not child.is_dir():
+            continue
+        try:
+            validate_slug(child.name, label="worktree_name")
+        except ValueError:
             continue
         binding = read_binding(project_slug, child.name)
         if binding is None:
