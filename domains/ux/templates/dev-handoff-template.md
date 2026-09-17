@@ -108,6 +108,11 @@ cross_ref_pixel_gate: "domains/ux/gates/pixel-check-gate.md"
 | 🔴 **Pixel Perfect (Figma ref vs code)** | PASS / FAIL | Score = x.y (≥8.0?). Within 4px % = 0.xx. Max deviation = N px | `./reports/pixel-check-report.json` | `./reports/pixel-visual-diff.png` |
 | 🟡 **Lighthouse Performance (optional UX gate, bonus)** | PASS / FAIL | LCP / TTI / CLS = x,y,z · Performance score ≥ 90? | `./reports/lighthouse-report.json` | `./reports/lighthouse-report.html` |
 
+> The paths above are relative to **this handoff bundle**, which is the recipient's copy. The gate's own
+> artifacts are resolved by `che pixel paths` (`$CHE_PIXEL_REPORT`, `$CHE_PIXEL_VISUAL_DIFF`,
+> `$CHE_PIXEL_MAP` — gate §2.4) and live outside any worktree, so nothing is duplicated into the repo by
+> filling this table in: copy the file, do not re-derive it.
+
 ---
 
 ## 7. Final Accessibility Checklist Summary (🔴 15 items · copied from profile, 100% must be ✅ to pass A11y Gate)

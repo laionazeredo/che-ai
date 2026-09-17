@@ -597,7 +597,7 @@ try { ... } catch(e) { throw new Error("failed") /* LOST stack and root cause */
 |---|---|---|---|
 | `engineering` | GitHub | ✅ official `mcp_github` MCP + `gh` CLI | `gh` CLI npm-corepack (standard §18) |
 | `ux` | Figma | ✅ `mcp_open-pencil` (Figma Dev Mode) | `figma-cli` npm |
-| `ux` | Open-source PenPot | ✅ official maintainer `penpot-mcp` | N/A (P1 exists) |
+| `ux` | Open-source PenPot | ✅ official `@penpot/mcp` (Penpot monorepo; the `penpot/penpot-mcp` repo is archived) | N/A (P1 exists) |
 | `ux` | Axe-core WCAG 2.2 AA | `axe-core-mcp` MCP (if available) | official Deque `@axe-core/cli` npm |
 | `product` | Linear | ✅ `mcp_flockr-linear` MCP | `linear-cli` npm |
 | `product` | ClickUp | ✅ `mcp_laion-clickup` MCP | `clickup-cli` npm |

@@ -89,7 +89,7 @@ notes: "First non-engineering domain pilot. Model proven here, rollout of remain
 - **Official A11y Gate:** `domains/ux/gates/accessibility-gate.md` (official axe-core CLI `@axe-core/cli`, WCAG 2.2 AA).
 - **Official Pixel Gate:** `domains/ux/gates/pixel-check-gate.md` (inspired by `/figma-pixel-check`).
 - **Figma Connector:** `domains/ux/connectors/figma.config.md` (official `mcp_open-pencil` MCP + official `figma-cli` npm).
-- **PenPot Connector:** `domains/ux/connectors/penpot.config.md` (official open-source PenPot MCP https://penpot.app/).
+- **PenPot Connector:** `domains/ux/connectors/penpot.config.md` (official `@penpot/mcp` https://penpot.app/). Read its **"Wiring status"** first: the domain layer is tool-agnostic, but the pixel gate's design side has no Penpot extractor yet and refuses `--design-backend penpot` by name.
 - **Reuse core §13 Language 4-axis:** LANG_CODE=en (token names, filenames, variant slugs), LANG_DOCS=project-preferred (UI labels, UX copy), LANG_CHAT=project-preferred (designer-user conversation), LANG_REPORT=en (a11y audit reports for CI).
 - **Reuse §19 Logging Standard:** Any Figma Variables → dev JSON ETL script uses `[STEP 1/N]` numbered echo, anti-flood loops >100 batch.
 

@@ -323,39 +323,77 @@ The canonical flags enum lives in `che_core/constants.py`. Always treat that fil
 
 ---
 
-### 3.4 Domain Gate CLI — `che pixel check`
+### 3.4 Domain Gate CLI — `che pixel check` / `che pixel paths`
 
 The runner behind `domains/ux/gates/pixel-check-gate.md`. It compares design properties against
 rendered DOM properties **numerically** — never screenshot against screenshot — and is the only
 supported way to execute that gate. See the gate's §2 Execution for the recipe that `che-ship §0.9.5`
 follows.
 
+Resolve the artifact set **first**. `che pixel paths` is the single source of truth for where the gate's
+files live (gate §2.3, §4.1–§4.3), and its output is meant to be `eval`'d:
+
 ```bash
+eval "$(che pixel paths "$WORKTREE_ROOT" "$SESSION_ID" \
+  --sub-product <sub_product> --breakpoint lg --backend figma \
+  --related-id "$RELATED_ID" --attempt 1)"
+
 che pixel check \
-  --map "$DESIGN_MAP" \
-  --dom "$DOM_FACTS" \
-  --design-source "$DESIGN_RAW" --design-backend figma \
+  --map "$CHE_PIXEL_MAP" \
+  --dom "$CHE_PIXEL_DOM_FACTS" \
+  --design-source "$CHE_PIXEL_DESIGN_RAW" --design-backend figma \
+  --design-facts-out "$CHE_PIXEL_DESIGN_FACTS" \
   --breakpoint lg \
-  --out "$DOMAIN_GATE_REPORT"
+  --out "${DOMAIN_GATE_REPORT:-$CHE_PIXEL_REPORT}"
 ```
+
+The resolved set is split by lifetime, and the split is load-bearing:
+
+| Variable | Lives | Why there |
+| :--- | :--- | :--- |
+| `CHE_PIXEL_DIR` | inside the worktree: `design/<sub_product>/pixel-check/` | the folder holding the frozen references |
+| `CHE_PIXEL_MAP` | inside the worktree, `<breakpoint>.map.json` | human-approved and **frozen as regression**: a timestamped name would stop the next run from finding it |
+| `CHE_PIXEL_DESIGN_FACTS` | inside the worktree, `<breakpoint>.design-facts.json` | the per-element record a reviewer reads in the PR diff |
+| `CHE_PIXEL_DESIGN_RAW` | inside the worktree — `<breakpoint>.design-raw.txt` (`figma`), or `design/<sub_product>/source/home.op` (`openpencil`, where it already lives) | the bytes the numbers were read from, so a re-run derives them from the same reference |
+| `CHE_PIXEL_DOM_FACTS` | session, `design/<related_id>/<timestamp>-<sub_product>-<breakpoint>-dom-facts.json` | a measurement of one attempt; never committed |
+| `CHE_PIXEL_REPORT` | session, `…-check-attempt<N>.json` | retry budget is `2` (§5), so the attempt number is in the name: attempt 2 must not overwrite attempt 1 |
+| `CHE_PIXEL_DESIGN_IMAGE` · `CHE_PIXEL_DOM_SCREENSHOT` · `CHE_PIXEL_VISUAL_DIFF` | session, `…-design.png` · `…-dom.png` · `…-visual-diff.png` | the gate §4.5 evidence: the design raster, the browser screenshot, and the composite. Nothing scores them, so nothing commits them |
+| `CHE_PIXEL_CROP_REPORT` · `CHE_PIXEL_CROP_SHEET` | session, `…-crop-report-attempt<N>.json` · `…-crop-sheet-attempt<N>.png` | the per-element crop (§4.5): same instrument narrowed to each element's box, because a whole-frame percentage is dominated by everything that is not the element. The report carries the attempt, since it is what says *which* element differs |
+
+`che pixel paths` refuses (`2`) when `--sub-product` has no design tree at `design/<sub_product>/`
+(create it with `che designer init`), when `--breakpoint` cannot name a file, when `--attempt` is below
+`1`, or when `worktree_root` is not a directory. It writes nothing itself.
 
 | Flag | Required | Meaning |
 | :--- | :------- | :------ |
-| `--map` | yes | `design-map.json`: `{element: {design_node, selector}}` — the **only** join between the two sides. |
-| `--dom` | yes | DOM facts, keyed by CSS selector. |
-| `--design-source` | one of | Raw design artefact: a `get_figma_data` response, or an OpenPencil `.op` file. |
+| `--sub-product` | yes | Sub-product slug; its design tree must already exist. |
+| `--breakpoint` | yes | Breakpoint label, e.g. `lg`. One map per breakpoint. |
+| `--backend` | yes | `figma` or `openpencil`. Decides what `CHE_PIXEL_DESIGN_RAW` points at — no inference (gate §3). `penpot` is a declared backend with no capture convention, so it is refused (`2`) with its reason rather than as an invalid choice. |
+| `--related-id` | no | Ticket/feature id; groups the session artifacts under one folder. |
+| `--attempt` | no | Pass number (default `1`); it becomes part of the report filename. |
+
+| Flag | Required | Meaning |
+| :--- | :------- | :------ |
+| `--map` | yes | `$CHE_PIXEL_MAP`: `{element: {design_node, selector}}` — the **only** join between the two sides. |
+| `--dom` | yes | `$CHE_PIXEL_DOM_FACTS`, keyed by CSS selector. Validated for shape and units before anything is scored; a malformed bag is refused (`2`) rather than scored. |
+| `--design-source` | one of | `$CHE_PIXEL_DESIGN_RAW`: the raw `get_figma_data` response, or an OpenPencil `.op` file. |
 | `--design` | one of | Design facts already extracted, keyed by design node id. |
-| `--design-backend` | with `--design-source` | `figma` or `openpencil`. **Never inferred** from the file — guessing picks the wrong extractor and yields plausible-but-wrong numbers. |
+| `--design-facts-out` | no | Write gate §4.1's per-element record here — pass `$CHE_PIXEL_DESIGN_FACTS`. It is committed beside the map **inside the worktree**, so it is the one output that deliberately bypasses the outside-worktree guard. Written only after the run is scored, so a refused run leaves no file. |
+| `--design-backend` | with `--design-source` | `figma` or `openpencil`. **Never inferred** from the file — guessing picks the wrong extractor and yields plausible-but-wrong numbers. `penpot` is *declared* by the UX domain but has no extractor (its MCP server exposes `execute_code`, not a fact export), so it is refused with that reason instead of an invalid-choice message. With `--design` it is provenance only, so any declared backend is accepted there. |
 | `--breakpoint` | no | Label recorded as report provenance. |
 | `--design-viewport` | no | Width the design frame was captured at, in px. |
 | `--dom-viewport` | no | Width the DOM was measured at, in px. A **mismatch** with `--design-viewport` is refused (`2`) rather than scored, because it makes every measurement meaningless. When either is omitted the report records `viewport_binding: "undeclared"`. |
-| `--out` | no | Write the JSON report atomically. |
+| `--attempt` | no | Pass number over this screen (default `1`). The retry budget is `2` — the first measurement plus one free retry (§5). A higher value is **refused** (`2`) unless `--override-reason` is given. |
+| `--override-reason` | no | The user's verbatim acceptance, recorded in the report. Required to exceed `--attempt 2`; empty means no override was claimed. |
+| `--out` | no | Write the JSON report atomically. `che-ship §0.9.5` sets the generic `$DOMAIN_GATE_REPORT` per gate — pass it when it exists, `$CHE_PIXEL_REPORT` standalone. |
 | `--json` | no | Print the full report instead of the one-line summary. |
 
-The report also carries `coverage` (the fraction of the gate's 14 categories the run actually verified),
-`unverified_categories` (their names — `margin` always, `position` from `.op`, `letter_spacing` from
-Figma), and the `viewport_binding`. A `PASS` should be quoted *with* those, never alone: the score is
-computed over the verified rows only, so `score=9.5` does not mean "visually identical".
+The report also carries `coverage` (the fraction of the gate's 18 reachable categories the run actually
+verified), `unverified_categories` (their names — `position` and `opacity` from `.op`,
+`letter_spacing` from Figma, `asset` wherever the map declares no digest), `unreachable_categories`
+(`margin`, held out of the fraction because no design backend emits one — see the gate §2.6), and the
+`viewport_binding`. A `PASS` should be quoted *with* those, never alone: the score is computed over the
+verified rows only, so `score=9.5` does not mean "visually identical".
 
 Exit codes — branch on these, not on the text:
 
