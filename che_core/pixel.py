@@ -37,6 +37,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from che_core.pixel_sources import COORD_FRAME_NONE, parse_figma_facts, parse_op_facts
+
 # --- Contract constants (mirror the gate §1 tolerances + §2 weights) ---------
 
 WEIGHT_CRITICAL = 2.0
@@ -240,6 +242,21 @@ class Report:
     elements: int = 0
     backend: str = ""
     reason: str = ""
+    #: Fraction of the gate's own category surface that this run actually checked,
+    #: i.e. `verified category keys / len(CATEGORIES)`. The denominator is the
+    #: spec itself and therefore fixed, so the number is comparable across runs
+    #: and across backends — which a row-level ratio is not, since normal
+    #: inapplicability (a frame has no font) would swamp it.
+    coverage: Optional[float] = None
+    #: Category keys that no element verified. This is the complement of
+    #: `coverage`, named so a PASS can disclose what it did not look at.
+    unverified_categories: List[str] = field(default_factory=list)
+    #: `ok` when both sides declared matching viewports, else `undeclared`. A
+    #: MISMATCH never reaches the report: it is refused as a usage error, because
+    #: it invalidates every measurement rather than one category.
+    viewport_binding: str = ""
+    design_viewport: Optional[int] = None
+    dom_viewport: Optional[int] = None
 
     @property
     def failures(self) -> List[Measurement]:
@@ -256,6 +273,11 @@ class Report:
             "elements_compared": self.elements,
             "backend": self.backend,
             "reason": self.reason,
+            "coverage": self.coverage,
+            "unverified_categories": self.unverified_categories,
+            "viewport_binding": self.viewport_binding,
+            "design_viewport": self.design_viewport,
+            "dom_viewport": self.dom_viewport,
             "thresholds": {
                 "pass_score_min": PASS_SCORE_MIN,
                 "pass_within_tolerance_pct": PASS_WITHIN_TOLERANCE_PCT,
@@ -354,6 +376,30 @@ def _is_text(design: Dict[str, Any]) -> bool:
     return True
 
 
+def _frame_problem(design: Dict[str, Any], actual: Dict[str, Any]) -> Optional[str]:
+    """Why `position` cannot be compared, or ``None`` when it can.
+
+    Coordinates only mean something inside a declared frame. The design side is
+    parent-relative (`locationRelativeToParent`) while the DOM side reports
+    `getBoundingClientRect()`, which is viewport-relative — so differencing the two
+    does not measure layout drift, it measures the distance between two unrelated
+    origins and reports it with a confident-looking number. That is a false FAIL
+    (and, on a coincidence, a false PASS), so the positions are not compared at all.
+
+    An undeclared frame is incomparable for the same reason: a comparison that
+    cannot be shown to be meaningful is not one.
+    """
+    design_frame = design.get("coord_frame")
+    actual_frame = actual.get("coord_frame")
+    if design_frame == COORD_FRAME_NONE:
+        return "coord_frame_absent"
+    if not design_frame or not actual_frame:
+        return "coord_frame_undeclared"
+    if design_frame != actual_frame:
+        return "coord_frame_mismatch"
+    return None
+
+
 def compare_element(
     key: str,
     design: Dict[str, Any],
@@ -394,7 +440,10 @@ def compare_element(
         if spec.key in ("box", "position"):
             origin_design = design.get(spec.prop) or {}
             origin_actual = actual.get(spec.prop) or {}
+            # None for `box` — width/height are frame-independent, only origin is not.
+            frame_problem = _frame_problem(design, actual) if spec.key == "position" else None
             for axis in spec.axes:
+                actual_value = origin_actual.get(axis)
                 if axis not in origin_design:
                     measurements.append(
                         Measurement(
@@ -402,7 +451,7 @@ def compare_element(
                             key,
                             axis,
                             None,
-                            origin_actual.get(axis),
+                            actual_value,
                             spec.tolerance,
                             spec.weight,
                             None,
@@ -412,7 +461,24 @@ def compare_element(
                     )
                     skipped.append({"category": spec.key, "element": key, "axis": axis, "reason": "absent_from_design"})
                     continue
-                emit(spec, axis, origin_design[axis], origin_actual.get(axis), spec.tolerance)
+                if frame_problem is not None:
+                    measurements.append(
+                        Measurement(
+                            spec.key,
+                            key,
+                            axis,
+                            origin_design[axis],
+                            actual_value,
+                            spec.tolerance,
+                            spec.weight,
+                            None,
+                            False,
+                            False,
+                        )
+                    )
+                    skipped.append({"category": spec.key, "element": key, "axis": axis, "reason": frame_problem})
+                    continue
+                emit(spec, axis, origin_design[axis], actual_value, spec.tolerance)
             continue
 
         if spec.kind == _KIND_PX_LIST:
@@ -526,6 +592,24 @@ def _unit_score(measurement: Measurement) -> float:
     return max(0.0, 1.0 - (measurement.deviation or 0.0) / measurement.tolerance)
 
 
+def _coverage(measurements: List[Measurement]) -> Tuple[float, List[str]]:
+    """How much of the gate's own category surface this run actually checked.
+
+    The denominator is :data:`CATEGORIES` — the spec itself — and not the number of
+    measurement rows, so the figure is comparable across runs and across backends.
+    A row-level ratio would be swamped by normal inapplicability (a frame has no
+    font, most text nodes have no explicit padding row), and would end up reporting
+    roughly the same number for a thorough run and a nearly blind one.
+
+    Returns ``(fraction, unverified_category_keys)``; the second element is the
+    complement of the first, in spec order, so it can only ever name categories
+    this gate actually declares.
+    """
+    verified = {m.category for m in measurements if m.verified}
+    unverified = [spec.key for spec in CATEGORIES if spec.key not in verified]
+    return round(len(verified) / len(CATEGORIES), 4), unverified
+
+
 def build_report(
     design_elements: Dict[str, Dict[str, Any]],
     dom_elements: Dict[str, Dict[str, Any]],
@@ -553,6 +637,7 @@ def build_report(
         skipped.extend(element_skipped)
 
     verified = [m for m in measurements if m.verified]
+    coverage, unverified_categories = _coverage(measurements)
     if not verified:
         return Report(
             verdict=VERDICT_INCONCLUSIVE,
@@ -564,6 +649,8 @@ def build_report(
             elements=len(design_elements),
             backend=backend,
             reason="no measurable property: the design source exposed nothing comparable",
+            coverage=coverage,
+            unverified_categories=unverified_categories,
         )
 
     total_weight = sum(m.weight for m in verified)
@@ -600,6 +687,8 @@ def build_report(
         skipped_categories=skipped,
         elements=len([k for k in design_elements if k in dom_elements]),
         backend=backend,
+        coverage=coverage,
+        unverified_categories=unverified_categories,
     )
 
     missing_from_dom = sorted({s["element"] for s in skipped if s["reason"] == "missing_from_dom"})
@@ -664,11 +753,18 @@ def summarise(report: Report) -> str:
     score = "n/a" if report.score is None else report.score
     within = "n/a" if report.within_tolerance_pct is None else report.within_tolerance_pct
     worst = "n/a" if report.max_critical_deviation_px is None else report.max_critical_deviation_px
-    return (
+    coverage = "n/a" if report.coverage is None else report.coverage
+    line = (
         f"[DOMAIN-GATE-EXECUTED] domain=ux gate=pixel-check-gate status={report.verdict} "
         f"score={score} within_4px_pct={within} deviation_max_px={worst} "
-        f"elements={report.elements} backend={report.backend or 'n/a'}"
+        f"elements={report.elements} coverage={coverage} viewport={report.viewport_binding or 'n/a'} "
+        f"backend={report.backend or 'n/a'}"
     )
+    # Named, not just counted: a PASS must be quotable together with the parts of the
+    # gate it did not reach, otherwise "PASS" reads as "everything was checked".
+    if report.unverified_categories:
+        line += f" unverified={','.join(report.unverified_categories)}"
+    return line
 
 
 # --- Gate runner (the join §3.3 exists for) ---------------------------------
@@ -683,12 +779,8 @@ def resolve_design_source(source: Path, backend: str, node_ids: Sequence[str]) -
     numbers, and §3's backend contract is fail-closed for the same reason.
     """
     if backend == "figma":
-        from che_core.pixel_sources import parse_figma_facts
-
         return parse_figma_facts(Path(source).read_text(encoding="utf-8"), node_ids)
     if backend == "openpencil":
-        from che_core.pixel_sources import parse_op_facts
-
         return parse_op_facts(Path(source), node_ids)
     raise ValueError(f"unknown design backend {backend!r}: expected 'figma' or 'openpencil'")
 
@@ -744,18 +836,34 @@ def run_check(
     *,
     backend: str = "",
     breakpoint: str = "",
+    design_viewport: Optional[int] = None,
+    dom_viewport: Optional[int] = None,
 ) -> Report:
     """Run the gate end to end: join both sides and apply §1/§2's rules.
 
     `design_facts` is keyed by design node id, `dom_facts` by CSS selector; both
     are the flat per-node form the extractors emit (not the §3.1 nested document,
     which is the human-facing record). `breakpoint` is carried into the report as
-    provenance only — the viewpoint is fixed by whoever extracted the facts.
+    provenance only.
+
+    The viewports are a precondition, not provenance. A design captured at 375px
+    compared against a DOM measured at 1440px is not a nearly-passing run — every
+    number it produces is meaningless, so that is refused here rather than scored
+    and reported with a reassuring score next to it.
     """
+    if design_viewport is not None and dom_viewport is not None and design_viewport != dom_viewport:
+        raise ValueError(
+            f"viewport mismatch: the design was captured at {design_viewport}px and the DOM was measured "
+            f"at {dom_viewport}px — no measurement between them is meaningful"
+        )
+
     design_elements, dom_elements = join_by_map(design_map, design_facts, dom_facts)
     report = build_report(design_elements, dom_elements, backend=backend)
     if breakpoint:
         report.reason = f"[{breakpoint}] {report.reason}".strip()
+    report.design_viewport = design_viewport
+    report.dom_viewport = dom_viewport
+    report.viewport_binding = "ok" if design_viewport is not None and design_viewport == dom_viewport else "undeclared"
     return report
 
 

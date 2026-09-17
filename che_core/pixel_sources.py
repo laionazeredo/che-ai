@@ -40,6 +40,14 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # --- shared helpers ---------------------------------------------------------
 
+#: Coordinates measured relative to the element's own parent/anchor. Figma's
+#: `locationRelativeToParent` is exactly this.
+COORD_FRAME_PARENT = "parent"
+
+#: Declares that no comparable coordinates exist for this node. An `.op` document
+#: is auto-layout: children are laid out by the tool, so they carry no x/y at all.
+COORD_FRAME_NONE = "none"
+
 _PX_RE = re.compile(r"^-?\d+(?:\.\d+)?px$")
 
 
@@ -177,9 +185,14 @@ def _op_node_facts(node: Dict[str, Any]) -> Dict[str, Any]:
     box_size = {k: v for k, v in (("width", width), ("height", height)) if v is not None}
     if box_size:
         facts["box_size"] = box_size
-    box_origin = {k: v for k, v in (("x", _px(node.get("x"))), ("y", _px(node.get("y")))) if v is not None}
-    if box_origin:
-        facts["box_origin"] = box_origin
+
+    # No `box_origin`: an `.op` document is an auto-layout tree. Children carry no
+    # coordinates at all (`fill_container` / `fit_content`), and the only node with
+    # an x/y is the root, sitting at its own origin. That 0,0 is not a measured
+    # position, so emitting it produced a guaranteed false FAIL the moment the DOM
+    # side reported a real viewport coordinate. Position is declared unobtainable
+    # here rather than approximated.
+    facts["coord_frame"] = COORD_FRAME_NONE
 
     padding = _shorthand(node.get("padding"))
     if padding is not None:
@@ -446,6 +459,11 @@ def _figma_node_facts(node: Dict[str, Any]) -> Dict[str, Any]:
     if box_size:
         facts["box_size"] = box_size
 
+    # Coordinates are declared with the frame they live in. The DOM side reports
+    # `getBoundingClientRect()` (viewport-relative), so without this the comparator
+    # would difference two different origins and emit a confident, meaningless
+    # number. See `_position_is_comparable`.
+    facts["coord_frame"] = COORD_FRAME_PARENT
     where = layout.get("locationRelativeToParent") if isinstance(layout.get("locationRelativeToParent"), dict) else {}
     box_origin = {k: v for k, v in (("x", _px(where.get("x"))), ("y", _px(where.get("y")))) if v is not None}
     if box_origin:

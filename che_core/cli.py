@@ -461,6 +461,18 @@ def main(argv=None):
         help="Extractor for --design-source. Never inferred from the file's shape.",
     )
     px_check.add_argument("--breakpoint", default="", help="Breakpoint label, recorded as report provenance.")
+    px_check.add_argument(
+        "--design-viewport",
+        type=int,
+        default=None,
+        help="Viewport width the design frame was captured at. Must agree with --dom-viewport when both are given.",
+    )
+    px_check.add_argument(
+        "--dom-viewport",
+        type=int,
+        default=None,
+        help="Viewport width the DOM was measured at. A mismatch with --design-viewport is refused, not scored.",
+    )
     px_check.add_argument("--out", default=None, help="Write the JSON report here (atomic, outside-worktree safe).")
     px_check.add_argument("--json", action="store_true", default=False, help="Print the full JSON report.")
 
@@ -691,7 +703,15 @@ def main(argv=None):
                 backend = args.design_backend
             if not isinstance(design_map, dict) or not isinstance(dom_facts, dict):
                 raise ValueError("--map and --dom must each contain a JSON object at the root")
-            report = run_check(design_map, design_facts, dom_facts, backend=backend, breakpoint=args.breakpoint)
+            report = run_check(
+                design_map,
+                design_facts,
+                dom_facts,
+                backend=backend,
+                breakpoint=args.breakpoint,
+                design_viewport=args.design_viewport,
+                dom_viewport=args.dom_viewport,
+            )
         except ValueError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             sys.exit(2)

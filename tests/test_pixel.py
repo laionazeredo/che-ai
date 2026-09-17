@@ -66,7 +66,6 @@ def test_op_parser_extracts_normalised_facts() -> None:
     # n1 is a frame: a 2-value CSS padding shorthand must broadcast to four sides.
     assert facts["n1"]["padding"] == [88.0, 84.0, 88.0, 84.0]
     assert facts["n1"]["box_size"] == {"width": 1080.0, "height": 1080.0}
-    assert facts["n1"]["box_origin"] == {"x": 0.0, "y": 0.0}
     assert facts["n1"]["bg"].startswith("#")
 
     # n4 is text: the .op backend is the only one that exposes letter-spacing.
@@ -79,6 +78,20 @@ def test_op_parser_extracts_normalised_facts() -> None:
     # n6 is a rectangle: a single cornerRadius broadcasts to all four corners.
     assert facts["n6"]["radius"] == [5.0, 5.0, 5.0, 5.0]
     assert facts["n6"]["box_size"] == {"width": 180.0, "height": 12.0}
+
+
+def test_op_parser_never_emits_a_position() -> None:
+    """An `.op` document is auto-layout: there are no coordinates to compare.
+
+    Only the root carries an x/y in the whole document, and it sits at its own
+    origin. Emitting that 0,0 as `box_origin` produced a guaranteed false FAIL
+    against any real `getBoundingClientRect()`, so the backend declares the frame
+    unobtainable instead of approximating one.
+    """
+    facts = parse_op_facts(OP_FIXTURE, ["n1", "n4"])
+
+    assert "box_origin" not in facts["n1"]
+    assert all(node["coord_frame"] == "none" for node in facts.values())
 
 
 def test_op_parser_omits_ids_that_are_not_in_the_document() -> None:
@@ -200,7 +213,14 @@ def test_delta_e_is_none_when_either_colour_is_unparseable() -> None:
 
 
 def _design(**overrides):
+    """A complete, comparable fact record — the shape both extractors aim to emit.
+
+    `coord_frame` is declared because positions are only comparable inside a frame:
+    without it the engine refuses to difference the origins, so `position` would be
+    unverified and every score computed from this fixture would be weights-shifted.
+    """
     base = {
+        "coord_frame": "parent",
         "box_size": {"width": 320.0, "height": 52.0},
         "box_origin": {"x": 480.0, "y": 220.0},
         "padding": [12.0, 24.0, 12.0, 24.0],
@@ -443,6 +463,102 @@ def test_report_json_is_serialisable_and_carries_the_thresholds() -> None:
     assert payload["thresholds"]["pass_critical_max_deviation_px"] == PASS_CRITICAL_MAX_DEVIATION_PX
 
 
+# --- Position is only comparable inside a declared frame ----------------------
+
+
+def test_a_position_is_refused_when_the_two_sides_use_different_origins() -> None:
+    """Design parent-relative vs DOM viewport-relative is not a layout defect.
+
+    A root design frame sits at its own origin while the DOM reports the element's
+    position in the viewport. Differencing them measures the distance between two
+    unrelated origins: the number looks confident, means nothing, and at ×1.5 it can
+    drag the run under the within-tolerance floor on its own.
+    """
+    design = _design(box_origin={"x": 0.0, "y": 0.0}, coord_frame="parent")
+    actual = _design(box_origin={"x": 480.0, "y": 220.0}, coord_frame="viewport")
+    report = build_report({"cta": design}, {"cta": actual}, backend="figma")
+
+    assert report.verdict == VERDICT_PASS  # not the false FAIL this used to produce
+    assert all(not m.verified for m in report.measurements if m.category == "position")
+    assert any(s["reason"] == "coord_frame_mismatch" for s in report.skipped_categories)
+    assert "position" in report.unverified_categories
+
+
+def test_a_position_without_a_declared_frame_is_not_compared() -> None:
+    """A comparison that cannot be shown to be meaningful is not one."""
+    design = _design()
+    del design["coord_frame"]
+    report = build_report({"cta": design}, {"cta": _design()}, backend="figma")
+
+    assert all(not m.verified for m in report.measurements if m.category == "position")
+    assert any(s["reason"] == "coord_frame_undeclared" for s in report.skipped_categories)
+
+
+def test_a_matching_declared_frame_permits_the_comparison() -> None:
+    """The guard must not become a way to never check position at all."""
+    report = build_report({"cta": _design()}, {"cta": _design(box_origin={"x": 480.0, "y": 250.0})})
+
+    origin = [m for m in report.measurements if m.category == "position"]
+    assert origin and all(m.verified for m in origin)
+    assert [m.deviation for m in origin] == [0.0, 30.0]
+
+
+# --- Viewport binding --------------------------------------------------------
+
+
+def test_a_viewport_mismatch_is_refused_rather_than_scored() -> None:
+    """375-vs-1440 does not make the numbers slightly wrong; it makes them meaningless."""
+    design_map = {"cta": {"design_node": "12:345", "selector": "#cta"}}
+    facts = {"12:345": _design()}
+
+    with pytest.raises(ValueError, match="viewport mismatch"):
+        run_check(design_map, facts, {"#cta": _design()}, design_viewport=375, dom_viewport=1440)
+
+
+def test_an_undeclared_viewport_is_recorded_not_assumed() -> None:
+    design_map = {"cta": {"design_node": "12:345", "selector": "#cta"}}
+    facts = {"12:345": _design()}
+
+    bound = run_check(design_map, facts, {"#cta": _design()}, design_viewport=1440, dom_viewport=1440)
+    assert bound.viewport_binding == "ok"
+    assert bound.design_viewport == 1440
+
+    silent = run_check(design_map, facts, {"#cta": _design()})
+    assert silent.viewport_binding == "undeclared"
+    assert silent.design_viewport is None
+
+
+# --- Coverage ----------------------------------------------------------------
+
+
+def test_coverage_counts_the_gate_surface_not_the_measurement_rows() -> None:
+    """`verified categories / len(CATEGORIES)`, so the figure is comparable.
+
+    A row-level ratio would be dominated by normal inapplicability — a frame has no
+    font, most text nodes carry no padding row — and would report roughly the same
+    number for a thorough run and a nearly blind one.
+    """
+    report = build_report({"cta": _design()}, {"cta": _design()}, backend="figma")
+
+    assert report.coverage == round(13 / 14, 4)  # only `margin` is unreachable by any backend
+    assert report.unverified_categories == ["margin"]
+
+
+def test_unverified_categories_name_what_a_pass_did_not_check() -> None:
+    """`score=9.5 status=PASS` must not be quotable as "everything was checked"."""
+    text_only = {"kind": "text", "font_size": 14.0}
+    report = build_report({"label": text_only}, {"label": dict(text_only)})
+
+    assert "padding" in report.unverified_categories
+    assert report.coverage == round(1 / 14, 4)
+    assert report.verdict == VERDICT_INCONCLUSIVE  # padding is ×2 and no element measured it
+
+    line = summarise(report)
+    assert " coverage=" in line
+    assert "unverified=" in line
+    assert "padding" in line
+
+
 # --- The map is the only join (§3.3) -----------------------------------------
 
 
@@ -578,6 +694,10 @@ def test_cli_writes_a_report_the_decision_log_can_quote(tmp_path: Path) -> None:
         str(OP_FIXTURE),
         "--design-backend",
         "openpencil",
+        "--design-viewport",
+        "1440",
+        "--dom-viewport",
+        "1440",
         "--out",
         str(out),
     )
@@ -587,6 +707,10 @@ def test_cli_writes_a_report_the_decision_log_can_quote(tmp_path: Path) -> None:
     assert payload["verdict"] == VERDICT_PASS
     assert payload["thresholds"]["pass_score_min"] == PASS_SCORE_MIN
     assert payload["summary"].startswith("[DOMAIN-GATE-EXECUTED] domain=ux gate=pixel-check-gate")
+    # The two declarations a reviewer needs to judge how much the PASS is worth.
+    assert payload["viewport_binding"] == "ok"
+    assert payload["coverage"] is not None
+    assert "position" in payload["unverified_categories"]  # `.op` has no coordinates
 
 
 def test_cli_refuses_a_design_source_without_a_backend(tmp_path: Path) -> None:
@@ -598,6 +722,32 @@ def test_cli_refuses_a_design_source_without_a_backend(tmp_path: Path) -> None:
 
     assert proc.returncode == 2
     assert "--design-backend" in proc.stderr
+
+
+def test_cli_refuses_a_viewport_mismatch_as_a_usage_error(tmp_path: Path) -> None:
+    """Refused, not scored: a mismatch invalidates every measurement, not one row."""
+    design_map = _write(tmp_path / "map.json", {"hero": {"design_node": "n1", "selector": "#hero"}})
+    dom = _write(tmp_path / "dom.json", {"#hero": {"kind": "frame", "padding": [1.0, 1.0, 1.0, 1.0]}})
+
+    proc = _run_cli(
+        "pixel",
+        "check",
+        "--map",
+        design_map,
+        "--dom",
+        dom,
+        "--design-source",
+        str(OP_FIXTURE),
+        "--design-backend",
+        "openpencil",
+        "--design-viewport",
+        "375",
+        "--dom-viewport",
+        "1440",
+    )
+
+    assert proc.returncode == 2
+    assert "viewport mismatch" in proc.stderr
 
 
 def test_cli_reports_an_unreadable_artefact_as_a_usage_error(tmp_path: Path) -> None:
