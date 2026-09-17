@@ -346,9 +346,16 @@ che pixel check \
 | `--design-source` | one of | Raw design artefact: a `get_figma_data` response, or an OpenPencil `.op` file. |
 | `--design` | one of | Design facts already extracted, keyed by design node id. |
 | `--design-backend` | with `--design-source` | `figma` or `openpencil`. **Never inferred** from the file — guessing picks the wrong extractor and yields plausible-but-wrong numbers. |
-| `--breakpoint` | no | Label recorded as report provenance. The viewport itself is fixed by whoever measured. |
+| `--breakpoint` | no | Label recorded as report provenance. |
+| `--design-viewport` | no | Width the design frame was captured at, in px. |
+| `--dom-viewport` | no | Width the DOM was measured at, in px. A **mismatch** with `--design-viewport` is refused (`2`) rather than scored, because it makes every measurement meaningless. When either is omitted the report records `viewport_binding: "undeclared"`. |
 | `--out` | no | Write the JSON report atomically. |
 | `--json` | no | Print the full report instead of the one-line summary. |
+
+The report also carries `coverage` (the fraction of the gate's 14 categories the run actually verified),
+`unverified_categories` (their names — `margin` always, `position` from `.op`, `letter_spacing` from
+Figma), and the `viewport_binding`. A `PASS` should be quoted *with* those, never alone: the score is
+computed over the verified rows only, so `score=9.5` does not mean "visually identical".
 
 Exit codes — branch on these, not on the text:
 
@@ -357,7 +364,7 @@ Exit codes — branch on these, not on the text:
 | `0` | `PASS` | The gate's three numeric conditions held. |
 | `1` | `FAIL` | A condition broke, **or** a designed element is absent from the DOM. |
 | `3` | `INCONCLUSIVE` | Could not be decided honestly: a critical category measured on no element, an element with no design reference, or nothing measurable at all. **Never a pass.** |
-| `2` | usage | Unreadable artefact, an incomplete map entry, an unknown backend, or a missing `--design-backend`. |
+| `2` | usage | Unreadable artefact, an incomplete map entry, an unknown backend, a missing `--design-backend`, or a **viewport mismatch**. |
 
 The summary line on stdout already matches the gate's `log_format_decisions`, so it can be passed
 straight to `che decision_append`.

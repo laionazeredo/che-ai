@@ -1,7 +1,7 @@
 ---
 gate_id: "ux-pixel-check-gate"
 domain: "ux"
-version: "0.3.0"
+version: "0.4.0"
 executable: true
 inspired_by_reference_skill: "Flockr official /figma-pixel-check skill (see domains/ux/profile.md cross-references) — NOTE: that skill is a NUMERIC token diff, not an image diff. Adopt its method: compare design properties against rendered properties, never screenshot against screenshot."
 threshold_pass: "score_0_to_10 ≥ 8.0  AND  pct_elements_within_4px_tolerance ≥ 95%  AND  no critical deviation > 8px"
@@ -9,7 +9,7 @@ threshold_single_critical_fail: "Any single critical element (CTA button, hero h
 tool_official: "§2 Execution runner: `che pixel check` (che_core/pixel.py). Design side: mcp_Figma_AI_Bridge.get_figma_data (Figma) or mcp_open-pencil.get_jsx/node_bounds/analyze_spacing/analyze_typography/analyze_colors (OpenPencil). Implementation side: mcp_Chrome_DevTools_MCP.evaluate_script (getBoundingClientRect + getComputedStyle)."
 tool_evidence_only: "Image diff (export_image + playwright_screenshot + pixelmatch) — attaches a human-readable artefact to the PR. NEVER the PASS/FAIL signal: whole-frame pixel deltas are dominated by text antialiasing/DPR/font-loading noise while being near-blind to a 2px radius error, which inverts the signal-to-noise ratio for exactly the deviations this gate exists to catch."
 retry_policy: "1 free automatic retry (fixes top 3 deviations / padding / radius / font-size). 2nd failure → HUMAN REQUIRED hard stop ship."
-log_format_decisions: "[DOMAIN-GATE-EXECUTED] domain=ux gate=pixel-check-gate status={PASS|FAIL|INCONCLUSIVE} score={x.y} within_4px_pct={0.xx} deviation_max_px={n} elements={n} backend={name} duration_ms={ms} traceId=..."
+log_format_decisions: "[DOMAIN-GATE-EXECUTED] domain=ux gate=pixel-check-gate status={PASS|FAIL|INCONCLUSIVE} score={x.y} within_4px_pct={0.xx} deviation_max_px={n} elements={n} coverage={0.xx} viewport={ok|undeclared} unverified={cat,cat} backend={name} duration_ms={ms} traceId=..."
 ---
 
 # Executable Gate — UX · Pixel Perfect (based on `/figma-pixel-check`)
@@ -80,6 +80,16 @@ rules **before** reading anything — typography rows are meaningless if a fallb
 
 Write `dom-facts.json` keyed by selector: `{"[data-design-node='12:345']": { ... }}`.
 
+**Two declarations are mandatory on every element**, because without them the comparator cannot tell a
+real match from a coincidence:
+
+- `coord_frame` — the origin the coordinates are relative to. `getBoundingClientRect()` is
+  **viewport**-relative while the design is **parent**-relative, so declaring `viewport` against a
+  `parent` reference is not a layout mismatch, it is two different origins subtracted. The engine
+  refuses to compare positions unless both sides declare the same frame (§4.4).
+- the element's `kind` — see §4.1. A frame has no font; without this the comparator reads that as a
+  ×2 category the design withheld and returns INCONCLUSIVE for the whole run.
+
 ### 2.4 Run the comparator
 
 ```bash
@@ -87,9 +97,16 @@ che pixel check \
   --map "$DESIGN_MAP" \
   --dom "$DOM_FACTS" \
   --design-source "$DESIGN_RAW" --design-backend figma \
+  --design-viewport "$DESIGN_WIDTH" --dom-viewport "$DOM_WIDTH" \
   --breakpoint lg \
   --out "$DOMAIN_GATE_REPORT"
 ```
+
+`--design-viewport` and `--dom-viewport` are the widths each side was captured at. When both are given
+and disagree the command **refuses** (exit `2`) rather than scoring: 375 compared against 1440 does not
+make the numbers slightly wrong, it makes every one of them meaningless. When either is omitted the
+report records `viewport=undeclared`, and a PASS from such a run is weaker evidence — it must say so in
+the PR.
 
 `design-map.json` (§4.3) is the only join between the two sides and is human-approved and frozen. An
 element missing from it is silent scope reduction: that element is simply never compared.
@@ -101,7 +118,7 @@ Branch on the exit code; do not parse the text.
 | `0` | `PASS` | The three §3 conditions held. |
 | `1` | `FAIL` | A §3 condition broke, **or** a designed element is absent from the DOM. |
 | `3` | `INCONCLUSIVE` | Could not be decided honestly — see §2.5. |
-| `2` | usage | Unreadable artefact, incomplete map entry, or an unknown backend. |
+| `2` | usage | Unreadable artefact, incomplete map entry, unknown backend, or a **viewport mismatch**. |
 
 ### 2.5 INCONCLUSIVE is never a pass
 
@@ -113,6 +130,28 @@ It means "could not verify", and `§0.9.5` MUST treat it as a hard stop rather t
 
 A category missing from *one* element is **not** a gap: a text node has no explicit padding row and a
 frame has no font, so those report `not_applicable` instead of escalating.
+
+### 2.6 `coverage` — what a PASS did not look at
+
+The score is computed over the rows that were **verified**, so a high score cannot mean "this page is
+visually identical". It means "among the properties that could be measured, the weighted match was
+high". `coverage` is the fraction of §1's own category surface that the run actually reached
+(`verified categories / 14`); `unverified` names the remainder.
+
+Both are on the summary line. A `PASS` **MUST** be quoted together with them in the PR description —
+`status=PASS score=9.5 coverage=0.21 unverified=padding,radius,position` is an honest statement, and
+`status=PASS score=9.5` alone is not.
+
+Coverage is deliberately **not** a PASS condition. The numerator moves with things that are nobody's
+fault (`.op` has no coordinates at all; the Figma bridge emits no `letterSpacing`), so a fixed floor
+would either never bind or block honest work — inventing a threshold for it would be exactly the
+unprincipled number this gate exists to avoid. Treat a low coverage as a prompt to widen the mapping
+or the fact set, not as a failure.
+
+Known blind spots today, all visible in `unverified`: `margin` (no backend exposes it), `position`
+(never from `.op`, and only when both sides declare the same frame), `letter_spacing` (never from
+Figma). Assets — images, SVGs, icons, font *family* — are outside §1 entirely: they are the subject of
+§6.
 
 > `executable: true` does not promise a verdict for every input. It promises a mechanism that runs —
 > and that says "I could not measure this" instead of inventing a PASS.
@@ -189,7 +228,7 @@ Two shapes exist, and they are not interchangeable:
 | Shape | Where | Consumed by |
 |---|---|---|
 | **Per-element record** (the JSON above, nested per breakpoint) | `design-facts.json`, for humans | the reviewer; the PR description |
-| **Flat per-node facts** (`{"<design_node>": {"padding": [...], "kind": "frame", …}}`) | in memory | `che pixel check` — `--design-source` extracts it from the raw artefact, or `--design` reads it pre-extracted |
+| **Flat per-node facts** (`{"<design_node>": {"kind": "frame", "coord_frame": "parent", "padding": [...], …}}`) | in memory | `che pixel check` — `--design-source` extracts it from the raw artefact, or `--design` reads it pre-extracted |
 
 The runner deliberately does not read the per-element record: it re-parses the raw `get_figma_data`
 / `.op` artefact on every run (§2.2), so the numbers it scores can never drift from the design file
@@ -200,7 +239,9 @@ flat, node-keyed form, not the nested one.
 
 Measure the live DOM — **never photograph it**. `mcp_Chrome_DevTools_MCP`:
 `navigate_page` → `resize_page`(breakpoint) → `evaluate_script` returning `getBoundingClientRect()`
-plus `getComputedStyle()` per selector, emitted in the §4.1 shape.
+plus `getComputedStyle()` per selector, emitted in the §4.1 shape. Every record must also carry the two
+declarations §2.3 requires — `kind` and `coord_frame` — since without them the comparator refuses the
+affected categories rather than scoring them.
 
 Determinism rules — without these the gate measures noise and the score is meaningless:
 
@@ -232,6 +273,16 @@ offline against frozen artefacts.
 It is code and not a judgement call on purpose: a model deciding whether 3px is "close enough" to 4px
 is exactly the subjectivity this gate forbids.
 
+Two refusals are built into it, both of which exist because a confident wrong number is worse than a
+missing one:
+
+- **Positions are only compared inside a matching declared frame.** The design side is parent-relative
+  and `getBoundingClientRect()` is viewport-relative; differencing them measures the distance between
+  two origins. An undeclared or disagreeing `coord_frame` leaves `position` unverified instead —
+  which is why a run against an `.op` document always reports `position` unverified, since an
+  auto-layout tree has no coordinates to give.
+- **A viewport mismatch is refused outright**, not scored and footnoted (§2.4).
+
 ### 4.5 Image diff (evidence only — never the verdict)
 
 `export_image` (design) + `playwright_screenshot` (implementation) composited into
@@ -255,3 +306,30 @@ is exactly the subjectivity this gate forbids.
 - ❌ Does not validate animations / motion → motion stays in `domains/ux/gates/motion-gate.md` (future phase 2, not created today).
 - ❌ Does not validate textual content copy → separate copywriting domain copy gate (future phase 2).
 - ❌ Does not replace A11y validation → run A11y Gate BEFORE this one. Correct layout with inaccessible content = Fail.
+
+### 6.1 It does not answer "is it identical to the Figma?"
+
+This is the most important limitation to read before quoting a PASS. §1 measures **geometry and text
+metrics on the elements you mapped**. That is a useful, strictly numeric subset — and it is not visual
+equivalence. A page can score 10.0 while being visibly wrong, because each of the following is outside
+§1 entirely. All of them were found by inspection, none of them is hypothetical:
+
+| Not measured | Consequence |
+|---|---|
+| **Images, SVGs, icons** | A wrong icon in the right box scores perfectly. Nothing compares asset identity, `object-fit`, crop, or an `<svg>`'s path data. |
+| **Font *family*** | §1 has font-size, weight, line-height and tracking — but no family. A different typeface with matching metrics scores 100 %. |
+| **Gradient and multi-fill** | `_first_color` reads only the *first* flat fill and returns nothing for a gradient, so the category is recorded unverified — it does not fail. A gradient design against a solid implementation passes as "not measured". |
+| **Element visibility** | Nothing checks `opacity`, `display`, `visibility`, clipping or occlusion. An element that is present, correctly sized, correctly positioned and invisible passes every row. |
+| **Paint order / z-index** | Two elements swapped in stacking order both keep their boxes, so both pass. |
+| **Alignment to the grid** | §1 #13 describes a 12-column check; the engine compares x/y to x/y, not to the grid. |
+| **Text reflow** | Where a line breaks is a visual property; equal computed styles wrap differently. Needs per-line rects, which are not collected. |
+| **Sub-tolerance drift** | 3px of padding everywhere, or a uniform 5px position shift, is inside tolerance on every row and invisible in the aggregate. |
+
+The image diff (§4.5) is the instrument that catches the first five, and it is deliberately **not** the
+PASS/FAIL signal — see `tool_evidence_only`. So the two methods have complementary blind spots and this
+gate machine-checks only one of them. When "identical to the design" is the actual requirement, the
+numeric gate is necessary and not sufficient: the reviewer still has to look at `pixel-visual-diff.png`,
+and closing the gap for real means per-element asset identity and a bounded per-element pixel crop.
+
+`coverage` (§2.6) is the honest summary of how much of the surface above was reached — not a substitute
+for it.
