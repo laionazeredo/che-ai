@@ -97,3 +97,53 @@ def test_a_disabled_gate_must_declare_what_is_missing() -> None:
         assert _frontmatter(gate).get("blocked_by", "").strip(), (
             f"{gate} sets `executable: false` without a `blocked_by:` reason."
         )
+
+
+def _headings(path: Path) -> List[str]:
+    return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.startswith("#")]
+
+
+def test_an_executable_gate_documents_the_steps_ship_follows() -> None:
+    """§0.9.5 step 3.c runs "EXACTLY the steps listed in the gate's 'Execution' section".
+
+    A gate declaring `executable: true` with no such section leaves ship with nothing
+    to follow — the gate is nominally runnable and still never runs, which is the
+    same end state as `executable: false` but without the honest skip.
+    """
+    missing = [
+        gate
+        for gate in _gate_files()
+        if _frontmatter(gate).get("executable") == "true"
+        and not any("Execution" in heading for heading in _headings(gate))
+    ]
+
+    assert not missing, f"gates declare `executable: true` with no Execution section: {missing}"
+
+
+def test_an_executable_gate_does_not_also_declare_a_blocker() -> None:
+    """The two declarations contradict each other; ship would skip a runnable gate."""
+    contradictory = [
+        gate
+        for gate in _gate_files()
+        if _frontmatter(gate).get("executable") == "true" and _frontmatter(gate).get("blocked_by", "").strip()
+    ]
+
+    assert not contradictory, f"gates claim `executable: true` while still declaring `blocked_by:`: {contradictory}"
+
+
+def test_the_pixel_gate_names_a_runner_this_repo_actually_ships() -> None:
+    """Its predecessor named a tool signature that could not exist.
+
+    The gate was declared executable while citing `diff_jsx(file_id, node_id,
+    actual_dom_screenshot)` — a signature with no such parameters — so the check is
+    against the real command, not against a plausible-looking recipe.
+    """
+    text = (_repo_root() / "domains" / "ux" / "gates" / "pixel-check-gate.md").read_text(encoding="utf-8")
+
+    assert "che pixel check" in text, "the Execution section must name the real runner"
+
+    for line in text.splitlines():
+        if "diff_jsx(" in line:
+            assert line.lstrip().startswith(">"), (
+                f"`diff_jsx` may only appear in the superseded-tool warning, never as an instruction: {line!r}"
+            )

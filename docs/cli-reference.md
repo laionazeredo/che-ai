@@ -116,6 +116,7 @@ pip uninstall che-ai
 | `export`     | (project → portable `.tar.gz`)                                     | Project  | Terminal CLI |
 | `import`     | (portable `.tar.gz` → project)                                     | Project  | Terminal CLI |
 | `eject`      | `plan`, `execute`, `restore`                                       | All      | Terminal CLI |
+| `pixel`      | `check`                                                            | Worktree | Terminal CLI |
 | plumbing     | `compute_paths`, `ensure_dirs`, `output_path`, `write_file_atomic`, `assert_outside_worktree`, `registry_append`, `registry_lookup`, `decision_append` | Any | Terminal CLI |
 
 ### 2.1 Help Discovery
@@ -319,6 +320,47 @@ Valid choices (see `che config --help` for the up-to-date list):
 | `--flags`         | Escape hatch (JSON)    | free-form object       | `{}`    |
 
 The canonical flags enum lives in `che_core/constants.py`. Always treat that file as SSoT — do **not** copy the flag list into docs, specs, or prompt templates.
+
+---
+
+### 3.4 Domain Gate CLI — `che pixel check`
+
+The runner behind `domains/ux/gates/pixel-check-gate.md`. It compares design properties against
+rendered DOM properties **numerically** — never screenshot against screenshot — and is the only
+supported way to execute that gate. See the gate's §2 Execution for the recipe that `che-ship §0.9.5`
+follows.
+
+```bash
+che pixel check \
+  --map "$DESIGN_MAP" \
+  --dom "$DOM_FACTS" \
+  --design-source "$DESIGN_RAW" --design-backend figma \
+  --breakpoint lg \
+  --out "$DOMAIN_GATE_REPORT"
+```
+
+| Flag | Required | Meaning |
+| :--- | :------- | :------ |
+| `--map` | yes | `design-map.json`: `{element: {design_node, selector}}` — the **only** join between the two sides. |
+| `--dom` | yes | DOM facts, keyed by CSS selector. |
+| `--design-source` | one of | Raw design artefact: a `get_figma_data` response, or an OpenPencil `.op` file. |
+| `--design` | one of | Design facts already extracted, keyed by design node id. |
+| `--design-backend` | with `--design-source` | `figma` or `openpencil`. **Never inferred** from the file — guessing picks the wrong extractor and yields plausible-but-wrong numbers. |
+| `--breakpoint` | no | Label recorded as report provenance. The viewport itself is fixed by whoever measured. |
+| `--out` | no | Write the JSON report atomically. |
+| `--json` | no | Print the full report instead of the one-line summary. |
+
+Exit codes — branch on these, not on the text:
+
+| Exit | Verdict | Meaning |
+| :--- | :------ | :------ |
+| `0` | `PASS` | The gate's three numeric conditions held. |
+| `1` | `FAIL` | A condition broke, **or** a designed element is absent from the DOM. |
+| `3` | `INCONCLUSIVE` | Could not be decided honestly: a critical category measured on no element, an element with no design reference, or nothing measurable at all. **Never a pass.** |
+| `2` | usage | Unreadable artefact, an incomplete map entry, an unknown backend, or a missing `--design-backend`. |
+
+The summary line on stdout already matches the gate's `log_format_decisions`, so it can be passed
+straight to `che decision_append`.
 
 ---
 

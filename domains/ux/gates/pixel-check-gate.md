@@ -1,16 +1,15 @@
 ---
 gate_id: "ux-pixel-check-gate"
 domain: "ux"
-version: "0.2.0"
-executable: false
-blocked_by: "The comparison engine does not exist yet. §3 states the real mechanism; until it is implemented there is no tool to run, so this gate must be SKIPPED (never passed) by che-ship §0.9.5."
+version: "0.3.0"
+executable: true
 inspired_by_reference_skill: "Flockr official /figma-pixel-check skill (see domains/ux/profile.md cross-references) — NOTE: that skill is a NUMERIC token diff, not an image diff. Adopt its method: compare design properties against rendered properties, never screenshot against screenshot."
-threshold_pass: "score_0_to_10 ≥ 8.0  AND  pct_elements_within_4px_tolerance ≥ 95%"
+threshold_pass: "score_0_to_10 ≥ 8.0  AND  pct_elements_within_4px_tolerance ≥ 95%  AND  no critical deviation > 8px"
 threshold_single_critical_fail: "Any single critical element (CTA button, hero heading) with deviation > 8px → FAIL, regardless of overall score."
-tool_official: "Design side: mcp_Figma_AI_Bridge.get_figma_data (Figma) or mcp_open-pencil.get_jsx/node_bounds/analyze_spacing/analyze_typography/analyze_colors (OpenPencil). Implementation side: mcp_Chrome_DevTools_MCP.evaluate_script (getBoundingClientRect + getComputedStyle)."
+tool_official: "§2 Execution runner: `che pixel check` (che_core/pixel.py). Design side: mcp_Figma_AI_Bridge.get_figma_data (Figma) or mcp_open-pencil.get_jsx/node_bounds/analyze_spacing/analyze_typography/analyze_colors (OpenPencil). Implementation side: mcp_Chrome_DevTools_MCP.evaluate_script (getBoundingClientRect + getComputedStyle)."
 tool_evidence_only: "Image diff (export_image + playwright_screenshot + pixelmatch) — attaches a human-readable artefact to the PR. NEVER the PASS/FAIL signal: whole-frame pixel deltas are dominated by text antialiasing/DPR/font-loading noise while being near-blind to a 2px radius error, which inverts the signal-to-noise ratio for exactly the deviations this gate exists to catch."
 retry_policy: "1 free automatic retry (fixes top 3 deviations / padding / radius / font-size). 2nd failure → HUMAN REQUIRED hard stop ship."
-log_format_decisions: "[DOMAIN-GATE-EXECUTED] domain=ux gate=pixel-check-gate status={PASS|FAIL} score={x.y} within_4px_pct={0.xx} deviation_max_px={n} duration_ms={ms} traceId=..."
+log_format_decisions: "[DOMAIN-GATE-EXECUTED] domain=ux gate=pixel-check-gate status={PASS|FAIL|INCONCLUSIVE} score={x.y} within_4px_pct={0.xx} deviation_max_px={n} elements={n} backend={name} duration_ms={ms} traceId=..."
 ---
 
 # Executable Gate — UX · Pixel Perfect (based on `/figma-pixel-check`)
@@ -19,23 +18,13 @@ log_format_decisions: "[DOMAIN-GATE-EXECUTED] domain=ux gate=pixel-check-gate st
 
 ---
 
-## Executability status — READ THIS BEFORE ATTEMPTING
-
-**This gate has no working tool path yet.** `executable: false`.
-
-Do NOT attempt to run it, and do NOT report a PASS: a skipped gate reported as passed is worse than no gate at all. `che-ship §0.9.5` must skip it and log `DOMAIN-GATE-SKIPPED-NOT-IMPLEMENTED`.
-
-What is missing is the **engine**, not the thresholds. §1's tolerances, §2's scoring and §4's retry policy are complete and correct — they are the specification. §3 describes the mechanism that must be built to execute them.
-
----
-
-## 0. Prerequisites (what a working engine will need)
+## 0. Prerequisites
 
 - Valid design reference: a Figma `node_id` or an OpenPencil `.op` node id. NOT "any image".
 - Code implementation running locally (Next.js build or dev server).
 - Design-side MCP: `mcp_Figma_AI_Bridge` (`figma`) or `mcp_open-pencil` (`openpencil`).
 - Implementation-side MCP: `mcp_Chrome_DevTools_MCP`.
-- A `design-map.json` plus matching `data-design-node` attributes in the JSX (§3.3).
+- A `design-map.json` plus matching `data-design-node` attributes in the JSX (§4.3).
 - Evidence only, never the verdict: `pixelmatch` + `pngjs`, installed with the project's own package manager.
 
 ---
@@ -62,7 +51,75 @@ For each unique node/frame = a page / screen / component, we measure these absol
 
 ---
 
-## 2. Final Score 0–10 (weighted average by importance)
+## 2. Execution (the standard recipe)
+
+`che-ship §0.9.5` runs these steps verbatim. The comparator is code, never a model — see §4.4.
+
+### 2.1 Bring the implementation up
+
+Serve the app on a fixed origin and keep it up for the whole run. A production build is preferred
+over a dev server: dev overlays inject DOM nodes the design does not have.
+
+```bash
+corepack pnpm --filter <app> dev   # or build + start
+```
+
+### 2.2 Capture the design side
+
+`mcp_Figma_AI_Bridge.get_figma_data(fileKey, nodeId)` for `figma`, or `mcp_open-pencil.get_jsx` /
+`node_bounds` / `analyze_*` for `openpencil` — the backend frozen in `design-map.json`, never both.
+
+Save the **raw** response (the `get_figma_data` text, or the `.op` document). The runner re-parses it
+on every run, so the reference is never a hand-copied transcription that drifts from its source.
+
+### 2.3 Measure the DOM side
+
+`mcp_Chrome_DevTools_MCP`: `navigate_page` → `resize_page`(breakpoint) → `evaluate_script`
+returning `getBoundingClientRect()` + `getComputedStyle()` per selector. Apply §4.2's determinism
+rules **before** reading anything — typography rows are meaningless if a fallback font was measured.
+
+Write `dom-facts.json` keyed by selector: `{"[data-design-node='12:345']": { ... }}`.
+
+### 2.4 Run the comparator
+
+```bash
+che pixel check \
+  --map "$DESIGN_MAP" \
+  --dom "$DOM_FACTS" \
+  --design-source "$DESIGN_RAW" --design-backend figma \
+  --breakpoint lg \
+  --out "$DOMAIN_GATE_REPORT"
+```
+
+`design-map.json` (§4.3) is the only join between the two sides and is human-approved and frozen. An
+element missing from it is silent scope reduction: that element is simply never compared.
+
+Branch on the exit code; do not parse the text.
+
+| Exit | Verdict | Meaning |
+|---|---|---|
+| `0` | `PASS` | The three §3 conditions held. |
+| `1` | `FAIL` | A §3 condition broke, **or** a designed element is absent from the DOM. |
+| `3` | `INCONCLUSIVE` | Could not be decided honestly — see §2.5. |
+| `2` | usage | Unreadable artefact, incomplete map entry, or an unknown backend. |
+
+### 2.5 INCONCLUSIVE is never a pass
+
+It means "could not verify", and `§0.9.5` MUST treat it as a hard stop rather than a skip-to-green:
+
+- a critical (×2) category was measured on **no** element — the design source withheld it;
+- a declared element has **no** design reference — usually a stale `design_node` or the wrong backend;
+- nothing at all was measurable, so the two artefacts share no comparable property.
+
+A category missing from *one* element is **not** a gap: a text node has no explicit padding row and a
+frame has no font, so those report `not_applicable` instead of escalating.
+
+> `executable: true` does not promise a verdict for every input. It promises a mechanism that runs —
+> and that says "I could not measure this" instead of inventing a PASS.
+
+---
+
+## 3. Final Score 0–10 (weighted average by importance)
 
 Each element above has a different WEIGHT for the score (more important = higher penalty if wrong):
 
@@ -86,21 +143,21 @@ final_score_0_10 = round(weighted_score × 10, 1)
 
 ---
 
-## 3. Mechanism (specification — NOT yet implemented)
+## 4. Mechanism — the artifact contracts
 
-> ⚠️ Everything below describes **what must be built**. No step here is runnable today.
->
 > **Superseded (do not use):** earlier versions of this file declared the primary tool as
 > `mcp_open-pencil.diff_jsx(file_id, node_id, actual_dom_screenshot)`. That signature does not exist.
 > The real `diff_jsx(from, to, document_id?, page_id?)` is a *structural* diff between two nodes of the
 > same document — it reports added/removed children and changed props, never measurements, and it
 > cannot see the DOM at all. The `figma-cli` fallback was equally fictional: Figma ships no official
-> CLI, and the official integration is the MCP bridge.
+> CLI, and the official integration is the MCP bridge. Kept as a warning: a plausible-looking tool
+> signature that nothing can execute is how this gate came to be declared "executable" while being
+> impossible to run.
 
 The gate compares **numbers, not pictures**. §1's 13 categories are properties; both sides must be
 reduced to the same property schema before any comparison happens.
 
-### 3.1 Reference side → `design-facts.json`
+### 4.1 Reference side → `design-facts.json`
 
 | Backend | Tools | Output |
 |---|---|---|
@@ -127,11 +184,23 @@ engines. Schema (one entry per element per breakpoint):
 
 Text and git-diffable on purpose: it is the artefact a PR reviewer can actually check.
 
-### 3.2 Implementation side → `dom-facts.json`
+Two shapes exist, and they are not interchangeable:
+
+| Shape | Where | Consumed by |
+|---|---|---|
+| **Per-element record** (the JSON above, nested per breakpoint) | `design-facts.json`, for humans | the reviewer; the PR description |
+| **Flat per-node facts** (`{"<design_node>": {"padding": [...], "kind": "frame", …}}`) | in memory | `che pixel check` — `--design-source` extracts it from the raw artefact, or `--design` reads it pre-extracted |
+
+The runner deliberately does not read the per-element record: it re-parses the raw `get_figma_data`
+/ `.op` artefact on every run (§2.2), so the numbers it scores can never drift from the design file
+they came from. `--design` exists for the case where the extraction already happened; it expects the
+flat, node-keyed form, not the nested one.
+
+### 4.2 Implementation side → `dom-facts.json`
 
 Measure the live DOM — **never photograph it**. `mcp_Chrome_DevTools_MCP`:
 `navigate_page` → `resize_page`(breakpoint) → `evaluate_script` returning `getBoundingClientRect()`
-plus `getComputedStyle()` per selector, emitted in the §3.1 schema.
+plus `getComputedStyle()` per selector, emitted in the §4.1 shape.
 
 Determinism rules — without these the gate measures noise and the score is meaningless:
 
@@ -142,7 +211,7 @@ Determinism rules — without these the gate measures noise and the score is mea
 - browser version and font files pinned — a font substitution invalidates every typography row
 - non-deterministic subtrees excluded via the map (avatars, timestamps, maps, ads, user content)
 
-### 3.3 Element map → `design-map.json`
+### 4.3 Element map → `design-map.json`
 
 Design node → DOM element cannot be inferred reliably, so it is declared once, approved by a human,
 and frozen as regression. Add `data-design-node="12:345"` in the JSX so the map is self-documenting
@@ -152,32 +221,36 @@ in the code.
 { "cta-button": { "design_node": "12:345", "selector": "[data-design-node='12:345']" } }
 ```
 
-### 3.4 Comparator → pure function, no LLM
+### 4.4 Comparator → pure function, no LLM
 
-`compare(design_facts, dom_facts, design_map) -> deviations[] + score`, applying §1's tolerances and
-§2's weights and PASS conditions verbatim, then writing `pixel-check-report.json`. It must be code:
-§2 permits no judgement call, and a model deciding whether 3px is "close enough" to 4px is exactly the
-subjectivity this gate forbids.
+Implemented in `che_core/pixel.py` and invoked as `che pixel check` (§2.4). The functional core is
+pure: it takes the two fact maps and the map, and returns deviations plus a score, applying §1's
+tolerances and §3's weights and PASS conditions verbatim. All I/O — fetching the design, measuring
+the browser, writing the report — happens in the caller, which is what makes the comparator testable
+offline against frozen artefacts.
 
-### 3.5 Image diff (evidence only — never the verdict)
+It is code and not a judgement call on purpose: a model deciding whether 3px is "close enough" to 4px
+is exactly the subjectivity this gate forbids.
+
+### 4.5 Image diff (evidence only — never the verdict)
 
 `export_image` (design) + `playwright_screenshot` (implementation) composited into
 `pixel-visual-diff.png` for the reviewer's eye. Useful, and never the PASS/FAIL signal — see
 `tool_evidence_only` in the frontmatter for why.
 
-
 ---
 
-## 4. Retry Policy (same as A11y gate)
+## 5. Retry Policy (same as A11y gate)
 | Failure # | Action |
 |---|---|
-| **1st failure** | **FREE AUTOMATIC Retry**: Take the 3 measurements with HIGHEST deviation (top 3) and apply the obvious fix (padding: 12→16, radius: 4→8, color: #...). Re-run the gate ONE more time. |
+| **1st failure** | **FREE AUTOMATIC Retry**: Take the 3 measurements with HIGHEST deviation (top 3 — `che pixel check` prints them as `fix:` lines, worst first) and apply the obvious fix (padding: 12→16, radius: 4→8, color: #...). Re-run the gate ONE more time. |
 | **2nd failure** (after automatic retry) | **HARD STOP ship §0.9.5 DOMAIN GATES.** Do not open PR. Message: "GATE G-UX-2 PIXEL FAIL after retry. Current score = {s} ≥8.0? N. Top 3 deviations: [...]. Manual fix or EXPLICIT_OVERRIDE VERBATIM user logged in decisions.log." |
+| **INCONCLUSIVE** (exit `3`) | Treated as a HARD STOP, not a skip. The gate could not measure, so there is no score to retry against — resolve what §2.5 names (missing reference, withheld category, wrong backend) and re-run. Never override to PASS: the override exists for a *measured* disagreement, not for a missing measurement. |
 | **EXPLICIT_OVERRIDE (ONLY user VERBATIM)** | `[EXPLICIT_OVERRIDE] domain=ux gate=pixel-check-gate old=8.0 new={x.y} reason="..."` |
 
 ---
 
-## 5. What this gate DOES NOT do (delimited purpose, KISS)
+## 6. What this gate DOES NOT do (delimited purpose, KISS)
 - ❌ Does not evaluate "visual beauty" / personal taste → only numerical deviation.
 - ❌ Does not validate animations / motion → motion stays in `domains/ux/gates/motion-gate.md` (future phase 2, not created today).
 - ❌ Does not validate textual content copy → separate copywriting domain copy gate (future phase 2).

@@ -16,5 +16,6 @@
 > sends the next agent down a path that cannot work.
 >
 > Pattern copy (structure + thresholds) from: `domains/ux/gates/pixel-check-gate.md`.
-> Note that its comparison engine is **not implemented** (`executable: false`) — copy its §1/§2
-> tolerances and scoring, not its §3 mechanism.
+> It is now `executable: true` and runnable via `che pixel check`, so its §1/§2 tolerances **and** its
+> §2 Execution recipe are both worth copying. Copy the shape, not the numbers: tolerances and weights
+> must come from the gate's own §1 table.
