@@ -1,7 +1,8 @@
 ---
 gate_id: "ux-accessibility-gate"
 domain: "ux"
-version: "0.1.0"
+version: "0.2.0"
+executable: true
 threshold_hard_stop: "CRITICAL_count > 0 → HARD FAIL"
 tool_official: "@axe-core/cli (npm package by Deque Systems, official WCAG maintainer)"
 tool_package_manager: "npm"
@@ -60,11 +61,16 @@ corepack pnpm nx run @flockr/platform:build
 # [STEP 2/3] Run @axe-core/cli pointing to page (URL or built HTML)
 #     EXPLICIT ruleset = wcag22aa (never mixed with default "best practices")
 #     Output: Structured JSON + visual HTML for humans
-corepack pnpm axe --chromedriver-path $(corepack pnpm exec which playwright-chromium) \
+#     NOTE: @axe-core/cli drives a chromedriver, which is NOT the same binary as
+#     Playwright's bundled chromium — the previous `--chromedriver-path $(pnpm exec
+#     which playwright-chromium)` substitution resolved nothing and the gate could
+#     not run. Let the CLI resolve its own driver, or pass --chromedriver-path
+#     pointing at a real chromedriver. Verify against the installed version.
+corepack pnpm axe \
   --rules wcag22aa \
   --tags wcag2a,wcag2aa,wcag22a,wcag22aa \
   --format json \
-  --output-dir $CHE_SESSION_DIR/reports/ \
+  --output-dir "$CHE_SESSION_DIR/reports/" \
   --save accessibility-report.json \
   http://localhost:3000/<page-slug>
 
