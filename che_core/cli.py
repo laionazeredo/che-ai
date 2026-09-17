@@ -645,6 +645,45 @@ def main(argv=None):
     px_paths.add_argument("--related-id", default="", help="Ticket/feature id, used to group the session artifacts")
     px_paths.add_argument("--attempt", type=int, default=1, help="Pass number; it is part of the report filename")
 
+    px_diff = pixel_subs.add_parser(
+        "diff",
+        help="§4.5 whole-frame diff (evidence only). Writes the picture; never exits non-zero on a difference.",
+    )
+    px_diff.add_argument("--design", required=True, help="Design raster, e.g. $CHE_PIXEL_DESIGN_IMAGE")
+    px_diff.add_argument("--dom", required=True, help="Implementation screenshot, e.g. $CHE_PIXEL_DOM_SCREENSHOT")
+    px_diff.add_argument("--out", required=True, help="Where to write the diff PNG, e.g. $CHE_PIXEL_VISUAL_DIFF")
+    px_diff.add_argument(
+        "--threshold",
+        type=float,
+        default=0.1,
+        help="pixelmatch matching threshold (0-1); smaller is more sensitive. §4.5 fixes it at 0.1.",
+    )
+    px_diff.add_argument("--json", action="store_true", default=False, help="Print the numbers as JSON.")
+
+    px_crop = pixel_subs.add_parser(
+        "crop",
+        help="§4.5 per-element crops (evidence only). Writes the report and, optionally, the strip.",
+    )
+    px_crop.add_argument("--design", required=True, help="Design raster, e.g. $CHE_PIXEL_DESIGN_IMAGE")
+    px_crop.add_argument("--dom", required=True, help="Implementation screenshot, e.g. $CHE_PIXEL_DOM_SCREENSHOT")
+    px_crop.add_argument(
+        "--map",
+        required=True,
+        help="design-map.json, each entry carrying a `design_box` in the design image's own pixels.",
+    )
+    px_crop.add_argument("--dom-facts", required=True, help="dom-facts.json, keyed by CSS selector.")
+    px_crop.add_argument("--out", required=True, help="Where to write the report JSON, e.g. $CHE_PIXEL_CROP_REPORT")
+    px_crop.add_argument(
+        "--sheet",
+        default=None,
+        help=(
+            "Where to write the design|implementation|diff strip, e.g. $CHE_PIXEL_CROP_SHEET. "
+            "Omitted when every element was refused, so `sheet` in the report names only a real file."
+        ),
+    )
+    px_crop.add_argument("--threshold", type=float, default=0.1, help="pixelmatch matching threshold (0-1).")
+    px_crop.add_argument("--json", action="store_true", default=False, help="Print the report as JSON.")
+
     args = parser.parse_args(argv)
 
     if args.command == "compute_paths":
@@ -861,6 +900,72 @@ def main(argv=None):
                 args.attempt,
             ).items():
                 print(f'export {key}="{value}"')
+            return
+
+        if args.pixel_cmd == "diff":
+            from che_core.pixel_visual import frame_diff, save_rgba
+
+            try:
+                output, differing, refusal = frame_diff(args.design, args.dom, args.threshold)
+            except (OSError, ValueError) as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                sys.exit(2)
+            if refusal is not None or output is None:
+                # §4.5: differing sizes are refused rather than scored, because the number
+                # `pixelmatch` would return is computed against the wrong pixels. Bad input → 2.
+                print(f"Error: {refusal}", file=sys.stderr)
+                sys.exit(2)
+
+            save_rgba(output, args.out)
+            counted = int(output.shape[0] * output.shape[1])
+            antialiased = int(((output[..., 0] == 255) & (output[..., 1] == 255) & (output[..., 2] == 0)).sum())
+            payload = {
+                "design_image": str(args.design),
+                "dom_image": str(args.dom),
+                "pixelmatch_threshold": args.threshold,
+                "diff_image": str(args.out),
+                "pixels": counted,
+                "differing_pixels": differing,
+                "antialiased_pixels": antialiased,
+                "ratio": 0 if counted == 0 else round(differing / counted, 6),
+            }
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"{100.0 * differing / counted:.2f}% of pixels differ ({differing}/{counted})")
+                print("Evidence only, never a verdict: this ratio is not a threshold (§4.5).")
+            # Deliberately exit 0: a screen that differs is the finding, not a failure to run.
+            return
+
+        if args.pixel_cmd == "crop":
+            from che_core.pixel_visual import build_crop_report, public_crop_report, render_crop_sheet, save_rgba
+
+            try:
+                report = build_crop_report(
+                    args.design,
+                    args.dom,
+                    args.map,
+                    args.dom_facts,
+                    args.threshold,
+                    # Progress goes to stderr so `--json` keeps stdout parseable, and so a
+                    # refusal reaches the operator's eye rather than only the report file.
+                    log=lambda line: print(line, file=sys.stderr),
+                )
+            except (OSError, ValueError) as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                sys.exit(2)
+
+            sheet = render_crop_sheet(report) if args.sheet else None
+            if sheet is not None and args.sheet:
+                save_rgba(sheet, args.sheet)
+            payload = public_crop_report(report, sheet is not None, args.sheet)
+            write_file_atomic(args.out, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
+            if args.json:
+                _print_json(payload)
+            else:
+                print(f"{payload['compared']} of {len(payload['elements'])} element(s) compared")
+                print(f"report: {args.out}" + (f" · sheet: {args.sheet}" if payload["sheet"] else ""))
+                print("Evidence only, never a verdict: the ratios are not pass marks (§4.5).")
             return
 
         if args.pixel_cmd != "check":

@@ -25,7 +25,8 @@ log_format_decisions: "[DOMAIN-GATE-EXECUTED] domain=ux gate=pixel-check-gate st
 - Design-side MCP: `mcp_Figma_AI_Bridge` (`figma`) or `mcp_open-pencil` (`openpencil`).
 - Implementation-side MCP: `mcp_Chrome_DevTools_MCP`.
 - A `$CHE_PIXEL_MAP` (§2.4) plus matching `data-design-node` attributes in the JSX (§4.3).
-- Evidence only, never the verdict: `pixelmatch` + `pngjs`, resolved from a scratch directory (§4.5).
+- Evidence only, never the verdict: `che pixel diff` + `che pixel crop` (§4.5). The pixelmatch port is
+  the only code in Che outside the standard library; `Pillow` and `numpy` come with the CLI install.
 
 ---
 
@@ -453,52 +454,35 @@ the comparison is numeric, and a whole-frame delta is deliberately not a PASS/FA
 (`tool_evidence_only`, §6.1). The step is **manual**, and a manual step that nobody records is a step
 nobody takes, so the PR must name `$CHE_PIXEL_VISUAL_DIFF` when it exists — and say so when it does not.
 
-Both sides are rasterised at the same declared width (§2.3), and their sizes must agree: `pixelmatch`
-returns nonsense rather than an error when they do not, which is the one way this evidence can lie.
+Both sides are rasterised at the same declared width (§2.3), and their sizes must agree: a comparison
+across two sizes returns a number computed against the wrong pixels rather than an error, which is the
+one way this evidence can lie. `che pixel diff` refuses that case (exit 2) rather than producing it.
 
 | Side | Tool | Target |
 |---|---|---|
 | design | `mcp_open-pencil.export_image` (scale 2) or `mcp_Figma_AI_Bridge.download_figma_images` | `$CHE_PIXEL_DESIGN_IMAGE` |
 | implementation | `mcp_Chrome_DevTools_MCP.take_screenshot` at the §2.3 viewport | `$CHE_PIXEL_DOM_SCREENSHOT` |
 
-`pixelmatch` + `pngjs` are the PNG decoder and the per-pixel comparison. Che cannot supply them: it has no
-Node runtime of its own — `assets/dom-facts-extractor.js` is a payload the browser evaluates, not a
-program Che runs — and adding a Node toolchain to the harness for one evidence picture would be a
-dependency the gate does not need. They come from a directory that has them, because
-`node --input-type=module -` resolves bare specifiers from the working directory and **not** from the
-script's own location.
-
-That directory is a scratch one, **never the project under test**: the gate must not edit the
-`package.json` of the repository it is judging, and a dev dependency added for a picture that no verdict
-reads would outlive the run that needed it.
-
 ```bash
-SCRATCH="$(mktemp -d)" && cd "$SCRATCH" && npm install --silent pixelmatch pngjs
-
-node --input-type=module - "$CHE_PIXEL_DESIGN_IMAGE" "$CHE_PIXEL_DOM_SCREENSHOT" "$CHE_PIXEL_VISUAL_DIFF" <<'JS'
-import { readFileSync, writeFileSync } from "node:fs";
-import { PNG } from "pngjs";
-import pixelmatch from "pixelmatch";
-
-const [designPath, domPath, outPath] = process.argv.slice(2);
-const design = PNG.sync.read(readFileSync(designPath));
-const dom = PNG.sync.read(readFileSync(domPath));
-if (design.width !== dom.width || design.height !== dom.height) {
-  console.error(`refusing: design is ${design.width}x${design.height}, DOM is ${dom.width}x${dom.height}`);
-  process.exit(2);
-}
-const diff = new PNG({ width: design.width, height: design.height });
-const changed = pixelmatch(design.data, dom.data, diff.data, design.width, design.height, { threshold: 0.1 });
-writeFileSync(outPath, PNG.sync.write(diff));
-console.log(`${((100 * changed) / (design.width * design.height)).toFixed(2)}% of pixels differ`);
-JS
+che pixel diff \
+  --design "$CHE_PIXEL_DESIGN_IMAGE" --dom "$CHE_PIXEL_DOM_SCREENSHOT" \
+  --out "$CHE_PIXEL_VISUAL_DIFF"
 ```
+
+The comparison is `pixelmatch` 7.2.0's: a YIQ colour distance (Kotsarenko & Ramos) gated by an
+anti-aliasing detector (Vysniauskas, 2009). `che_core/pixel_visual.py` is a port of it, and
+`tests/test_pixel_visual.py` holds that port to the package's own counts — so the picture is the one the
+npm tool drew, without a Node toolchain in the harness and without adding a dev dependency to the
+repository being judged.
+
+Differing sizes are the only non-zero exit. A screen that differs is the finding, not a failure to run:
+nothing reads this file.
 
 The percentage is **not** a threshold and must never be quoted as one: dominant causes are text
 antialiasing, DPR and font-loading, while a 2px radius error barely moves it. The file is for the
 reviewer's eye, and the number is for context.
 
-#### Per element — `assets/per-element-pixel-crop.mjs`
+#### Per element — `che pixel crop`
 
 The frame delta above answers "did this screen change". It cannot answer "which element", because its
 percentage is dominated by the noise of everything that is not the element you are asking about. The
@@ -506,14 +490,13 @@ crop is the same instrument narrowed to one box, and it is what makes the residu
 `object-fit`, crop, `<svg>` path data, reflow, paint order — readable at all.
 
 It is still **evidence**: nothing scores it, it never exits non-zero on a difference, and its ratio is
-not a pass mark. Run it from the same scratch directory as above, so `pngjs`/`pixelmatch` resolve there:
+not a pass mark.
 
 ```bash
-node --input-type=module - \
+che pixel crop \
   --design "$CHE_PIXEL_DESIGN_IMAGE" --dom "$CHE_PIXEL_DOM_SCREENSHOT" \
   --map "$CHE_PIXEL_MAP" --dom-facts "$CHE_PIXEL_DOM_FACTS" \
-  --out "$CHE_PIXEL_CROP_REPORT" --sheet "$CHE_PIXEL_CROP_SHEET" \
-  < domains/ux/gates/assets/per-element-pixel-crop.mjs
+  --out "$CHE_PIXEL_CROP_REPORT" --sheet "$CHE_PIXEL_CROP_SHEET"
 ```
 
 Two things it needs that no other step does, both stated rather than inferred:
@@ -529,9 +512,9 @@ Two things it needs that no other step does, both stated rather than inferred:
   invent the pixels it then compares and would erase the size drift, which is itself the finding.
 
 Rows in the sheet follow the JSON's `elements` order — that is the legend, since drawing labels would
-mean shipping a font to a tool whose whole point is not to add a dependency. Every element keeps its
-row: an element that was refused renders blank and its reason is in the JSON, so the strip never
-shifts a picture onto the wrong element and "could not measure" never looks like "matched".
+mean shipping a font to a tool that draws pixels, not type. Every element keeps its row: an element
+that was refused renders blank and its reason is in the JSON, so the strip never shifts a picture onto
+the wrong element and "could not measure" never looks like "matched".
 
 ---
 

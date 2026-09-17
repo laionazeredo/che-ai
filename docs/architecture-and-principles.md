@@ -30,7 +30,9 @@ The opinions above are **not new**. Che is a concrete, opinionated *implementati
 
 > **Che's team-delivery promise.** If you onboard five repos to Che, then bring a sixth online six months later with a new agent and a new human engineer, all six participants (old agent + new agent + new engineer + CI + PR reviewer + spec writer) share the *exact same* team context, contracts and decision history. No one has to re-explain the brand or the SDLC.
 
-That promise is why the `che-ai`/`che` binary exists as a **zero-dependency stdlib Python package, installable via pipx** — and why structural commands are implemented first in the CLI *before* any skill is allowed to touch them. It is not the headline; it is the plumbing that makes the shared-team-brain promise survive agent turnovers.
+That promise is why the `che-ai`/`che` binary exists as a **stdlib Python package, installable via pipx** — and why structural commands are implemented first in the CLI *before* any skill is allowed to touch them. It is not the headline; it is the plumbing that makes the shared-team-brain promise survive agent turnovers.
+
+Stdlib, with one measured exception (principle 2.1 #6): `Pillow` and `numpy`, for §4.5's image evidence and nothing else. Every other command runs on a bare install.
 
 ---
 
@@ -48,6 +50,7 @@ Each stance is grounded in one of the four canonical methodologies from §1. If 
 4. **Trash, not delete** ([DbC](https://en.wikipedia.org/wiki/Design_by_contract) *postcondition recoverable* — every destructive operation must have a one-line inverse). There is exactly zero legitimate reason to `rm -rf` anything that lives under `~/.che-workspaces/`. If a `remove` command is invoked, the target is **moved** to `.trash/<kind>--<slug>--<timestamp>` with a printed restore command. A "hard delete forever" command does not exist and will not be added.
 5. **SSoT, everywhere** ([Pragmatic Programmer](https://pragprog.com/the-pragmatic-programmer/) ch. 2 — *DRY Principle, Orthogonality, Single Source of Truth*). A rule, a score, a playbook, a decision, or a project template lives in **exactly one canonical file**. If you see the same rule body twice anywhere in the repo, that is a bug — report it, don't rationalize it.
 6. **Python + plain-text memory, always — for core logic** ([Pragmatic Programmer](https://pragprog.com/the-pragmatic-programmer/) ch. 7 — *Good-Enough Software* + *Plain Text as Ground Truth*). Che's runtime logic is in stdlib Python ≥ 3.9. Skills live in declarative `.md`. No Node, no TypeScript, no Rust, no Go in the core. If the logic you're writing exceeds ~15 lines in a Markdown code block, extract it to Python and route it through the CLI. This is not negotiable.
+   The library set is closed and currently **`Pillow` + `numpy`, for `che pixel diff`/`che pixel crop` only** — the one place where "extract it to Python" landed on work stdlib cannot do at a usable speed (a paint is not text, and a per-pixel loop over a 1440x7500 frame is minutes). It is not a precedent for ergonomics libraries: those two exist because the alternative was a Node toolchain in the harness, and the bar to add a third is a measurement like theirs, in the PR.
 7. **Structural operations go to the terminal CLI. Creative work goes to the agent slash-commands.** This is the structural-first principle (§3). Structural/admin operations are implemented first as deterministic Python CLI commands — before any skill is allowed to do them. LLMs never get a vote on L1–L4 path canonicity. Token tax only for creative work: spec authoring, diff review, SQL migration drafting, PR bodies.
 8. **No UI. Ever.** (Che is a **framework**, not a product. It has no server, no login screen, no dashboard, no hosted environment. Its surfaces are: (a) the two CLI binaries, (b) the Markdown contracts you read/write, (c) the agent skills run inside **Claude Code** (or another supported IDE).
 9. **Workspaces live *outside* user repos.** You will never be told "add `.trae/` at your repo root and commit it." Che's L1–L4 hierarchy lives in `~/.che-workspaces` (the user's home directory) by design. The shipped artifact (your code) stays pristine.
@@ -202,7 +205,7 @@ These are the "rules for writing rules." They apply to every code change in `che
 
 Why: Harnesses die under feature accretion. Every flag you add is a flag every future skill has to read, understand, and not conflict with. Every dep you add is a future supply-chain incident waiting to happen.
 
-Corollary: **`dependencies = []` in `pyproject.toml` is a feature, not a bug.** If you need Typer/Click/Rich/Pydantic for developer ergonomics, first make the case that argparse + stdlib JSON is genuinely insufficient. 95% of the time it isn't.
+Corollary: **an empty `dependencies` list is the default, and each entry has to earn its place.** The current list is two packages, both for one command. If you need Typer/Click/Rich/Pydantic for developer ergonomics, first make the case that argparse + stdlib JSON is genuinely insufficient. 95% of the time it isn't — and "it isn't" is not the same as "it can't be": `che pixel diff` needed a *measurement* (15 s against 202 s) plus the absence of a worse alternative, not a preference.
 
 ### 6.2 Design by Contract (DbC) — [Meyer 1986](https://en.wikipedia.org/wiki/Design_by_contract)
 

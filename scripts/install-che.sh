@@ -521,6 +521,7 @@ install_cli_if_requested() {
       _install_cli_pip_fallback "$TARGET"
     else
       echo "    ✔ CLI installed globally. Run:  che --help   or   che-ai --help"
+      verify_pixel_dependencies
     fi
   else
     echo "    ⚠ pipx not found on PATH. pipx is RECOMMENDED for CLI Python apps."
@@ -530,6 +531,37 @@ install_cli_if_requested() {
     echo "      Falling back to pip3 install --user ..."
     _install_cli_pip_fallback "$TARGET"
   fi
+}
+
+_verify_pixel_dependencies() {
+  # §4.5's evidence lane (`che pixel diff` / `che pixel crop`) is the only part of the CLI that
+  # imports anything outside the standard library: Pillow reads the PNGs, numpy keeps the
+  # comparison affordable. Both are declared in pyproject.toml, so `pipx install -e` resolves them
+  # along with everything else — but the failure mode is quiet. A pipx environment created before
+  # they were declared survives `--force` with the metadata updated and the packages absent, and
+  # nothing surfaces until someone runs the one command that draws a picture.
+  #
+  # So: verify, and name the fix. Absent dependencies are a WARNING, not a failure — every other
+  # command works without them, and refusing to finish an install over an optional picture would
+  # be the wrong trade.
+  local venv_py="${1:-}"
+  if [ -z "$venv_py" ]; then
+    venv_py="${PIPX_HOME:-$HOME/.local/share/pipx}/venvs/che-ai/bin/python"
+  fi
+  if [ ! -x "$venv_py" ]; then
+    venv_py="$(command -v python3 2>/dev/null || true)"
+  fi
+  [ -z "$venv_py" ] && return 0
+
+  if "$venv_py" -c "import PIL, numpy" >/dev/null 2>&1; then
+    echo "    ✔ pixel evidence dependencies present (Pillow, numpy)"
+    return 0
+  fi
+  echo ""
+  echo "    ⚠ Pillow/numpy are missing from: ${venv_py}"
+  echo "      Only §4.5's evidence pictures need them; every other command works without."
+  echo "      Fix:  pipx install -e \"${TARGET}\" --force"
+  echo "      Or :  pipx inject che-ai Pillow numpy"
 }
 
 _install_cli_pip_fallback() {
@@ -555,6 +587,7 @@ _install_cli_pip_fallback() {
     echo "    Then run:  che --help"
     echo ""
     echo "    Strongly recommend installing pipx and re-running this script for a clean install."
+    _verify_pixel_dependencies "$py"
   else
     echo ""
     echo "    ❌ CLI install FAILED. You can manually install later:"

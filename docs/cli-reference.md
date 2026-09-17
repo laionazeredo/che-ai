@@ -323,7 +323,7 @@ The canonical flags enum lives in `che_core/constants.py`. Always treat that fil
 
 ---
 
-### 3.4 Domain Gate CLI — `che pixel check` / `che pixel paths`
+### 3.4 Domain Gate CLI — `che pixel check` / `che pixel paths` / `che pixel diff` / `che pixel crop`
 
 The runner behind `domains/ux/gates/pixel-check-gate.md`. It compares design properties against
 rendered DOM properties **numerically** — never screenshot against screenshot — and is the only
@@ -406,6 +406,50 @@ Exit codes — branch on these, not on the text:
 
 The summary line on stdout already matches the gate's `log_format_decisions`, so it can be passed
 straight to `che decision_append`.
+
+#### The evidence lane — `che pixel diff` / `che pixel crop`
+
+Gate §4.5's two pictures. Neither is scored, and neither exits non-zero because two rasters differ: a
+screen that changed is the finding, not a failure to run. Both take rasters of **equal size** — a
+comparison across two sizes returns a number computed against the wrong pixels rather than an error, so
+`diff` refuses it with exit `2`.
+
+```bash
+che pixel diff \
+  --design "$CHE_PIXEL_DESIGN_IMAGE" --dom "$CHE_PIXEL_DOM_SCREENSHOT" \
+  --out "$CHE_PIXEL_VISUAL_DIFF"
+
+che pixel crop \
+  --design "$CHE_PIXEL_DESIGN_IMAGE" --dom "$CHE_PIXEL_DOM_SCREENSHOT" \
+  --map "$CHE_PIXEL_MAP" --dom-facts "$CHE_PIXEL_DOM_FACTS" \
+  --out "$CHE_PIXEL_CROP_REPORT" --sheet "$CHE_PIXEL_CROP_SHEET"
+```
+
+This is the only part of the CLI that imports anything outside the standard library (`Pillow` and
+`numpy`, declared in `pyproject.toml` and installed with the CLI). The comparison itself is a port of
+`pixelmatch` 7.2.0 — a YIQ distance behind an anti-aliasing detector — held to that package's own counts
+by `tests/test_pixel_visual.py`. It replaced two `.mjs` scripts that no test could execute, which is how
+one of them came to carry two false claims in its own docstring.
+
+| Flag | Required | Meaning |
+| :--- | :------- | :------ |
+| `--design` | yes | Design raster — `$CHE_PIXEL_DESIGN_IMAGE`. |
+| `--dom` | yes | Implementation screenshot — `$CHE_PIXEL_DOM_SCREENSHOT`. |
+| `--out` | yes | `diff`: the composite PNG. `crop`: the report JSON, written atomically. |
+| `--map` | `crop` only | `$CHE_PIXEL_MAP`. Each entry needs a `design_box` in the design image's own pixels; without it the element is **refused**, not guessed. |
+| `--dom-facts` | `crop` only | `$CHE_PIXEL_DOM_FACTS` — the same bag `check` validates. |
+| `--sheet` | no | `$CHE_PIXEL_CROP_SHEET`: the design \| implementation \| diff strip, one row per element. Omitted from the report when every element was refused, so a path that was requested but never written never reads as evidence of a file. |
+| `--threshold` | no | `pixelmatch`'s matching threshold (default `0.1`, which is what §4.5 fixes). Smaller is more sensitive. |
+| `--json` | no | `diff`: the counts. `crop`: the full report, on stdout — the per-element progress lines go to stderr so the two never interleave. |
+
+`diff` reports `pixels`, `differing_pixels`, `antialiased_pixels` and `ratio`. The ratio is **not** a
+threshold and must never be quoted as one: text antialiasing, DPR and font-loading dominate it, while a
+2px radius error barely moves it.
+
+`crop` gives every element exactly one row, whatever happened to it — `compared`, `size_mismatch` (both
+crops shown **unscaled**, because resampling would invent the pixels it then compares and erase the drift
+that is itself the finding), or `refused` with its reason, which is both printed and recorded so a gap
+cannot hide in the JSON.
 
 ---
 

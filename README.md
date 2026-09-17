@@ -20,7 +20,7 @@ The result is a harness that:
   4. **L4 — Source-of-Truth Rule Package Checkout (pipx feed, IDE-agnostic):** The Che package root directory — the folder containing `pyproject.toml`, `domains/`, `skills/` and `che_core/` from where `pipx install -e .` was run, and where the IDE adapter installers (`adapters/*/install.sh`) live. By default the quick installer clones it into `~/.che-ai/` for convenience, but it can live anywhere on disk. *This* folder is the single source of truth that feeds all symlinks of the L2 IDE adapter layer; Claude Code (or any other supported IDE) **never reads L4 directly** — it only ever sees the adapter symlinks in L2. (Pragmatic Programmer orthogonality: keep the *agent source package* and the *running IDE wiring* in separate layers so either can move without breaking the other).
   (Pragmatic Programmer orthogonality: *team process state* does not live inside the *shipped artifact*; *adapter IDE wiring* does not pollute *rule package source*).
 - **Never deletes anything permanently.** Every `remove` is a **move to trash** with a printed one-line restore command (Design by Contract postcondition: "after `remove X`, the state of X is recoverable in one deterministic command"). Hard-delete commands do not exist, and will not be added.
-- **Runs structural/admin operations deterministically as a terminal CLI.** Project onboarding, worktree binding, session config, task listing, state indexing, export/import portability, and safe eject are exposed as a zero-dependency stdlib Python CLI (`che-ai` / `che`), installed once and callable from any shell or CI. This is a feature for predictability and cost discipline, not the product's headline.
+- **Runs structural/admin operations deterministically as a terminal CLI.** Project onboarding, worktree binding, session config, task listing, state indexing, export/import portability, and safe eject are exposed as a stdlib Python CLI (`che-ai` / `che`), installed once and callable from any shell or CI. This is a feature for predictability and cost discipline, not the product's headline.
 - **Single-Source-of-Truth (SSoT), everywhere.** Every rule, score, playbook, template lives in exactly one canonical file. If you see the same body twice anywhere in the repo — that is a bug, report it. (DRY, The Pragmatic Programmer ch. 2.)
 
 ***
@@ -60,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/in
 
 ### 2. Install the Global CLI (recommended for terminal-first users)
 
-Che ships as a **zero-dependency PEP-621 Python package**. The two canonical binaries are:
+Che ships as a **PEP-621 Python package whose only libraries are two, for one command**. The two canonical binaries are:
 - **`che-ai`** — long/full name (brand)
 - **`che`** — short alias for daily use
 

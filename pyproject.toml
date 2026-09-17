@@ -3,7 +3,16 @@ name = "che-ai"
 version = "1.0.0"
 description = "IDE-agnostic Agentic Engineering Harness"
 requires-python = ">=3.9"
-dependencies = []
+dependencies = [
+  # The ONLY code outside the standard library, and it is one command's worth: §4.5's evidence
+  # lane (`che pixel diff` / `che pixel crop`). Pillow reads and writes PNG, which `zlib` +
+  # `struct` can also do at the cost of owning a codec; numpy is what keeps the comparison
+  # usable — 15 s rather than 202 s on a 1440x7500 frame pair (measured; see
+  # `che_core/pixel_visual.py`). Everything else in the CLI still runs on a bare install.
+  # Floors are recent-enough-not-to-be-abandoned, loose enough not to fight an existing env.
+  "Pillow>=10",
+  "numpy>=1.24",
+]
 
 [project.scripts]
 che-ai = "che_core.cli:main"
