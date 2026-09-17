@@ -1,0 +1,617 @@
+{
+  "version": "0.8.4",
+  "name": "OpenPencil slice",
+  "variables": {
+    "knowledge-card-square--c-accent": {
+      "type": "color",
+      "value": "#C8502B"
+    },
+    "knowledge-card-square--c-accent-soft": {
+      "type": "color",
+      "value": "#FAE3D8"
+    },
+    "knowledge-card-square--c-bg": {
+      "type": "color",
+      "value": "#FFF7F0"
+    },
+    "knowledge-card-square--c-border": {
+      "type": "color",
+      "value": "#EDDCD0"
+    },
+    "knowledge-card-square--c-ink": {
+      "type": "color",
+      "value": "#241A12"
+    },
+    "knowledge-card-square--c-muted": {
+      "type": "color",
+      "value": "#7A6455"
+    },
+    "knowledge-card-square--c-surface": {
+      "type": "color",
+      "value": "#FFFFFF"
+    }
+  },
+  "children": [
+    {
+      "type": "frame",
+      "id": "n1",
+      "name": "知识卡片 · 方版",
+      "x": 0.0,
+      "y": 0.0,
+      "width": 1080.0,
+      "height": 1080.0,
+      "layout": "vertical",
+      "gap": 0.0,
+      "padding": [
+        88.0,
+        84.0
+      ],
+      "justifyContent": "space_between",
+      "alignItems": "start",
+      "clipContent": true,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#FFF7ED"
+        }
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "n2",
+          "name": "卡头",
+          "width": "fill_container",
+          "height": "fit_content",
+          "layout": "vertical",
+          "gap": 22.0,
+          "alignItems": "start",
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#FFF7ED"
+            }
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "n3",
+              "name": "标签",
+              "width": "fit_content",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "gap": 0.0,
+              "padding": [
+                12.0,
+                24.0
+              ],
+              "justifyContent": "center",
+              "alignItems": "center",
+              "cornerRadius": 999.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#FFFFFF"
+                }
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n4",
+                  "name": "标签文字",
+                  "width": "fit_content",
+                  "content": "MASTERPAN • DESDE 1972",
+                  "fontFamily": "Noto Sans SC",
+                  "fontSize": 28.0,
+                  "fontWeight": 700,
+                  "letterSpacing": 0.0,
+                  "lineHeight": 1.4,
+                  "textGrowth": "auto",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#C2410C"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n5",
+              "name": "主标题",
+              "width": "fill_container",
+              "content": "Pão quente, feito com AMOR.",
+              "fontFamily": "Noto Sans SC",
+              "fontSize": 94.0,
+              "fontWeight": 700,
+              "letterSpacing": 0.0,
+              "lineHeight": 1.15,
+              "textGrowth": "fixed-width",
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#1C1917"
+                }
+              ]
+            },
+            {
+              "type": "rectangle",
+              "id": "n6",
+              "name": "强调短线",
+              "width": 180.0,
+              "height": 12.0,
+              "cornerRadius": 5.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#C2410C"
+                }
+              ],
+              "children": []
+            },
+            {
+              "type": "text",
+              "id": "n7",
+              "name": "副标题",
+              "width": "fill_container",
+              "content": "MasterPan — Padaria artesanal na porta da sua casa. Desde 1972.",
+              "fontFamily": "Noto Sans SC",
+              "fontSize": 34.0,
+              "fontWeight": 500,
+              "letterSpacing": 0.0,
+              "lineHeight": 1.7,
+              "textGrowth": "fixed-width",
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#292524"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n8",
+          "name": "要点列表",
+          "width": "fill_container",
+          "height": "fit_content",
+          "layout": "vertical",
+          "gap": 24.0,
+          "alignItems": "start",
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#FFF7ED"
+            }
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "n9",
+              "name": "要点 1",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "gap": 22.0,
+              "alignItems": "center",
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#FFF7ED"
+                }
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n10",
+                  "name": "序号 1",
+                  "width": 64.0,
+                  "height": 64.0,
+                  "layout": "horizontal",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "cornerRadius": 32.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#C2410C"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n11",
+                      "name": "序号数字",
+                      "width": "fit_content",
+                      "content": "✨",
+                      "fontFamily": "Inter",
+                      "fontSize": 38.0,
+                      "fontWeight": 700,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.0,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#FFFFFF"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n12",
+                  "name": "要点文案",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "vertical",
+                  "gap": 10.0,
+                  "alignItems": "start",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#FFF7ED"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n13",
+                      "name": "要点标题",
+                      "width": "fill_container",
+                      "content": "Forno à lenha • 100% artesanal",
+                      "fontFamily": "Noto Sans SC",
+                      "fontSize": 40.0,
+                      "fontWeight": 500,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.3,
+                      "textGrowth": "fixed-width",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#1C1917"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n14",
+              "name": "要点 2",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "gap": 22.0,
+              "alignItems": "center",
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#FFF7ED"
+                }
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n15",
+                  "name": "序号 2",
+                  "width": 64.0,
+                  "height": 64.0,
+                  "layout": "horizontal",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "cornerRadius": 32.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#C2410C"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n16",
+                      "name": "序号数字",
+                      "width": "fit_content",
+                      "content": "🌾",
+                      "fontFamily": "Inter",
+                      "fontSize": 38.0,
+                      "fontWeight": 700,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.0,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#FFFFFF"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n17",
+                  "name": "要点文案",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "vertical",
+                  "gap": 10.0,
+                  "alignItems": "start",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#FFF7ED"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n18",
+                      "name": "要点标题",
+                      "width": "fill_container",
+                      "content": "Ingredientes de fazenda local",
+                      "fontFamily": "Noto Sans SC",
+                      "fontSize": 40.0,
+                      "fontWeight": 500,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.3,
+                      "textGrowth": "fixed-width",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#1C1917"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n19",
+              "name": "要点 3",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "gap": 22.0,
+              "alignItems": "center",
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#FFF7ED"
+                }
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n20",
+                  "name": "序号 3",
+                  "width": 64.0,
+                  "height": 64.0,
+                  "layout": "horizontal",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "cornerRadius": 32.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#C2410C"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n21",
+                      "name": "序号数字",
+                      "width": "fit_content",
+                      "content": "👨‍🍳",
+                      "fontFamily": "Inter",
+                      "fontSize": 38.0,
+                      "fontWeight": 700,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.0,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#FFFFFF"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n22",
+                  "name": "要点文案",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "vertical",
+                  "gap": 10.0,
+                  "alignItems": "start",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#FFF7ED"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n23",
+                      "name": "要点标题",
+                      "width": "fill_container",
+                      "content": "Receita de família • 52 anos",
+                      "fontFamily": "Noto Sans SC",
+                      "fontSize": 40.0,
+                      "fontWeight": 500,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.3,
+                      "textGrowth": "fixed-width",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#1C1917"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n24",
+          "name": "署名",
+          "width": "fill_container",
+          "height": "fit_content",
+          "layout": "vertical",
+          "gap": 22.0,
+          "alignItems": "start",
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#FFF7ED"
+            }
+          ],
+          "children": [
+            {
+              "type": "rectangle",
+              "id": "n25",
+              "name": "分隔线",
+              "width": "fill_container",
+              "height": 2.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#44403C"
+                }
+              ],
+              "children": []
+            },
+            {
+              "type": "frame",
+              "id": "n26",
+              "name": "署名行",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "gap": 22.0,
+              "alignItems": "center",
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#FFF7ED"
+                }
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n27",
+                  "name": "头像占位",
+                  "width": 80.0,
+                  "height": 80.0,
+                  "layout": "horizontal",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "cornerRadius": 40.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#C2410C"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n28",
+                      "name": "头像文字",
+                      "width": "fit_content",
+                      "content": "MP",
+                      "fontFamily": "Noto Sans SC",
+                      "fontSize": 42.0,
+                      "fontWeight": 700,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.0,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#FFFFFF"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n29",
+                  "name": "署名文案",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "vertical",
+                  "gap": 6.0,
+                  "alignItems": "start",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#FFF7ED"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n30",
+                      "name": "账号名",
+                      "width": "fill_container",
+                      "content": "🛒  PEDIR AGORA  →",
+                      "fontFamily": "Noto Sans SC",
+                      "fontSize": 46.0,
+                      "fontWeight": 700,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.3,
+                      "textGrowth": "fixed-width",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#C2410C"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n31",
+                      "name": "一句话简介",
+                      "width": "fill_container",
+                      "content": "Padaria artesanal • Pão quente diariamente",
+                      "fontFamily": "Noto Sans SC",
+                      "fontSize": 28.0,
+                      "fontWeight": 500,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.7,
+                      "textGrowth": "fixed-width",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#44403C"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

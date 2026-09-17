@@ -1,0 +1,26 @@
+NAME: "Flockr Wireframes (sliced)"
+
+GLOBAL_VARS:
+effect_74152b83:
+  filter: blur(60px)
+Body/Small:
+  fontFamily: Poppins
+  fontStyle: Regular
+  fontWeight: 400
+  fontSize: 14
+  lineHeight: 1.45em
+  textAlignHorizontal: LEFT
+  textAlignVertical: TOP
+fill_f009204e:
+  - '#C4B5FD'
+drop shadow do video:
+  boxShadow: 10px 20px 40px 0px rgba(51, 27, 59, 0.16)
+fill_e329f69a:
+  - type: GRADIENT_LINEAR
+    gradient: linear-gradient(239deg, rgba(98, 70, 229, 1) 0%, rgba(155, 98, 192, 1) 96%)
+
+NODES:
+    [IMAGE-SVG] "Dot Ornament" #117:5670 layout={"mode":"none","sizing":{},"locationRelativeToParent":{"x":1032,"y":648},"dimensions":{"width":404,"height":154}}
+    [IMAGE-SVG] "Vector" #117:5851 layout={"mode":"none","sizing":{},"locationRelativeToParent":{"x":1188,"y":7130},"dimensions":{"width":432,"height":383}} fills=["#82BBFF"] effects=effect_74152b83 opacity=0.4000000059604645
+        [TEXT] #I117:5864;1:12255 layout={"mode":"none","sizing":{},"locationRelativeToParent":{"x":0,"y":73.59},"dimensions":{"width":416,"height":101.63}} fills=fill_f009204e componentPropertyReferences={"text":"description"} textStyle=Body/Small text="We provide information about properties such as houses, villas and apartments to help people find their dream home"
+          [FRAME] "testimonial-cta-button" #117:5966 layout={"mode":"row","padding":"20px 40px","justifyContent":"center","alignItems":"center","gap":"10px","sizing":{"horizontal":"hug","vertical":"fixed"},"dimensions":{"height":67.02}} fills=fill_e329f69a effects="drop shadow do video" borderRadius=260px
