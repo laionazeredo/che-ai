@@ -341,8 +341,13 @@ Execution steps (fixed order):
       Proceed §0.9.6 ALL GATES PASSED normally.
    b. **Glob + sort alphabetical gate files:** `${CHE_HOME:-$HOME/.che-ai}/domains/<effective_domain>/gates/*.md`. Execution order = filename alphabetical order (same as G1→G2→G3→G4 convention). UX example: `accessibility-gate.md` executes BEFORE `pixel-check-gate.md`.
    c. **For EACH gate file (0.9.5.1, 0.9.5.2, ...):**
-      - Parse file YAML frontmatter: `threshold_pass`, `retry_policy`, `log_format_decisions`, `tool_official`.
+      - Parse file YAML frontmatter: `threshold_pass`, `retry_policy`, `log_format_decisions`, `tool_official`, `executable`.
       - If frontmatter missing → FAIL gate immediately: "Gate <filename> has no declared YAML threshold frontmatter. Invalid domain."
+      - **Executability check — runs BEFORE anything else:** if the frontmatter declares `executable: false`, this gate has no working mechanism yet. **SKIP it. Do NOT attempt it, do NOT invent a result, do NOT report PASS.** A gate silently recorded as passed is worse than no gate at all, because it converts "never verified" into "verified". Log:
+        ```bash
+        che decision_append "$WORKTREE_ROOT" "DOMAIN-GATE-SKIPPED-NOT-IMPLEMENTED" "domain=${effective_domain} gate=${GATE_BASENAME} blocked_by=${BLOCKED_BY} skip=TRUE"
+        ```
+        `executable: false` MUST come with `blocked_by:` naming what is missing. Without it the skip is indistinguishable from a pass → FAIL immediately instead of skipping.
       - **Build report path PER gate using helper (one JSON file per gate, sorted, grouped):**
         ```bash
         GATE_BASENAME="$(basename "$gate_file" .md)"
@@ -356,11 +361,11 @@ Execution steps (fixed order):
         | 🟢 PASS threshold | ✅ Passes this gate. Decision log helper: `che decision_append "$WORKTREE_ROOT" "DOMAIN-GATE-EXECUTED" "domain=${effective_domain} gate=${GATE_BASENAME} status=PASS score=${score} duration_ms=${ms} report=${DOMAIN_GATE_REPORT}"`. Next gate. |
         | 🔴 FAIL threshold (1st time) | **AUTOMATIC FREE Retry = 1 single round:** Apply recommended steps in gate file "Retry Policy" section (e.g. "fix top-3 deviations >4px", "fix missing alt"). Re-run gate 1 NEW time. Decision log helper for retry: `che decision_append "$WORKTREE_ROOT" "DOMAIN-GATE-RETRY" "domain=${effective_domain} gate=${GATE_BASENAME} score_before=${sb} retry=1"`. |
         | 🔴 FAIL threshold AFTER automatic retry = 2nd failure | **HARD STOP §0.9.5 DOMAIN GATES.** Does not open PR. Does not commit. Does not proceed to §0.9.6. Decision log HELPER with details: `che decision_append "$WORKTREE_ROOT" "DOMAIN-GATE-HARD-FAIL" "domain=${effective_domain} gate=${GATE_BASENAME} threshold=${orig} score_now=${sn} report=${DOMAIN_GATE_REPORT}"`. Show standardised message to user. |
-   d. **After all gates PASS or explicit override logged:** All gates passed OR user gave verbatim EXPLICIT_OVERRIDE logged in decisions → Log FINAL gate 5 entry HELPER: `che decision_append "$WORKTREE_ROOT" "DOMAIN-GATES-ALL-PASSED" "domain=${effective_domain} n_gates=${N} overrides=${COUNT} duration_total_ms=${ms}"`. Proceed §0.9.6.
+   d. **After all gates PASS, are SKIPPED, or explicit override logged:** Log FINAL gate 5 entry HELPER: `che decision_append "$WORKTREE_ROOT" "DOMAIN-GATES-ALL-PASSED" "domain=${effective_domain} n_gates=${N} skipped=${S} skipped_gates=[${SKIPPED_LIST}] overrides=${COUNT} duration_total_ms=${ms}"`. Skipped gates MUST be named in the PR description (e.g. "ux pixel gate: not executed — engine unimplemented"), so the PR never implies a verification that did not happen. Proceed §0.9.6.
 4. **EXPLICIT_OVERRIDE rules (same as G2 code-review today):** Threshold is NEVER lowered automatically by agent. ONLY allowed if user LITERALLY typed "EXPLICIT_OVERRIDE domain=<slug> gate=<X> old=<threshold> new=<n> reason=<TEXT>" in chat. In this condition: log HELPER entry `che decision_append "$WORKTREE_ROOT" "EXPLICIT_OVERRIDE" "domain=${effective_domain} gate=${GATE_BASENAME} old=${OLD} new=${NEW} reason=${TEXT} trace_id=${TRACE_ID}"` and mark gate as "PASS (WITH OVERRIDE)". No other bypass form exists. Do not trust "seems OK".
 
 **Output artifacts gate 0.9.5:**
-- 1 decision.log entry PER executed gate (PASS/FAIL/RETRY/OVERRIDE), **all via official `che decision_append` helper.**
+- 1 decision.log entry PER gate (EXECUTED PASS/FAIL/RETRY, SKIPPED-NOT-IMPLEMENTED, or OVERRIDE), **all via official `che decision_append` helper.**
 - Report per gate: `$DOMAIN_GATE_REPORT` (1 JSON file per gate, dynamically built via `che output_path` inside loop). Final structure: `$CHE_WORKSPACE_SHARED/report/ship-<wt-slug>/YYYYMMDD-HHMMSS-domain-gate-<dom>-<name>.json` (timestamp prefix = sorted; all files of same ship stay in SAME `report/ship-<wt-slug>/` subfolder → easy to search glob `**/ship-<slug>/*`).
 
 **Blacklist check:** Reports are 100% in `$CHE_WORKSPACE_SHARED/report/<related_id>/` (helper guaranteed outside assert). §0.8 + §2.2 continue to ensure no report/diff artifact/decisions log enters user commit diff.

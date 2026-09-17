@@ -2,8 +2,19 @@
 
 > Every gate file in this folder MUST:
 > 1. Have a PASS/FAIL rule with a NUMERIC threshold (no subjective language alone).
-> 2. Have ONE section called "Fail remediation steps" with concrete actions.
-> 3. Have retry policy (max 1 free retry). Human required on second fail.
-> 4. Fail without a threshold defined = default HARD FAIL.
+> 2. Have a retry policy carrying concrete remediation actions (max 1 free retry). Human required on second fail.
+> 3. Fail without a threshold defined = default HARD FAIL.
+> 4. Declare the machine-readable frontmatter `che-ship §0.9.5` parses: a numeric threshold
+>    (`threshold_pass` or `threshold_hard_stop`), `retry_policy`, `log_format_decisions`,
+>    `tool_official` (the official CLI/MCP channel per §20 — never an invented one), and `executable`.
 >
-> Pattern copy from working pilot: `domains/ux/gates/pixel-check-gate.md`
+> **`executable: false`** declares that the gate has no working mechanism yet. Ship then SKIPS it
+> and logs `DOMAIN-GATE-SKIPPED-NOT-IMPLEMENTED` — it is never reported as PASS. It MUST come with a
+> `blocked_by:` reason, because a silent skip is indistinguishable from a verification that happened.
+> Before declaring `executable: true`, confirm the declared tool and command actually resolve: a gate
+> naming a non-existent tool or flag is worse than a gate that admits it is not ready, because it
+> sends the next agent down a path that cannot work.
+>
+> Pattern copy (structure + thresholds) from: `domains/ux/gates/pixel-check-gate.md`.
+> Note that its comparison engine is **not implemented** (`executable: false`) — copy its §1/§2
+> tolerances and scoring, not its §3 mechanism.
