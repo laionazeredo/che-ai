@@ -34,8 +34,10 @@
  *
  * HOW TO CALL IT
  * --------------
- * From the project under test, so `pngjs`/`pixelmatch` resolve from there rather than from Che
- * (Che has no Node runtime of its own — see §4.5):
+ * From a scratch directory that has `pngjs`/`pixelmatch`, not from Che and not from the project
+ * under test: `node --input-type=module -` resolves bare specifiers from the working directory, so
+ * where it runs decides what it can import — and the gate must not edit the `package.json` of the
+ * repository it is judging (§4.5).
  *
  *     node --input-type=module - \
  *       --design "$CHE_PIXEL_DESIGN_IMAGE" --dom "$CHE_PIXEL_DOM_SCREENSHOT" \
@@ -121,10 +123,21 @@ const domBoxOf = (record) => {
 };
 
 const elements = [];
+
+/**
+ * Recorded *and* printed. A refusal that only reaches the JSON is a gap the operator cannot
+ * see, and the sheet cannot show it either — so an element this tool could not measure would
+ * be indistinguishable from one that matched.
+ */
+const refuse = (element, reason) => {
+  elements.push({ element, status: "refused", reason });
+  console.log(`${element}: refused (${reason})`);
+};
+
 for (const key of Object.keys(map).sort()) {
   const entry = map[key];
   if (!entry || typeof entry !== "object") {
-    elements.push({ element: key, status: "refused", reason: "map entry is not an object" });
+    refuse(key, "map entry is not an object");
     continue;
   }
 
@@ -132,24 +145,20 @@ for (const key of Object.keys(map).sort()) {
   // has a third. Only the caller who exported the frame can say where a node sits inside it.
   const designBox = entry.design_box;
   if (!designBox || typeof designBox !== "object") {
-    elements.push({
-      element: key,
-      status: "refused",
-      reason: "no `design_box` on the map entry — pass the node's box in the design image's own pixels",
-    });
+    refuse(key, "no `design_box` on the map entry — pass the node's box in the design image's own pixels");
     continue;
   }
 
   const domBox = domBoxOf(domFacts[entry.selector]);
   if (!domBox) {
-    elements.push({ element: key, status: "refused", reason: `no box for selector ${entry.selector} in the DOM facts` });
+    refuse(key, `no box for selector ${entry.selector} in the DOM facts`);
     continue;
   }
 
   const designCrop = crop(designImage, designBox);
   const domCrop = crop(domImage, domBox);
   if (designCrop.error || domCrop.error) {
-    elements.push({ element: key, status: "refused", reason: designCrop.error ?? domCrop.error });
+    refuse(key, designCrop.error ?? domCrop.error);
     continue;
   }
 
@@ -189,12 +198,16 @@ for (const key of Object.keys(map).sort()) {
 }
 
 // The strip: one row per element, design | implementation | diff. Rows follow `elements`, so the
-// JSON is the legend — which is how a tool with no font stays readable.
-const rows = elements.filter((entry) => Array.isArray(entry._crops));
-if (rows.length > 0) {
+// JSON is the legend — which is how a tool with no font stays readable. Every element keeps its
+// row, and one that was refused renders blank: filtering the refusals out made the legend false
+// twice over, because the row after a refusal shifted up (pairing the picture with the wrong
+// element) and an element the tool could not measure looked exactly like one that matched.
+const rows = elements.map((entry) => ({ _crops: entry._crops ?? [null, null, null] }));
+const crops = rows.flatMap((row) => row._crops).filter(Boolean);
+if (sheetPath && crops.length > 0) {
   const gap = 2;
-  const cellWidth = Math.max(...rows.flatMap((row) => row._crops.filter(Boolean).map((png) => png.width)));
-  const cellHeight = Math.max(...rows.flatMap((row) => row._crops.filter(Boolean).map((png) => png.height)));
+  const cellWidth = Math.max(...crops.map((png) => png.width));
+  const cellHeight = Math.max(...crops.map((png) => png.height));
   const sheet = new PNG({ width: cellWidth * 3 + gap * 2, height: (cellHeight + gap) * rows.length });
   sheet.data.fill(255);
   rows.forEach((row, index) => {
@@ -204,9 +217,7 @@ if (rows.length > 0) {
       PNG.bitblt(png, sheet, 0, 0, png.width, png.height, column * (cellWidth + gap), top);
     });
   });
-  if (sheetPath) {
-    writeFileSync(sheetPath, PNG.sync.write(sheet));
-  }
+  writeFileSync(sheetPath, PNG.sync.write(sheet));
 }
 
 for (const entry of elements) {
@@ -222,7 +233,7 @@ writeFileSync(
       design_image: designPath,
       dom_image: domPath,
       pixelmatch_threshold: threshold,
-      sheet: sheetPath ?? null,
+      sheet: crops.length > 0 ? sheetPath : null,
       compared: elements.filter((entry) => entry.status === "compared").length,
       elements,
     },

@@ -25,7 +25,7 @@ log_format_decisions: "[DOMAIN-GATE-EXECUTED] domain=ux gate=pixel-check-gate st
 - Design-side MCP: `mcp_Figma_AI_Bridge` (`figma`) or `mcp_open-pencil` (`openpencil`).
 - Implementation-side MCP: `mcp_Chrome_DevTools_MCP`.
 - A `$CHE_PIXEL_MAP` (§2.4) plus matching `data-design-node` attributes in the JSX (§4.3).
-- Evidence only, never the verdict: `pixelmatch` + `pngjs`, installed with the project's own package manager (§4.5).
+- Evidence only, never the verdict: `pixelmatch` + `pngjs`, resolved from a scratch directory (§4.5).
 
 ---
 
@@ -461,14 +461,19 @@ returns nonsense rather than an error when they do not, which is the one way thi
 | design | `mcp_open-pencil.export_image` (scale 2) or `mcp_Figma_AI_Bridge.download_figma_images` | `$CHE_PIXEL_DESIGN_IMAGE` |
 | implementation | `mcp_Chrome_DevTools_MCP.take_screenshot` at the §2.3 viewport | `$CHE_PIXEL_DOM_SCREENSHOT` |
 
-`pixelmatch` + `pngjs` come from the **project under test**, not from Che: Che has no Node runtime of its
-own — `assets/dom-facts-extractor.js` is a payload the browser evaluates, not a program Che runs, and
-adding a Node toolchain to the harness for one evidence picture would be a dependency the gate does not
-need. Run the diff **from the project root**, because `node --input-type=module -` resolves bare
-specifiers from the working directory:
+`pixelmatch` + `pngjs` are the PNG decoder and the per-pixel comparison. Che cannot supply them: it has no
+Node runtime of its own — `assets/dom-facts-extractor.js` is a payload the browser evaluates, not a
+program Che runs — and adding a Node toolchain to the harness for one evidence picture would be a
+dependency the gate does not need. They come from a directory that has them, because
+`node --input-type=module -` resolves bare specifiers from the working directory and **not** from the
+script's own location.
+
+That directory is a scratch one, **never the project under test**: the gate must not edit the
+`package.json` of the repository it is judging, and a dev dependency added for a picture that no verdict
+reads would outlive the run that needed it.
 
 ```bash
-corepack pnpm --filter <app> add -D pixelmatch pngjs   # only if the project lacks them
+SCRATCH="$(mktemp -d)" && cd "$SCRATCH" && npm install --silent pixelmatch pngjs
 
 node --input-type=module - "$CHE_PIXEL_DESIGN_IMAGE" "$CHE_PIXEL_DOM_SCREENSHOT" "$CHE_PIXEL_VISUAL_DIFF" <<'JS'
 import { readFileSync, writeFileSync } from "node:fs";
@@ -501,7 +506,7 @@ crop is the same instrument narrowed to one box, and it is what makes the residu
 `object-fit`, crop, `<svg>` path data, reflow, paint order — readable at all.
 
 It is still **evidence**: nothing scores it, it never exits non-zero on a difference, and its ratio is
-not a pass mark. Run it from the project under test, as above, so `pngjs`/`pixelmatch` resolve there:
+not a pass mark. Run it from the same scratch directory as above, so `pngjs`/`pixelmatch` resolve there:
 
 ```bash
 node --input-type=module - \
@@ -524,7 +529,9 @@ Two things it needs that no other step does, both stated rather than inferred:
   invent the pixels it then compares and would erase the size drift, which is itself the finding.
 
 Rows in the sheet follow the JSON's `elements` order — that is the legend, since drawing labels would
-mean shipping a font to a tool whose whole point is not to add a dependency.
+mean shipping a font to a tool whose whole point is not to add a dependency. Every element keeps its
+row: an element that was refused renders blank and its reason is in the JSON, so the strip never
+shifts a picture onto the wrong element and "could not measure" never looks like "matched".
 
 ---
 
