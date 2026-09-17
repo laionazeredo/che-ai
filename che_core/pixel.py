@@ -1059,7 +1059,11 @@ def build_report(
     passed = sum(1 for m in verified if m.passed)
     within = round(passed / len(verified), 4)
 
-    critical_deviations = [m.deviation or 0.0 for m in verified if m.weight == WEIGHT_CRITICAL]
+    critical_deviations = [
+        m.deviation or 0.0
+        for m in verified
+        if m.weight == WEIGHT_CRITICAL and m.category in {"padding", "font_size"}
+    ]
     max_critical = round(max(critical_deviations), 2) if critical_deviations else 0.0
 
     #: §3 condition 3 is written as an 8px budget, which only describes the px
