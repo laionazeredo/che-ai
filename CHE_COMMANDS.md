@@ -90,7 +90,7 @@ The agent MUST recognise these and react immediately.
 
 ## `/che-spec [input_type:ticket|prd-flockr|desc|existing] [input_value] [worktree] [slug]`
 
-**What it does:** Standalone entry-point for generating or validating a **Che Execution Specification (SPEC)** — anti-hallucination/anti-scope-drift planning artifact that replaces legacy Flockr PRD. Saves DURABLE in `$CHE_WORKSPACE_SHARED/spec_<slug>.md` (outside sessions/, outside user worktree). 4 accepted input sources: (A) existing Approved SPEC; (B) Ticket URL (Linear FLO-XXX / ClickUp / GitHub Issue); (C) legacy-project PRD path (.md); (D) brief inline description with iterative prompts.
+**What it does:** Standalone entry-point for generating or validating a **Che Execution Specification (SPEC)** — anti-hallucination/anti-scope-drift planning artifact that replaces legacy Flockr PRD. Saves DURABLE in `$CHE_WORKSPACE_SHARED/specs/<slug>/<ts>-spec.md` (outside sessions/, outside user worktree). 4 accepted input sources: (A) existing Approved SPEC; (B) Ticket URL (Linear FLO-XXX / ClickUp / GitHub Issue); (C) legacy-project PRD path (.md); (D) brief inline description with iterative prompts.
 **When to invoke:** User wants to draft/update a SPEC **before** /che-act, or standalone for planning document, or when SM §0.5 auto-invokes it because no Approved SPEC exists.
 **Agent action on this command:**
 1. IMMEDIATELY call `che-spec` skill.
@@ -126,7 +126,7 @@ The agent MUST recognise these and react immediately.
 **Agent action on this command:**
 1. IMMEDIATELY call `che-act` skill.
 2. Scrum Master executes Pre-Flight (worktree path + `che compute_paths` → ensure_dirs + Level 2 binding).
-3. **SM §0.5 SPEC GATE (before scope capture):** Glob `$CHE_WORKSPACE_SHARED/spec_*.md` → parse Approved. If 0 OR user provided input → **automatically invoke che-spec Skill**, passing user input args (ticket/prd/desc).
+3. **SM §0.5 SPEC GATE (before scope capture):** Glob `$CHE_WORKSPACE_SHARED/specs/**/*.md` (canonical; if empty, fall back to the legacy `$CHE_WORKSPACE_SHARED/spec_*.md`) → parse Approved. If 0 OR user provided input → **automatically invoke che-spec Skill**, passing user input args (ticket/prd/desc).
 4. Capture 2 return lines: `SPEC_PATH` + `SPEC_STATUS`. Gate: Approved → releases Scope Capture; Draft → offers (A) `[SPEC-OVERRIDE]` Override logged in decisions / (B) Stop, finish SPEC later via standalone `/che-spec`.
 5. Scrum Master proceeds to Scope Capture.
 **Syntax examples:**

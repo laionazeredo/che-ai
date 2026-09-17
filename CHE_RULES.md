@@ -115,7 +115,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 
 For ANY feature implementation / bugfix with more than one step:
 1. **SCRUM MASTER (`che-act`):**
-   - **Preflight 0.5 (SPEC GATE — replaces legacy PRD)** — Validates if **SPEC Approved** already exists in `$CHE_WORKSPACE_SHARED/` (glob `spec_*.md` → parse YAML `status: Approved`). If 0 → **automatically invokes interactive `che-spec` skill** (4 input sources: existing / ticket URL / legacy-project PRD .md path / brief description). Captures 2 return lines: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → releases §1 scope capture; `Draft` → offers (A) Override without Approved, append `[SPEC-OVERRIDE] <reason>` in `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` or (B) Stop, finish SPEC later via standalone `/che-spec`.
+   - **Preflight 0.5 (SPEC GATE — replaces legacy PRD)** — Validates if **SPEC Approved** already exists in `$CHE_WORKSPACE_SHARED/` (glob `specs/**/*.md`, falling back to the legacy `spec_*.md` → parse YAML `status: Approved`). If 0 → **automatically invokes interactive `che-spec` skill** (4 input sources: existing / ticket URL / legacy-project PRD .md path / brief description). Captures 2 return lines: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → releases §1 scope capture; `Draft` → offers (A) Override without Approved, append `[SPEC-OVERRIDE] <reason>` in `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` or (B) Stop, finish SPEC later via standalone `/che-spec`.
    - **Understand scope → validate ACs →** (if large) **plan gh-stack multi-PR** → build TASK GRAPH (or approve existing list) → create TASK ENVELOPE per task.
 2. **DEVELOPER (`che-developer`):** ONLY called by SM, with formal ENVELOPE.
    - First invokes `engineering-contracts`.
@@ -493,7 +493,7 @@ Every domain folder has the structure below. DO NOT break (boilerplate created a
 | Location | Mandatory | Who fills it |
 |---|---|---|
 | New skills (`skills/<new>/SKILL.md` file YAML header frontmatter `domain:` field) | **YES NEW (TODAY 2026-09-01 onwards)** | Skill author before merge |
-| SPEC (`spec_<slug>.md` YAML frontmatter `domain:` field) | OPTIONAL — default `engineering` | If not declared = normal engineering; if UX/product etc = specific domain. che-spec skill already sets default engineering if field is empty. |
+| SPEC (`specs/<slug>/<ts>-spec.md` YAML frontmatter `domain:` field) | OPTIONAL — default `engineering` | If not declared = normal engineering; if UX/product etc = specific domain. che-spec skill already sets default engineering if field is empty. |
 | Project registry Level 1.5 `product_context.md` frontmatter `domains: [ux, copywriting, ...]` field | OPTIONAL array | When project frequently uses multiple domains | Scrum-master loads profiles of all listed domains at the start of the session. |
 
 ### Correct (recommended) skill frontmatter example for new skill:

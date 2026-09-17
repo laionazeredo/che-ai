@@ -18,7 +18,7 @@ cross_ref_pixel_gate: "domains/ux/gates/pixel-check-gate.md"
 | Field | Value |
 |---|---|
 | 🔴 **Canonical Handoff ID slug** | `ux-handoff-<YYYYMMDD>-<feature-slug>` |
-| 🔴 **Approved SPEC ID** (link to `spec_<slug>.md` in workspace) | `../../specs/spec_<slug>.md` |
+| 🔴 **Approved SPEC ID** (link to the SPEC in the workspace) | `../../specs/<slug>/<ts>-spec.md` |
 | 🔴 **Linear / ClickUp / Jira Ticket** | `<LINEAR-ID>` / `<CLICKUP-ID>` |
 | 🔴 **Feature / 1-line Description** | `<1 line, what this delivery provides>` |
 | 🔴 **Designer Owner** | `<designer name>` |

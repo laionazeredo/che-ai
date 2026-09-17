@@ -215,7 +215,7 @@ availability of the feature, prioritizing reach and zero-cost over the higher se
     - **Command**: `/che-architect` Step 2.
     - **Content**: Decomposition of intent into high-level phases (Foundations, Core, Enhancement) with feature maps and dependencies. Serves as the "Highway" and the source of truth for task relation.
 3.  **Phase 3: Tasks (Tactical Contracts)**:
-    - **Artifact**: `spec_<slug>.md` (stored in `$CHE_WORKSPACE_SHARED/`).
+    - **Artifact**: `specs/<slug>/<ts>-spec.md` (stored under `$CHE_WORKSPACE_SHARED/`).
     - **Command**: `/che-spec` and `/che-plan`.
     - **Methodology**: **SbE (Spec by Example)** using Given/When/Then.
     - **Navigability**: Every SPEC must link to a `roadmap_phase` ID from `roadmap.md`.
@@ -544,7 +544,7 @@ try { ... } catch(e) { throw new Error("failed") /* LOST stack and root cause */
 #### 20.1 Path Contract — One Worktree = One Base of Truth.
 
 - **Durable Assets**: `intent.md`, `roadmap.md`, and `architecture.md` live at the Project level (L2).
-- **Tactical Assets**: `task_graph.md`, `decisions.log.jsonl`, and `spec_*.md` live at the Worktree level (L3).
+- **Tactical Assets**: `task_graph.md`, `decisions.log.jsonl`, and the SPEC (`specs/<slug>/<ts>-spec.md`) live at the Worktree level (L3).
 - **Shared History**: Multiple sessions working on the same worktree MUST read from the same L3 tactical assets to ensure consistency.
 - **Session Isolation**: Only execution logs and isolated debugger state live in the L4 session folder.
 

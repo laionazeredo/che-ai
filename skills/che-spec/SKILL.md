@@ -1,6 +1,6 @@
 ---
 name: "che-spec"
-description: "Generate or validate a Che Execution Specification (SPEC). 4 inputs: existing spec file, ticket URL (Linear/ClickUp/GitHub), legacy-project PRD .md path, or inline brief. Produces 7 sections + machine-parsable YAML frontmatter, user-approved before save into $CHE_WORKSPACE_SHARED/spec_<slug>.md (DURABLE workspace area OUTSIDE user worktree code)."
+description: "Generate or validate a Che Execution Specification (SPEC). 4 inputs: existing spec file, ticket URL (Linear/ClickUp/GitHub), legacy-project PRD .md path, or inline brief. Produces 7 sections + machine-parsable YAML frontmatter, user-approved before save into $CHE_WORKSPACE_SHARED/specs/<slug>/<ts>-spec.md (DURABLE workspace area OUTSIDE user worktree code)."
 ---
 
 # Che Spec Generator (SPEC)
@@ -131,7 +131,7 @@ Present choices when input arg is missing or ambiguous. First match wins, never 
 
 | # | Source | User provides | Action before draft |
 |---|---|---|---|
-| A | **Existing SPEC file** | File path OR pick from glob `$CHE_WORKSPACE_SHARED/spec_*.md` | Read it; if `status=Approved` → jump straight to §5 (approval). If Draft → proceed to §3 editing with existing content pre-filled. |
+| A | **Existing SPEC file** | File path OR pick from glob `$CHE_WORKSPACE_SHARED/specs/**/*.md` (canonical; if empty, fall back to the legacy `$CHE_WORKSPACE_SHARED/spec_*.md`) | Read it; if `status=Approved` → jump straight to §5 (approval). If Draft → proceed to §3 editing with existing content pre-filled. |
 | B | **Ticket URL** (Linear FLO-XXX, ClickUp, GitHub issue) | Full URL | 1. Try to extract title + description + status via MCP tools (`mcp_flockr-linear`, `mcp_laion-clickup`, `mcp_github`). If MCP fails → fall back to user-provided inline description. 2. Populate frontmatter `ticket_ref:` + `spec_id:` from slug. 3. Seed §1 WHY bullets from ticket description. 4. Seed §4 MUST ACs = 3 bullets if ticket has Acceptance Criteria field. |
 | C | **Legacy PRD** (Project legacy .md) | Absolute path to `.md` file | Parse with headings, map: `Problem / Background` → §1 WHY; `Goals` → §4 MUST; `Non-Goals` → §1 Non-goals; `Data Model / Migration` → §6 Hints; `Acceptance Criteria` → §4 MUST AC, each prefixed `GWT` verbatim; `Risk` → §5 Rollback trigger. If section missing → leave empty and prompt user to fill during §4 review. |
 | D | **Inline brief** (short text 2–5 sentences) | User typed description or typed nothing at all → walk through interactive prompts 1-by-1 | Prompt for: change_class (feature|bug|refactor|perf|ops); 3 bullets §1 WHY; 3 sections §2 (Can Touch ≤ 10 files, Can Create, Cannot Touch ≤ 5 lines); 3 PRE + 3 POST + 2 INVARIANTS in §3; 3 MUST + 1 SHOULD + 1 MAY §4 ACs (each AC must include GWT + TEST_METHOD literal). Defaults: `estimated_files_max=15`, `estimated_max_lines_add=400`, `new_dependencies=[]`, `pii_touch=none`, `supabase_rls_touch=false`, `currency_gbp_pence=false`, `domain=engineering`, `flags=LANG_PT_CHECK=ENABLED`. |
@@ -505,19 +505,19 @@ This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bila
 ## §6 SAVE (atomic write via contract helpers)
 
 1. **Final sanitise slug:** `slug = frontmatter.spec_id` sanitised `[^a-zA-Z0-9_-] → -`.
-2. **Build UNIQUE path at workspace ROOT (NEVER manual):**
+2. **Resolve the canonical path (NEVER hand-build it):**
    ```bash
-   # related_id = "" to save at root of $CHE_WORKSPACE_SHARED/specs/
-   # scope = workspace → DURABLE
-   SPEC_FINAL_PATH="$(che output_path "spec" "spec" "${slug}" "workspace" "md" "")"
+   # related_id = <slug>: one folder per SPEC, so versions stay together.
+   # scope = workspace → DURABLE. output_path creates the parent on demand.
+   SPEC_FINAL_PATH="$(che output_path "spec" "spec" "${slug}" "workspace" "md")"
    ```
-   Expected result: `$CHE_WORKSPACE_SHARED/specs/spec_<slug>.md`
-   → Note: SM /che-act searches for `$CHE_WORKSPACE_SHARED/spec_*.md`. We will align so the spec is saved directly in the pattern expected by the execution gate.
+   Result: `$CHE_WORKSPACE_SHARED/specs/<slug>/<UTC-ts>-spec.md`
+   This is the ONLY location the execution gate reads. Never write `$CHE_WORKSPACE_SHARED/spec_<slug>.md`
+   — that legacy root path is still *read* for backward compatibility (`/che-act`, `/che-ship`) but never written.
 3. **Check existing overwrite:** If file already exists AND existing status is Approved → ask "Overwrite Approved spec? Yes/No" before writing. Yes = overwrite. No = append `-v2`, `-v3` suffix to slug until unused.
-4. **Write EXCLUSIVELY via atomic write helper:**
+4. **Write EXCLUSIVELY via atomic write helper — to the path from step 2:**
    ```bash
-   # Saves at shared workspace root to be visible to /che-act
-   che write_file_atomic "$CHE_WORKSPACE_SHARED/spec_${slug}.md" <<'SPEC_EOF'
+   che write_file_atomic "$SPEC_FINAL_PATH" <<'SPEC_EOF'
    ---
    # Full YAML frontmatter here
    ---
