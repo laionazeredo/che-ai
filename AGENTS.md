@@ -16,7 +16,7 @@ This document defines the rules and architectural boundaries for **AI coding age
 >
 > The `che-ai` / `che` terminal CLI **is NOT a replacement** — it is the **structural administrative sidecar** for team bootstrap, project admin, CI wiring, trash-safe removal, bulk listing/exporting, and offline structural operations. A normal team flow is **(1) `che project init` + `che worktree add` (terminal or CI setup) → (2) in-IDE `/che-spec` (inside Claude Code) → (3) `/che-act` → (4) `/che-ship`**. Not one or the other.
 
-Che ships as a **zero-dependency PEP-621 Python package** installable via `pipx`. Two binaries are globally registered on the user's `PATH`:
+Che ships as a **PEP-621 Python package** installable via `pipx`. Two binaries are globally registered on the user's `PATH`:
 
 | Binary | Canonical | Purpose | Entry point |
 | :----- | :-------: | :------ | :---------- |
@@ -86,7 +86,7 @@ The L1 "workspace" grouping level (`workspaces/<workspace>/<project>/`) was reti
 
 Based on [The Pragmatic Programmer](https://pragprog.com/the-pragmatic-programmer/) (Hunt & Thomas, 1999) — orthogonality, tracer bullets, DRY, good-enough software, plain-text ground truth. Spec writing is [Specification by Example](https://en.wikipedia.org/wiki/Specification_by_example) (Adzic, 2011): `/che-spec` always returns a spec led by concrete customer examples, never a TODO list.
 
-- **KISS & YAGNI (Pragmatic orthogonality)**: Minimize dependencies and avoid over-engineering. `pyproject.toml` declares `dependencies = []` on purpose — argparse + stdlib sqlite3 + stdlib subprocess is the feature set. Add a dep only when you can prove stdlib is genuinely insufficient.
+- **KISS & YAGNI (Pragmatic orthogonality)**: Minimize dependencies and avoid over-engineering. `pyproject.toml`'s dependency list is a closed set of two (`Pillow`, `numpy`) and both exist for `che pixel diff`/`che pixel crop` alone — argparse + stdlib sqlite3 + stdlib subprocess is the feature set everywhere else. Add a dep only when you can prove stdlib is genuinely insufficient *and* name what it replaced.
 - **Design by Contract (DbC)**: Apply [Design by Contract™](https://en.wikipedia.org/wiki/Design_by_contract) preconditions and postconditions on core public `che_core/*` functions via assertions / docstring contracts / argparse schemas. Fail fast at the boundary instead of corrupting state 4 steps later.
 - **Storytelling Commits**: Use conventional commits with a **CDJ body** (Context → Decision → Justification, one paragraph each). Two lines is a style nit; three paragraphs is the contract.
 - **Worktree Hygiene**: Never leave temporary files, logs, screenshots, caches, or generated `.md` spec drafts at the **root of a user repository**. Ephemeral data belongs in L4 (`sessions/<id>/`); shared evidence belongs in L3 (`qa/`, `designs/`). Cross this line once and the team loses trust permanently.

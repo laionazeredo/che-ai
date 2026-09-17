@@ -160,6 +160,44 @@ fi
 
 check_tool REQUIRED ruff "ruff (lint + formatter)" $'Install ONE of:\n  (A) Pipx (recommended):      pipx install ruff\n  (B) Python user install:     python3 -m pip install --user ruff\n  (C) Inside a venv:            pip install ruff'
 
+# The pixel gate's evidence lane is the only code in Che that imports anything outside the
+# standard library. Checked here because the failure is invisible until `che pixel diff` runs —
+# every other command works without them, and a dev box that never draws a picture would never
+# notice. `pip install -e .` resolves both from pyproject.
+if command -v python3 >/dev/null 2>&1; then
+  MISSING_MODULES="$(python3 - <<'EOF' 2>/dev/null
+import importlib.util
+print(" ".join(name for name in ("PIL", "numpy") if importlib.util.find_spec(name) is None))
+EOF
+)"
+  if [ -z "${MISSING_MODULES}" ]; then
+    ok "pixel evidence dependencies (Pillow, numpy)"
+  else
+    MISSING_REQUIRED=$((MISSING_REQUIRED + 1))
+    miss "pixel evidence dependencies — missing: ${MISSING_MODULES}. REQUIRED to run the test suite."
+    cat <<'EOF'
+          §4.5's evidence lane (`che pixel diff`, `che pixel crop`) needs these two.
+          Everything else in the CLI runs without them.
+
+          Install ONE of:
+
+            (A) Local virtual env (RECOMMENDED):
+                cd /path/to/che-ai
+                python3 -m venv .venv
+                . .venv/bin/activate
+                pip install -e .
+                pip install pytest ruff
+
+            (B) User-level site-packages:
+                python3 -m pip install --user Pillow numpy
+
+            (C) Pipx (if Che is already installed that way):
+                pipx install -e . --force
+
+EOF
+  fi
+fi
+
 # ---------------------------------------------------------------------------
 # OPTIONAL tools — missing → warn only, gates are skipped locally.
 # ---------------------------------------------------------------------------

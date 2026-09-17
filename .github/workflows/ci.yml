@@ -21,6 +21,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # `-e .` resolves what pyproject declares. The pixel gate's evidence lane imports
+          # Pillow and numpy, so a CI that installed only ruff+pytest would fail on exactly the
+          # tests that hold that lane to the reference implementation's numbers.
+          pip install -e .
           pip install ruff pytest
 
       - name: Run Ruff Linter
