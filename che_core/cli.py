@@ -1,5 +1,7 @@
 import argparse
+import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -10,6 +12,11 @@ from che_core.paths import (
     ensure_session_dirs,
     output_path,
     write_file_atomic,
+)
+from che_core.pixel_sources import (
+    BACKENDS_WITH_EXTRACTOR,
+    BACKENDS_WITHOUT_EXTRACTOR,
+    DECLARED_BACKENDS,
 )
 from che_core.portability import export_project, import_project
 from che_core.project_layout import DOMAIN_SLUGS
@@ -46,6 +53,117 @@ def _build_filters_from_args(args) -> dict:
     if args.ready_only:
         filters["ready_only"] = True
     return filters
+
+
+#: Subfolder of the worktree-side design tree holding one screen's pixel-check inputs.
+_PIXEL_CHECK_DIRNAME = "pixel-check"
+
+
+def _pixel_artifact_paths(
+    worktree_root: str,
+    session_id: str,
+    sub_product: str,
+    breakpoint: str,
+    backend: str,
+    related_id: str,
+    attempt: int,
+) -> dict:
+    """Resolve the artifact set gate `ux-pixel-check-gate` runs on (§2.3, §4.1–§4.3).
+
+    Until now the gate's recipe and the CLI reference both used Undefined shell
+    variables, so every run invented its own paths and none of them could be found
+    again. Two storage classes make that unacceptable in opposite directions:
+
+    * The **map**, the **raw design capture** and the **per-element record** are
+      evidence a reviewer reads in the PR diff, and §4.3 freezes the map as
+      regression — so they live inside the worktree under
+      ``design/<sub_product>/pixel-check/`` with stable per-breakpoint names. A
+      timestamped name would make "frozen" a fiction: the next run could not find
+      the previous one, and a re-run would look like a new map.
+    * The **DOM facts** and the **report** measure one particular attempt. §5 allows
+      exactly one free retry, so attempt 1 and attempt 2 must both survive; the
+      attempt number is in the filename rather than overwriting, which is what makes
+      the retry budget auditable after the fact.
+
+    The sub-product's design tree must already exist. Refusing otherwise keeps a
+    mistyped slug from creating a parallel design root that no skill owns.
+    """
+    wt_root = Path(worktree_root).resolve()
+    if not wt_root.is_dir():
+        print(f"Error: {wt_root} is not a valid worktree directory.", file=sys.stderr)
+        sys.exit(2)
+
+    design_dir = wt_root / "design" / sub_product
+    if not design_dir.is_dir():
+        print(f"Error: no design tree for sub-product {sub_product!r} at {design_dir}.", file=sys.stderr)
+        print(
+            f"Hint: create it first with `che designer init {wt_root} {session_id} --sub-product {sub_product}`.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    label = breakpoint.strip()
+    if not label or "/" in label or label in (".", ".."):
+        print(f"Error: {breakpoint!r} is not a usable breakpoint label.", file=sys.stderr)
+        sys.exit(2)
+
+    if backend in BACKENDS_WITHOUT_EXTRACTOR:
+        # This flag picks the raw-capture NAMING CONVENTION, not just a label, and there
+        # is none to pick for a backend no session has ever been recorded from. Inventing
+        # one would put a filename in the recipe that nothing can write.
+        print(
+            f"Error: --backend {backend!r} has no capture convention yet — no session has ever "
+            "been recorded from it, so the raw reference filename would be a guess.",
+            file=sys.stderr,
+        )
+        print(
+            "Hint: see domains/ux/connectors/penpot.config.md 'Wiring status' for what has to "
+            f"exist first. Implemented now: {', '.join(sorted(BACKENDS_WITH_EXTRACTOR))}.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    if attempt < 1:
+        print(f"Error: --attempt must be >= 1, found {attempt}.", file=sys.stderr)
+        sys.exit(2)
+
+    paths = ensure_session_dirs(str(wt_root), session_id)
+    # `output_path` resolves its roots from the environment, because every shell
+    # caller reaches it through `eval "$(che compute_paths …)"`. This command is meant
+    # to be self-sufficient, so it seeds the roots it needs from what it just resolved.
+    os.environ["CHE_SESSION_DIR"] = paths["CHE_SESSION_DIR"]
+    os.environ["CHE_WORKSPACE_SHARED"] = paths["CHE_WORKSPACE_SHARED"]
+
+    check_dir = design_dir / _PIXEL_CHECK_DIRNAME
+    slug = f"{sub_product}-{label}"
+    # OpenPencil's raw artefact is the committed .op source itself; the Figma bridge
+    # returns text that has no home of its own, so the capture is dumped beside the map.
+    raw_path = design_dir / "source" / "home.op" if backend == "openpencil" else check_dir / f"{label}.design-raw.txt"
+
+    return {
+        "CHE_PIXEL_DIR": str(check_dir),
+        "CHE_PIXEL_MAP": str(check_dir / f"{label}.map.json"),
+        "CHE_PIXEL_DESIGN_FACTS": str(check_dir / f"{label}.design-facts.json"),
+        "CHE_PIXEL_DESIGN_RAW": str(raw_path),
+        "CHE_PIXEL_DOM_FACTS": output_path("design", f"{slug}-dom-facts", related_id, "session", "json"),
+        "CHE_PIXEL_REPORT": output_path("design", f"{slug}-check-attempt{attempt}", related_id, "session", "json"),
+        # §4.5 evidence. Session-side because it is a picture of one attempt at one
+        # breakpoint, regenerable at will, and attaching it to the PR is a human step —
+        # nothing in the repository should carry a stale rendering of a fixed layout.
+        "CHE_PIXEL_DESIGN_IMAGE": output_path("design", f"{slug}-design", related_id, "session", "png"),
+        "CHE_PIXEL_DOM_SCREENSHOT": output_path("design", f"{slug}-dom", related_id, "session", "png"),
+        "CHE_PIXEL_VISUAL_DIFF": output_path("design", f"{slug}-visual-diff", related_id, "session", "png"),
+        # The per-element crop, which is a different instrument from the frame delta: cropping
+        # to each element's own box is what makes the residue §6.1 lists readable at all, since a
+        # whole-frame percentage is dominated by antialiasing and font loading. Named here rather
+        # than derived from the diff's filename, so no recipe invents a path of its own.
+        "CHE_PIXEL_CROP_REPORT": output_path(
+            "design", f"{slug}-crop-report-attempt{attempt}", related_id, "session", "json"
+        ),
+        "CHE_PIXEL_CROP_SHEET": output_path(
+            "design", f"{slug}-crop-sheet-attempt{attempt}", related_id, "session", "png"
+        ),
+    }
 
 
 def main(argv=None):
@@ -456,9 +574,13 @@ def main(argv=None):
     )
     px_check.add_argument(
         "--design-backend",
-        choices=("figma", "openpencil"),
+        choices=DECLARED_BACKENDS,
         default=None,
-        help="Extractor for --design-source. Never inferred from the file's shape.",
+        help=(
+            "Extractor for --design-source. Never inferred from the file's shape. "
+            "With --design it is provenance only, so any declared backend is accepted — "
+            "the bag was produced elsewhere and mislabelling it would be the lie."
+        ),
     )
     px_check.add_argument("--breakpoint", default="", help="Breakpoint label, recorded as report provenance.")
     px_check.add_argument(
@@ -473,8 +595,55 @@ def main(argv=None):
         default=None,
         help="Viewport width the DOM was measured at. A mismatch with --design-viewport is refused, not scored.",
     )
+    px_check.add_argument(
+        "--attempt",
+        type=int,
+        default=1,
+        help=(
+            "Pass number over this screen. §5 allows 2 (the first measurement plus one free retry); "
+            "a higher value is refused unless --override-reason is given."
+        ),
+    )
+    px_check.add_argument(
+        "--override-reason",
+        default="",
+        help="The user's verbatim acceptance, recorded in the report. Required to exceed --attempt 2.",
+    )
     px_check.add_argument("--out", default=None, help="Write the JSON report here (atomic, outside-worktree safe).")
+    px_check.add_argument(
+        "--design-facts-out",
+        default=None,
+        help=(
+            "Write the §4.1 per-element record here. Pass $CHE_PIXEL_DESIGN_FACTS: it is committed "
+            "beside the map, INSIDE the worktree, so this is the one output that bypasses the "
+            "outside-worktree guard on purpose."
+        ),
+    )
     px_check.add_argument("--json", action="store_true", default=False, help="Print the full JSON report.")
+
+    px_paths = pixel_subs.add_parser(
+        "paths",
+        help="Resolve the gate's artifact set as `export CHE_PIXEL_*` lines (eval-able).",
+    )
+    px_paths.add_argument("worktree_root", help="Absolute path to the user worktree")
+    px_paths.add_argument("session_id", help="Che session id (sess-...)")
+    px_paths.add_argument(
+        "--sub-product",
+        required=True,
+        help="Sub-product slug — its design tree must already exist (che designer init)",
+    )
+    px_paths.add_argument("--breakpoint", required=True, help="Breakpoint label, e.g. lg")
+    px_paths.add_argument(
+        "--backend",
+        required=True,
+        choices=DECLARED_BACKENDS,
+        help=(
+            "Design backend (§3). Declared here so a backend the domain names but the engine "
+            "cannot read is refused with its reason instead of an 'invalid choice' typo message."
+        ),
+    )
+    px_paths.add_argument("--related-id", default="", help="Ticket/feature id, used to group the session artifacts")
+    px_paths.add_argument("--attempt", type=int, default=1, help="Pass number; it is part of the report filename")
 
     args = parser.parse_args(argv)
 
@@ -672,19 +841,37 @@ def main(argv=None):
 
     if args.command == "pixel":
         from che_core.pixel import (
+            design_facts_record,
             exit_code,
             remediation_steps,
             resolve_design_source,
             run_check,
             summarise,
         )
+        from che_core.pixel_dom import fact_bag_summary, validate_dom_facts
+
+        if args.pixel_cmd == "paths":
+            for key, value in _pixel_artifact_paths(
+                args.worktree_root,
+                args.session_id,
+                args.sub_product,
+                args.breakpoint,
+                args.backend,
+                args.related_id,
+                args.attempt,
+            ).items():
+                print(f'export {key}="{value}"')
+            return
 
         if args.pixel_cmd != "check":
             parser.error(f"Unknown pixel subcommand: {args.pixel_cmd}")
             return
 
         if args.design_source and not args.design_backend:
-            print("Error: --design-source requires --design-backend (figma|openpencil).", file=sys.stderr)
+            print(
+                f"Error: --design-source requires --design-backend ({', '.join(DECLARED_BACKENDS)}).",
+                file=sys.stderr,
+            )
             sys.exit(2)
 
         try:
@@ -703,6 +890,31 @@ def main(argv=None):
                 backend = args.design_backend
             if not isinstance(design_map, dict) or not isinstance(dom_facts, dict):
                 raise ValueError("--map and --dom must each contain a JSON object at the root")
+            # The bag is checked for shape and units BEFORE anything is scored, because a
+            # wrong unit is silent: `line_height: 24` would be scored as an enormous
+            # deviation rather than reported as the px-vs-ratio mistake it is, and a
+            # selector the map names but the bag omits would become a false
+            # `missing_from_dom` failure rather than the extraction error it is.
+            problems = validate_dom_facts(
+                dom_facts,
+                [
+                    entry["selector"]
+                    for entry in design_map.values()
+                    if isinstance(entry, dict) and isinstance(entry.get("selector"), str)
+                ],
+            )
+            if problems:
+                print(
+                    f"Error: the DOM fact bag is not usable ({len(problems)} problem(s)):",
+                    file=sys.stderr,
+                )
+                for problem in problems:
+                    print(f"  - {problem}", file=sys.stderr)
+                print(
+                    "Hint: re-run domains/ux/gates/assets/dom-facts-extractor.js over the whole map.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
             report = run_check(
                 design_map,
                 design_facts,
@@ -711,6 +923,13 @@ def main(argv=None):
                 breakpoint=args.breakpoint,
                 design_viewport=args.design_viewport,
                 dom_viewport=args.dom_viewport,
+                attempt=args.attempt,
+                override_reason=args.override_reason,
+                # Digests of the two inputs, so a later run can tell "the same check
+                # again" from "the check was moved": a changed digest means the map or
+                # the design was edited, and comparing scores across that is meaningless.
+                design_map_sha256=hashlib.sha256(Path(args.map).read_bytes()).hexdigest(),
+                design_source_sha256=hashlib.sha256(Path(args.design_source or args.design).read_bytes()).hexdigest(),
             )
         except ValueError as exc:
             print(f"Error: {exc}", file=sys.stderr)
@@ -718,6 +937,19 @@ def main(argv=None):
 
         payload = report.to_json()
         payload["summary"] = summarise(report)
+        # What the bag declared about itself: the consequence of a thin extraction shows up
+        # in `unverified_categories`, but the cause does not.
+        payload["dom_fact_bag"] = fact_bag_summary(dom_facts)
+        if args.design_facts_out:
+            # §4.1's human record. Written AFTER the run is scored, so a refused run leaves
+            # no file behind — the artefact is only worth having if it describes a check
+            # that actually happened. And written directly rather than through
+            # `write_file_atomic`, because the guard that helper enforces is exactly what
+            # this file is exempt from: it is committed beside the map, inside the worktree.
+            record = design_facts_record(design_map, design_facts, args.breakpoint)
+            target = Path(args.design_facts_out)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         if args.out:
             write_file_atomic(args.out, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
         if args.json:

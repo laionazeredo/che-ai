@@ -1,7 +1,14 @@
 """Design-side fact extractors for the pixel-check engine.
 
-Two backends, resolved fail-closed by `DESIGN_BACKEND_CONTRACT.md` and never
-converted into one another:
+Two extractors, resolved fail-closed by `DESIGN_BACKEND_CONTRACT.md` and never
+converted into one another. A third design tool is declared first-class by the UX
+domain — Penpot — and has deliberately **no** extractor here: its MCP server exposes
+`execute_code` rather than a fact-export tool, so a bag would have to be recorded from
+a real session and pinned by a fixture before any number it produced could be trusted.
+Writing that parser against a guessed schema is the exact mistake §4 of the gate warns
+about, so until the recording exists `penpot` is *refused by name* (see
+:data:`BACKENDS_WITHOUT_EXTRACTOR`) rather than failing as an unknown string — the
+difference between "this tool cannot be read yet" and "you spelled the flag wrong":
 
 * ``openpencil`` — reads a ``.op`` document. It is plain JSON, so this is the
   robust path: no vendor text format to reverse-engineer, and it is the harness's
@@ -16,19 +23,31 @@ both **omit** a property the backend does not expose rather than defaulting it t
 zero. Omitting is what lets the comparator mark a category unverified instead of
 scoring a comparison against an invented value.
 
-Coverage differs by backend, measured against the gate's §1 table:
+Coverage differs by backend, measured against the gate's §1 table. `no` means **no code path
+emits the property at all** — a structural gap. A property that only one *sampled document*
+lacks is a different thing and is marked as such, because conflating the two turns a fact
+about a test fixture into a claim about a tool:
 
-===============  =========  =============
-section          openpencil  figma bridge
-===============  =========  =============
-box / position   yes         yes
-padding          yes         yes
-radius           yes         yes
-border           no          yes
-typography       yes         no letter-spacing
-colours          yes         yes
-shadow           no          yes
-===============  =========  =============
+===============  ===========  =============
+section          openpencil   figma bridge
+===============  ===========  =============
+box / position   yes          yes
+padding          yes          yes
+radius           yes          yes
+border           no           yes
+typography       yes          yes †
+colours          yes          yes
+shadow           no           yes
+===============  ===========  =============
+
+† Both parsers read `letterSpacing`; the sampled bridge response carries none, so #9 is
+unverified for *that document* rather than for the backend.
+
+`margin` appears in neither design column. Auto-layout replaced it with `gap` (#14), so
+`margin` is declared **unreachable** rather than merely unmeasured: it is excluded from the
+`coverage` denominator and named in the report. See
+`che_core.pixel.UNREACHABLE_CATEGORY_KEYS` for why the exclusion is a disclosure and not a
+silent discount.
 """
 
 from __future__ import annotations
@@ -37,6 +56,26 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+# --- the backend vocabulary ------------------------------------------------
+
+#: Design backends this module can actually read.
+BACKENDS_WITH_EXTRACTOR = frozenset({"figma", "openpencil"})
+
+#: Design backends the UX domain declares but that nothing here can read.
+#:
+#: Keep them separate from "unknown": a caller who asks for `penpot` is not mistaken,
+#: only early — `domains/ux/connectors/penpot.config.md` documents it as a first-class
+#: alternative to Figma, and it genuinely is, for the parts of the domain that need a
+#: design tool rather than a numeric fact bag. Refusing it by name keeps the reply
+#: actionable; treating it as a typo sends the caller to check their spelling against
+#: documentation that told them the opposite.
+BACKENDS_WITHOUT_EXTRACTOR = frozenset({"penpot"})
+
+#: Every backend name a caller may legitimately say out loud. Used for CLI vocabularies,
+#: so an unimplemented backend reaches the code that can explain itself instead of being
+#: rejected by the argument parser with a message shaped like a typo.
+DECLARED_BACKENDS = tuple(sorted(BACKENDS_WITH_EXTRACTOR | BACKENDS_WITHOUT_EXTRACTOR))
 
 # --- shared helpers ---------------------------------------------------------
 
@@ -47,6 +86,42 @@ COORD_FRAME_PARENT = "parent"
 #: Declares that no comparable coordinates exist for this node. An `.op` document
 #: is auto-layout: children are laid out by the tool, so they carry no x/y at all.
 COORD_FRAME_NONE = "none"
+
+#: The `layout.mode` values that make a Figma node an auto-layout container.
+#:
+#: Padding exists *only* on such a node, and the bridge omits a property whose
+#: value is zero — so here an absent `padding` is a **declared 0**, not a withheld
+#: value. Reading it as withheld made a ×2 critical category unverifiable on every
+#: auto-layout screen, which returned INCONCLUSIVE on a page where every other
+#: property was measurable (§2.5).
+FIGMA_AUTO_LAYOUT_MODES = frozenset({"row", "column", "grid"})
+
+#: The same notion in `.op`, which names the axis `layout` and likewise omits a
+#: zero `padding`.
+OP_AUTO_LAYOUT_MODES = frozenset({"vertical", "horizontal", "grid"})
+
+#: Node kinds that render as a *box*, and therefore have a corner radius at all.
+#:
+#: Same rule as padding: a box always has a radius, and both backends leave the
+#: property out when it is zero — so its absence is a declared 0. A text node, a
+#: vector or an ellipse has no radius concept, so nothing is invented for them.
+BOX_NODE_KINDS = frozenset({"frame", "rectangle", "instance", "component", "group"})
+
+#: The bridge reports `opacity` only when a node is not fully opaque, so an absent
+#: value means 1.0 rather than "unknown". Reading it as unknown would leave the
+#: category unverified on every element, and an element that is correctly sized,
+#: positioned and invisible is exactly the failure §6.1 admits the gate cannot see.
+DEFAULT_OPACITY = 1.0
+
+#: The value each backend uses for "this text box takes the text's own size".
+#:
+#: §1 #18 needs it because a line count is only knowable where wrapping *cannot* happen.
+#: When the box hugs its content, the rendered lines are exactly the text's own breaks, so
+#: the design can state a count; when the box has a fixed or filled width the text wraps at
+#: a width the design does not report and any count would be an invention. Figma spells it
+#: `sizing.horizontal: "hug"`, `.op` spells it `textGrowth: "auto"`.
+FIGMA_TEXT_SIZING_HUG = "hug"
+OP_TEXT_GROWTH_AUTO = "auto"
 
 _PX_RE = re.compile(r"^-?\d+(?:\.\d+)?px$")
 
@@ -109,6 +184,57 @@ def _first_color(fills: Any) -> Optional[str]:
     return None
 
 
+def _resolve_paint(fill: Any) -> Optional[str]:
+    """One paint entry as something comparable: a flat colour, or a gradient's CSS."""
+    colour = _first_color([fill])
+    if colour:
+        return colour
+    if isinstance(fill, dict):
+        for key in ("gradient", "css", "value"):
+            candidate = fill.get(key)
+            if isinstance(candidate, str) and "gradient(" in candidate:
+                return candidate
+    return None
+
+
+def _paint_stack(fills: Any) -> Optional[List[str]]:
+    """Every paint in a fill list, **bottom-to-top**, or ``None`` when it is not comparable.
+
+    This replaces ``_first_paint``, which returned the first *resolvable* entry. On a node with
+    two fills that is the bottom layer alone, so an implementation that dropped the top layer — a
+    tint over a base, a gradient over a colour — was compared against the base and **passed**. That
+    is the truncation §6.1 listed as "stacked fills are outside §1", and what it hides is worse than
+    a gap: a confident match. It is also how a gradient design once passed against a flat
+    implementation, one fill earlier.
+
+    Two rules make the replacement fail closed rather than quietly partial:
+
+    * **Every** entry must resolve to a comparable paint. An image fill is not comparable, and
+      skipping it would shift the indices so layer *n* of one side was compared against layer *n-1*
+      of the other — a wrong pair reported as a deviation. Non-comparable input omits the property,
+      which the comparator reports as unverified. Note this is a coverage *loss* on such nodes and
+      still the correct trade: the value it replaces was misleading, not merely incomplete.
+    * The result is ordered bottom-to-top, the direction the design side states natively (Figma's
+      ``fills[0]`` is the bottom layer). The DOM side re-orders to match — CSS lists
+      ``background-image`` top-first with ``background-color`` underneath everything. A caller that
+      cannot establish its source's direction must not call this with a stack; see
+      :func:`parse_op_facts`.
+    """
+    if fills is None:
+        return None
+    if not isinstance(fills, (list, tuple)):
+        fills = [fills]
+    if not fills:
+        return None
+    resolved: List[str] = []
+    for fill in fills:
+        paint = _resolve_paint(fill)
+        if paint is None:
+            return None
+        resolved.append(paint)
+    return resolved
+
+
 def _shadow_from_css(value: str) -> Optional[Dict[str, float]]:
     """Parse ``"0px 2px 8px 0px rgba(0,0,0,0.08)"`` into the gate's five axes."""
     if not isinstance(value, str):
@@ -161,6 +287,27 @@ def _shorthand(values: Any) -> Optional[List[float]]:
     return None
 
 
+def _gap_list(value: Any) -> Optional[List[float]]:
+    """Auto-layout gap -> ``[row]`` or ``[row, column]``.
+
+    A uniform gap is written as one value and an axis pair as two; a single value
+    is deliberately *not* broadcast here, so the comparator's own coercion stays
+    the one place that decides how a short list fills its axes.
+    """
+    if isinstance(value, str):
+        try:
+            nums = [float(p) for p in value.replace("px", " ").split() if p.strip()]
+        except ValueError:
+            return None
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        nums = [float(value)]
+    else:
+        return None
+    if not nums or len(nums) > 2:
+        return None
+    return nums
+
+
 # --- OpenPencil (.op) --------------------------------------------------------
 
 #: `.op` pads a frame with a 1/2/4-value array and stores a single corner radius.
@@ -195,20 +342,46 @@ def _op_node_facts(node: Dict[str, Any]) -> Dict[str, Any]:
     facts["coord_frame"] = COORD_FRAME_NONE
 
     padding = _shorthand(node.get("padding"))
+    if padding is None and node.get("layout") in OP_AUTO_LAYOUT_MODES:
+        # A container always has a padding; a zero one is simply not written down.
+        padding = [0.0, 0.0, 0.0, 0.0]
     if padding is not None:
         facts["padding"] = padding
 
+    gap = _gap_list(node.get("gap"))
+    if gap is not None:
+        facts["gap"] = gap
+
     radius = _px(node.get("cornerRadius"))
+    if radius is None and node_type in BOX_NODE_KINDS:
+        # A box always has a corner radius; a zero one is not written down.
+        radius = 0.0
     if radius is not None:
         facts["radius"] = [radius] * 4
 
-    background = _first_color(node.get("fill"))
-    if node_type != "text" and background:
-        facts["bg"] = background
-    if node_type == "text":
-        ink = _first_color(node.get("fill"))
-        if ink:
-            facts["fg"] = ink
+    # Read through the stack reader, so an unresolvable fill (an image) omits the property
+    # rather than standing in for it. A stack is emitted only when it holds one paint: `.op`
+    # documents neither the direction of `fill` nor where a stack's paint order comes from, and
+    # guessing it inverts the comparison instead of failing it. One paint has no order, which is
+    # why every node in the sampled documents is readable.
+    stack = _paint_stack(node.get("fill"))
+    if stack is not None and len(stack) > 1:
+        stack = None
+    if node_type != "text" and stack:
+        facts["bg"] = stack
+    if node_type == "text" and stack:
+        facts["fg"] = stack[-1]
+
+    # §1 #18 — text reflow. A count is knowable only where wrapping cannot happen, and
+    # `textGrowth: auto` is exactly that statement: the box is the text's own size, so the
+    # rendered lines are the text's own breaks and nothing else. A `fixed-width` box wraps at a
+    # width the document never states, and a node with no `content` leaves even the breaks
+    # unknown — both omit the property, which the comparator reports as unverified rather than
+    # scoring a line count nobody stated.
+    if node_type == "text" and node.get("textGrowth") == OP_TEXT_GROWTH_AUTO:
+        content = node.get("content")
+        if isinstance(content, str):
+            facts["line_count"] = content.count("\n") + 1
 
     for source, target in _OP_PROPERTY_MAP.items():
         raw = node.get(source)
@@ -217,6 +390,17 @@ def _op_node_facts(node: Dict[str, Any]) -> Dict[str, Any]:
             facts[target] = numeric
         elif isinstance(raw, (int, float)) and not isinstance(raw, bool):
             facts[target] = float(raw)
+
+    family = node.get("fontFamily")
+    if isinstance(family, str) and family.strip():
+        facts["font_family"] = family.strip()
+
+    # Read only when the document carries the key, and nothing is defaulted: the sampled
+    # `.op` documents have no opacity, and asserting 1.0 there would be a fabrication
+    # rather than a measurement.
+    opacity = _px(node.get("opacity"))
+    if opacity is not None:
+        facts["opacity"] = opacity
 
     return facts
 
@@ -306,10 +490,22 @@ def _parse_indented(lines: List[str]) -> Dict[str, Any]:
 
         if text.startswith("- "):
             # The list itself is the nearest stack entry (pushed by its key line).
-            for _, candidate in reversed(stack):
-                if isinstance(candidate, list):
-                    candidate.append(text[2:].strip().strip("'\""))
-                    break
+            target = next((candidate for _, candidate in reversed(stack) if isinstance(candidate, list)), None)
+            if target is None:
+                continue
+            item = text[2:].strip()
+            key, separator, remainder = item.partition(":")
+            # A list item is usually a bare scalar (`- '#FFFFFF'`), but a
+            # multi-property one — a gradient fill, for instance — opens with a
+            # `key: value` line whose more-indented siblings belong to the same entry.
+            # Appending it as a raw string dropped the gradient's own definition, so
+            # the paint was recorded absent and a gradient design could never fail.
+            if separator and remainder.strip() and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", key.strip()):
+                entry: Dict[str, Any] = {key.strip(): remainder.strip().strip("'\"")}
+                target.append(entry)
+                stack.append((indent, entry))
+                continue
+            target.append(item.strip("'\""))
             continue
 
         if ":" not in text:
@@ -470,13 +666,23 @@ def _figma_node_facts(node: Dict[str, Any]) -> Dict[str, Any]:
         facts["box_origin"] = box_origin
 
     padding = _shorthand(layout.get("padding")) if layout.get("padding") is not None else None
+    if padding is None and layout.get("mode") in FIGMA_AUTO_LAYOUT_MODES:
+        # A container always has a padding; a zero one is simply not written down.
+        padding = [0.0, 0.0, 0.0, 0.0]
     if padding is not None:
         facts["padding"] = padding
+
+    gap = _gap_list(layout.get("gap"))
+    if gap is not None:
+        facts["gap"] = gap
 
     radius = _shorthand(node.get("borderRadius"))
     if radius is None:
         single = _px(node.get("borderRadius"))
         radius = [single] * 4 if single is not None else None
+    if radius is None and facts.get("kind") in BOX_NODE_KINDS:
+        # A box always has a corner radius; a zero one is not written down.
+        radius = [0.0, 0.0, 0.0, 0.0]
     if radius is not None:
         facts["radius"] = radius
 
@@ -501,18 +707,40 @@ def _figma_node_facts(node: Dict[str, Any]) -> Dict[str, Any]:
     line_height = _ratio(text_style.get("lineHeight", node.get("lineHeight")))
     if line_height is not None:
         facts["line_height"] = line_height
-    # The bridge emits no letterSpacing, so category #9 stays absent on purpose:
-    # the comparator reports it unverified rather than comparing against a guess.
+    # Read only when the response carries it: the sampled bridge response has no
+    # `letterSpacing`, so #9 stays absent for that document — but that is a fact about the
+    # document, not about the bridge, so the value is read rather than declared missing.
     spacing = node.get("letterSpacing")
     if isinstance(spacing, (int, float)) and not isinstance(spacing, bool):
         facts["letter_spacing"] = float(spacing)
 
-    background = _first_color(node.get("fills"))
+    family = text_style.get("fontFamily", node.get("fontFamily"))
+    if isinstance(family, str) and family.strip():
+        facts["font_family"] = family.strip()
+
+    # §1 #18, the `.op` rule in the bridge's vocabulary: `hug` means the box took the text's own
+    # size, so the rendered lines are the text's own breaks. A `fill`/`fixed` box wraps at a width
+    # the response does not report and the property is omitted. The sampled response states no
+    # `sizing` for its TEXT nodes at all, so this is unverified for that document while the bridge
+    # reads it whenever it is there — a fact about the document, not about the backend.
+    sizing = layout.get("sizing") if isinstance(layout.get("sizing"), dict) else {}
+    if facts.get("kind") == "text" and sizing.get("horizontal") == FIGMA_TEXT_SIZING_HUG:
+        text = node.get("text")
+        if isinstance(text, str):
+            facts["line_count"] = text.count("\n") + 1
+
+    # Omitting `opacity` means fully opaque, so the default *is* the measured value rather
+    # than a guess — the bridge states it whenever the node is not fully opaque, unlike the
+    # sampled `.op` documents, which never mention it at all.
+    opacity = _px(node.get("opacity"))
+    facts["opacity"] = DEFAULT_OPACITY if opacity is None else opacity
+
+    paints = _paint_stack(node.get("fills"))
     if node.get("type") == "TEXT":
-        if background:
-            facts["fg"] = background
-    elif background:
-        facts["bg"] = background
+        if paints:
+            facts["fg"] = paints[-1]
+    elif paints:
+        facts["bg"] = paints
 
     effects = node.get("effects")
     if isinstance(effects, dict) and "boxShadow" in effects:

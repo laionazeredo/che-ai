@@ -1,0 +1,13 @@
+NAME: "EducAR 2026"
+
+GLOBAL_VARS:
+Gradient/Primary CTA:
+  - type: GRADIENT_LINEAR
+    gradient: linear-gradient(90deg, rgba(98, 70, 229, 1) 0%, rgba(155, 98, 192, 1) 91%)
+
+NODES:
+[FRAME] "geral" #I117:7236;99:1142 layout={"mode":"row","alignItems":"center","sizing":{"horizontal":"fixed","vertical":"hug"},"dimensions":{"width":1325.85}}
+[FRAME] "copy" #I117:7236;99:1139 layout={"mode":"grid","alignSelf":"stretch","gridTemplateColumns":"repeat(1,minmax(0,1fr))","gridTemplateRows":"repeat(4,fit-content(100%))","gap":"30px 0px","sizing":{"horizontal":"fixed","vertical":"fill"},"dimensions":{"width":611}}
+[FRAME] "cta" #I117:7236;99:1143 layout={"mode":"row","alignItems":"center","gap":"20px","sizing":{"horizontal":"fill","vertical":"hug"}}
+[FRAME] "cta" #I117:7236;99:1144 layout={"mode":"none","sizing":{"horizontal":"fill","vertical":"fixed"},"dimensions":{"height":60.06}} fills="Gradient/Primary CTA" borderRadius=16px
+[IMAGE-SVG] "Decore" #I117:7236;1:11886 layout={"mode":"none","sizing":{"horizontal":"fixed","vertical":"fixed"},"position":"absolute","locationRelativeToParent":{"x":-10,"y":59},"dimensions":{"width":633.3,"height":12}}
