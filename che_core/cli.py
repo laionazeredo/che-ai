@@ -456,6 +456,30 @@ def main(argv=None):
         "--confirm", dest="confirmed", action="store_true", default=False, help="Mandatory safety gate."
     )
 
+    # CHE SELF-UPDATE =========================================================
+    parser_update = subparsers.add_parser(
+        "update",
+        aliases=["self-update", "upgrade"],
+        help="Fast-forward this Che checkout to the latest main, and reload the CLI if it must.",
+    )
+    parser_update.add_argument(
+        "--check",
+        action="store_true",
+        default=False,
+        help="Report what an update would bring, without applying it. Nothing is written.",
+    )
+    parser_update.add_argument(
+        "--che-home",
+        default=None,
+        help="Che checkout to update. Defaults to $CHE_HOME -> $HARNESS_HOME -> ~/.che-ai -> ~/.trae.",
+    )
+    parser_update.add_argument(
+        "--remote",
+        default="origin",
+        help="Git remote to read from. Its default branch is what gets fast-forwarded.",
+    )
+    parser_update.add_argument("--json", action="store_true", default=False, help="Print the full result.")
+
     # EJECT SUBCOMMANDS (safe Che uninstallation) ============================
     parser_eject = subparsers.add_parser(
         "eject",
@@ -1086,6 +1110,29 @@ def main(argv=None):
             return
         _print_json(res)
         return
+
+    if args.command in ("update", "self-update", "upgrade"):
+        from che_core.selfupdate import UpdateRefused, exit_code, summarise, update
+
+        try:
+            state = update(che_home=args.che_home, remote=args.remote, check_only=args.check)
+        except UpdateRefused as exc:
+            # A refusal is the command declining to move a working tree it was not asked to move —
+            # not a crash. The reason already carries the remedy, so print it and use its code.
+            print(f"Error: {exc.reason}", file=sys.stderr)
+            sys.exit(exc.code)
+
+        if args.json:
+            _print_json(state)
+        else:
+            print(summarise(state))
+            # Name what is coming (or what arrived). "Update available" with no subjects is a
+            # prompt to go and look, which is the opposite of what this command is for.
+            for subject in state["commits"]:
+                print(f"  {subject}")
+            if state["commits_omitted"]:
+                print(f"  … and {state['commits_omitted']} more")
+        sys.exit(exit_code(state))
 
     if args.command == "eject":
         from che_core.eject import eject_apply, eject_plan, eject_restore, eject_trash_list

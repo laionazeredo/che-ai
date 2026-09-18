@@ -92,6 +92,23 @@ che config --help                                     # Session flags (LANG_CHAT
 python3 -m pytest tests/ -q                           # 114 unit tests (core harness)
 ```
 
+### 4. Keep it up to date — `che update`
+
+One command, no flags, no dry-run gate. It fast-forwards the checkout to the remote's default
+branch, and reinstalls the CLI when (and only when) `pyproject.toml` changed — the one gap a plain
+`git pull` cannot close, because Che installs editable:
+
+```bash
+che update                 # aliases: che self-update, che upgrade
+che update --check         # what an update would bring; changes nothing
+```
+
+It refuses, naming the remedy and changing nothing, if you have uncommitted tracked files, are on a
+branch other than the default, or hold commits the remote lacks. Already being current is success.
+Skills, rules and hooks are symlinked into the checkout, so they go live with the same command.
+A zip/manual install (no `.git`) is pointed at `scripts/self-update-che.sh`. See §1.4 of
+[docs/cli-reference.md](./docs/cli-reference.md).
+
 ***
 
 ## ⚡ 60-second Quickstart (no tokens, no agents, no API keys)
@@ -165,6 +182,7 @@ The full rationale, 8 opinionated stances, 5 anti-goals and methodology referenc
 | `che rag {build,search,list,prune}` | Project | Terminal CLI | Local sqlite-vec hybrid search. |
 | `che export` / `che import` | Project | Terminal CLI | Portable project `.tar.gz` — no `.git`, no code, only memory. |
 | `che eject {plan,execute,restore}` | All | Terminal CLI | Two-gated safe uninstall. Always trash, never rm. |
+| `che update` (alias `self-update`, `upgrade`) | All | Terminal CLI | Fast-forward the checkout to the remote's default branch; reinstall the CLI only if `pyproject.toml` moved. |
 
 > **Full command reference with examples, exit codes and troubleshooting → [docs/cli-reference.md](./docs/cli-reference.md).**
 
