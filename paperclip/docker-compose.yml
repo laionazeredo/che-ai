@@ -1,0 +1,30 @@
+# Paperclip + Che, phase 1 of `./bootstrap.sh` (credential-free).
+#
+# `local_trusted` + loopback = no board auth, so the board API key can be minted
+# and the Che package imported unattended from *inside* the container via
+# `docker compose exec`. This works on any Docker (incl. Docker Desktop/WSL,
+# where `network_mode: host` does not expose the container loopback to the host).
+#
+# Do not start this directly: run `./bootstrap.sh`, which imports here and then
+# switches to docker-compose.ui.yml (authenticated + published port) using the
+# same volume.
+name: che-paperclip
+
+services:
+  paperclip:
+    build:
+      context: ..
+      dockerfile: paperclip/Dockerfile
+    environment:
+      PAPERCLIP_DEPLOYMENT_MODE: local_trusted
+      PAPERCLIP_BIND: loopback
+      HOST: 127.0.0.1
+      PORT: "3100"
+      PAPERCLIP_HOME: /paperclip
+      PAPERCLIP_INSTANCE_ID: default
+      PAPERCLIP_PUBLIC_URL: "http://127.0.0.1:3100"
+    volumes:
+      - paperclip-data:/paperclip
+
+volumes:
+  paperclip-data: {}
