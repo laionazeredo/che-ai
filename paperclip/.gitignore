@@ -1,0 +1,2 @@
+# Local secrets / runtime state for the Paperclip bootstrap. Never commit.
+.better-auth-secret

@@ -1,0 +1,35 @@
+schema: "paperclip/v1"
+schemaVersion: 7
+agents:
+  pm:
+    role: pm
+    icon: crown
+    adapter:
+      type: claude_local
+      config: {}
+  engineer:
+    role: engineer
+    icon: code
+    adapter:
+      type: claude_local
+      config: {}
+  designer:
+    role: designer
+    icon: wand
+    adapter:
+      type: claude_local
+      config: {}
+  qa:
+    role: qa
+    icon: bug
+    adapter:
+      type: claude_local
+      config: {}
+routines:
+  daily-sync:
+    triggers:
+      - kind: schedule
+        label: Daily sync
+        enabled: true
+        cronExpression: "0 9 * * *"
+        timezone: Europe/London
