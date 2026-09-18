@@ -99,3 +99,19 @@ Four findings make this unattended:
    `https://github.com/<owner>/<repo>/tree/<ref>/<path>` and scopes the walk to `<path>`, so the
    generated package is importable straight from the repo:
    `https://github.com/laionazeredo/che-ai/tree/main/paperclip/package`.
+5. **The PM must not be a second root.** Onboarding always creates a lead agent *before* any
+   import, so a package whose PM has no `reportsTo` shows up as a second CEO beside it. An import
+   can only link to an agent that already exists
+   (`reportsToExistingAgentSlug` / `...Id`), and that agent's slug is derived from the name the
+   human chose — unknowable at build time. `bootstrap.py` therefore resolves it live:
+   `attach_roots_to_lead` finds the single root agent the package does not own and `PATCH`es the
+   imported root(s) to report to it. That also makes the rule hold for GitHub-sourced imports and
+   re-asserts it on every run, since a re-import resets `reportsTo` from the manifest.
+   A package imported *only* through the UI or the GitHub URL keeps the PM at the root — attach it
+   by hand, or run the bootstrap.
+6. **`include.company` rewrites the target's identity.** With `target.mode = existing_company`,
+   `include: { company: true }` calls `companies.update` with the *manifest's* name, description,
+   approval flags and logo (clearing the logo when the manifest has none). Importing into a board's
+   own company therefore renames it. The bootstrap sets `include.company` only when it is the one
+   creating the company, and otherwise picks the target by looking for the company that already has
+   a lead agent.

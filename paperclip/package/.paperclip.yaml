@@ -3,7 +3,7 @@ schemaVersion: 7
 agents:
   pm:
     role: pm
-    icon: crown
+    icon: target
     adapter:
       type: claude_local
       config: {}

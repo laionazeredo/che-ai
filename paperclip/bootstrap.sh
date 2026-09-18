@@ -5,6 +5,14 @@
 #   ./bootstrap.sh                 # build, import, then serve the UI on :3210
 #   ./bootstrap.sh --headless      # build + import only (no host port, no auth)
 #   PORT=4000 ./bootstrap.sh       # serve the UI on another port
+#   CHE_COMPANY=Manifesto48 ./bootstrap.sh
+#                                  # override the target company (name or id)
+#
+# The Che team joins the company that already has a lead agent (the one created
+# during onboarding), and the PM reports to that lead rather than becoming a
+# second root. With no such company, one named after seed/COMPANY.md is created
+# -- and only then is the company's name/description written, since importing
+# into an existing company would otherwise rename the board's own company.
 #
 # Why it works in two phases:
 #   Phase 1 boots `local_trusted` on loopback, where requests are implicitly
@@ -70,7 +78,13 @@ HINT
 fi
 
 echo "==> 4/5 mint board key + import package (idempotent)"
-docker compose "${BASE_ARGS[@]}" exec -T paperclip \
+# `docker compose exec` does not forward the host environment, so pass the
+# target company through explicitly when the caller pinned one.
+COMPANY_ENV=()
+if [[ -n "${CHE_COMPANY:-}" ]]; then
+  COMPANY_ENV=(-e "CHE_COMPANY=$CHE_COMPANY")
+fi
+docker compose "${BASE_ARGS[@]}" exec -T "${COMPANY_ENV[@]}" paperclip \
   python3 /opt/che-ai/paperclip/bootstrap.py
 
 if [[ "$MODE" == "headless" ]]; then
