@@ -6,7 +6,12 @@
 #
 #   CASE 1 — target (default ~/.che-ai, legacy ~/.trae if valid, or $CHE_HOME)
 #            IS A GIT REPO cloned DIRECTLY from laionazeredo/che-ai
-#     → executes:  git fetch  (dry-run) or  git pull --ff-only (--apply)
+#     → if the `che` CLI is on PATH:  executes  `che update --che-home <target> --check`
+#       (or without --check under --apply) and stops. This is the ONE implementation of
+#       the merge — see §1.4 of docs/cli-reference.md. It adds the step this script never
+#       had: reinstalling the CLI when pyproject.toml changes.
+#     → otherwise (an install made with --no-cli, so no `che` binary):
+#        executes  git fetch  (dry-run) or  git pull --ff-only (--apply)
 #        + if package.json/pnpm-lock.yaml changed → corepack pnpm install --prefer-offline
 #     Advantage: zero copies, zero conflict merge (ff-only aborts if divergence),
 #     repo .gitignore blacklist protects user_rules / bindings / memory AUTOMATICALLY.
@@ -126,6 +131,21 @@ if is_git_repo_with_remote "$TARGET"; then
   # CASE 1 — GIT REPO (recommended path)
   # ==========================================================
   echo "✅ CASE 1 DETECTED: target ${TARGET} is a git repo with remote."
+  echo ""
+
+  # Preferred path: hand over to `che update`. It performs the same fast-forward and adds the one
+  # thing this script has never done — reinstalling the CLI when pyproject.toml changes — so there
+  # is exactly one implementation of the merge instead of two that can drift (§1.4 in
+  # docs/cli-reference.md). The shell body below stays as the fallback for installs made with
+  # `--no-cli`, where `che` is not on PATH.
+  if command -v che >/dev/null 2>&1; then
+    UPDATE_ARGS=(update --che-home "$TARGET")
+    [ "$APPLY" -eq 1 ] || UPDATE_ARGS+=(--check)
+    echo "   Strategy: che update (ff-only; reinstalls the CLI if pyproject.toml changed)."
+    echo ""
+    exec che "${UPDATE_ARGS[@]}"
+  fi
+
   echo "   Strategy: git pull --ff-only (automatic merge NOT permitted)."
   echo ""
 

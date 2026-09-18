@@ -92,7 +92,56 @@ cd ~/.che-ai
 pip install -e . --break-system-packages
 ```
 
-### 1.4 Uninstall
+### 1.4 Updating an existing install — `che update`
+
+One command, no flags, no dry-run gate. It moves the checkout to the remote's default branch and
+reloads the CLI if it has to:
+
+```bash
+che update              # aliases: che self-update, che upgrade
+```
+
+```bash
+che update --check      # report what an update would bring; change nothing
+che update --json       # same envelope for scripts and agents
+che update --che-home /path/to/checkout
+```
+
+What it does, in order:
+
+1. Resolves the checkout (`$CHE_HOME` → `$HARNESS_HOME` → `~/.che-ai` → `~/.trae`) and refuses
+   anything that is not a Che install.
+2. Fetches the remote and reports the incoming commits.
+3. `git merge --ff-only` onto the remote's default branch.
+4. If — and only if — `pyproject.toml` was among the changed files, reinstalls the CLI
+   (`pipx install -e … --force`, falling back to `pip install --user -e …`) so a changed
+   dependency list actually takes effect.
+
+**Why step 4 exists.** Che installs *editable*, so `import che_core` resolves into the checkout: a
+pull makes every code change live immediately, while a change to `dependencies` sits in the file
+doing nothing until something reinstalls. That is the one gap a plain `git pull` cannot close, and
+it is why this is a command rather than a documented sequence of shell steps.
+
+`che update` is safe to run blind. It is fast-forward-only — it cannot invent a merge commit or
+rewrite a local one — and every state it will not touch fails closed with the remedy named:
+
+| State | Result |
+| :---- | :----- |
+| Already on the latest default branch | **Success.** Nothing is done, and nothing is reinstalled. |
+| Modified *tracked* files | **Refused** (exit 3). Commit or `git stash push` first. Personal state (`user_rules/`, `bindings/`, `memory/`) is gitignored and never counts. |
+| On a branch other than the default | **Refused** (exit 3). "Get the latest from main" does not mean "move me off my branch". |
+| Local commits the remote lacks | **Refused** (exit 3). A fast-forward would discard them. |
+| Not reachable | **Refused** (exit 4). Nothing was changed. |
+| Code updated, reinstall failed | **Partial** (exit 5). The command that failed is printed; run it yourself. |
+
+Skills, rules and hooks are symlinked into the checkout, so a successful update makes them live in
+the same instant.
+
+A zip/manual install (no `.git`) is **refused** by design, pointing at
+`scripts/self-update-che.sh`, which owns that path. Two implementations of one merge would be two
+chances to disagree.
+
+### 1.5 Uninstall
 
 ```bash
 pipx uninstall che-ai
@@ -116,6 +165,7 @@ pip uninstall che-ai
 | `export`     | (project → portable `.tar.gz`)                                     | Project  | Terminal CLI |
 | `import`     | (portable `.tar.gz` → project)                                     | Project  | Terminal CLI |
 | `eject`      | `plan`, `execute`, `restore`                                       | All      | Terminal CLI |
+| `update`     | (alias: `self-update`, `upgrade`) — flags: `--check`, `--che-home`, `--remote`, `--json` | All | Terminal CLI |
 | `pixel`      | `check`                                                            | Worktree | Terminal CLI |
 | plumbing     | `compute_paths`, `ensure_dirs`, `output_path`, `write_file_atomic`, `assert_outside_worktree`, `registry_append`, `registry_lookup`, `decision_append` | Any | Terminal CLI |
 
@@ -130,6 +180,7 @@ che worktree --help
 che worktree add --help
 che config --help
 che eject plan --help
+che update --help
 ```
 
 ---
@@ -591,6 +642,9 @@ che decision_append ~/code/my-company/web-app ARCH \
 |  0   | Success. JSON on stdout for commands that report a result. |
 |  2   | Usage / precondition failure: bad argument, non-git path, missing required `--slug` / `--project` / `--name`, refused oversized write, or a destructive operation applied without `--confirm`. |
 |  3   | Unknown project / worktree, or a worktree path that is not bound to any project. |
+|  3   | `che update`: the working tree is not in a state it will move (dirty tracked files, wrong branch, local commits the remote lacks). Nothing was changed. |
+|  4   | `che update`: the remote could not be reached. Nothing was changed. |
+|  5   | `che update`: the code was updated but the CLI could not be reinstalled, so its dependencies may be stale. |
 |  98  | Fatal missing dependency: the `che` CLI is not on `PATH` (guard raised by the skills before any write). |
 |  99  | Storage-boundary violation: a Che artifact would land inside the user's repository. |
 

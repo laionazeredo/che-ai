@@ -20,6 +20,11 @@
 #   bash ~/.trae/scripts/self-update-che.sh --apply
 #   bash -h | --help
 #
+# For a GIT checkout there is now a shorter path that needs no flags at all:
+#   che update          (see §1.4 of docs/cli-reference.md)
+# This script hands over to it in Step 1.5 whenever `che` is on PATH, and keeps the shell paths
+# for the two cases the CLI does not cover: a --no-cli install, and a zip/manual copy.
+#
 # What this script DOES AUTOMATICALLY, ZERO CONFIGURATION:
 #   1) Validates that the resolved Che home (TARGET) already exists (not a fresh install).
 #   2) Performs AUTONOMOUS fetch of the LATEST official version from github.com/laionazeredo/che-ai:
@@ -29,8 +34,12 @@
 #          /private repos/enterprise/2FA token flow/uniform auditing via gh auth login.
 #   3) AUTOMATICALLY detects target case:
 #        CASE 1 — TARGET is a git repo with upstream set.
-#          → executes: bash scripts/update-che.sh --[apply] (git pull --ff-only on TARGET ITSELF;
-#            gitignore protection + --ff-only guarantees zero automatic merge / zero personal overwrite).
+#          → `che` on PATH: executes `che update [--check] --che-home TARGET` and stops, BEFORE the
+#            fetch above (no second clone of the repo into /tmp). Same ff-only merge, plus the
+#            pyproject.toml reinstall step this script never had.
+#          → no `che` on PATH: executes bash scripts/update-che.sh --[apply] (git pull --ff-only on
+#            TARGET ITSELF; gitignore protection + --ff-only guarantees zero automatic merge /
+#            zero personal overwrite).
 #        CASE 2 — TARGET is not a git repo (zip/manual copy).
 #          → executes: bash <tmp-src>/scripts/install-che.sh --update [--apply]
 #            (item-by-item merge with INDIVIDUAL backups and untouchable BLACKLIST.
@@ -141,6 +150,20 @@ echo "    Official repo: https://github.com/${GH_REPO}"
 echo ""
 
 # ============================================================
+# HELPER: is TARGET a git repo with a remote configured?
+# Declared before Step 1 because the fast path in Step 1.5 uses it.
+# ============================================================
+is_target_git_repo_with_remote() {
+  local d="$1"
+  [ -d "${d}/.git" ] || return 1
+  (cd "$d" && git rev-parse --git-dir >/dev/null 2>&1) || return 1
+  local remotes
+  remotes=$(cd "$d" && git remote 2>/dev/null | wc -l)
+  [ "${remotes:-0}" -gt 0 ] || return 1
+  return 0
+}
+
+# ============================================================
 # Step 1: validate that TARGET exists (not a fresh install).
 # ============================================================
 if [ ! -e "$TARGET" ]; then
@@ -155,6 +178,25 @@ fi
 if [ ! -f "${TARGET}/README.md" ] && [ ! -f "${TARGET}/CHE_RULES.md" ]; then
   echo "❌ Folder ${TARGET} does not seem to be a valid Che checkout (missing README.md and CHE_RULES.md)." >&2
   exit 2
+fi
+
+# ============================================================
+# Step 1.5: CASE 1 fast path — a git checkout is updated in place by the CLI.
+# Taken BEFORE the fetch below, because that fetch clones a second copy of the repository into
+# /tmp only to run a fast-forward on the checkout we already have. `che update` does the same
+# merge in place and adds the one step this script never had: reinstalling the CLI when
+# pyproject.toml changes. One implementation, so the two cannot drift (§1.4 of
+# docs/cli-reference.md). Falls through to the shell paths when `che` is not on PATH, which is
+# the `--no-cli` install and the zip install.
+# ============================================================
+if is_target_git_repo_with_remote "$TARGET" && command -v che >/dev/null 2>&1; then
+  echo "🟢 CASE 1 DETECTED: target ${TARGET} is a git repo with remote."
+  echo "   Strategy: che update (ff-only; reinstalls the CLI if pyproject.toml changed)."
+  echo "   AUTOMATIC Blacklist via repo .gitignore: user_rules/*, bindings/registry.jsonl, memory/."
+  echo ""
+  UPDATE_ARGS=(update --che-home "$TARGET")
+  [ "$APPLY" -eq 1 ] || UPDATE_ARGS+=(--check)
+  exec che "${UPDATE_ARGS[@]}"
 fi
 
 # ============================================================
@@ -230,29 +272,22 @@ echo "    ✔ Fetch OK (${FETCH_METHOD}). Latest official version downloaded: ${
 echo ""
 
 # ============================================================
-# Step 3: AUTOMATIC DETECTION OF CASE 1 vs CASE 2.
+# Step 3: route to the case that is still ours.
+# CASE 1 was already handled in Step 1.5 when `che` is on PATH; what reaches this point as a git
+# repo is a `--no-cli` install, which falls through to update-che.sh's own shell body.
 # ============================================================
-is_target_git_repo_with_remote() {
-  local d="$1"
-  [ -d "${d}/.git" ] || return 1
-  (cd "$d" && git rev-parse --git-dir >/dev/null 2>&1) || return 1
-  local remotes
-  remotes=$(cd "$d" && git remote 2>/dev/null | wc -l)
-  [ "${remotes:-0}" -gt 0 ] || return 1
-  return 0
-}
-
 EXTRA_UPDATE_ARGS=()
 [ "$APPLY" -eq 1 ] && EXTRA_UPDATE_ARGS+=("--apply")
 EXTRA_UPDATE_ARGS+=("--target" "$TARGET")
 
 if is_target_git_repo_with_remote "$TARGET"; then
   # ==========================================================
-  # CASE 1 — target IS ALREADY a git repo with remote (90% of fresh install §0 users).
+  # CASE 1 WITHOUT THE CLI — target is a git repo with remote, but there is no `che` binary.
   # We call update-che.sh from TARGET itself (ff-only pull in repo itself).
   # ==========================================================
-  echo "🟢 CASE 1 DETECTED: target ${TARGET} is a git repo with remote."
+  echo "🟢 CASE 1 DETECTED (no che binary on PATH): target ${TARGET} is a git repo with remote."
   echo "   Strategy: git pull --ff-only in TARGET itself (update-che.sh via source tmp)."
+  echo "   Install the CLI to get the pyproject.toml reinstall step: see §1.2 of docs/cli-reference.md."
   echo "   AUTOMATIC Blacklist via repo .gitignore: user_rules/*, bindings/registry.jsonl, memory/."
   echo ""
   if [ -f "${TMP_SRC}/scripts/update-che.sh" ]; then
