@@ -133,13 +133,191 @@ che worktree list --project web-app | jq
 che registry_lookup onboarding-001 | jq '.flags'
 ```
 
-Then (and **only then** — after the whole structure is in place) you invoke agent work via the in-IDE slash commands inside **Claude Code**:
+Then (and **only then** — after the whole structure is in place) you invoke agent work via the in-IDE slash commands inside **Claude Code**. The happy path for a project that is already onboarded:
 
-1. **Plan** → `/che-spec` generates a SBE (Specification-by-Example) execution spec.
-2. **Execute** → `/che-act` runs the multi-domain implementation loop.
-3. **Deliver** → `/che-ship` passes the four executable DbC gates (scope → review → compliance → QA) then opens a Draft PR.
+1. **Onboard** → `/che-xray` (automatic scan of the code) + `/che-onboarding` (human product context). Once per project, and the gate before the first spec.
+2. **Plan** → `/che-spec` generates a SBE (Specification-by-Example) execution spec.
+3. **Execute** → `/che-act` runs the multi-domain implementation loop.
+4. **Deliver** → `/che-ship` passes the four executable DbC gates (scope → review → compliance → QA) then opens a Draft PR.
 
 The full command reference, including `task`, `state` (SQLite FTS5), `rag`, `export`/`import` portability and safe `eject`, is in [docs/cli-reference.md](./docs/cli-reference.md).
+
+***
+
+## 🧭 Which Scenario Am I In?
+
+The **terminal** sets the structure up once (`che project init` + `che worktree add`, above).
+Everything after that is a `/che-*` slash command inside your IDE, and it follows the five phases of
+the agentic SDLC (`engineering-contracts` Rule 15):
+
+| Phase | Artifact | Command |
+| :---- | :------- | :------ |
+| 1 · Intent | `intent.md` | `/che-architect` (step 1) or `/che-onboarding` |
+| 2 · Roadmap | `roadmap.md` | `/che-architect` (step 2) |
+| 3 · Tasks | `specs/<slug>/<ts>-spec.md` | `/che-spec`, then `/che-plan` for tickets |
+| 4 · Execute | task graph + code | `/che-act` (or `/che-parallel` to force fan-out) |
+| 5 · Refine | Draft PR + lessons | `/che-ship` |
+
+**Which entry you use depends on where you are right now**, not on the phase list:
+
+| You are… | Run |
+| :------- | :-- |
+| Starting a project from zero, with an idea and no code | `/che-architect` then `/che-onboarding` |
+| Adopting an existing repo Che has never seen | `/che-xray` then `/che-onboarding` |
+| Ready to build one specific thing | `/che-spec` (or `/che-act`, which invokes it for you) |
+| Implementing something that already has an Approved SPEC | `/che-act` |
+| Needing a design, a design system or a logo | `/che-design` (or `/che-figma`) |
+| Chasing a bug rather than building a feature | `/che-fix` |
+| Reacting to a PR that is already open | `/che-diff`, `/che-review`, `/che-pr-comments`, `/che-ci-fix` |
+
+### A. Starting from zero — an idea, no code yet
+
+Yes, `/che-onboarding` is part of it — but not first, and not alone. Phase 1 and 2 come before there
+is anything to specify:
+
+```bash
+che project init ~/code/acme/api --slug acme-api
+che worktree add ~/code/acme/api --project acme-api --name main
+```
+
+```text
+/che-architect      # idea → intent.md, roadmap.md, stack, C4 diagrams, ERD, first ADRs
+/che-onboarding     # the human half: product_context.md, roadmap.md, manual architecture.md
+```
+
+`/che-architect` is the one that turns a business idea into a technical blueprint, iteratively, and
+it declares itself for exactly this case ("Before starting a new repository"). `/che-onboarding`
+then captures what no scan can infer: pitch, personas, hard invariants, compliance risks, auth
+roles. From there you are on the normal feature loop (see C).
+
+`/che-xray` is deliberately absent here: it reads *code*, so on an empty repository it has nothing
+to read. Run it once the first slice has landed — it is idempotent, and re-running it preserves any
+section you have edited by hand.
+
+### B. Adopting an existing repo
+
+```bash
+che project init ~/code/acme/legacy --slug acme-legacy
+che worktree add ~/code/acme/legacy --project acme-legacy --name main
+```
+
+```text
+/che-xray           # automatic: stack, monorepo shape, conventions, tests, CI, DB — 12 sections
+/che-onboarding     # human: product context, roadmap, manual architecture
+/che-archeology     # optional: reconstruct intent + roadmap from git history and merged PRs
+```
+
+The order is not decoration. `/che-xray` is the automatic first pass (the skill that owns the
+human half says to run it after), and `/che-onboarding` is the **mandatory gate before the first
+`/che-spec`** in any project that has never been through it — Che reads `product_context.md` and
+`architecture.md` before writing a spec. `/che-archeology` is for repos with real history: it
+clusters commits and merged PRs into phases so the roadmap you inherit matches what the team
+actually built.
+
+### C. Specifying a feature
+
+`/che-spec` takes four input sources and always ends with an approval gate:
+
+```text
+/che-spec input=desc slug=refund-flow "Refunds for cancelled orders"
+/che-spec input=ticket https://linear.app/acme/issue/ACME-123 slug=refund-flow
+/che-spec input=prd-flockr docs/prd/payments/refunds.md slug=refund-flow
+/che-spec input=existing slug=refund-flow
+```
+
+It answers with the two lines everything downstream parses:
+
+```text
+SPEC_PATH=/abs/path/to/specs/refund-flow/20260918-spec.md
+SPEC_STATUS=Approved
+```
+
+Only `Approved` unlocks execution. Optionally push the plan into your tracker first — `/che-plan`
+turns an Approved SPEC into a Linear / ClickUp / Jira Epic with one sub-task per vertical slice and
+BDD acceptance criteria.
+
+### D. Implementing something that already has a SPEC
+
+```text
+/che-act
+```
+
+`/che-act` runs its SPEC gate before scope capture: it globs the worktree's specs, finds the
+Approved one and proceeds. If there is none, it invokes `/che-spec` itself with whatever arguments
+you passed it — so `/che-act input=ticket <url>` is a valid one-liner when you want to go straight
+from ticket to code.
+
+```text
+/che-act --slug=refund-flow input=ticket https://linear.app/acme/issue/ACME-123
+/che-parallel --max-parallel=4     # tasks are independent (disjoint files) — force fan-out
+/che-status                        # where the task graph is (also /che-decisions, /che-summary)
+/che-skip qa T3 reason:"..."       # override a gate; logged, user-approved, never silent
+/che-abort                         # stop the session; nothing is deleted
+```
+
+When the work is done:
+
+```text
+/che-ship
+```
+
+`/che-ship` is not a git wrapper: it runs four executable gates in a fixed order *before* touching
+git (scope → review → compliance → QA), then makes atomic conventional commits, pushes, and opens a
+**Draft PR** assigned to you.
+
+### E. Needing design
+
+```text
+/che-design B --palette "#6D28D9,#F59E0B,#111827,#F9FAFB" --tone "Minimalist luxury"
+/che-figma  B     # same pipeline, explicit Figma backend
+```
+
+Four modes: **A** Social Media creatives · **B** UI/UX feature (wireframe → hi-fi → dev-spec) ·
+**C** Design System (Tailwind 4 tokens ↔ variables, light/dark) · **D** Logo & Branding (SVG +
+brandbook). `/che-design` and `/che-figma` are the same pipeline with a different backend
+preference.
+
+The durable half of the output is **git-native and lives inside your repo**, so it reaches the PR
+diff like any other source:
+
+```bash
+che designer init <worktree_root> <session_id> --sub-product <slug>   # design/DESIGN.md + tokens/
+```
+
+That creates `design/DESIGN.md`, `design/tokens/tokens.json` and `design/<sub_product>/`. The
+per-mode working directory (the spec, exported PNGs, assets) stays in the shared workspace outside
+the repo. After implementation the `ux` domain gate can compare the *built* DOM against the design
+numerically rather than by eyeballing screenshots:
+
+```bash
+eval "$(che pixel paths "$WORKTREE_ROOT" "$SESSION_ID" --sub-product <slug> --breakpoint lg --backend figma --related-id <id> --attempt 1)"
+che pixel check --map "$CHE_PIXEL_MAP" --dom "$CHE_PIXEL_DOM_FACTS" \
+  --design-source "$CHE_PIXEL_DESIGN_RAW" --design-backend figma \
+  --design-facts-out "$CHE_PIXEL_DESIGN_FACTS" --breakpoint lg --out "$CHE_PIXEL_REPORT"
+```
+
+### F. Fixing a bug
+
+Different loop, different command. `/che-fix` is not `/che-act` with a different ticket:
+
+```text
+/che-fix "HTTP 500 when submitting an order without a customer_id"
+```
+
+You supply expected behaviour, actual behaviour and numbered reproduction steps. It reproduces the
+bug for real, then loops hypothesis → instrument → reproduce → confirm or refute (max 5 iterations,
+after which it stops and reports which hypotheses it *eliminated*). On a confirmed root cause it
+writes the failing test first, then the minimal fix, then shows you how to verify by hand.
+
+### G. Reacting to an open PR
+
+| Command | When |
+| :------ | :--- |
+| `/che-diff <PR_URL>` | You want to *understand* a diff and prepare to discuss it. No verdict. |
+| `/che-review <PR_URL> --ticket <url>` | You want a blocking review: runtime breakage, security/PII, unjustified dependencies, scope deviation. |
+| `/che-pr-comments <PR_URL>` | The PR has many comments; get a triage of what to fix, what to reply, what to resolve silently. |
+| `/che-ci-fix <actions_run_or_pr_url>` | CI is red. Classifies the failure and applies a minimal fix — and stops without touching code when the cause is infrastructure or external. |
+| `/che-manual-test --worktree <path> --task-id <slug>` | You want the manual test plan executed in a real browser with screenshot evidence per step. |
 
 ***
 
