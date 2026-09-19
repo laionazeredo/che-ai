@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from che_core.decisions import append_decision_jsonl
+from che_core.memory_store import append_decision
 from che_core.paths import (
     assert_outside_worktree,
     compute_paths,
@@ -745,7 +745,7 @@ def main(argv=None):
         return
 
     if args.command == "decision_append":
-        append_decision_jsonl(
+        append_decision(
             args.worktree_root,
             args.event_type,
             args.payload,
