@@ -178,41 +178,62 @@ Estimated effort: XS / S / M / L
 
 ### Section 2: ✏️ TO RESPOND — Human comments, no code change
 
-Each entry:
+Each entry uses four fields plus the post command. Nothing else — the user copies THIS, not the triage above.
+
 ```
 ## R-1 — <short title of what comment was>
 
 Reviewer: @<username>
-Context: <issue-level or in-file:path:line>
+Comment ID: <numeric id of the review comment being answered>
+Context: <issue-level | in-file:path:line>
 Original comment:
-> <quoted>
+> <quoted, trimmed to 2 lines max>
 
-### Decision: NOT IMPLEMENTING — Respond only.
+### Action: DECLINE — reply only, no code change.
 
 Rationale (1 line):
-<why we are NOT making the code change. E.g.: "Repo convention uses manual guards everywhere already; moving to zod here is inconsistent + out of scope for this ticket. We can open follow-up for migration.">
+<why we are NOT making the code change. E.g.: "Repo convention uses manual guards everywhere already; moving to zod here is inconsistent + out of scope for this ticket. We can open a follow-up for the migration.">
 
-### Draft response (ENGLISH, ready to paste — professional, constructive, never argumentative):
+### Reply (ENGLISH, MAX 2 sentences, simple, ready to paste):
+Thanks for raising this, @<username> — the current approach matches the convention used in <file1> and <file2>, so I would rather keep it consistent here. I have noted the migration as a follow-up for a separate refactor PR so we do not lose it.
 
-Thanks for raising this, @<username>! 🙏
-
-<explain why we're not changing, short, polite>
-- Concretely: the current approach matches the repo convention at <reference to 1-2 existing files doing the same pattern>.
-- I'll note this down as a follow-up idea for a separate refactor PR (ticket: <link if available>), so we don't lose it.
-- Let me know if you still feel strongly and we can re-discuss! 👍
+### Post command (inline review comment):
+gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments/<COMMENT_ID>/replies \
+  -f body='Thanks for raising this, @<username> — the current approach matches the convention used in <file1> and <file2>, so I would rather keep it consistent here. I have noted the migration as a follow-up for a separate refactor PR so we do not lose it.'
 ```
 
+HARD RULES for the reply command:
+
+1. **Two endpoints, pick by where the comment lives.** Inline review comment → `POST /repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments/<COMMENT_ID>/replies`. PR-level (issue) comment → `POST /repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments` (no `<COMMENT_ID>`).
+2. **`COMMENT_ID` is the numeric id of the comment being answered**, not the review id and not the thread id. Read it with `gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments --jq '.[] | {id, path, line, user: .user.login}'`.
+3. **MAX 2 sentences.** If the objection does not fit in two, we have not understood it yet — go back to classification, do not pad the reply.
+4. **Prefer phrasing without apostrophes** inside `-f body='...'` — English contractions ("doesn't", "won't", "I'd") break the shell string. Write "does not" / "I would" instead, or post from stdin with `-F body=@-` when the wording genuinely needs a contraction.
+5. **Replying works even when the comment is OUTDATED** — the endpoint targets the comment, not the line, so an outdated thread can still be answered in place.
+6. **Never auto-post.** Same rule as §5: only after the user explicitly says to post the responses, and only for the entries the user names.
+
 ### Section 3: 💬 DISCUSSION — User decides (we draft BOTH sides)
+
+Same four fields as Section 2, but `Action: PENDING USER` and two reply drafts instead of one.
 
 ```
 ## D-1
 
-Reviewer: @
-Comment: "IMO use zod instead."
+Reviewer: @<username>
+Comment ID: <numeric id>
+Context: <issue-level | in-file:path:line>
+Original comment:
+> "IMO use zod instead."
 
-If USER wants to IMPLEMENT → Implementation plan same format as Section 1.
-If USER wants to DECLINE → Draft response similar to Section 2.
-Decision: PENDING USER CHOICE.
+### Action: PENDING USER — this reviewer is <owner|member|contributor>; do not decide alone.
+
+### Reply if we ACCEPT:
+<2-sentence English reply confirming the change, plus which commit will carry it>
+
+### Reply if we DECLINE:
+<2-sentence English reply, same shape as Section 2>
+
+### Post command (run only the draft the user picks):
+gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments/<COMMENT_ID>/replies -f body='<the chosen 2-sentence reply>'
 ```
 
 ### Section 4: NITs — quick / optional
