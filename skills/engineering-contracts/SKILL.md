@@ -387,7 +387,9 @@ This rule applies to **every operation the che does that touches GitHub (clone, 
 | PR full unified diff | `gh pr diff <PR_URL>` |
 | PR diff name-only list | `gh pr diff <PR_URL> --name-only` |
 | PR reviews + comments (inline + general) | `gh pr view <PR_URL> --json comments,reviews,reviewComments` (reviewComments = inline code comments) |
-| Post inline reply to review thread | `gh pr reply <review_comment_db_id> --body "<text>"` |
+| Post inline review comment pinned to a line | `gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments -f body='<text>' -f path='<file>' -F line=<N> -f side='RIGHT' -f commit_id="$(gh pr view <PR_NUMBER> --json headRefOid -q .headRefOid)"` (`-F` = typed field: `line` MUST be numeric; `side=RIGHT` = new side, `LEFT` = deleted line; the line MUST be inside a diff hunk) |
+| Post inline reply to review thread | `gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments/<COMMENT_ID>/replies -f body='<text>'` (there is NO `gh pr reply` subcommand) |
+| Post PR-level (issue) comment | `gh api repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments -f body='<text>'` |
 | Post official PR review + approve/request-changes | `gh pr review <PR_URL> --[approve\|request-changes\|comment] --body-file <path.md>` |
 | PR checks / CI status | `gh pr checks <PR_URL>` |
 | Actions run view + failed logs | `gh run view <RUN_ID> --log-failed > /tmp/run-<id>.log` |

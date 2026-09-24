@@ -168,7 +168,7 @@ the agentic SDLC (`engineering-contracts` Rule 15):
 | Implementing something that already has an Approved SPEC | `/che-act` |
 | Needing a design, a design system or a logo | `/che-design` (or `/che-figma`) |
 | Chasing a bug rather than building a feature | `/che-fix` |
-| Reacting to a PR that is already open | `/che-diff`, `/che-review`, `/che-pr-comments`, `/che-ci-fix` |
+| Reacting to a PR that is already open | `/che-explain`, `/che-review`, `/che-pr-comments`, `/che-ci-fix` |
 
 ### A. Starting from zero — an idea, no code yet
 
@@ -313,7 +313,7 @@ writes the failing test first, then the minimal fix, then shows you how to verif
 
 | Command | When |
 | :------ | :--- |
-| `/che-diff <PR_URL>` | You want to *understand* a diff and prepare to discuss it. No verdict. |
+| `/che-explain <PR_URL / TICKET / branch>` | You want to *understand* what a PR, ticket or branch is about: plain language, Mermaid diagrams and attention points. Add `--deep` for technical depth. No verdict. |
 | `/che-review <PR_URL> --ticket <url>` | You want a blocking review: runtime breakage, security/PII, unjustified dependencies, scope deviation. |
 | `/che-pr-comments <PR_URL>` | The PR has many comments; get a triage of what to fix, what to reply, what to resolve silently. |
 | `/che-ci-fix <actions_run_or_pr_url>` | CI is red. Classifies the failure and applies a minimal fix — and stops without touching code when the cause is infrastructure or external. |

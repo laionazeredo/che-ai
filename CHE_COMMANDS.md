@@ -27,7 +27,7 @@ The agent MUST recognise these and react immediately.
 | `/che-ship` | `che-ship` | Worktree preflight + `gh auth` + no-secret-staged check → skill commits/push/PR. |
 | `/che-fix` | `che-debugger-bugfix` | Worktree preflight + capture 4 required inputs → skill runs scientific debug loop. |
 | `/che-review` | `che-code-review` | Preflight `gh auth` + parseable PR URL → skill pulls diff + metadata + 4-category review. |
-| `/che-diff` | `che-diff-context` | Worktree preflight (Mode B) / gh auth (Mode A) → lightweight CONTEXT report for diff conversation (PR URL or local worktree vs default branch). DIFFERENT from /che-review (blocking review vs context). |
+| `/che-explain` | `che-explain` | Input preflight (gh auth for PR / MCP for ticket / worktree for branch) → DIDACTIC explanation with Mermaid diagrams + attention points. Default = simple and short; `--deep` = technical depth (3 diagrams, walkthrough, design decisions, contracts, edge cases, how to test). DIFFERENT from /che-review (blocking verdict) and /che-spec (formal plan). |
 | `/che-manual-test` | `che-manual-test-executor` | Worktree preflight + §19 session binding + finds manual_test_plan.md via --task-id or --plan-path → mandatory setup approval GATE → executes steps via Playwright MCP + screenshot evidence + final 8-section report. DIFFERENT from /che-qa (QA = only automated build/lint/test commands; Manual = step-by-step browser with evidence). |
 | `/che-pr-comments` | `che-pr-comments` | Preflight `gh auth` + PR URL → skill downloads comments + classification + triage. |
 | `/che-ci-fix` | `che-ci-fixer` | Preflight `gh auth` + worktree → skill classifies R1-R9 + applies minimal fix. |
@@ -277,7 +277,8 @@ Agent action: ask confirmation first.
 5. Run the 4-category review framework (Runtime / Security / Deps-blast-radius / Scope deviation).
 6. Structured review report saved to disk: resolve canonical OUTSIDE-WORKTREE path via `che output_path "review" "che-code-review" "pr-<N>" "session" "md"` (NOT inside the Che checkout; NEVER hardcode `.trae/` or `.che-ai/` relative to worktree).
 7. Verdict delivered to chat (Portuguese): 🔴 REQUEST CHANGES / 🟡 APPROVE WITH COMMENTS / 🟢 APPROVE, with numbered blocking issues.
-8. If user says "suba essa review oficial": use `gh pr review` with the report as body + request-changes / comment / approve flag.
+8. **Actionable findings block (LAST section of the report, §4-O):** one entry per finding — ID + category, location (`path:line`), plain-language explanation, an English comment of MAX 2 sentences ready to post, and the exact `gh api repos/<OWNER>/<REPO>/pulls/<N>/comments` command pinned to that line (`-F line=N -f side='RIGHT' -f commit_id=…`). The commands are emitted for YOU to paste; the skill never posts them on its own.
+9. If user says "suba essa review oficial": use `gh pr review` with the report as body + request-changes / comment / approve flag.
 **Syntax examples:**
 ```
 /che-review https://github.com/myorg/myrepo/pull/42 --ticket https://linear.app/team/issue/PROJ-123
@@ -286,27 +287,31 @@ Agent action: ask confirmation first.
 
 ---
 
-## `/che-diff <PR_URL OR --worktree /abs/path> [--base origin/dev]`
+## `/che-explain <PR_URL | TICKET_URL_OR_KEY | branch> [--deep] [--base origin/dev] [--worktree /abs/path]`
 
-**What it does:** Lightweight "prepared conversation" about a diff. **DIFFERENT from `/che-review`** (which gives approve/request-changes verdict with CRITICAL + HIGH issues only). This delivers a 5-section report for YOU TO HAVE CONTEXT to discuss the diff with someone: (1) what it implements (high level), (2) main changes by module, (3) CI checks status (Mode A) or AlreadyCommitted/ToCommit/Untracked buckets (Mode B), (4) slight risks, (5) 3 attention points to discuss in a call/comment. Mode A = PR URL via gh CLI. Mode B = local worktree, compares with default branch (asks which base if ambiguous).
+**What it does:** Didactic explainer. Answers "what is this about?" in plain language, with Mermaid diagrams and the attention points that matter. **DIFFERENT from `/che-review`** (verdict + blocking issues) and from `/che-spec` (formal plan with acceptance criteria). Three input modes: (A) **PR URL** — explains what WAS implemented; (B) **ticket** (Linear/ClickUp/GitHub issue URL or key) — explains what IS TO BE implemented, marking the diagrams as proposed design; (C) **branch or worktree** — explains what was implemented versus the base branch, split into already-committed / to-commit / untracked. Two depths: **default** = 5 short didactic sections + 1 flow diagram, written for someone who has never seen the code; **`--deep`** = 10 technical sections + architecture, sequence and flow diagrams, module-by-module walkthrough, design decisions and discarded alternatives, contracts touched, edge cases, how to verify.
 
-**When to invoke:** You pasted a PR link OR pointed to a worktree and want to "understand what happened here" + conversation points, without formal review rigor. When you want review blocking issues → use `/che-review`.
+**When to invoke:** You pasted a PR link, a ticket, or pointed to a branch/worktree and want to actually *understand* it — onboarding, handover, or a quick catch-up before a call. For blocking issues → `/che-review`. For a plan to build → `/che-spec`.
 
 **Agent action:**
-1. Invoke `che-diff-context` skill.
-2. Preflight Mode A (PR URL): `gh auth status` OK; URL parseable and reachable.
-3. Preflight Mode B (--worktree): worktree confirmed, §19 session binding read (ask mismatch). Base branch: auto-detect attempt (origin/main or origin/dev), if ambiguous → AskUserQuestion 2 options + "other".
-4. Collect 3 context sources Mode A: PR descr/metadata via gh pr view --json, diff names/stat, CI checks gh pr checks.
-5. Collect 4 buckets Mode B: Already Committed (base..HEAD), To Commit (staged + unstaged tracked), Untracked, Branch metadata.
-6. Structure report in 5 CANONICAL sections (high context / change areas / CI or buckets / slight risks / 3 conversation points).
-7. Save file via canonical helper: `che output_path "diff_context" "diff-summary" "<pr-or-local>" "session" "md"` → resolves OUTSIDE the worktree to `$CHE_SESSION_DIR/diff_contexts/...`; NEVER hardcode `.trae/` or `.che-ai/` relative to worktree.
-8. Deliver condensed summary in chat §18 contracts (250–500w + 4 sections). Full report saved to disk.
+1. Invoke `che-explain` skill.
+2. Preflight §1.0 (che CLI present + storage boundary) before any write.
+3. Classify the input, first match wins: GitHub PR URL → Mode A; ticket URL/key → Mode B; `--worktree` / absolute path / branch name → Mode C.
+4. Mode A: `gh auth status` OK, URL reachable → `gh pr view --json`, `gh pr diff --name-only`, `gh pr checks`, then read the diff body itself.
+5. Mode B: retrieve the ticket via the matching MCP tool (`mcp_flockr-linear` / `mcp_laion-clickup` / `mcp_github`); if it returns nothing usable → ASK for the description, never guess. Read the code the ticket will touch.
+6. Mode C: worktree confirmed, §19 session binding read (ask on mismatch). Resolve the base branch by auto-detect, and if ≥2 candidates are equally valid → AskUserQuestion instead of choosing silently.
+7. Render at the requested depth (default 5 sections / 1 diagram, `--deep` 10 sections / 3 diagrams) using the §3 Mermaid rules — never draw a node not seen in the code or diff, and label new elements as new.
+8. Save via canonical helper: `che output_path "explain" "che-explain" "<related_id>" "session" "md"` → resolves OUTSIDE the worktree to `$CHE_SESSION_DIR/explanations/<related_id>/`; NEVER hardcode `.trae/` or `.che-ai/` relative to worktree.
+9. Deliver condensed 4-section summary in chat (§18 contracts, 250–500w) in the chat language, re-emitting the diagram with translated labels. Artifact stays English.
 
 **Syntax examples:**
+
 ```
-/che-diff https://github.com/myorg/myrepo/pull/42
-/che-diff --worktree /abs/path/to/worktree
-/che-diff --worktree /abs/path --base origin/dev
+/che-explain https://github.com/myorg/myrepo/pull/42
+/che-explain https://linear.app/flockr/issue/FLO-745
+/che-explain FLO-745 --deep
+/che-explain --worktree /abs/path/to/worktree
+/che-explain --worktree /abs/path --base origin/dev --deep
 ```
 
 ---
@@ -348,7 +353,8 @@ Agent action: ask confirmation first.
 4. Triage report saved to `$CHE_WORKSPACE_SHARED/pr_comments/pr-<N>_<YYYYMMDD>.md` (resolve via `che compute_paths`; NEVER inside the Che checkout folder nested in a user project, e.g. `<WORKTREE_ROOT>/.che-ai/` or legacy `<WORKTREE_ROOT>/.trae/`).
 5. Deliver to user chat: summary buckets count, Section 1 (TO IMPLEMENT) sorted by severity, Section 2 (DRAFT RESPONSES) English polite non-argumentative, Section 3 DISCUSSION PENDING USER, Section 4 NIT optional, Section 5 RESOLVED SILENTLY.
 6. Aggregated implementation plan as atomic commits batches.
-7. If user says: implement → apply fixes in worktree. If user says: post replies → `gh pr reply` each drafted comment.
+7. If user says: implement → apply fixes in worktree.
+8. If user says: post replies → run the command carried by each Section-2/3 entry: `gh api repos/<OWNER>/<REPO>/pulls/<N>/comments/<COMMENT_ID>/replies -f body='…'` for an inline comment, or `gh api repos/<OWNER>/<REPO>/issues/<N>/comments -f body='…'` for a PR-level one. There is no `gh pr reply` command. Never auto-post without that explicit instruction.
 **Syntax examples:**
 ```
 /che-pr-comments https://github.com/myorg/myrepo/pull/42
@@ -412,7 +418,7 @@ Agent action: ask confirmation first.
 | `/che-ship` | `che-ship` (commits → push → DRAFT PR → assign) |
 | `/che-fix` | `che-debugger-bugfix` (scientific debug loop, different from features) |
 | `/che-review` | `che-code-review` (HIGH / CRITICAL + scope only) |
-| `/che-diff` | `che-diff-context` (lightweight conversation context — NO verdict) |
+| `/che-explain` | `che-explain` (didactic explainer for PR / ticket / branch — Mermaid diagrams, default simple and `--deep` technical, NO verdict) |
 | `/che-manual-test` | `che-manual-test-executor` (Playwright MCP + HTTP driver, manual_test_plan.md steps with screenshot evidence + 8-section report. MANDATORY setup approval gate. Boundary vs che-qa: QA = automated build/lint/test; Manual = real browser/interactive.) |
 | `/che-pr-comments` | `che-pr-comments` (triage, implementation plan, reply drafts) |
 | `/che-ci-fix` | `che-ci-fixer` (classify CI failure + minimal fix) |

@@ -59,8 +59,8 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 >   # → $CHE_SESSION_DIR/reviews/pr-382/20260902-092405-che-code-review_full.md
 > che output_path "report" "che-scope-check" "pr-382" "workspace" "md"
 >   # → $CHE_WORKSPACE_SHARED/reports/pr-382/20260902-093010-che-scope-check.md
-> che output_path "diff_context" "diff-summary" "pr-382" "session" "md"
->   # → $CHE_SESSION_DIR/diff_contexts/pr-382/20260902-093500-diff-summary.md
+> che output_path "explain" "che-explain" "pr-382" "session" "md"
+>   # → $CHE_SESSION_DIR/explanations/pr-382/20260902-093500-che-explain.md
 > ```
 >
 > `che output_path` automatically GUARANTEES: (1) UTC timestamp prefix **AT THE START** of the filename → alphabetical order = chronological creation order (does not depend on OS mtime); (2) Subfolders `<type>/<related_id>/` → all files from the same PR/task are co-located, easy to search with a glob; (3) low-level `che assert_outside_worktree` → HARD STOP if for any reason the path would resolve inside the worktree; (4) automatically creates parent directories.
@@ -89,8 +89,8 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
        - `binding.md` — Level 2 detail (outside user worktree, never committed).
        - `session.md` — session metadata.
        - `reviews/<related_id>/` — code-review reports, postfix reviews, PR comments triage (current session).
-       - `reports/<related_id>/` — ephemeral reports, diff-contexts, intermediate merge-audit, batch execution.
-       - `diff_contexts/<related_id>/` — 5-section context pre-diff conversation.
+       - `reports/<related_id>/` — ephemeral reports, intermediate merge-audit, batch execution.
+       - `explanations/<related_id>/` — didactic explanations (PR / ticket / branch).
        - `pr_comments/<related_id>/` — triage and response drafts for PR comments.
        - `qa/screenshots/`, `qa/evidence/<related_id>/` — Playwright/manual test evidence.
        - `execution/` — batch logs, execution trace, runtime envelopes.
@@ -761,7 +761,7 @@ KISS always wins. Parallelism is an OPTIMISATION, not a REQUIREMENT.
 >
 > Quick view (14 commands total):
 > - 9 **heavy (workflow)** → preflight validation wrapper + `Skill(...)`:
->   `/che-spec` | `/che-act` | `/che-parallel` | `/che-ship` | `/che-fix` | `/che-review` | `/che-diff` | `/che-manual-test` | `/che-pr-comments` | `/che-ci-fix` | `/che-design` | `/che-figma` | `/che-scope-check` | `/che-merge`
+>   `/che-spec` | `/che-act` | `/che-parallel` | `/che-ship` | `/che-fix` | `/che-review` | `/che-explain` | `/che-manual-test` | `/che-pr-comments` | `/che-ci-fix` | `/che-design` | `/che-figma` | `/che-scope-check` | `/che-merge`
 > - 5 **light (file operation)**: inline, DOES NOT become a skill (read/write markdown, KISS → do not create 3-line skill):
 >   `/che-status` | `/che-skip` | `/che-decisions` | `/che-summary` | `/che-abort`
 > - Updated count: consult `CHE_COMMANDS.md` §Architecture Commands vs Skills for exact Category A (heavy) + Category B (light).

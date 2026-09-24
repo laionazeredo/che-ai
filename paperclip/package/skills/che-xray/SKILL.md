@@ -22,7 +22,7 @@ description: "X-ray onboarding for NEW repositories. Detects stack, language, mo
 **NON-GOALS (do not use X-Ray for):**
 - Task spec → use `/che-spec`
 - Human product context → use `/che-onboarding`
-- Real-time diff knowledge → use `/che-diff`
+- Real-time diff knowledge → use `/che-explain`
 
 ---
 
