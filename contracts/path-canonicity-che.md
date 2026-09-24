@@ -59,7 +59,7 @@ CHE_WORKSPACES_ROOT ($HOME/.che-workspaces/)   ← storage root — CLI, hooks a
          │  single creator of artifact directories (there is no eager list).
          │
          ├─ specs/ tasks/ reports/ reviews/ design/ architecture/
-         ├─ pr_plans/ diff_contexts/ pr_comments/ merge_audits/
+         ├─ pr_plans/ explanations/ pr_comments/ merge_audits/
          ├─ qa/evidence/ execution/ graph/ debugger/ other/
          ├─ decisions.log.jsonl                ← this worktree's decision log (`CHE_DECISIONS_PATH`)
          └─ .quarantine/                       ← planning artifacts moved OUT of a user repo

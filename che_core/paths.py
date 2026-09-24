@@ -31,7 +31,7 @@ _OUTPUT_SUBFOLDERS = {
     "spec": "specs",
     "design": "design",
     "task": "tasks",
-    "diff_context": "diff_contexts",
+    "explain": "explanations",
     "pr_comments": "pr_comments",
     "merge_audit": "merge_audits",
     "execution": "execution",

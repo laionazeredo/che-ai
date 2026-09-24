@@ -70,7 +70,7 @@ AGENT_SKILLS = {
         "che-archeology",
         "che-architect",
         "che-graph",
-        "che-diff-context",
+        "che-explain",
         "che-pr-comments",
         "che-decisions-query",
         "che-executor-dispatcher",
