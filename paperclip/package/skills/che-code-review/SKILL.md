@@ -690,6 +690,59 @@ At the end (both modes, except verdict notes):
 - **Blocker summary**: numbered list — each CRITICAL/HIGH fixed before merge (or before commit+push in Mode B)
 - **Non-blocker nice-to-have**: numbered list — MEDIUM/LOW, fix or ignore, user decides
 
+**O. 🎯 ACTIONABLE FINDINGS — copy-paste block (MANDATORY — the LAST section of the report)**
+
+> Purpose: every finding becomes actionable in one paste. This is the section the user actually copies from, so it must be self-contained — the reader should never have to scroll back to "Findings".
+
+One entry per finding, in the SAME ORDER as the Findings section (blocking severity first). If a finding is skipped because it needs no code comment (already answered in the PR body, or a pure question), say how many were skipped and why.
+
+Canonical entry — five fields, nothing else:
+
+| Field | Rule |
+|---|---|
+| **Finding + category** | `#F-<n> · <severity> · <category>` — the ID and category MUST match the Findings section verbatim. |
+| **Where** | `path/to/file.ext:LINE` — the exact line the comment will attach to. |
+| **Explanation** | 1–3 lines for the USER (Portuguese in chat). Why it is a problem, in plain language. |
+| **GitHub comment (EN)** | MAX 2 sentences, simple English, no jargon. This is the literal posted text: state the consequence, not the rule number. |
+| **Post command** | The `gh api` command below, filled in. |
+
+```bash
+# Post ONE inline review comment pinned to an exact line (Mode A only).
+# side=RIGHT → LINE is the line number in the NEW file (added or context line).
+# side=LEFT  → LINE is the line number in the OLD file (a deleted line).
+# -F line=N is a TYPED (integer) field; -f is for strings. Swapping them sends a
+# string and GitHub rejects the request.
+gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
+  -f body='<the 2-sentence English comment>' \
+  -f path='<path/to/file.ext>' \
+  -F line=<LINE> -f side='RIGHT' \
+  -f commit_id="$(gh pr view <PR_NUMBER> --repo <OWNER>/<REPO> --json headRefOid -q .headRefOid)"
+```
+
+HARD RULES for the post command:
+
+1. **The line MUST appear in the PR diff.** GitHub accepts a comment only on a line inside a hunk (an added line, or a context line within a hunk). A line outside every hunk returns `422 Validation Failed`. When the finding is about code that is NOT in the diff, pin the comment to the nearest in-diff line and say so in the body, or post it as a PR-level comment instead.
+2. **`side` must match where the line lives.** `RIGHT` for the new side, `LEFT` only for deleted lines. The wrong side highlights the wrong line, or fails with 422.
+3. **Never guess the line number.** Read it from the hunk header (`@@ -old,len +new,len @@`) or from the file at the PR head commit. A comment pinned to a guessed line teaches the author to distrust the tool.
+4. **Two sentences maximum.** If it does not fit in two, the finding is not understood well enough yet — go back to the analysis.
+5. **No single quotes inside `-f body='...'`.** An apostrophe in English prose ("doesn't", "won't") breaks the shell string. Use the quote-safe form below when the comment needs one.
+6. **Multi-line findings** (a whole function rather than one line): add `-F start_line=<FIRST> -f start_side='RIGHT'`. `line`/`side` stay the END of the range.
+7. **Mode B (local worktree) has no PR.** Emit the same five fields, but leave the command in placeholder form with the note "run once a PR exists". NEVER fabricate a PR number.
+8. **Never post automatically.** These commands are generated FOR the user; posting happens only when the user explicitly asks (§5).
+
+Quote-safe form for rule 5 — reads the body from stdin, so no quoting hazard:
+
+```bash
+gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
+  -f path='<path/to/file.ext>' -F line=<LINE> -f side='RIGHT' \
+  -f commit_id="$(gh pr view <PR_NUMBER> --json headRefOid -q .headRefOid)" \
+  -F body=@- <<'EOF'
+Since `applyDiscountCode` no longer patches the PaymentIntent server-side, this total is only what the buyer sees.
+EOF
+```
+
+**Chat delivery:** the five fields per finding — Portuguese for the explanation, English for the GitHub comment body, and the command verbatim. This block IS the deliverable: do not also paste the full report.
+
 ---
 
 ## 4.9 🔴 MANDATORY STORAGE PREFLIGHT (NEVER SKIP — engineering-contracts §20 + CHE_RULES.md STORAGE BOUNDARY)
@@ -740,6 +793,7 @@ fi
   - **NEVER use relative path `./reports/` or `$WORKTREE_ROOT/.trae/`. §20 MORATORIUM.**
 
 - **DO NOT approve or request changes DIRECTLY on GitHub via `gh pr review`** unless user explicitly asks after seeing report. First deliverable = report for user to review in chat.
+- **The §4-O post commands are NOT run by this skill.** They are emitted for the user to paste, one per finding. Posting inline comments on the user's behalf requires an explicit request ("posta os comentários"), and even then only for the findings the user names.
 - If ZERO findings → still write report: "No CRITICAL/HIGH issues found; scope matches; dependencies justified." + list checked items.
 - **Write using atomic write:** pipe markdown to `che write_file_atomic "$REPORT_FULL_PATH"` stdin.
 

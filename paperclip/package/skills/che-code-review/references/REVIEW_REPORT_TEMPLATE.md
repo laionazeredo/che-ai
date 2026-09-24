@@ -240,3 +240,53 @@ Non-blocking nice-to-haves:
 - F-5 (testing traceability) — up to you.
 
 After fixes: re-run a short follow-up review, then OK to move to /che-ship or merge.
+
+---
+
+## 🎯 ACTIONABLE FINDINGS — copy-paste block (LAST section — hard rules in SKILL.md §4-O)
+
+> One entry per finding, blocking severity first, SAME order as "Findings". Five fields only. The user copies THIS section, not the report above.
+
+### #F-1 · 🔴 CRITICAL · Runtime breakage
+
+**Where:** `packages/platform/components/payment-stripe/stripe-checkout-page.tsx:133`
+
+**Explanation (PT):** O desconto deixou de ser aplicado no PaymentIntent no servidor, portanto o total mostrado já não é o que vai ser cobrado — o `stripe.confirmPayment` cobra o montante pré-desconto.
+
+**GitHub comment (EN):**
+
+> Since `applyDiscountCode` no longer patches the PaymentIntent server-side, `setOverrideAmountMinor` here only changes the displayed total, so `stripe.confirmPayment` will charge the buyer more than the total shown. Either drop the discount form from this page or re-create the PaymentIntent at confirm time.
+
+**Post command:**
+
+```bash
+gh api repos/Flockr-platform/Lumos/pulls/489/comments \
+  -f body='Since `applyDiscountCode` no longer patches the PaymentIntent server-side, `setOverrideAmountMinor` here only changes the displayed total, so `stripe.confirmPayment` will charge the buyer more than the total shown. Either drop the discount form from this page or re-create the PaymentIntent at confirm time.' \
+  -f path='packages/platform/components/payment-stripe/stripe-checkout-page.tsx' \
+  -F line=133 -f side='RIGHT' \
+  -f commit_id="$(gh pr view 489 --repo Flockr-platform/Lumos --json headRefOid -q .headRefOid)"
+```
+
+### #F-2 · 🟠 HIGH · Security / PII
+
+**Where:** `packages/notification/src/email-service.ts:211`
+
+**Explanation (PT):** E-mail do comprador em texto simples a entrar num log de nível info, quando o repositório já tem `hashPII()` para correlação.
+
+**GitHub comment (EN):**
+
+> This logs the raw customer email at info level, and the repo already provides `hashPII()` for correlation. Please swap it for the hash so notification logging stays consistent.
+
+**Post command:**
+
+```bash
+gh api repos/Flockr-platform/Lumos/pulls/489/comments \
+  -f body='This logs the raw customer email at info level, and the repo already provides `hashPII()` for correlation. Please swap it for the hash so notification logging stays consistent.' \
+  -f path='packages/notification/src/email-service.ts' \
+  -F line=211 -f side='RIGHT' \
+  -f commit_id="$(gh pr view 489 --repo Flockr-platform/Lumos --json headRefOid -q .headRefOid)"
+```
+
+**Skipped:** 1 finding — #F-3 (scope deviation) is already answered in the PR body, so it needs no code comment.
+
+> **Mode B (local worktree):** there is no PR. Emit the same five fields, leave the command in placeholder form, and add "run once a PR exists". Never fabricate a PR number.
