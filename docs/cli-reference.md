@@ -196,14 +196,7 @@ che update --help
 
 ### 2.2 Every failure is machine-readable
 
-`--json` goes **before** the command and applies to any command, success or failure:
-
-```bash
-che --json project list
-che --json worktree show web-app main
-```
-
-Failures always come out of the same envelope, whether or not `--json` was passed:
+A **failure** always comes out of the same envelope, whether or not `--json` was passed:
 
 ```jsonc
 {
@@ -222,11 +215,34 @@ Failures always come out of the same envelope, whether or not `--json` was passe
 - **`code` is the contract.** Several failures share exit `2`, so the number cannot tell them apart;
   the string can. Codes are declared once in `che_core/diagnostics.py` (`ERROR_CATALOG`), and a test
   fails if a call site raises a code the catalog does not describe.
-- **`--json` puts the envelope on stdout, prose on stderr.** Without it, the same failure is three
-  lines on stderr (`Error:` / `Hint:` / `Next:`) and stdout stays empty. A caller that asked for JSON
-  always finds JSON on stdout — success or failure.
 - **`hint` is the remedy, `next_actions` are the commands.** When a Che command fixes the problem it
   is named there; run it rather than working out the fix from the message.
+
+**`--json` goes before the command and governs how the failure is rendered:**
+
+```bash
+che --json project list          # failure → the envelope on stdout
+che --json worktree show web-app main
+```
+
+Without it, the same failure is three lines on stderr (`Error:` / `Hint:` / `Next:`) and stdout stays
+empty. With it, the envelope goes to **stdout** — so a caller that asked for JSON always finds JSON
+there, on stdout, for any command.
+
+> **Scope of the guarantee.** The global `--json` shapes the **failure** channel, not the success
+> channel. Success output stays per-command, because three of them are contracts with something other
+> than a parser:
+>
+> | Shape | Commands | Why |
+> | :--- | :--- | :--- |
+> | JSON object | `project`, `worktree`, `task`, `state`, `rag`, `export`, `import`, `eject`, `update`, `pixel check/diff/crop` | Consumed by `jq` and by skills directly. |
+> | `export K="v"` lines | `compute_paths`, `pixel paths` | The recipes are `eval "$(che …)"`. JSON here would break every skill. |
+> | `K=v` lines | `che designer …`, `python3 -m che_core.ship`, `python3 -m che_core.xray` | Same reason, for the preflight/bootstrap recipes. |
+> | Prose | a few confirmations (`Project exported to: …`) | No machine form today. |
+>
+> The per-command `--json` flags (`che state query --json`, `che pixel check --json`, …) are what
+> select JSON output on success where the command supports it. Making the global flag do that
+> everywhere is a separate change, because it has to keep the `eval` recipes working.
 
 ---
 
