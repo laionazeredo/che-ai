@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
+from che_core.diagnostics import CheError
 from che_core.state_store import query_state_db, rebuild_state_index, sanitize_state, search_state
 from tests.conftest import bind_worktree
+
+CHE_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _setup_wt_with_content(tmp_path: Path):
@@ -94,12 +100,52 @@ def test_query_state_db_whitelist_readonly(tmp_path: Path):
     tables = [r["name"] for r in res["rows"]]
     assert "tasks" in tables
     assert "decisions" in tables
-    # INSERT deve falhar sem force: ValueError do módulo
-    with pytest.raises(ValueError):
+    # INSERT must fail without --force: catalogued STATE_QUERY_NEEDS_FORCE.
+    with pytest.raises(CheError) as exc:
         query_state_db(
             "INSERT INTO tasks(id,title,status,domain,updated_at) VALUES('X','Y','TODO','engineering','2024-01-01')",
             worktree_root=str(wt),
         )
+    assert exc.value.code == "STATE_QUERY_NEEDS_FORCE"
+    assert exc.value.exit_code == 2
+
+
+def _cli(args: list, env: dict) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, "-m", "che_core.cli", "--json", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(CHE_ROOT),
+        env=env,
+    )
+
+
+def test_the_cli_exposes_the_force_flag_the_refusal_names(tmp_path: Path) -> None:
+    """A hint that names a flag the command does not have is worse than no hint.
+
+    `STATE_QUERY_NEEDS_FORCE` tells the caller to pass `--force`; the flag is therefore part of the
+    failure's contract, not a nicety. The three runs below differ only in what the caller supplied,
+    and each is read from the envelope — the code, never the wording.
+
+    No index is built on purpose: the refusal and the missing-argument check both happen before the
+    database is opened, so nothing is written and the codes prove which gate was reached.
+    """
+    repo, _ = bind_worktree(tmp_path)
+    env = dict(os.environ, CHE_WORKSPACES_ROOT=str(tmp_path / "che-workspaces"))
+    write = "INSERT INTO tasks(id,title,status,domain,updated_at) VALUES('X','Y','TODO','engineering','2024-01-01')"
+
+    refused = _cli(["state", "query", "--sql", write, "--worktree-root", str(repo)], env)
+    assert json.loads(refused.stdout)["code"] == "STATE_QUERY_NEEDS_FORCE"
+
+    # Accepted, so the run reaches the next gate — the state store has not been built yet.
+    forced = _cli(["state", "query", "--sql", write, "--worktree-root", str(repo), "--force"], env)
+    assert json.loads(forced.stdout)["code"] == "STATE_DB_MISSING"
+
+    # Without a worktree there is no database to open: a catalogued failure, not a ValueError.
+    rootless = _cli(["state", "query", "--sql", "SELECT 1"], env)
+    assert json.loads(rootless.stdout)["code"] == "MISSING_WORKTREE_ROOT"
+    assert rootless.returncode == 2
 
 
 def test_sanitize_dry_run_then_apply(tmp_path: Path):

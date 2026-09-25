@@ -1,11 +1,11 @@
 import os
 import re
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
 
+from che_core.diagnostics import fail
 from che_core.project_layout import (
     DOMAIN_SLUGS,
     PROJECT_DOCS,
@@ -299,8 +299,7 @@ def compute_paths(
     an actionable message when the path is not bound yet.
     """
     if not worktree_root:
-        print("compute_paths: worktree_root is required.", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_WORKTREE_ROOT")
 
     wt_root = Path(worktree_root).expanduser().resolve()
     assert_no_cwd_dependency(wt_root)
@@ -311,13 +310,7 @@ def compute_paths(
     else:
         matches = find_worktree_by_path(str(wt_root))
         if not matches:
-            print(
-                f"compute_paths: {wt_root} is not bound to any Che worktree.\n"
-                f"  Bind it:        che worktree add {wt_root} --project <project> --name <name>\n"
-                f"  List projects:  che project list",
-                file=sys.stderr,
-            )
-            sys.exit(3)
+            fail("UNBOUND_WORKTREE", path=str(wt_root))
         resolved_project = matches[0]["project"]
         resolved_worktree = matches[0]["name"]
 
@@ -436,22 +429,15 @@ def assert_outside_worktree(candidate_path, worktree_root, label: str = "path") 
     cand_str = str(candidate)
 
     if cand_str == wt_str or cand_str.startswith(wt_str + "/"):
-        print(
-            "🔴 CHE SESSIONS CONTRACT VIOLATION — HARD STOP\n"
-            f"{label} is falling INSIDE the user worktree.\n"
-            "This must NEVER happen — it causes accidental commits of "
-            "decisions.log, task_graph, manual_test_plan, spec_*.md, etc. into PRs.\n"
-            f"  label        : {label}\n"
-            f"  candidate    : {cand_str}\n"
-            f"  worktree_root: {wt_str}\n"
-            "How to fix:\n"
-            "  - Do NOT build paths with $PWD/.che/ or $WORKTREE_ROOT/.che/.\n"
-            "  - Always use:\n"
-            '      eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID")"\n'
-            "    then use $CHE_WORKSPACE_SHARED (guaranteed OUTSIDE the worktree).",
-            file=sys.stderr,
+        # Loud on purpose: a Che artifact landing inside the user repository causes
+        # accidental commits of decisions.log, task_graph, manual_test_plan, spec_*.md,
+        # etc. into PRs. The spec's hint carries the fix.
+        fail(
+            "STORAGE_BOUNDARY_VIOLATION",
+            label=label,
+            path=cand_str,
+            worktree_root=wt_str,
         )
-        sys.exit(99)
 
 
 def output_path(
@@ -476,13 +462,13 @@ def output_path(
     Returns the absolute target path (parent directory created on disk).
     """
     if not type:
-        raise ValueError("che_output_path: type is required")
+        fail("MISSING_ARTIFACT_ARGUMENT", helper="che_output_path", argument="type")
     if not slug:
-        raise ValueError("che_output_path: slug is required")
+        fail("MISSING_ARTIFACT_ARGUMENT", helper="che_output_path", argument="slug")
     if not ext:
-        raise ValueError("che_output_path: ext is required")
+        fail("MISSING_ARTIFACT_ARGUMENT", helper="che_output_path", argument="ext")
     if scope not in ("session", "workspace"):
-        raise ValueError("che_output_path: scope must be 'session' or 'workspace'")
+        fail("INVALID_ARTIFACT_SCOPE", helper="che_output_path", scope=scope)
 
     subfolder = _OUTPUT_SUBFOLDERS.get(type, type)
 
@@ -522,7 +508,7 @@ def write_file_atomic(target, content: bytes, worktree_root: Optional[str] = Non
     inside the user worktree.
     """
     if not target:
-        raise ValueError("che_write_file_atomic: target path required")
+        fail("MISSING_ARTIFACT_ARGUMENT", helper="che_write_file_atomic", argument="target")
 
     target_path = Path(target).expanduser()
     target_path.parent.mkdir(parents=True, exist_ok=True)

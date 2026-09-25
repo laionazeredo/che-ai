@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from che_core.diagnostics import diagnosed, fail
 from che_core.paths import compute_paths, ensure_session_dirs
 from che_core.project_layout import hermetic_git_env
 
@@ -78,8 +79,7 @@ def run_preflight(worktree_root: str, session_id: str):
     wt_root = Path(worktree_root).resolve()
 
     if not wt_root.is_dir():
-        print(f"[che-ship] ❌ WORKTREE_ROOT {wt_root} is not a valid directory.", file=sys.stderr)
-        sys.exit(1)
+        fail("NOT_A_DIRECTORY", path=wt_root)
 
     paths = compute_paths(str(wt_root), session_id)
     ensure_session_dirs(str(wt_root), session_id)
@@ -136,10 +136,10 @@ def run_blacklist_check(worktree_root: str, session_id: str):
     blacklisted = [f for f in all_files if is_blacklisted(f)]
 
     if not blacklisted:
-        print("✅ No blacklisted planning artifacts found in the worktree.")
+        print("✅ No blacklisted planning artifacts found in the worktree.", file=sys.stderr)
         return
 
-    print(f"⚠️ Found {len(blacklisted)} blacklisted files in the worktree.")
+    print(f"⚠️ Found {len(blacklisted)} blacklisted files in the worktree.", file=sys.stderr)
 
     untracked_moved = []
     tracked_found = []
@@ -178,22 +178,25 @@ def run_blacklist_check(worktree_root: str, session_id: str):
             tracked_found.append(bf)
 
     if tracked_found:
-        print("\n🔴 PLANNING ARTIFACTS BLACKLIST — TRACKED FILES FOUND (committed before):")
-        for f in tracked_found:
-            print(f"  · {f}")
-        print("\nThese are che internal files and MUST NOT live in user-code git history.")
-        print("Options:")
-        print(f"  A = Untrack them (git rm --cached each), KEEP local copies MOVED to {backup_dir}")
-        print("  B = I will handle manually. Cancel ship.")
-        sys.exit(2)
+        # The A/B remedy has no equivalent in the diagnostics catalog, so it stays a print — on
+        # STDERR: the catalogued failure below writes the JSON envelope to stdout when `--json` was
+        # requested, and prose printed here first would leave that stream unparseable.
+        print("Options:", file=sys.stderr)
+        print(
+            f"  A = Untrack them (git rm --cached each), KEEP local copies MOVED to {backup_dir}",
+            file=sys.stderr,
+        )
+        print("  B = I will handle manually. Cancel ship.", file=sys.stderr)
+        fail("PLANNING_ARTIFACTS_TRACKED", files=", ".join(tracked_found))
 
     if untracked_moved:
-        print("\n🧹 Moved untracked files to backup:")
+        print("\n🧹 Moved untracked files to backup:", file=sys.stderr)
         for f in untracked_moved:
-            print(f"  · {f}")
+            print(f"  · {f}", file=sys.stderr)
 
 
-def main():
+@diagnosed
+def main(argv=None):
     parser = argparse.ArgumentParser(description="Che Ship Helper")
     subparsers = parser.add_subparsers(dest="cmd", required=True)
 
@@ -205,7 +208,7 @@ def main():
     p_blacklist.add_argument("worktree_root")
     p_blacklist.add_argument("session_id")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.cmd == "preflight":
         run_preflight(args.worktree_root, args.session_id)

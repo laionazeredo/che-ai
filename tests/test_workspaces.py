@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from che_core.diagnostics import CheError
 from che_core.hooks import posttooluse_git_worktree
 from che_core.paths import _slugify, project_slug_from_git_origin, resolve_workspace_name, resolve_worktree_slug
 from che_core.project_layout import DOMAIN_SLUGS, get_project_dir, get_trash_dir, get_workspaces_root
@@ -166,18 +167,20 @@ def test_cli_project_init_twice_preserves_edited_roadmap(tmp_path, _isolate_work
 def test_init_project_refuses_non_git_path(tmp_path, _isolate_workspaces_root):
     plain = tmp_path / "plain"
     plain.mkdir()
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         init_project(str(plain), slug="acme")
-    assert exc.value.code == 2
+    assert exc.value.code == "NOT_A_GIT_REPOSITORY"
+    assert exc.value.exit_code == 2
     assert not (_isolate_workspaces_root / "acme").exists()
 
 
 @pytest.mark.parametrize("bad_slug", ["", "   ", "Acme", "with space", "a" * 64])
 def test_init_project_refuses_invalid_slug(tmp_path, bad_slug):
     repo = make_git_repo(tmp_path / "repo")
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         init_project(str(repo), slug=bad_slug)
-    assert exc.value.code == 2
+    assert exc.value.code == "INVALID_SLUG"
+    assert exc.value.exit_code == 2
 
 
 def test_list_projects_reports_docs_domains_and_worktrees(tmp_path, _isolate_workspaces_root):
@@ -208,9 +211,10 @@ def test_remove_project_is_dry_run_by_default_then_trashes_with_manifest(tmp_pat
     assert project_dir.is_dir()
 
     # Applying without --confirm is refused (usage exit 2) and changes nothing.
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         remove_project("acme", dry_run=False, confirmed=False)
-    assert exc.value.code == 2
+    assert exc.value.code == "REFUSED_WITHOUT_CONFIRM"
+    assert exc.value.exit_code == 2
     assert project_dir.is_dir()
 
     applied = remove_project("acme", dry_run=False, confirmed=True)
@@ -247,9 +251,10 @@ def test_restore_project_refuses_to_overwrite_existing_target(tmp_path):
     moved = remove_project("acme", dry_run=False, confirmed=True)
 
     init_project(str(repo), slug="acme")  # recreates the target folder -> conflict
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         restore_project(moved["trash_slug"])
-    assert exc.value.code == 3
+    assert exc.value.code == "RESTORE_TARGET_EXISTS"
+    assert exc.value.exit_code == 3
     # The trashed copy is left untouched.
     assert (Path(moved["trash_path"]) / "_MANIFEST.json").is_file()
 

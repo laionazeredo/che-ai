@@ -24,7 +24,7 @@ if che_home not in sys.path:
     sys.path.insert(0, che_home)
 
 # ruff: noqa: E402
-from che_core.hooks import posttooluse_3layer_dedup
+from che_core.hooks import hook_failure, posttooluse_3layer_dedup
 
 
 def main():
@@ -38,7 +38,7 @@ def main():
         result = posttooluse_3layer_dedup(input_json)
         print(json.dumps(result))
     except Exception as e:
-        print(json.dumps({"decision": "allow", "additionalContext": f"Hook error: {e}"}))
+        print(json.dumps(hook_failure(e)))
 
 
 if __name__ == "__main__":

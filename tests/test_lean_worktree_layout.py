@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from che_core.diagnostics import CheError
 from che_core.paths import output_path
 from che_core.ship import QUARANTINE_DIRNAME, run_blacklist_check
 from che_core.worktrees import add_worktree
@@ -20,6 +21,22 @@ from tests.conftest import bind_worktree, isolated_git_env
 
 def _entries(path: Path) -> list[str]:
     return sorted(p.name for p in path.iterdir())
+
+
+def _tracked_leak(repo: Path, name: str = "spec_leak.md") -> Path:
+    """Drop a blacklisted planning artifact into the repo AND commit it.
+
+    Committing is what selects the refusal path: an untracked leak is moved to quarantine, a tracked
+    one stops the run, because deleting a file that exists in git history is not ours to decide.
+    """
+    leak = repo / name
+    leak.write_text("tracked planning artifact\n", encoding="utf-8")
+
+    env = isolated_git_env()
+    git = ["git", "-C", str(repo), "-c", "user.email=test@che.local", "-c", "user.name=Che Test"]
+    subprocess.run([*git, "add", name], check=True, capture_output=True, env=env)
+    subprocess.run([*git, "commit", "-q", "-m", "leak"], check=True, capture_output=True, env=env)
+    return leak
 
 
 # --- B-1 ----------------------------------------------------------------------
@@ -97,20 +114,35 @@ def test_quarantine_never_deletes(tmp_path: Path) -> None:
     # @ac AB-2
     """A TRACKED artifact aborts the run and survives — never silently removed."""
     repo, _ = bind_worktree(tmp_path)
-    leak = Path(repo) / "spec_leak.md"
-    leak.write_text("tracked planning artifact\n", encoding="utf-8")
+    leak = _tracked_leak(repo)
 
-    env = isolated_git_env()
-    git = ["git", "-C", str(repo), "-c", "user.email=test@che.local", "-c", "user.name=Che Test"]
-    subprocess.run([*git, "add", "spec_leak.md"], check=True, capture_output=True, env=env)
-    subprocess.run([*git, "commit", "-q", "-m", "leak"], check=True, capture_output=True, env=env)
-
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         run_blacklist_check(str(repo), "sess-lean")
 
-    assert exc.value.code == 2, "a tracked artifact must stop the ship, not be moved"
+    assert exc.value.code == "PLANNING_ARTIFACTS_TRACKED"
+    assert exc.value.exit_code == 2, "a tracked artifact must stop the ship, not be moved"
     assert leak.is_file(), "a tracked artifact must never be silently deleted"
     assert leak.read_text(encoding="utf-8") == "tracked planning artifact\n"
+
+
+def test_the_refusal_keeps_stdout_for_the_machine_channel(tmp_path: Path, capsys) -> None:
+    """The A/B options are human guidance, so they belong on stderr.
+
+    `--json` writes the failure envelope to stdout, and prose printed there first would leave the
+    stream unparseable — worse than no JSON at all, because a caller cannot tell. Asserted directly
+    rather than through `--json`, which the ship CLI does not accept: the invariant is what matters,
+    not the flag that would exercise it.
+    """
+    repo, _ = bind_worktree(tmp_path)
+    _tracked_leak(repo)
+
+    with pytest.raises(CheError):
+        run_blacklist_check(str(repo), "sess-lean")
+
+    captured = capsys.readouterr()
+    assert captured.out == "", "stdout is the machine channel and must stay empty here"
+    assert "Options:" in captured.err
+    assert "A = Untrack them" in captured.err
 
 
 # --- AB-1 ---------------------------------------------------------------------

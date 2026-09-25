@@ -2,27 +2,27 @@ import argparse
 import json
 import os
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from che_core.diagnostics import diagnosed, fail
 from che_core.paths import compute_paths, ensure_session_dirs
 from che_core.registry import registry_append_jsonl
 
 
-def main():
+@diagnosed
+def main(argv=None):
     parser = argparse.ArgumentParser(description="Che X-Ray Preflight")
     parser.add_argument("worktree_root", help="Absolute path to the worktree")
     parser.add_argument("session_id", nargs="?", help="Session ID")
     parser.add_argument("--finalize", action="store_true", help="Run the final steps to write the templates")
     parser.add_argument("--files-scanned", type=int, default=0, help="Number of files scanned (for finalize)")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     wt_root = Path(args.worktree_root).resolve()
 
     if not wt_root.is_dir():
-        print(f"[che-xray] ❌ WORKTREE_ROOT {wt_root} is not a valid directory.", file=sys.stderr)
-        sys.exit(1)
+        fail("NOT_A_DIRECTORY", path=wt_root)
 
     session_id = args.session_id or os.environ.get("CHE_CURRENT_SESSION_ID") or os.environ.get("SESSION_ID")
     if not session_id:

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from che_core.diagnostics import CheError
 from che_core.paths import (
     _slugify,
     assert_outside_worktree,
@@ -68,17 +69,19 @@ def test_assert_outside_worktree_is_noop_on_empty(tmp_path):
 def test_assert_outside_worktree_blocks_inside(tmp_path):
     wt = tmp_path / "wt"
     wt.mkdir()
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         assert_outside_worktree(str(wt / ".che" / "leak.md"), str(wt), "TEST")
-    assert exc.value.code == 99
+    assert exc.value.code == "STORAGE_BOUNDARY_VIOLATION"
+    assert exc.value.exit_code == 99
 
 
 def test_assert_outside_worktree_blocks_root_itself(tmp_path):
     wt = tmp_path / "wt"
     wt.mkdir()
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         assert_outside_worktree(str(wt), str(wt), "TEST")
-    assert exc.value.code == 99
+    assert exc.value.code == "STORAGE_BOUNDARY_VIOLATION"
+    assert exc.value.exit_code == 99
 
 
 def test_compute_paths_exposes_decisions_and_registry(bound_worktree):
@@ -144,17 +147,20 @@ def test_spec_lands_in_specs_folder_grouped_by_slug(tmp_path, monkeypatch):
 
 def test_output_path_rejects_bad_scope(tmp_path, monkeypatch):
     monkeypatch.setenv("CHE_WORKSPACE_SHARED", str(tmp_path))
-    with pytest.raises(ValueError):
+    with pytest.raises(CheError) as exc:
         output_path("qa", "x", "", "global", "md")
+    assert exc.value.code == "INVALID_ARTIFACT_SCOPE"
+    assert exc.value.exit_code == 2
 
 
 def test_output_path_refuses_target_inside_worktree(tmp_path, monkeypatch):
     wt = tmp_path / "wt"
     wt.mkdir()
     monkeypatch.setenv("CHE_WORKSPACE_SHARED", str(wt / "nested"))
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         output_path("task", "graph", "FLO-1", "workspace", "md", worktree_root=str(wt))
-    assert exc.value.code == 99
+    assert exc.value.code == "STORAGE_BOUNDARY_VIOLATION"
+    assert exc.value.exit_code == 99
 
 
 def test_write_file_atomic_writes_content(tmp_path):
@@ -168,12 +174,14 @@ def test_write_file_atomic_writes_content(tmp_path):
 def test_write_file_atomic_refuses_inside_worktree(tmp_path):
     wt = tmp_path / "wt"
     wt.mkdir()
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         write_file_atomic(str(wt / "leak.md"), b"x", worktree_root=str(wt))
-    assert exc.value.code == 99
+    assert exc.value.code == "STORAGE_BOUNDARY_VIOLATION"
+    assert exc.value.exit_code == 99
     assert not (wt / "leak.md").exists()
 
 
 def test_write_file_atomic_requires_target():
-    with pytest.raises(ValueError):
+    with pytest.raises(CheError) as exc:
         write_file_atomic("", b"x")
+    assert exc.value.code == "MISSING_ARTIFACT_ARGUMENT"

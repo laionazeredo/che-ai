@@ -49,11 +49,12 @@ def test_stock_add_accepts_real_image(tmp_path: Path) -> None:
 def test_stock_add_rejects_html_placeholder(tmp_path: Path) -> None:
     """AB-4: an HTML/403 payload writes NOTHING and appends NO CREDITS entry."""
     from che_core.designer import run_stock_add
+    from che_core.diagnostics import CheError
 
     asset = tmp_path / "fake.png"
     asset.write_bytes(b"<!DOCTYPE html><html><body>403 Forbidden</body></html>")
 
-    with pytest.raises(SystemExit) as exc_info:
+    with pytest.raises(CheError) as exc_info:
         run_stock_add(
             str(tmp_path),
             str(asset),
@@ -61,7 +62,8 @@ def test_stock_add_rejects_html_placeholder(tmp_path: Path) -> None:
             "Unsplash License",
             "https://example.com/forbidden",
         )
-    assert exc_info.value.code != 0, "placeholder payload must abort with non-zero exit"
+    assert exc_info.value.code == "ASSET_NOT_AN_IMAGE"
+    assert exc_info.value.exit_code != 0, "placeholder payload must abort with non-zero exit"
 
     assets_dir = tmp_path / "design" / "assets"
     assert not (assets_dir / "fake.png").exists(), "placeholder must NOT be written under design/assets/"
@@ -86,10 +88,12 @@ def test_stock_add_subcommand_registered() -> None:
 def test_stock_add_requires_provenance_fields(tmp_path: Path) -> None:
     """run_stock_add rejects empty provider/license/source_url (precondition)."""
     from che_core.designer import run_stock_add
+    from che_core.diagnostics import CheError
 
     asset = tmp_path / "hero.png"
     asset.write_bytes(_PNG_BYTES)
 
-    with pytest.raises(SystemExit) as exc_info:
+    with pytest.raises(CheError) as exc_info:
         run_stock_add(str(tmp_path), str(asset), "", "CC0", "https://example.com")
-    assert exc_info.value.code != 0
+    assert exc_info.value.code == "MISSING_ASSET_METADATA"
+    assert exc_info.value.exit_code != 0

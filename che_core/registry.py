@@ -1,9 +1,9 @@
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from che_core.diagnostics import fail
 from che_core.project_layout import append_line_atomic, get_state_registry_path
 
 
@@ -32,8 +32,7 @@ def registry_append_jsonl(
     session_id: str, status: str, worktree_root: str, payload_s: str = "{}", ts_override: Optional[str] = None
 ):
     if not session_id or not status or not worktree_root:
-        print("registry_append_jsonl: session_id, status, and worktree_root are required.", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_REGISTRY_FIELDS")
 
     payload = _clean_payload(payload_s)
 
@@ -108,8 +107,7 @@ def registry_append_jsonl(
     try:
         append_line_atomic(out_path, line)
     except ValueError as exc:
-        print(f"registry_append_jsonl: {exc}", file=sys.stderr)
-        sys.exit(2)
+        fail("APPEND_FAILED", target=str(out_path), detail=str(exc))
 
 
 def registry_lookup_last(session_id: str) -> Optional[Dict[str, Any]]:

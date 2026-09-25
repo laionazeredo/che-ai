@@ -5,6 +5,7 @@ import os
 import sys
 from pathlib import Path
 
+from che_core.diagnostics import diagnosed, fail
 from che_core.memory_store import append_decision
 from che_core.paths import (
     assert_outside_worktree,
@@ -39,9 +40,9 @@ def _load_json(path: str):
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))
     except OSError as exc:
-        raise ValueError(f"cannot read {path}: {exc}") from exc
+        fail("UNREADABLE_INPUT", path=path, detail=str(exc))
     except json.JSONDecodeError as exc:
-        raise ValueError(f"{path} is not valid JSON: {exc}") from exc
+        fail("INVALID_JSON", path=path, detail=str(exc))
 
 
 def _build_filters_from_args(args) -> dict:
@@ -90,42 +91,28 @@ def _pixel_artifact_paths(
     """
     wt_root = Path(worktree_root).resolve()
     if not wt_root.is_dir():
-        print(f"Error: {wt_root} is not a valid worktree directory.", file=sys.stderr)
-        sys.exit(2)
+        fail("NOT_A_DIRECTORY", path=wt_root)
 
     design_dir = wt_root / "design" / sub_product
     if not design_dir.is_dir():
-        print(f"Error: no design tree for sub-product {sub_product!r} at {design_dir}.", file=sys.stderr)
-        print(
-            f"Hint: create it first with `che designer init {wt_root} {session_id} --sub-product {sub_product}`.",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        fail("DESIGN_TREE_MISSING", path=design_dir)
 
     label = breakpoint.strip()
     if not label or "/" in label or label in (".", ".."):
-        print(f"Error: {breakpoint!r} is not a usable breakpoint label.", file=sys.stderr)
-        sys.exit(2)
+        fail("INVALID_BREAKPOINT_LABEL", breakpoint=breakpoint)
 
     if backend in BACKENDS_WITHOUT_EXTRACTOR:
         # This flag picks the raw-capture NAMING CONVENTION, not just a label, and there
         # is none to pick for a backend no session has ever been recorded from. Inventing
         # one would put a filename in the recipe that nothing can write.
-        print(
-            f"Error: --backend {backend!r} has no capture convention yet — no session has ever "
-            "been recorded from it, so the raw reference filename would be a guess.",
-            file=sys.stderr,
+        fail(
+            "NO_CAPTURE_CONVENTION",
+            backend=backend,
+            backends=", ".join(sorted(BACKENDS_WITH_EXTRACTOR)),
         )
-        print(
-            "Hint: see domains/ux/connectors/penpot.config.md 'Wiring status' for what has to "
-            f"exist first. Implemented now: {', '.join(sorted(BACKENDS_WITH_EXTRACTOR))}.",
-            file=sys.stderr,
-        )
-        sys.exit(2)
 
     if attempt < 1:
-        print(f"Error: --attempt must be >= 1, found {attempt}.", file=sys.stderr)
-        sys.exit(2)
+        fail("INVALID_ATTEMPT", attempt=attempt)
 
     paths = ensure_session_dirs(str(wt_root), session_id)
     # `output_path` resolves its roots from the environment, because every shell
@@ -166,19 +153,39 @@ def _pixel_artifact_paths(
     }
 
 
+@diagnosed
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+
+    # The global `--json` may precede the subcommand, but the dispatch below runs before argparse
+    # and can only look at `argv[0]`. Drop the flag here so `che --json designer …` is forwarded
+    # exactly like `che designer …` is — otherwise it reaches argparse, which has no handler for the
+    # `designer` subparser (it is registered for `--help` discoverability only) and rejects the
+    # designer's own arguments as unrecognized. `diagnosed` holds the original list, so the failure
+    # envelope still knows JSON was requested.
+    if argv and argv[0] == "--json":
+        argv = argv[1:]
 
     # `che designer …` is forwarded verbatim to the domain sub-CLI before argparse
     # runs, because argparse's REMAINDER does not forward leading optionals
     # (e.g. `che designer --help`) — see bpo-17050.
     if argv and argv[0] == "designer":
-        from che_core.designer import main as designer_main
+        # `dispatch`, not `main`: this wrapper owns failure rendering, and it is the layer that saw
+        # the global `--json`. Letting the designer wrap too would render the failure first, as prose.
+        from che_core.designer import dispatch as designer_dispatch
 
-        designer_main(argv[1:])
+        designer_dispatch(argv[1:])
         return
 
     parser = argparse.ArgumentParser(description="Che Core CLI")
+    # One flag an agent can always pass, whatever the command: `che --json <anything>`.
+    # The per-subcommand `--json` flags keep working unchanged, so no existing caller breaks.
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_global",
+        help="Machine-readable result for any command, success or failure. Goes before the command.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # paths
@@ -331,9 +338,18 @@ def main(argv=None):
     )
     ps_query.add_argument("--bind", nargs="*", default=[], help="Values for ? placeholders (textual order)")
     ps_query.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help=(
+            "Allow a write statement (INSERT/UPDATE/DELETE/DDL). Reads are the default, and a write "
+            "is refused with STATE_QUERY_NEEDS_FORCE without this flag."
+        ),
+    )
+    ps_query.add_argument(
         "--worktree-root",
         default=None,
-        help="Target worktree (some queries do not require it).",
+        help="Target worktree. Required in practice: the query opens that project's state database.",
     )
     ps_query.add_argument("--json", action="store_true", dest="json_out", help="Return JSON instead of a table.")
 
@@ -741,7 +757,9 @@ def main(argv=None):
         if entry:
             _print_json(entry)
         else:
-            sys.exit(1)
+            # Used to be `sys.exit(1)` with nothing printed: an agent got a number and an empty
+            # stream, with no way to tell a missing binding from a corrupt registry.
+            fail("NO_REGISTRY_ENTRY", session_id=args.session_id)
         return
 
     if args.command == "decision_append":
@@ -767,11 +785,10 @@ def main(argv=None):
         if args.flags:
             try:
                 extra = json.loads(args.flags)
-                if isinstance(extra, dict):
-                    payload["flags"].update(extra)
-            except Exception as e:
-                print(f"Error parsing --flags: {e}", file=sys.stderr)
-                sys.exit(2)
+            except json.JSONDecodeError as exc:
+                fail("INVALID_FLAGS_JSON", detail=str(exc))
+            if isinstance(extra, dict):
+                payload["flags"].update(extra)
 
         registry_append_jsonl(args.session_id, "FLAGS", args.worktree_root, json.dumps(payload))
         print(f"Configuration updated for session {args.session_id}")
@@ -835,6 +852,7 @@ def main(argv=None):
                 args.bind,
                 worktree_root=args.worktree_root,
                 as_json=args.json_out,
+                force=args.force,
             )
             if isinstance(res, (list, dict)):
                 _print_json(res)
@@ -932,13 +950,11 @@ def main(argv=None):
             try:
                 output, differing, refusal = frame_diff(args.design, args.dom, args.threshold)
             except (OSError, ValueError) as exc:
-                print(f"Error: {exc}", file=sys.stderr)
-                sys.exit(2)
+                fail("PIXEL_INPUT_INVALID", detail=str(exc))
             if refusal is not None or output is None:
                 # §4.5: differing sizes are refused rather than scored, because the number
                 # `pixelmatch` would return is computed against the wrong pixels. Bad input → 2.
-                print(f"Error: {refusal}", file=sys.stderr)
-                sys.exit(2)
+                fail("PIXEL_SIZE_MISMATCH", detail=refusal)
 
             save_rgba(output, args.out)
             counted = int(output.shape[0] * output.shape[1])
@@ -976,8 +992,7 @@ def main(argv=None):
                     log=lambda line: print(line, file=sys.stderr),
                 )
             except (OSError, ValueError) as exc:
-                print(f"Error: {exc}", file=sys.stderr)
-                sys.exit(2)
+                fail("PIXEL_INPUT_INVALID", detail=str(exc))
 
             sheet = render_crop_sheet(report) if args.sheet else None
             if sheet is not None and args.sheet:
@@ -997,11 +1012,7 @@ def main(argv=None):
             return
 
         if args.design_source and not args.design_backend:
-            print(
-                f"Error: --design-source requires --design-backend ({', '.join(DECLARED_BACKENDS)}).",
-                file=sys.stderr,
-            )
-            sys.exit(2)
+            fail("INVALID_DESIGN_SOURCE", backends=", ".join(DECLARED_BACKENDS))
 
         try:
             design_map = _load_json(args.map)
@@ -1033,17 +1044,11 @@ def main(argv=None):
                 ],
             )
             if problems:
-                print(
-                    f"Error: the DOM fact bag is not usable ({len(problems)} problem(s)):",
-                    file=sys.stderr,
+                fail(
+                    "DOM_FACTS_UNUSABLE",
+                    count=len(problems),
+                    problems="\n".join(f"  - {problem}" for problem in problems),
                 )
-                for problem in problems:
-                    print(f"  - {problem}", file=sys.stderr)
-                print(
-                    "Hint: re-run domains/ux/gates/assets/dom-facts-extractor.js over the whole map.",
-                    file=sys.stderr,
-                )
-                sys.exit(2)
             report = run_check(
                 design_map,
                 design_facts,
@@ -1061,8 +1066,7 @@ def main(argv=None):
                 design_source_sha256=hashlib.sha256(Path(args.design_source or args.design).read_bytes()).hexdigest(),
             )
         except ValueError as exc:
-            print(f"Error: {exc}", file=sys.stderr)
-            sys.exit(2)
+            fail("PIXEL_INPUT_INVALID", detail=str(exc))
 
         payload = report.to_json()
         payload["summary"] = summarise(report)

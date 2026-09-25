@@ -238,6 +238,18 @@ Why: Teams stop using harnesses the moment `git status` inside their project sho
 
 Why: Refactors that "seemed like a good idea at the time" are the #1 cause of harness regressions. The 2 minutes spent writing the ADR cost far less than the 2 days spent bisecting the 17-commit "cleanup" PR 6 months later.
 
+### 6.7 One Failure, One Description (Pragmatic DRY applied to error handling)
+
+> **Rule:** A Che failure is raised with `fail("<CODE>", **values)`, never `print(..., file=sys.stderr)` followed by `sys.exit(N)`. The code is declared in `ERROR_CATALOG` (`che_core/diagnostics.py`) **before** the call site, and the spec — not the caller — owns the message, the hint and the `next_actions`.
+
+Why: an agent reads failures, so a failure is an API. Three things follow from describing it once:
+
+1. **Identity.** `exit 3` means "unknown project" in `worktrees.py` and `INCONCLUSIVE` in the pixel gate, so a number cannot be branched on. The string code can, and it is additive — the exit numbers stay as they were for the scripts already relying on them.
+2. **Shape.** `--json` used to print an envelope on success and prose on failure, leaving the caller to guess which format it held. `emit()` renders the failure in the shape that was asked for, on the same stream.
+3. **Remedy.** "Error: bad slug" leaves the reader to work out what to do; a `hint` and a `next_actions` command do not.
+
+Two tests keep this from decaying: one asserts every code raised anywhere in `che_core` is catalogued, the other renders each spec with **only the values its call site actually passes** — a spec may not ask for a value the site raising it cannot supply. The catalog's own docstring carries the how-to; `docs/cli-reference.md` §2.2 carries the envelope an agent consumes.
+
 ---
 
 ## 7. The "Blast Radius + Trash-Safe" Principle

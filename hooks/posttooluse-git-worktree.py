@@ -22,7 +22,7 @@ che_home = str(_che_home)
 if che_home not in sys.path:
     sys.path.insert(0, che_home)
 
-from che_core.hooks import posttooluse_git_worktree  # noqa: E402 (sys.path inserted above is intentional)
+from che_core.hooks import hook_failure, posttooluse_git_worktree  # noqa: E402
 
 
 def main():
@@ -35,7 +35,7 @@ def main():
         result = posttooluse_git_worktree(input_json)
         print(json.dumps(result))
     except Exception as e:
-        print(json.dumps({"decision": "allow", "additionalContext": f"git-worktree hook error (safe-noop): {e}"}))
+        print(json.dumps(hook_failure(e)))
 
 
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
 import json
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from che_core.diagnostics import fail
 from che_core.paths import compute_paths
 from che_core.project_layout import append_line_atomic
 
@@ -21,8 +21,7 @@ def get_decisions_path(worktree_root: str, cwd_override: Optional[str] = None) -
     never met itself.
     """
     if not worktree_root:
-        print("get_decisions_path: worktree_root empty", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_WORKTREE_ROOT")
 
     paths = compute_paths(worktree_root, "decisions", cwd_override)
     return Path(paths["CHE_DECISIONS_PATH"])
@@ -42,9 +41,10 @@ def append_decision_jsonl(
     Postcondition: the log grows by at most one complete, parseable JSONL line
     (duplicate suppression is best-effort and never rewrites existing content).
     """
-    if not worktree_root or not event_type:
-        print("append_decision_jsonl: worktree_root and event_type are required.", file=sys.stderr)
-        sys.exit(2)
+    if not worktree_root:
+        fail("MISSING_WORKTREE_ROOT")
+    if not event_type:
+        fail("MISSING_EVENT_TYPE")
 
     out_path = get_decisions_path(worktree_root)
 
@@ -88,5 +88,4 @@ def append_decision_jsonl(
     try:
         append_line_atomic(out_path, line)
     except ValueError as exc:
-        print(f"append_decision_jsonl: {exc}", file=sys.stderr)
-        sys.exit(2)
+        fail("APPEND_FAILED", target=str(out_path), detail=str(exc))

@@ -6,6 +6,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from che_core.diagnostics import diagnosed, fail
 from che_core.paths import compute_paths, ensure_session_dirs
 
 # Sub-product slug contract: lowercase, digits, dash, underscore; must START with
@@ -64,22 +65,15 @@ def run_init(worktree_root: str, session_id: str, sub_product: str) -> int:
     See che-design-domain-v1 SPEC §4.2 B-1 (positive) and §4.3 AB-1 (negative).
     """
     if not isinstance(worktree_root, str) or not worktree_root:
-        print("ERROR: worktree_root is required", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_WORKTREE_ROOT")
     if not isinstance(session_id, str) or not session_id:
-        print("ERROR: session_id is required", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_SESSION_ID")
     if not isinstance(sub_product, str) or not _SUB_PRODUCT_SLUG_RE.match(sub_product):
-        print(
-            f"ERROR: invalid sub-product slug '{sub_product}' — must match {_SUB_PRODUCT_SLUG_RE.pattern}",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        fail("INVALID_SUB_PRODUCT_SLUG", sub_product=sub_product, pattern=_SUB_PRODUCT_SLUG_RE.pattern)
 
     wt_root = Path(worktree_root).resolve()
     if not wt_root.is_dir():
-        print(f"ERROR: worktree_root {wt_root} is not a valid directory", file=sys.stderr)
-        sys.exit(2)
+        fail("NOT_A_DIRECTORY", path=wt_root)
 
     # Design root MUST live inside the worktree — refuse any resolved path outside.
     design_root = wt_root / "design"
@@ -91,14 +85,13 @@ def run_init(worktree_root: str, session_id: str, sub_product: str) -> int:
         design_root_resolved = design_root.resolve(strict=False)
         wt_root_resolved = wt_root.resolve(strict=False)
         if not (design_root_resolved == wt_root_resolved or wt_root_resolved in design_root_resolved.parents):
-            print(
-                f"ERROR: design root {design_root_resolved} escapes worktree {wt_root_resolved}",
-                file=sys.stderr,
+            fail(
+                "DESIGN_ROOT_ESCAPES_WORKTREE",
+                design_root=design_root_resolved,
+                worktree_root=wt_root_resolved,
             )
-            sys.exit(2)
     except (OSError, RuntimeError) as e:
-        print(f"ERROR: failed to resolve design paths: {e}", file=sys.stderr)
-        sys.exit(2)
+        fail("PATH_UNRESOLVABLE", path=design_root, detail=str(e))
 
     # Resolve templates relative to che_core package — no hardcoded absolute paths.
     che_home = _che_home_root()
@@ -106,11 +99,9 @@ def run_init(worktree_root: str, session_id: str, sub_product: str) -> int:
     tokens_json_template = che_home / "domains" / "ux" / "templates" / "tokens.json.template"
 
     if not design_md_template.is_file():
-        print(f"ERROR: DESIGN.md template missing at {design_md_template}", file=sys.stderr)
-        sys.exit(2)
+        fail("TEMPLATE_MISSING", name="DESIGN.md", path=design_md_template)
     if not tokens_json_template.is_file():
-        print(f"ERROR: tokens.json template missing at {tokens_json_template}", file=sys.stderr)
-        sys.exit(2)
+        fail("TEMPLATE_MISSING", name="tokens.json", path=tokens_json_template)
 
     created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -174,51 +165,35 @@ def run_tokens_render(worktree_root: str) -> int:
     ABORTS (sys.exit(2)): any PRE violation; no files written.
     """
     if not isinstance(worktree_root, str) or not worktree_root:
-        print("ERROR: worktree_root is required", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_WORKTREE_ROOT")
 
     wt_root = Path(worktree_root).resolve()
     if not wt_root.is_dir():
-        print(f"ERROR: worktree_root {wt_root} is not a valid directory", file=sys.stderr)
-        sys.exit(2)
+        fail("NOT_A_DIRECTORY", path=wt_root)
 
     # A-1: design_dir must exist before render (no auto-create — keeps the F0/F2 boundary clean).
     design_root = wt_root / "design"
     if not design_root.is_dir():
-        print(
-            f"ERROR: A-1 — design root {design_root} does not exist; run `che designer init` first.",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        fail("DESIGN_TREE_MISSING", path=design_root, worktree_root=wt_root)
 
     tokens_json = design_root / "tokens" / "tokens.json"
     if not tokens_json.is_file():
-        print(
-            f"ERROR: tokens.json not found at {tokens_json}; cannot render (R4 single-source).",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        fail("TOKENS_JSON_MISSING", path=tokens_json, worktree_root=wt_root)
 
     try:
         tokens = json.loads(tokens_json.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        print(f"ERROR: tokens.json is not valid JSON: {e}", file=sys.stderr)
-        sys.exit(2)
+        fail("INVALID_JSON", path=tokens_json, detail=str(e))
 
     # A-2: tokens.json must have a `colors` object.
     if not isinstance(tokens, dict) or "colors" not in tokens or not isinstance(tokens["colors"], dict):
-        print(
-            "ERROR: A-2 — tokens.json must contain a `colors` object (single source of truth).",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        fail("TOKENS_MISSING_COLORS")
 
     # Read template fresh every render so any template edits propagate without a rebuild.
     che_home = _che_home_root()
     template_path = che_home / "domains" / "ux" / "templates" / "DESIGN.md.template"
     if not template_path.is_file():
-        print(f"ERROR: DESIGN.md template missing at {template_path}", file=sys.stderr)
-        sys.exit(2)
+        fail("TEMPLATE_MISSING", name="DESIGN.md", path=template_path)
     rendered = template_path.read_text(encoding="utf-8")
 
     # Substitute all placeholders sourced from tokens.json (R4 single-source).
@@ -284,13 +259,11 @@ def run_validate(design_md_path: str) -> int:
     sections in order so callers can grep `## Overview` etc.
     """
     if not isinstance(design_md_path, str) or not design_md_path:
-        print("ERROR: design_md_path is required", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_DESIGN_MD_PATH")
 
     md_path = Path(design_md_path)
     if not md_path.is_file():
-        print(f"ERROR: DESIGN.md not found at {md_path}", file=sys.stderr)
-        sys.exit(2)
+        fail("DESIGN_MD_MISSING", path=md_path)
 
     text = md_path.read_text(encoding="utf-8")
     issues: list[str] = []
@@ -378,33 +351,24 @@ def run_stock_add(
     ABORTS (sys.exit(2)): asset is not a real image; no files written.
     """
     if not isinstance(worktree_root, str) or not worktree_root:
-        print("ERROR: worktree_root is required", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_WORKTREE_ROOT")
     if not isinstance(asset_path, str) or not asset_path:
-        print("ERROR: asset_path is required", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_ASSET_PATH")
     for label, value in (("provider", provider), ("license", license_id), ("source_url", source_url)):
         if not isinstance(value, str) or not value.strip():
-            print(f"ERROR: {label} is required", file=sys.stderr)
-            sys.exit(2)
+            fail("MISSING_ASSET_METADATA", label=label)
 
     wt_root = Path(worktree_root).resolve()
     if not wt_root.is_dir():
-        print(f"ERROR: worktree_root {wt_root} is not a valid directory", file=sys.stderr)
-        sys.exit(2)
+        fail("NOT_A_DIRECTORY", path=wt_root)
 
     asset = Path(asset_path).resolve()
     if not asset.is_file():
-        print(f"ERROR: asset file not found at {asset}", file=sys.stderr)
-        sys.exit(2)
+        fail("ASSET_FILE_MISSING", path=asset)
 
     data = asset.read_bytes()
     if not _is_real_image(data):
-        print(
-            f"ERROR: AB-4 — asset {asset.name} is not a real image (HTML/placeholder payload); discarded.",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        fail("ASSET_NOT_AN_IMAGE", name=asset.name)
 
     assets_dir = wt_root / "design" / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
@@ -432,8 +396,7 @@ def run_bootstrap(worktree_root: str, session_id: str, mode: str, slug: str):
     wt_root = Path(worktree_root).resolve()
 
     if not wt_root.is_dir():
-        print(f"[che-social-ui-designer] ❌ WORKTREE_ROOT {wt_root} is not a valid directory.", file=sys.stderr)
-        sys.exit(1)
+        fail("NOT_A_DIRECTORY", path=wt_root)
 
     paths = compute_paths(str(wt_root), session_id)
     ensure_session_dirs(str(wt_root), session_id)
@@ -450,11 +413,13 @@ def run_bootstrap(worktree_root: str, session_id: str, mode: str, slug: str):
     print("\nBootstrap complete. Export these variables to use in the subsequent design gates.")
 
 
-def main(argv=None):
-    """Entry point for the `che designer` subcommand.
+def dispatch(argv=None):
+    """Parse one `che designer …` invocation and run the selected command.
 
-    ``argv`` is forwarded from ``che_core.cli`` verbatim; ``None`` falls back to
-    ``sys.argv[1:]`` so ``python -m che_core.designer`` keeps working standalone.
+    Deliberately **undecorated**: ``che designer …`` reaches this through ``che_core.cli``, whose own
+    ``@diagnosed`` wrapper owns failure rendering and is the only layer that saw the global ``--json``.
+    Wrapping here as well would render the failure first — and always as prose, because the flag was
+    consumed by the outer parser. Standalone use goes through :func:`main`, which does wrap.
     """
     parser = argparse.ArgumentParser(prog="che designer", description="Che Social UI Designer Helper")
     subparsers = parser.add_subparsers(dest="cmd", required=True)
@@ -536,6 +501,15 @@ def main(argv=None):
             args.source_url,
         )
         sys.exit(rc)
+
+
+@diagnosed
+def main(argv=None):
+    """Standalone entrypoint — ``python -m che_core.designer …``.
+
+    ``che designer …`` does not come through here (see :func:`dispatch`).
+    """
+    dispatch(argv)
 
 
 if __name__ == "__main__":

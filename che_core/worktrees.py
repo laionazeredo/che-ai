@@ -21,11 +21,11 @@ Binding record (``<worktree-dir>/.binding.json``)::
 
 import json
 import shutil
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from che_core.diagnostics import fail
 from che_core.project_layout import (
     DOMAIN_SLUGS,
     assert_no_cwd_dependency,
@@ -101,32 +101,20 @@ def add_worktree(
     validate_slug(worktree_name, label="worktree_name")
 
     if not repo_path:
-        print("add_worktree: `repo_path` is required.", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_REPO_PATH")
 
     resolved_repo = Path(repo_path).expanduser().resolve()
     assert_no_cwd_dependency(resolved_repo)
 
     if not resolved_repo.is_dir():
-        print(f"add_worktree: repo_path={resolved_repo} is not a directory.", file=sys.stderr)
-        sys.exit(2)
+        fail("NOT_A_DIRECTORY", path=resolved_repo)
 
     if not project_exists(project_slug):
-        print(
-            f"add_worktree: project {project_slug!r} does not exist. "
-            f"Create it first: che project init <repo> --slug {project_slug}",
-            file=sys.stderr,
-        )
-        sys.exit(3)
+        fail("UNKNOWN_PROJECT", project_slug=project_slug)
 
     # R4 — both project and worktree require git. Refuse instead of best-effort.
     if not is_git_repo(str(resolved_repo)):
-        print(
-            f"add_worktree: {resolved_repo} is not a git repository. "
-            "Che worktrees require git (contract R4); no tree was created.",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        fail("NOT_A_GIT_REPOSITORY", path=resolved_repo, subject="worktrees")
 
     worktree_dir = get_worktree_dir(project_slug, worktree_name)
     assert_no_cwd_dependency(worktree_dir)
@@ -135,12 +123,7 @@ def add_worktree(
     reused = worktree_dir.is_dir() and existing is not None
 
     if worktree_dir.exists() and existing is None and not force:
-        print(
-            f"add_worktree: {worktree_dir} exists but holds no {BINDING_FILENAME}. "
-            "Refusing to adopt an unmanaged directory (pass --force to adopt).",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        fail("REFUSED_UNMANAGED_DIRECTORY", path=worktree_dir, binding=BINDING_FILENAME)
 
     worktree_dir.mkdir(parents=True, exist_ok=True)
 
@@ -163,8 +146,12 @@ def add_worktree(
     # function produces — so if it is missing the worktree is unusable and the
     # success report below would be a lie. Impossible in correct code: crash.
     if not (worktree_dir / BINDING_FILENAME).is_file():
-        raise AssertionError(
-            f"INVARIANT VIOLATED: {worktree_dir / BINDING_FILENAME} missing after write; the worktree was never bound."
+        fail(
+            "UNEXPECTED",
+            detail=(
+                f"INVARIANT VIOLATED: {worktree_dir / BINDING_FILENAME} missing after write; "
+                "the worktree was never bound."
+            ),
         )
 
     return {
@@ -215,11 +202,7 @@ def list_worktrees(project_slug: str) -> List[Dict[str, Any]]:
 def show_worktree(project_slug: str, worktree_name: str) -> Dict[str, Any]:
     binding = read_binding(project_slug, worktree_name)
     if binding is None:
-        print(
-            f"show_worktree: no worktree {worktree_name!r} in project {project_slug!r}.",
-            file=sys.stderr,
-        )
-        sys.exit(3)
+        fail("UNKNOWN_WORKTREE", worktree_name=worktree_name, project_slug=project_slug)
     binding["worktree_dir"] = str(get_worktree_dir(project_slug, worktree_name))
     return binding
 
@@ -284,11 +267,7 @@ def remove_worktree(
     """
     binding = read_binding(project_slug, worktree_name)
     if binding is None:
-        print(
-            f"remove_worktree: no worktree {worktree_name!r} in project {project_slug!r}.",
-            file=sys.stderr,
-        )
-        sys.exit(3)
+        fail("UNKNOWN_WORKTREE", worktree_name=worktree_name, project_slug=project_slug)
 
     worktree_dir = get_worktree_dir(project_slug, worktree_name)
     plan = {
@@ -307,11 +286,7 @@ def remove_worktree(
         return plan
 
     if not confirmed:
-        print(
-            "remove_worktree: refusing to apply without --confirm (run the --dry-run first and review the plan).",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        fail("REFUSED_WITHOUT_CONFIRM")
 
     trash_root = get_trash_dir()
     trash_root.mkdir(parents=True, exist_ok=True)
