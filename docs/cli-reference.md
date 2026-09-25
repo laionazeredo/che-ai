@@ -116,26 +116,37 @@ What it does, in order:
 4. If — and only if — `pyproject.toml` was among the changed files, reinstalls the CLI
    (`pipx install -e … --force`, falling back to `pip install --user -e …`) so a changed
    dependency list actually takes effect.
+5. Re-runs the installer of every adapter already wired to this checkout, so the symlinks match
+   the files that are now on disk. This runs on **every** real run, including when the checkout
+   was already current.
 
 **Why step 4 exists.** Che installs *editable*, so `import che_core` resolves into the checkout: a
 pull makes every code change live immediately, while a change to `dependencies` sits in the file
 doing nothing until something reinstalls. That is the one gap a plain `git pull` cannot close, and
 it is why this is a command rather than a documented sequence of shell steps.
 
+**Why step 5 exists.** A pull moves the *checkout*, not the *installation*. The adapters link each
+command, skill and hook one at a time, walking whatever exists at that moment — so a command
+renamed upstream gains no new symlink and keeps the old one, which now dangles. The user is left
+with a completion list offering a command that resolves to nothing. `che update` therefore re-runs
+the adapters, and `scripts/prune-che-symlinks.sh` removes the orphans as part of each install.
+Adapters that were never installed are left alone: Che does not wire itself into a host the user
+never asked it to touch.
+
 `che update` is safe to run blind. It is fast-forward-only — it cannot invent a merge commit or
 rewrite a local one — and every state it will not touch fails closed with the remedy named:
 
 | State | Result |
 | :---- | :----- |
-| Already on the latest default branch | **Success.** Nothing is done, and nothing is reinstalled. |
+| Already on the latest default branch | **Success.** Nothing is downloaded and nothing is reinstalled — but the host wiring is still refreshed (step 5). |
 | Modified *tracked* files | **Refused** (exit 3). Commit or `git stash push` first. Personal state (`user_rules/`, `bindings/`, `memory/`) is gitignored and never counts. |
 | On a branch other than the default | **Refused** (exit 3). "Get the latest from main" does not mean "move me off my branch". |
 | Local commits the remote lacks | **Refused** (exit 3). A fast-forward would discard them. |
 | Not reachable | **Refused** (exit 4). Nothing was changed. |
 | Code updated, reinstall failed | **Partial** (exit 5). The command that failed is printed; run it yourself. |
 
-Skills, rules and hooks are symlinked into the checkout, so a successful update makes them live in
-the same instant.
+Skills, rules and hooks are symlinked into the checkout, so a pull makes them live the moment it
+lands. What a pull cannot do is create a symlink that was never there — that is step 5's job.
 
 A zip/manual install (no `.git`) is **refused** by design, pointing at
 `scripts/self-update-che.sh`, which owns that path. Two implementations of one merge would be two

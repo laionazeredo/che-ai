@@ -48,6 +48,14 @@ mkdir -p "$CODEX_HOME"
 mkdir -p "$SKILLS_TARGET"
 mkdir -p "$COMMANDS_TARGET"
 
+# 0. Prune BEFORE linking. A rename upstream leaves the old symlink behind and
+#    creates no new one, so Codex would keep listing a command that resolves to
+#    nothing.
+PRUNER="$CHE_REPO/scripts/prune-che-symlinks.sh"
+if [ -f "$PRUNER" ]; then
+  bash "$PRUNER" "$CHE_REPO" "$SKILLS_TARGET" "$COMMANDS_TARGET"
+fi
+
 # 1. Link AGENTS.md
 AGENTS_TARGET="$CODEX_HOME/AGENTS.md"
 AGENTS_SOURCE="$SCRIPT_DIR/AGENTS.md"

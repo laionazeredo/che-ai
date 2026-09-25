@@ -31,6 +31,18 @@ place, and how it is resolved is the whole design:
 Everything else is a refusal that names its remedy, so `--check` and the real run share one code
 path and cannot disagree about what would happen.
 
+HOST WIRING
+-----------
+A pull moves the *checkout*; it does not move the *installation*. The adapters wire Che into an IDE
+by symlinking each command, skill and hook one at a time, so a command renamed upstream gains no
+new link and keeps the old one, which now dangles. The user is left with a completion list that
+offers a command resolving to nothing, and nothing telling them why.
+
+So a real run re-links every adapter already wired to this checkout — including when the checkout
+was already current. Converging the host is a different question from downloading commits, and only
+one of the two is answered by `git merge`. Adapters that were never installed are left alone: Che
+does not wire itself into a host the user never asked it to touch.
+
 NOT IN SCOPE
 ------------
 A checkout that is not a git repo (a zip install) is refused rather than half-handled: that path
@@ -38,6 +50,7 @@ needs a fetch of the official source, and ``scripts/self-update-che.sh`` already
 implementations of one merge would be two chances to disagree.
 """
 
+import os
 import shutil
 import subprocess
 import sys
@@ -285,40 +298,170 @@ def reinstall_cli(
     return {"ok": False, "command": attempts[0], "output": last_output.splitlines()[-8:]}
 
 
+#: Where each adapter wires itself, and which environment variable overrides that home. The table
+#: answers exactly one question — "is this adapter installed?" — so `che update` can refresh the
+#: ones that exist and leave the rest alone. `cursor` is deliberately absent: its installer prints
+#: instructions for the user to run rather than linking anything, so there is nothing to re-run.
+_ADAPTERS: List[Dict[str, Any]] = [
+    {
+        "name": "trae",
+        "home_env": "TRAE_HOME",
+        "default_home": ".trae",
+        "collections": ("commands", "skills", "hooks"),
+    },
+    {
+        "name": "claude",
+        "home_env": "CLAUDE_CONFIG_DIR",
+        "default_home": ".claude",
+        "collections": ("commands", "skills"),
+    },
+    {
+        "name": "codex",
+        "home_env": "CODEX_HOME",
+        "default_home": ".codex",
+        "collections": ("commands",),
+    },
+]
+
+#: The marker the adapters forward from `scripts/prune-che-symlinks.sh`.
+_PRUNE_MARKER = "CHE_PRUNE_REMOVED="
+
+
+def _points_into(entry: Path, checkout: Path) -> bool:
+    """Is this symlink one of Che's?
+
+    Compares the link *text*, not what it resolves to, and that is the point: an installation whose
+    Che links are all dangling is precisely the state that has to be repaired, so "still resolves"
+    cannot be part of the question.
+    """
+    if not entry.is_symlink():
+        return False
+    try:
+        link = os.readlink(entry)
+    except OSError:
+        return False
+    candidate = Path(link) if os.path.isabs(link) else entry.parent / link
+    candidate = Path(os.path.normpath(str(candidate)))
+    root = Path(os.path.normpath(str(checkout)))
+    return candidate == root or root in candidate.parents
+
+
+def detect_installed_adapters(checkout: Path, environ: Optional[Dict[str, str]] = None) -> List[str]:
+    """Names of the adapters already wired to this checkout.
+
+    Evidence is a symlink into the checkout, never the mere existence of a home directory: a user
+    who happens to have ``~/.claude`` because they use Claude Code has not thereby asked Che to
+    install itself there.
+    """
+    env = os.environ if environ is None else environ
+    home_root = Path(env.get("HOME") or str(Path.home()))
+    found: List[str] = []
+    for spec in _ADAPTERS:
+        home = Path(env.get(spec["home_env"]) or home_root / spec["default_home"])
+        if not home.is_dir():
+            continue
+        for collection in spec["collections"]:
+            target = home / collection
+            if not target.is_dir():
+                continue
+            try:
+                entries = list(target.iterdir())
+            except OSError:
+                continue
+            if any(_points_into(entry, checkout) for entry in entries):
+                found.append(spec["name"])
+                break
+    return found
+
+
+def _count_pruned(output: str) -> int:
+    """Sum the markers the adapters forward from the pruner."""
+    total = 0
+    for line in output.splitlines():
+        marker = line.strip()
+        if marker.startswith(_PRUNE_MARKER):
+            try:
+                total += int(marker[len(_PRUNE_MARKER) :])
+            except ValueError:
+                continue
+    return total
+
+
+def relink_adapters(
+    checkout: Path,
+    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+    environ: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Re-run the installer of every adapter already wired to this checkout.
+
+    Re-running is what closes the gap a pull cannot: the new symlinks appear and the pruner drops
+    the dangling ones. A failure here is reported, never raised — the code did update, and saying
+    so is more useful than aborting because an IDE home was read-only.
+    """
+    names = detect_installed_adapters(checkout, environ)
+    result: Dict[str, Any] = {"adapters": [], "orphans_removed": 0, "failed": []}
+    for name in names:
+        script = checkout / "adapters" / name / "install.sh"
+        if not script.is_file():
+            continue
+        try:
+            completed = runner(
+                ["bash", str(script)],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=_GIT_TIMEOUT_SECONDS,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            result["failed"].append({"adapter": name, "error": str(exc)})
+            continue
+        result["adapters"].append(name)
+        result["orphans_removed"] += _count_pruned(completed.stdout or "")
+        if completed.returncode != 0:
+            result["failed"].append({"adapter": name, "returncode": completed.returncode})
+    return result
+
+
 def update(
     che_home: Optional[str] = None,
     remote: str = DEFAULT_REMOTE,
     check_only: bool = False,
     reinstaller: Optional[Callable[[Path], Dict[str, Any]]] = None,
+    relinker: Optional[Callable[[Path], Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    """Bring the checkout to the latest ``main``. The whole command, minus the printing.
+    """Bring the checkout to the latest ``main``, then converge the host wiring.
 
-    ``reinstaller`` is injectable so the tests can exercise the decision to reinstall without
-    running a real package manager — the decision is the contract here, and pipx is not something a
-    test suite should be invoking.
+    ``reinstaller`` and ``relinker`` are injectable so the tests can exercise the two *decisions* —
+    reinstall the CLI, re-link the adapters — without running a package manager or an installer.
+    The decisions are the contract; pipx and the adapter scripts are not things a test suite should
+    be invoking.
     """
     state = inspect(che_home, remote=remote)
     state["updated"] = False
     state["reinstall"] = None
-
-    if state["up_to_date"]:
-        state["status"] = "up-to-date"
-        return state
+    state["relink"] = None
 
     if check_only:
-        state["status"] = "would-update"
+        state["status"] = "up-to-date" if state["up_to_date"] else "would-update"
         return state
 
     home = Path(state["che_home"])
-    merged = _git(["merge", "--ff-only", state["upstream"]], home)
-    if merged is None or merged.returncode != 0:
-        detail = (merged.stderr.strip().splitlines() or ["git merge failed"])[-1] if merged else "git merge failed"
-        raise UpdateRefused(f"fast-forward failed and nothing was changed: {detail}")
 
-    state["updated"] = True
-    state["status"] = "updated"
+    if not state["up_to_date"]:
+        merged = _git(["merge", "--ff-only", state["upstream"]], home)
+        if merged is None or merged.returncode != 0:
+            detail = (merged.stderr.strip().splitlines() or ["git merge failed"])[-1] if merged else "git merge failed"
+            raise UpdateRefused(f"fast-forward failed and nothing was changed: {detail}")
+        state["updated"] = True
 
-    if not state["declares_dependencies"]:
+    state["status"] = "updated" if state["updated"] else "up-to-date"
+
+    # Converge the host on EVERY real run, not only when the checkout moved. A renamed command
+    # leaves a dangling symlink behind and gains no new one, so an up-to-date checkout can still be
+    # a broken installation — and the second run is exactly when the user expects that fixed.
+    state["relink"] = (relinker or relink_adapters)(home)
+
+    if not state["updated"] or not state["declares_dependencies"]:
         return state
 
     result = (reinstaller or reinstall_cli)(home)
@@ -336,25 +479,49 @@ def exit_code(state: Dict[str, Any]) -> int:
     return UPDATE_OK
 
 
+def _relink_sentence(relink: Optional[Dict[str, Any]]) -> str:
+    """Say what actually happened to the host wiring.
+
+    This line used to read "skills, rules and hooks are symlinked into this checkout, so they are
+    already live" — true of a file that already had a link, and false of every file a rename added,
+    which is exactly how a user ends up with a command that never appears in completion.
+    """
+    if relink is None:
+        return "Host wiring was not refreshed."
+    names = relink.get("adapters") or []
+    failed = relink.get("failed") or []
+    if not names and not failed:
+        return "No host adapter is wired to this checkout, so there was nothing to re-link."
+    parts: List[str] = []
+    if names:
+        parts.append(f"Re-linked {len(names)} adapter(s) ({', '.join(names)})")
+        parts.append(f"{relink.get('orphans_removed', 0)} stale symlink(s) removed")
+    if failed:
+        names_failed = ", ".join(str(item.get("adapter")) for item in failed)
+        parts.append(f"{len(failed)} adapter(s) could not be re-linked ({names_failed})")
+    return ", ".join(parts) + "."
+
+
 def summarise(state: Dict[str, Any]) -> str:
     """The one-line human summary, per status. Same contract as the other gates' summaries."""
-    if state["status"] == "up-to-date":
-        return f"Che is already at the latest {state['upstream']} ({state['head_short']}). Nothing to do."
     if state["status"] == "would-update":
         return (
             f"{state['behind']} commit(s) available on {state['upstream']}: "
             f"{state['head_short']} -> {state['target_short']}."
         )
 
-    lines = [f"Che updated: {state['head_short']} -> {state['target_short']} ({state['behind']} commit(s))."]
-    if state["reinstall"] is None:
-        lines.append("No dependency change, so the installed CLI was left alone.")
-    elif state["reinstall"].get("ok"):
-        lines.append("Dependencies changed: the CLI was reinstalled in place.")
+    if state["status"] == "up-to-date":
+        lines = [f"Che is already at the latest {state['upstream']} ({state['head_short']})."]
     else:
-        lines.append(
-            "Dependencies changed but the CLI could NOT be reinstalled — "
-            f"run it yourself: {' '.join(state['reinstall']['command'])}"
-        )
-    lines.append("Skills, rules and hooks are symlinked into this checkout, so they are already live.")
+        lines = [f"Che updated: {state['head_short']} -> {state['target_short']} ({state['behind']} commit(s))."]
+        if state["reinstall"] is None:
+            lines.append("No dependency change, so the installed CLI was left alone.")
+        elif state["reinstall"].get("ok"):
+            lines.append("Dependencies changed: the CLI was reinstalled in place.")
+        else:
+            lines.append(
+                "Dependencies changed but the CLI could NOT be reinstalled — "
+                f"run it yourself: {' '.join(state['reinstall']['command'])}"
+            )
+    lines.append(_relink_sentence(state.get("relink")))
     return " ".join(lines)
