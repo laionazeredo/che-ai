@@ -26,8 +26,10 @@ from che_core.selfupdate import (
     UPDATE_REINSTALL_FAILED,
     UPDATE_USAGE,
     UpdateRefused,
+    detect_installed_adapters,
     exit_code,
     find_checkout,
+    relink_adapters,
     summarise,
     update,
 )
@@ -302,6 +304,226 @@ def test_a_failed_reinstall_is_a_distinct_outcome_that_names_the_command(install
     assert state["updated"] is True
     assert exit_code(state) == UPDATE_REINSTALL_FAILED
     assert "pipx install -e" in summarise(state)
+
+
+# --------------------------------------------------------------------------------------------
+# Host wiring — a pull moves the checkout, not the installation
+# --------------------------------------------------------------------------------------------
+
+
+class Relinker:
+    """Records the calls instead of running the adapters."""
+
+    def __init__(self, adapters=None, orphans=0, failed=None):
+        self.calls: list[Path] = []
+        self.result = {
+            "adapters": list(adapters or []),
+            "orphans_removed": orphans,
+            "failed": list(failed or []),
+        }
+
+    def __call__(self, che_home: Path) -> dict:
+        self.calls.append(che_home)
+        return self.result
+
+
+class FakeRunner:
+    """Stands in for `subprocess.run` when an adapter is invoked."""
+
+    def __init__(self, stdout: str = "", returncode: int = 0):
+        self.stdout = stdout
+        self.returncode = returncode
+        self.commands: list[list[str]] = []
+
+    def __call__(self, command, **kwargs) -> subprocess.CompletedProcess:
+        self.commands.append(list(command))
+        return subprocess.CompletedProcess(command, self.returncode, stdout=self.stdout, stderr="")
+
+
+def _wired_home(tmp_path: Path, checkout: Path, home_name: str, *, missing_source: bool = False) -> Path:
+    """A host home holding one Che symlink, pointing into `checkout`."""
+    home = tmp_path / home_name
+    (home / "commands").mkdir(parents=True)
+    target = checkout / "commands" / "che-explain.md"
+    if not missing_source:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# source\n", encoding="utf-8")
+    (home / "commands" / "che-explain.md").symlink_to(target)
+    return home
+
+
+def _adapter_checkout(tmp_path: Path, name: str = "trae") -> Path:
+    checkout = tmp_path / "che"
+    (checkout / "adapters" / name).mkdir(parents=True)
+    (checkout / "adapters" / name / "install.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    return checkout
+
+
+def test_the_host_is_relinked_even_when_the_checkout_is_already_current(install: Install) -> None:
+    """The state a pull alone leaves behind: nothing to download, and a command that never appears."""
+    relinker = Relinker(adapters=["trae"], orphans=2)
+
+    state = update(che_home=str(install.clone), relinker=relinker)
+
+    assert state["status"] == "up-to-date"
+    assert state["updated"] is False
+    assert relinker.calls == [install.clone.resolve()]
+    assert state["relink"]["orphans_removed"] == 2
+
+
+def test_the_host_is_relinked_after_an_update_too(install: Install) -> None:
+    install.publish("commands/che-new.md", "# new\n", "feat: add a command")
+    relinker = Relinker(adapters=["trae", "claude"])
+
+    state = update(che_home=str(install.clone), relinker=relinker)
+
+    assert state["status"] == "updated"
+    assert relinker.calls == [install.clone.resolve()]
+
+
+def test_check_only_does_not_touch_the_host(install: Install) -> None:
+    """`--check` is a question, and answering it must not rewrite the host's completion list."""
+    install.publish("a.txt", "one\n", "feat: add a")
+    relinker = Relinker(adapters=["trae"])
+
+    state = update(che_home=str(install.clone), check_only=True, relinker=relinker)
+
+    assert state["status"] == "would-update"
+    assert relinker.calls == []
+    assert state["relink"] is None
+
+
+def test_the_summary_reports_the_orphans_it_cleaned(install: Install) -> None:
+    """The line used to claim the links were "already live" — which is what hid this whole bug."""
+    relinker = Relinker(adapters=["trae"], orphans=3)
+
+    summary = summarise(update(che_home=str(install.clone), relinker=relinker))
+
+    assert "already live" not in summary
+    assert "Re-linked 1 adapter(s) (trae)" in summary
+    assert "3 stale symlink(s) removed" in summary
+
+
+def test_the_summary_says_so_when_no_adapter_is_wired(install: Install) -> None:
+    summary = summarise(update(che_home=str(install.clone), relinker=Relinker()))
+
+    assert "No host adapter is wired" in summary
+
+
+def test_a_failed_adapter_is_reported_without_failing_the_update(install: Install) -> None:
+    """The code did update; aborting because an IDE home was read-only would hide that."""
+    install.publish("a.txt", "one\n", "feat: add a")
+    relinker = Relinker(failed=[{"adapter": "trae", "returncode": 1}])
+
+    state = update(che_home=str(install.clone), relinker=relinker)
+
+    assert state["status"] == "updated"
+    assert exit_code(state) == UPDATE_OK
+    assert "could not be re-linked (trae)" in summarise(state)
+
+
+# --------------------------------------------------------------------------------------------
+# Detection — evidence, never the mere existence of a home directory
+# --------------------------------------------------------------------------------------------
+
+
+def test_an_adapter_is_detected_by_a_link_into_this_checkout(tmp_path: Path) -> None:
+    checkout = tmp_path / "che"
+    checkout.mkdir()
+    home = _wired_home(tmp_path, checkout, "trae-home")
+
+    found = detect_installed_adapters(checkout, {"HOME": str(tmp_path), "TRAE_HOME": str(home)})
+
+    assert found == ["trae"]
+
+
+def test_the_default_home_is_used_when_the_override_is_absent(tmp_path: Path) -> None:
+    checkout = tmp_path / "che"
+    checkout.mkdir()
+    _wired_home(tmp_path, checkout, ".trae")
+
+    found = detect_installed_adapters(checkout, {"HOME": str(tmp_path)})
+
+    assert found == ["trae"]
+
+
+def test_a_home_that_exists_but_was_never_wired_is_not_an_adapter(tmp_path: Path) -> None:
+    """`~/.claude` existing means the user has Claude Code, not that Che may install itself there."""
+    checkout = tmp_path / "che"
+    checkout.mkdir()
+    (tmp_path / ".claude" / "commands").mkdir(parents=True)
+
+    found = detect_installed_adapters(checkout, {"HOME": str(tmp_path)})
+
+    assert found == []
+
+
+def test_a_dangling_che_link_still_proves_the_adapter_is_installed(tmp_path: Path) -> None:
+    """An installation whose links are all broken is exactly the state that has to be repaired."""
+    checkout = tmp_path / "che"
+    checkout.mkdir()
+    home = _wired_home(tmp_path, checkout, "trae-home", missing_source=True)
+
+    found = detect_installed_adapters(checkout, {"HOME": str(tmp_path), "TRAE_HOME": str(home)})
+
+    assert found == ["trae"]
+
+
+def test_a_link_into_another_checkout_is_not_ours(tmp_path: Path) -> None:
+    checkout = tmp_path / "che"
+    checkout.mkdir()
+    other = tmp_path / "other-che"
+    other.mkdir()
+    home = _wired_home(tmp_path, other, "trae-home")
+
+    found = detect_installed_adapters(checkout, {"HOME": str(tmp_path), "TRAE_HOME": str(home)})
+
+    assert found == []
+
+
+# --------------------------------------------------------------------------------------------
+# relink_adapters — what it runs, and what it does with the answer
+# --------------------------------------------------------------------------------------------
+
+
+def test_relink_runs_only_the_wired_adapters_and_sums_what_they_pruned(tmp_path: Path) -> None:
+    checkout = _adapter_checkout(tmp_path)
+    home = _wired_home(tmp_path, checkout, "trae-home")
+    runner = FakeRunner(stdout="  - orphan removed: x\nCHE_PRUNE_REMOVED=2\n")
+
+    result = relink_adapters(checkout, runner=runner, environ={"HOME": str(tmp_path), "TRAE_HOME": str(home)})
+
+    assert result["adapters"] == ["trae"]
+    assert result["orphans_removed"] == 2
+    assert result["failed"] == []
+    assert runner.commands == [["bash", str(checkout / "adapters" / "trae" / "install.sh")]]
+
+
+def test_an_adapter_without_an_installer_is_skipped_quietly(tmp_path: Path) -> None:
+    """Detection can see a wiring that a newer checkout no longer ships an installer for."""
+    checkout = tmp_path / "che"
+    checkout.mkdir()
+    home = _wired_home(tmp_path, checkout, "trae-home")
+    runner = FakeRunner()
+
+    result = relink_adapters(checkout, runner=runner, environ={"HOME": str(tmp_path), "TRAE_HOME": str(home)})
+
+    assert result["adapters"] == []
+    assert result["failed"] == []
+    assert runner.commands == []
+
+
+def test_a_nonzero_adapter_exit_is_recorded_rather_than_raised(tmp_path: Path) -> None:
+    checkout = _adapter_checkout(tmp_path)
+    home = _wired_home(tmp_path, checkout, "trae-home")
+
+    result = relink_adapters(
+        checkout,
+        runner=FakeRunner(returncode=1),
+        environ={"HOME": str(tmp_path), "TRAE_HOME": str(home)},
+    )
+
+    assert result["failed"] == [{"adapter": "trae", "returncode": 1}]
 
 
 # --------------------------------------------------------------------------------------------
