@@ -157,13 +157,24 @@ def _pixel_artifact_paths(
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
 
+    # The global `--json` may precede the subcommand, but the dispatch below runs before argparse
+    # and can only look at `argv[0]`. Drop the flag here so `che --json designer …` is forwarded
+    # exactly like `che designer …` is — otherwise it reaches argparse, which has no handler for the
+    # `designer` subparser (it is registered for `--help` discoverability only) and rejects the
+    # designer's own arguments as unrecognized. `diagnosed` holds the original list, so the failure
+    # envelope still knows JSON was requested.
+    if argv and argv[0] == "--json":
+        argv = argv[1:]
+
     # `che designer …` is forwarded verbatim to the domain sub-CLI before argparse
     # runs, because argparse's REMAINDER does not forward leading optionals
     # (e.g. `che designer --help`) — see bpo-17050.
     if argv and argv[0] == "designer":
-        from che_core.designer import main as designer_main
+        # `dispatch`, not `main`: this wrapper owns failure rendering, and it is the layer that saw
+        # the global `--json`. Letting the designer wrap too would render the failure first, as prose.
+        from che_core.designer import dispatch as designer_dispatch
 
-        designer_main(argv[1:])
+        designer_dispatch(argv[1:])
         return
 
     parser = argparse.ArgumentParser(description="Che Core CLI")

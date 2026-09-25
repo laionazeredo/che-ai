@@ -413,12 +413,13 @@ def run_bootstrap(worktree_root: str, session_id: str, mode: str, slug: str):
     print("\nBootstrap complete. Export these variables to use in the subsequent design gates.")
 
 
-@diagnosed
-def main(argv=None):
-    """Entry point for the `che designer` subcommand.
+def dispatch(argv=None):
+    """Parse one `che designer …` invocation and run the selected command.
 
-    ``argv`` is forwarded from ``che_core.cli`` verbatim; ``None`` falls back to
-    ``sys.argv[1:]`` so ``python -m che_core.designer`` keeps working standalone.
+    Deliberately **undecorated**: ``che designer …`` reaches this through ``che_core.cli``, whose own
+    ``@diagnosed`` wrapper owns failure rendering and is the only layer that saw the global ``--json``.
+    Wrapping here as well would render the failure first — and always as prose, because the flag was
+    consumed by the outer parser. Standalone use goes through :func:`main`, which does wrap.
     """
     parser = argparse.ArgumentParser(prog="che designer", description="Che Social UI Designer Helper")
     subparsers = parser.add_subparsers(dest="cmd", required=True)
@@ -500,6 +501,15 @@ def main(argv=None):
             args.source_url,
         )
         sys.exit(rc)
+
+
+@diagnosed
+def main(argv=None):
+    """Standalone entrypoint — ``python -m che_core.designer …``.
+
+    ``che designer …`` does not come through here (see :func:`dispatch`).
+    """
+    dispatch(argv)
 
 
 if __name__ == "__main__":
