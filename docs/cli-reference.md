@@ -194,6 +194,40 @@ che eject plan --help
 che update --help
 ```
 
+### 2.2 Every failure is machine-readable
+
+`--json` goes **before** the command and applies to any command, success or failure:
+
+```bash
+che --json project list
+che --json worktree show web-app main
+```
+
+Failures always come out of the same envelope, whether or not `--json` was passed:
+
+```jsonc
+{
+  "status": "error",
+  "code": "UNKNOWN_PROJECT",          // stable identity — branch on this, never on the number
+  "stage": "resolve",                 // which part of the command failed
+  "message": "project 'web-app' does not exist.",
+  "hint": "Projects are created explicitly; nothing is inferred from a path.",
+  "retryable": false,
+  "next_actions": ["che project init <repo> --slug web-app", "che project list"],
+  "exit_code": 3,
+  "details": { "project_slug": "web-app" }
+}
+```
+
+- **`code` is the contract.** Several failures share exit `2`, so the number cannot tell them apart;
+  the string can. Codes are declared once in `che_core/diagnostics.py` (`ERROR_CATALOG`), and a test
+  fails if a call site raises a code the catalog does not describe.
+- **`--json` puts the envelope on stdout, prose on stderr.** Without it, the same failure is three
+  lines on stderr (`Error:` / `Hint:` / `Next:`) and stdout stays empty. A caller that asked for JSON
+  always finds JSON on stdout — success or failure.
+- **`hint` is the remedy, `next_actions` are the commands.** When a Che command fixes the problem it
+  is named there; run it rather than working out the fix from the message.
+
 ---
 
 ## 3. Project & Worktree Commands
@@ -523,10 +557,16 @@ workload is full-text search over structured decisions, task graphs, and QA evid
 
 ```bash
 che state rebuild-index ~/code/my-company/web-app   # indexes the bound worktree into <project>/_db/che_state.sqlite
-che state query ~/code/my-company/web-app 'SELECT key, json_extract(body,"$.owner") FROM kv WHERE key LIKE "task:%";'
+che state query --worktree-root ~/code/my-company/web-app \
+  --sql 'SELECT key, json_extract(body,"$.owner") FROM kv WHERE key LIKE "task:%";'
 che state search ~/code/my-company/web-app "stripe webhook signature"
 che state sanitize ~/code/my-company/web-app         # PII + secrets scrubbing pass
 ```
+
+`che state query` is read-only by default: only `SELECT`, `EXPLAIN` and `PRAGMA` run. Anything else is
+refused with `STATE_QUERY_NEEDS_FORCE` (exit `2`) naming the statement, and needs `--force` — a write is
+never something a caller stumbles into. Use `--bind` for `?` placeholders and `--json` for rows instead
+of the table.
 
 ---
 
@@ -651,6 +691,7 @@ che decision_append ~/code/my-company/web-app ARCH \
 | Code | Meaning                                           |
 | :--: | :------------------------------------------------ |
 |  0   | Success. JSON on stdout for commands that report a result. |
+|  1   | Unexpected failure — a Che bug, not a mistake in your input. |
 |  2   | Usage / precondition failure: bad argument, non-git path, missing required `--slug` / `--project` / `--name`, refused oversized write, or a destructive operation applied without `--confirm`. |
 |  3   | Unknown project / worktree, or a worktree path that is not bound to any project. |
 |  3   | `che update`: the working tree is not in a state it will move (dirty tracked files, wrong branch, local commits the remote lacks). Nothing was changed. |
@@ -661,11 +702,15 @@ che decision_append ~/code/my-company/web-app ARCH \
 
 Notes:
 
-- `0`, `2`, `3` and `99` are raised by the CLI itself; `2` is also argparse's default for an unknown flag or a
+- `0`, `1`, `2`, `3` and `99` are raised by the CLI itself; `2` is also argparse's default for an unknown flag or a
   missing argument.
+- Exit `3` is deliberately overloaded — "not found" and the pixel gate's `INCONCLUSIVE` are different
+  outcomes that happened to share a number before there was anywhere to record the difference. Read
+  `code` in the envelope (§2.2) rather than the number.
 - `98` is not raised by `che_core`: it is the guard the skills run (`command -v che >/dev/null 2>&1 || exit 98`) so
   that nothing is written without a resolved storage boundary.
-- `che registry_lookup` exits `1` when the session has no registry row yet.
+- `che registry_lookup` exits `1` when the session has no registry row yet; the failure is
+  `NO_REGISTRY_ENTRY` and it names the session it looked for.
 
 All successful structured output is **line-delimited JSON** on `stdout`. All human-readable progress is on `stderr`. Safe to `| jq` everything.
 

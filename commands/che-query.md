@@ -27,8 +27,11 @@ Executes **read-only, parameterized SQL queries** against the project-level stat
      --sql "$SQL" \
      [--bind BIND_VAL_1 BIND_VAL_2 ...] \
      [--worktree-root "$WORKTREE_ROOT"] \
+     [--force] \
      [--json]
    ```
+   `--force` is what makes step 3's override real: without it the CLI refuses any statement whose
+   first token is not SELECT/EXPLAIN/PRAGMA, and reports `STATE_QUERY_NEEDS_FORCE`.
 
 **Available tables / columns (to build the query):**
 ```
