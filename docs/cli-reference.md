@@ -219,31 +219,44 @@ A **failure** always comes out of the same envelope, whether or not `--json` was
 - **`hint` is the remedy, `next_actions` are the commands.** When a Che command fixes the problem it
   is named there; run it rather than working out the fix from the message.
 
-**`--json` goes before the command and governs how the failure is rendered:**
+**`--json` goes before the command and governs both channels:**
 
 ```bash
 che --json project list          # failure → the envelope on stdout
 che --json worktree show web-app main
+che --json output_path spec web-app onboarding session md   # success → {"path": "…"}
 ```
 
 Without it, the same failure is three lines on stderr (`Error:` / `Hint:` / `Next:`) and stdout stays
 empty. With it, the envelope goes to **stdout** — so a caller that asked for JSON always finds JSON
-there, on stdout, for any command.
+there, on stdout, for any command, success or failure. `che capabilities --json` describes each
+command's default shape; see the scope note below and §2.3.
 
-> **Scope of the guarantee.** The global `--json` shapes the **failure** channel, not the success
-> channel. Success output stays per-command, because three of them are contracts with something other
-> than a parser:
+> **Scope of the guarantee.** `--json` is a promise about the **channel**, not about the schema:
+> stdout carries no prose and no shell, and carries one JSON value — or nothing at all. What that
+> value *contains* is per-command, and `che capabilities --json` declares it. The `output` field is
+> the **default** shape: what a caller gets without asking, which is what a caller deciding whether
+> to ask needs to know.
 >
 > | Shape | Commands | Why |
 > | :--- | :--- | :--- |
-> | JSON object | `project`, `worktree`, `task`, `state`, `rag`, `export`, `import`, `eject`, `update`, `pixel check/diff/crop` | Consumed by `jq` and by skills directly. |
-> | `export K="v"` lines | `compute_paths`, `pixel paths` | The recipes are `eval "$(che …)"`. JSON here would break every skill. |
-> | `K=v` lines | `che designer …`, `python3 -m che_core.ship`, `python3 -m che_core.xray` | Same reason, for the preflight/bootstrap recipes. |
-> | Prose | a few confirmations (`Project exported to: …`) | No machine form today. |
+> | JSON object | `project`, `worktree`, `task`, `state`, `rag`, `import`, `eject`, `update`, `pixel check/diff/crop`, `capabilities` | Consumed by `jq` and by skills directly. |
+> | `export K="v"` lines | `compute_paths`, `pixel paths` | The recipes are `eval "$(che …)"`. The default must stay shell; JSON here would break every skill. |
+> | `K=v` lines | `che designer …` | Same reason, for the design-gate recipes. |
+> | A bare path | `output_path` | One value, printed to be captured. |
+> | Prose | `config`, `export`, a few confirmations | Written for a human reading a terminal. |
+> | Nothing | `ensure_dirs`, `write_file_atomic`, `assert_outside_worktree`, `registry_append`, `decision_append` | The side effect *is* the result; exit 0 says it happened. |
 >
-> The per-command `--json` flags (`che state query --json`, `che pixel check --json`, …) are what
-> select JSON output on success where the command supports it. Making the global flag do that
-> everywhere is a separate change, because it has to keep the `eval` recipes working.
+> Under `--json` every row above renders as a JSON value, except the last: a command with no result
+> has nothing to report, and inventing `{"status":"ok"}` would not match the domain payloads the
+> always-JSON commands return. **The defaults do not move**, so the ~30 recipes that do
+> `eval "$(che compute_paths …)"` are unaffected — none of them passes `--json`, which was verified
+> by searching for the flag next to every recipe rather than assumed from the fact that they work.
+>
+> Three modules are outside this contract because they are not `che` commands: `che_core/ship.py`,
+> `che_core/xray.py` and `che_core/decisions_query.py` are invoked as `python3 -m che_core.<module>`,
+> so a `che` flag can never reach them. They keep their `K=v` and prose output. Everything a skill
+> reaches as `python3 -m che_core.cli <command>` is the same parser and the same contract as `che`.
 
 ### 2.3 The surface is data — `che capabilities`
 
@@ -284,7 +297,7 @@ che capabilities --json --errors                # + the failure catalogue (§2.2
 | `summary`                 | One sentence stating what the command does — enough to decide whether to run it.      |
 | `mutates`                 | The command writes state. A caller checks this before running it unattended.          |
 | `requires_bound_worktree` | `che worktree add` must have run first; without it the command exits 3.               |
-| `output`                  | Which success shape the command emits — `json`, `shell`, `kv`, `text`, `prose`, `none` (§2.2). |
+| `output`                  | Which success shape the command emits **by default** — `json`, `shell`, `kv`, `text`, `prose`, `none`. Under `--json` each becomes a JSON value except `none` (§2.2). |
 | `arguments[]`             | `name` (longest form), `dest`, `kind` (`positional`\|`option`), `type`, `required`, `default`, `choices` when constrained, `aliases` for the short forms, `group` for a mutually-exclusive set. |
 
 `-h`/`--help` is omitted from `arguments` on purpose: it exists on all 45 commands and would be noise.
