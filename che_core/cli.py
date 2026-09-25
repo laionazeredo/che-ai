@@ -7,6 +7,8 @@ from pathlib import Path
 
 from che_core.diagnostics import diagnosed, fail
 from che_core.memory_store import append_decision
+from che_core.output import emit_mapping
+from che_core.output import print_json as _print_json
 from che_core.paths import (
     assert_outside_worktree,
     compute_paths,
@@ -31,8 +33,14 @@ from che_core.task_engine import (
 )
 
 
-def _print_json(obj):
-    print(json.dumps(obj, ensure_ascii=False, indent=2, default=str))
+def _wants_json(args) -> bool:
+    """One question — "did this caller ask for machine output?" — with one answer.
+
+    Three flags can say yes: the global `--json`, which goes before the command, and the two
+    per-command destinations that predate it. `getattr` because a command with no flag of its own
+    (compute_paths, output_path, config) can still be asked for JSON through the global one.
+    """
+    return bool(getattr(args, "json_global", False) or getattr(args, "json_out", False) or getattr(args, "json", False))
 
 
 def _load_json(path: str):
@@ -169,7 +177,7 @@ def build_parser():
         "--json",
         action="store_true",
         dest="json_global",
-        help="Render any failure as a JSON envelope on stdout. Goes before the command.",
+        help="Print JSON on stdout, success or failure. Goes before the command.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -735,24 +743,23 @@ def build_parser():
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
 
-    # The global `--json` may precede the subcommand, but the dispatch below runs before argparse
-    # and can only look at `argv[0]`. Drop the flag here so `che --json designer …` is forwarded
-    # exactly like `che designer …` is — otherwise it reaches argparse, which has no handler for the
-    # `designer` subparser (it is registered for `--help` discoverability only) and rejects the
-    # designer's own arguments as unrecognized. `diagnosed` holds the original list, so the failure
-    # envelope still knows JSON was requested.
-    if argv and argv[0] == "--json":
-        argv = argv[1:]
+    # The global `--json` is a top-level option, so argparse parses it wherever the command it
+    # precedes is. The one exception is the designer dispatch below, which runs *before* argparse
+    # and can only look at `argv[0]` — so the flag is looked through here, and only here.
+    json_precedes_command = bool(argv and argv[0] == "--json")
+    designer_argv = argv[1:] if json_precedes_command else argv
 
     # `che designer …` is forwarded verbatim to the domain sub-CLI before argparse
     # runs, because argparse's REMAINDER does not forward leading optionals
     # (e.g. `che designer --help`) — see bpo-17050.
-    if argv and argv[0] == "designer":
+    if designer_argv and designer_argv[0] == "designer":
         # `dispatch`, not `main`: this wrapper owns failure rendering, and it is the layer that saw
         # the global `--json`. Letting the designer wrap too would render the failure first, as prose.
         from che_core.designer import dispatch as designer_dispatch
 
-        designer_dispatch(argv[1:])
+        # The flag travels with the argv: the designer answers the same question as the rest of Che.
+        forwarded = ["--json", *designer_argv[1:]] if json_precedes_command else designer_argv[1:]
+        designer_dispatch(forwarded)
         return
 
     parser = build_parser()
@@ -774,7 +781,7 @@ def main(argv=None):
                 fail("UNKNOWN_COMMAND", command=args.command_name)
             manifest["commands"] = [command]
 
-        if args.json_out:
+        if _wants_json(args):
             _print_json(manifest)
         else:
             for command in manifest["commands"]:
@@ -785,8 +792,9 @@ def main(argv=None):
 
     if args.command == "compute_paths":
         paths = compute_paths(args.worktree_root, args.session_id, args.cwd)
-        for k, v in paths.items():
-            print(f'export {k}="{v}"')
+        # Default stays `export K="v"`: this command is a contract with the shell, and every
+        # recipe reaches it through `eval "$(che compute_paths …)"` without passing `--json`.
+        emit_mapping(paths, as_json=_wants_json(args), shell=True)
         return
 
     if args.command == "ensure_dirs":
@@ -794,7 +802,11 @@ def main(argv=None):
         return
 
     if args.command == "output_path":
-        print(output_path(args.type, args.slug, args.related_id, args.scope, args.ext, args.suffix))
+        path = output_path(args.type, args.slug, args.related_id, args.scope, args.ext, args.suffix)
+        if _wants_json(args):
+            _print_json({"path": path})
+        else:
+            print(path)
         return
 
     if args.command == "write_file_atomic":
@@ -848,7 +860,10 @@ def main(argv=None):
                 payload["flags"].update(extra)
 
         registry_append_jsonl(args.session_id, "FLAGS", args.worktree_root, json.dumps(payload))
-        print(f"Configuration updated for session {args.session_id}")
+        if _wants_json(args):
+            _print_json(payload)
+        else:
+            print(f"Configuration updated for session {args.session_id}")
         return
 
     if args.command == "export":
@@ -858,7 +873,10 @@ def main(argv=None):
             include_db=args.include_db,
             db_size_limit_mb=args.db_size_limit_mb,
         )
-        print(f"Project exported to: {out}")
+        if _wants_json(args):
+            _print_json({"exported_to": str(out)})
+        else:
+            print(f"Project exported to: {out}")
         return
 
     if args.command == "import":
@@ -908,7 +926,7 @@ def main(argv=None):
                 args.sql,
                 args.bind,
                 worktree_root=args.worktree_root,
-                as_json=args.json_out,
+                as_json=_wants_json(args),
                 force=args.force,
             )
             if isinstance(res, (list, dict)):
@@ -989,16 +1007,19 @@ def main(argv=None):
         from che_core.pixel_dom import fact_bag_summary, validate_dom_facts
 
         if args.pixel_cmd == "paths":
-            for key, value in _pixel_artifact_paths(
-                args.worktree_root,
-                args.session_id,
-                args.sub_product,
-                args.breakpoint,
-                args.backend,
-                args.related_id,
-                args.attempt,
-            ).items():
-                print(f'export {key}="{value}"')
+            emit_mapping(
+                _pixel_artifact_paths(
+                    args.worktree_root,
+                    args.session_id,
+                    args.sub_product,
+                    args.breakpoint,
+                    args.backend,
+                    args.related_id,
+                    args.attempt,
+                ),
+                as_json=_wants_json(args),
+                shell=True,
+            )
             return
 
         if args.pixel_cmd == "diff":
@@ -1026,7 +1047,7 @@ def main(argv=None):
                 "antialiased_pixels": antialiased,
                 "ratio": 0 if counted == 0 else round(differing / counted, 6),
             }
-            if args.json:
+            if _wants_json(args):
                 _print_json(payload)
             else:
                 print(f"{100.0 * differing / counted:.2f}% of pixels differ ({differing}/{counted})")
@@ -1056,7 +1077,7 @@ def main(argv=None):
                 save_rgba(sheet, args.sheet)
             payload = public_crop_report(report, sheet is not None, args.sheet)
             write_file_atomic(args.out, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
-            if args.json:
+            if _wants_json(args):
                 _print_json(payload)
             else:
                 print(f"{payload['compared']} of {len(payload['elements'])} element(s) compared")
@@ -1142,7 +1163,7 @@ def main(argv=None):
             target.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         if args.out:
             write_file_atomic(args.out, json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"))
-        if args.json:
+        if _wants_json(args):
             _print_json(payload)
         else:
             print(summarise(report))
@@ -1183,7 +1204,7 @@ def main(argv=None):
             print(f"Error: {exc.reason}", file=sys.stderr)
             sys.exit(exc.code)
 
-        if args.json:
+        if _wants_json(args):
             _print_json(state)
         else:
             print(summarise(state))
