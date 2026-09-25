@@ -1,9 +1,13 @@
+import argparse
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+from che_core.cli import build_parser
 from che_core.eject import (
     GITIGNORE_MARKER_BEGIN,
     GITIGNORE_MARKER_END,
@@ -287,3 +291,109 @@ def test_restore_moves_back_refuses_conflict_then_succeeds(tmp_path):
     assert (che / "user_rules" / "my-rules.md").is_file()
     assert (che / "bindings" / "registry.jsonl").is_file()
     assert (che / "memory" / "state.sqlite").is_file()
+
+
+# ── 8. the interface says what it does ──────────────────────────────────────
+
+
+def _own_options(parser):
+    """Options declared directly on `parser`, ignoring help and the subcommand holder."""
+    ignored = (argparse._SubParsersAction, argparse._HelpAction)
+    return [a.option_strings[0] for a in parser._actions if not isinstance(a, ignored)]
+
+
+def _parsers_with_subcommands(parser, path=""):
+    """Every `(path, parser)` in the tree that holds subcommands, including the root."""
+    found = []
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            found.append((path or "<root>", parser))
+            for name, sub in action.choices.items():
+                found.extend(_parsers_with_subcommands(sub, f"{path} {name}".strip()))
+    return found
+
+
+def test_no_parser_with_subcommands_declares_options_of_its_own():
+    """An option on the *parent* of a subcommand is only accepted BEFORE it, so `che eject plan
+    --dry-run` is an "unrecognized arguments" error — while the reference and
+    `commands/che-eject.md` both document that form, and every other command takes its flags after
+    the subcommand. `eject` was the only offender; this fails if one comes back.
+
+    The root is the exception by design: its `--json` is global and documented to go first.
+    """
+    offenders = {
+        path: _own_options(parser)
+        for path, parser in _parsers_with_subcommands(build_parser())
+        if path != "<root>" and _own_options(parser)
+    }
+    assert offenders == {}
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["eject", "plan"],
+        ["eject", "plan", "--dry-run"],
+        ["eject", "plan", "--apply", "--confirmed", "--i-know-what-im-doing"],
+        ["eject", "plan", "--che-home", "/tmp/che", "--no-keep-git-repo"],
+        ["eject", "plan", "--scan-client-repos", "/a", "/b"],
+        ["eject", "trash-list"],
+        ["eject", "trash-list", "--trash-root", "/tmp/trash"],
+        ["eject", "restore", "slug-1"],
+        ["eject", "restore", "slug-1", "--dry-run"],
+        ["eject", "restore", "slug-1", "--apply", "--confirmed"],
+    ],
+)
+def test_every_documented_eject_invocation_parses(argv):
+    """Each form is lifted from `commands/che-eject.md`'s dispatch table. A `SystemExit` here means
+    the parser rejected a command the docs tell the caller to run."""
+    build_parser().parse_args(argv)
+
+
+def test_the_gates_reach_the_handler_after_the_subcommand():
+    """Parsing is not enough: the values have to land on the namespace the handler reads."""
+    args = build_parser().parse_args(
+        ["eject", "plan", "--apply", "--confirmed", "--i-know-what-im-doing", "--trash-root", "/tmp/t"]
+    )
+
+    assert args.eject_cmd == "plan"
+    assert args.dry_run is False
+    assert args.confirmed is True
+    assert args.i_know_what_im_doing is True
+    assert args.trash_root == "/tmp/t"
+
+
+def test_each_subcommand_only_offers_the_options_it_reads():
+    """`trash-list` reads `--trash-root` and nothing else; offering it `--apply` would be a lie."""
+    eject_subs = next(
+        action for action in build_parser()._actions if isinstance(action, argparse._SubParsersAction)
+    ).choices["eject"]
+    subcommands = next(
+        action for action in eject_subs._actions if isinstance(action, argparse._SubParsersAction)
+    ).choices
+
+    def options_of(name):
+        return {
+            a.option_strings[0]
+            for a in subcommands[name]._actions
+            if a.option_strings and not isinstance(a, argparse._HelpAction)
+        }
+
+    assert options_of("trash-list") == {"--trash-root"}
+    assert {"--trash-root", "--dry-run", "--apply", "--confirmed"} <= options_of("restore")
+    assert {"--che-home", "--keep-git-repo", "--no-keep-git-repo", "--scan-client-repos"} <= options_of("plan")
+
+
+def test_the_printed_restore_command_is_one_the_cli_accepts(tmp_path):
+    """A remedy that does not run is worse than no remedy: it costs the caller a second failure.
+    The hint used to say `eject restore --trash-slug <slug>`, but `restore` takes it positionally."""
+    che = _fake_che_home(tmp_path, "copy-install")
+    plan = eject_plan(che_home=che, trash_root=tmp_path / "trash")
+    res = eject_apply(plan, dry_run=False, confirmed=True, i_know_what_im_doing=True)
+
+    undo = next(hint for hint in res["hints"] if hint.startswith("To undo:"))
+    command = undo.removeprefix("To undo: ").removeprefix("python3 -m che_core.cli ")
+
+    parsed = build_parser().parse_args(command.split())
+    assert parsed.eject_cmd == "restore"
+    assert parsed.trash_slug == plan["trash_slug"]

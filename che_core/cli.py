@@ -505,93 +505,88 @@ def build_parser():
         "eject",
         help="Safely eject Che: uninstall adapters, move non-blacklist files to trash, restore.",
     )
-    parser_eject.add_argument(
-        "--che-home",
-        default=None,
-        help="Che directory override (default: resolves the Che home cascade automatically).",
-    )
-    parser_eject.add_argument(
+
+    # Options belong to the subcommand that reads them, so they are accepted where a caller types
+    # them. Declared on `eject` instead, they were rejected after the subcommand — `che eject plan
+    # --dry-run` was an "unrecognized arguments" error — while both `commands/che-eject.md` and the
+    # CLI reference document that form, and every other Che command takes its flags after the
+    # subcommand. The shared sets are inherited through `parents=` so each one is declared once.
+    eject_common = argparse.ArgumentParser(add_help=False)
+    eject_common.add_argument(
         "--trash-root",
         default=None,
         help="Trash root override (default: ~/.che-workspaces/.trash/che-eject).",
     )
-    parser_eject.add_argument(
+
+    eject_gates = argparse.ArgumentParser(add_help=False, parents=[eject_common])
+    eject_gates.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=True,
+        help="Default: only display the plan, DO NOT write anything. Use --apply to apply.",
+    )
+    eject_gates.add_argument(
+        "--apply",
+        dest="dry_run",
+        action="store_false",
+        help="Effectively apply. Requires --confirmed (and --i-know-what-im-doing, for `eject plan`).",
+    )
+    eject_gates.add_argument(
+        "--confirmed",
+        action="store_true",
+        default=False,
+        help="Safety gate 1/2: explicit confirmation after reviewing the dry run.",
+    )
+
+    eject_subs = parser_eject.add_subparsers(dest="eject_cmd", required=True)
+
+    pe_plan = eject_subs.add_parser(
+        "plan",
+        parents=[eject_gates],
+        help="(default) Generate eject plan, apply or just display based on --dry-run/--apply.",
+    )
+    pe_plan.add_argument(
+        "--che-home",
+        default=None,
+        help="Che directory override (default: resolves the Che home cascade automatically).",
+    )
+    pe_plan.add_argument(
         "--keep-git-repo",
         action="store_true",
         default=True,
         help="(git-clone only) Keep .git/ intact after eject (default True). Use --no-keep-git-repo to remove it.",
     )
-    parser_eject.add_argument(
+    pe_plan.add_argument(
         "--no-keep-git-repo",
         dest="keep_git_repo",
         action="store_false",
         help="Also remove the .git/ directory on eject (only for copy-install or if explicitly overridden).",
     )
-    parser_eject.add_argument(
+    pe_plan.add_argument(
         "--scan-client-repos",
         nargs="*",
         default=None,
         help="Optional list of client projects to clean the CHE PLANNING ARTIFACTS BLACKLIST snippet from .gitignore.",
     )
-    parser_eject.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=True,
-        help="Default: only display plan, DO NOT write anything. Use --apply to apply.",
-    )
-    parser_eject.add_argument(
-        "--apply",
-        dest="dry_run",
-        action="store_false",
-        help="Effectively apply the eject. Requires --confirmed and --i-know-what-im-doing.",
-    )
-    parser_eject.add_argument(
-        "--confirmed",
-        action="store_true",
-        default=False,
-        help="Safety gate 1/2: explicit confirmation after reviewing --dry-run.",
-    )
-    parser_eject.add_argument(
+    pe_plan.add_argument(
         "--i-know-what-im-doing",
         action="store_true",
         default=False,
         help="Safety gate 2/2: double confirmation of user awareness of risk.",
     )
-    eject_subs = parser_eject.add_subparsers(dest="eject_cmd", required=True)
-
-    eject_subs.add_parser(
-        "plan",
-        help="(default) Generate eject plan, apply or just display based on --dry-run/--apply.",
-    )
 
     eject_subs.add_parser(
         "trash-list",
+        parents=[eject_common],
         help="List all ejects already sent to trash (with JSON manifests).",
     )
 
     pe_restore = eject_subs.add_parser(
         "restore",
+        parents=[eject_gates],
         help="Restore a previous eject, moving from trash to che_home and running setup-adapters.",
     )
     pe_restore.add_argument("trash_slug", help="Trash entry slug (e.g. che-eject--abc123--20260904-235959).")
-    pe_restore.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=True,
-        help="Default: only show restore plan. Use --apply to apply.",
-    )
-    pe_restore.add_argument(
-        "--apply",
-        dest="dry_run",
-        action="store_false",
-        help="Effectively restore. Requires --confirmed.",
-    )
-    pe_restore.add_argument(
-        "--confirmed",
-        action="store_true",
-        default=False,
-        help="Mandatory safety gate to apply the restore.",
-    )
 
     # PIXEL GATE SUBCOMMANDS (the §3.4 comparator of ux-pixel-check-gate) =======
     parser_pixel = subparsers.add_parser(
