@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from che_core.diagnostics import CheError
 from che_core.paths import output_path
 from che_core.ship import QUARANTINE_DIRNAME, run_blacklist_check
 from che_core.worktrees import add_worktree
@@ -105,10 +106,11 @@ def test_quarantine_never_deletes(tmp_path: Path) -> None:
     subprocess.run([*git, "add", "spec_leak.md"], check=True, capture_output=True, env=env)
     subprocess.run([*git, "commit", "-q", "-m", "leak"], check=True, capture_output=True, env=env)
 
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         run_blacklist_check(str(repo), "sess-lean")
 
-    assert exc.value.code == 2, "a tracked artifact must stop the ship, not be moved"
+    assert exc.value.code == "PLANNING_ARTIFACTS_TRACKED"
+    assert exc.value.exit_code == 2, "a tracked artifact must stop the ship, not be moved"
     assert leak.is_file(), "a tracked artifact must never be silently deleted"
     assert leak.read_text(encoding="utf-8") == "tracked planning artifact\n"
 

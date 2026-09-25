@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from che_core.decisions import append_decision_jsonl, get_decisions_path
+from che_core.diagnostics import CheError
 from che_core.paths import compute_paths
 from che_core.project_layout import get_state_registry_path
 from che_core.registry import get_registry_path
@@ -71,9 +72,10 @@ def test_compute_paths_refuses_an_unbound_path(che_ws_root: Path, tmp_path: Path
 
     repo = make_git_repo(tmp_path / "unbound")
 
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         compute_paths(str(repo), "sess-1")
-    assert exc.value.code == 3
+    assert exc.value.code == "UNBOUND_WORKTREE"
+    assert exc.value.exit_code == 3
 
 
 # --- Git probes must be hermetic ---------------------------------------------
@@ -275,6 +277,7 @@ def test_unbound_lookup_survives_legacy_and_invalid_slug_folders(che_ws_root: Pa
 
     repo = make_git_repo(tmp_path / "unbound")
 
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         compute_paths(str(repo), "sess-1")
-    assert exc.value.code == 3
+    assert exc.value.code == "UNBOUND_WORKTREE"
+    assert exc.value.exit_code == 3

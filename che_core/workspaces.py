@@ -10,11 +10,11 @@ folder.
 
 import json
 import shutil
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from che_core.diagnostics import fail
 from che_core.paths import _slugify, get_workspaces_root
 from che_core.project_layout import (
     DOMAIN_SLUGS,
@@ -281,33 +281,24 @@ def init_project(
     documents are never overwritten.
     """
     if not repo_path:
-        print("init_project: `repo_path` is required.", file=sys.stderr)
-        sys.exit(2)
+        fail("MISSING_REPO_PATH")
 
     try:
         validate_slug(slug, label="--slug")
     except ValueError as exc:
-        print(f"init_project: {exc}", file=sys.stderr)
-        sys.exit(2)
+        fail("INVALID_SLUG", exc=str(exc))
 
     try:
         canonical_domain = normalise_domain(domain)
     except ValueError as exc:
-        print(f"init_project: {exc}", file=sys.stderr)
-        sys.exit(2)
+        fail("INVALID_DOMAIN", exc=str(exc))
 
     repo = Path(repo_path).expanduser().resolve()
     if not repo.is_dir():
-        print(f"init_project: repo_path={repo} is not a directory.", file=sys.stderr)
-        sys.exit(2)
+        fail("NOT_A_DIRECTORY", path=repo)
 
     if not is_git_repo(str(repo)):
-        print(
-            f"init_project: {repo} is not a git repository. "
-            "Che projects require git (contract R4); nothing was created.",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        fail("NOT_A_GIT_REPOSITORY", path=repo, subject="projects")
 
     project_dir = get_project_dir(slug)
     already_existed = project_dir.is_dir()
@@ -470,8 +461,7 @@ def remove_project(
     }
 
     if not project_dir.is_dir():
-        print(f"remove_project: project {project_slug!r} does not exist.", file=sys.stderr)
-        sys.exit(3)
+        fail("UNKNOWN_PROJECT", project_slug=project_slug)
 
     if dry_run:
         plan["applied"] = False
@@ -479,8 +469,7 @@ def remove_project(
         return plan
 
     if not confirmed:
-        print("remove_project: refusing to apply without --confirm.", file=sys.stderr)
-        sys.exit(2)
+        fail("REFUSED_WITHOUT_CONFIRM")
 
     trash_root = _trash_dir()
     trash_slug = f"project--{project_slug}--{_ts_slug()}"
@@ -496,19 +485,16 @@ def restore_project(trash_slug: str) -> Dict[str, Any]:
     """Move a trashed project back to its original flat location."""
     trash_target = _trash_dir() / trash_slug
     if not trash_target.is_dir():
-        print(f"restore_project: trash entry {trash_slug!r} not found.", file=sys.stderr)
-        sys.exit(3)
+        fail("TRASH_ENTRY_NOT_FOUND", trash_slug=trash_slug)
 
     manifest = _read_manifest(trash_target)
     original = manifest.get("original_path")
     if not original:
-        print(f"restore_project: no original_path in manifest of {trash_slug!r}.", file=sys.stderr)
-        sys.exit(3)
+        fail("TRASH_MANIFEST_INCOMPLETE", trash_slug=trash_slug)
 
     target = Path(original)
     if target.exists():
-        print(f"restore_project: target {target} already exists — refusing to overwrite.", file=sys.stderr)
-        sys.exit(3)
+        fail("RESTORE_TARGET_EXISTS", target=target)
 
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(trash_target), str(target))

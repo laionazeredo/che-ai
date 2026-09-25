@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from che_core.diagnostics import fail
 from che_core.paths import compute_paths
 from che_core.task_graph import parse_task_graph
 
@@ -13,7 +14,9 @@ from che_core.task_graph import parse_task_graph
 def _get_state_db_path(worktree_root: Optional[str] = None, paths: Optional[Dict[str, str]] = None) -> Path:
     if paths is None:
         if worktree_root is None:
-            raise ValueError("worktree_root or paths must be provided")
+            # Every query opens the project's database, so the worktree is never optional — the
+            # CLI flag is, which is why this is a catalogued failure and not a bare ValueError.
+            fail("MISSING_WORKTREE_ROOT")
         paths = compute_paths(worktree_root, "state-store-fallback")
     return Path(paths["CHE_DB_DIR"]) / "che_state.sqlite"
 
@@ -338,12 +341,10 @@ def query_state_db(
     if not force:
         first_token = sql.lstrip().split(" ")[0].lower() if sql.strip() else ""
         if first_token not in {"select", "explain", "pragma"}:
-            raise ValueError(
-                "SQL restricted to SELECT / EXPLAIN / PRAGMA by default. To modify data, pass --force explicitly."
-            )
+            fail("STATE_QUERY_NEEDS_FORCE", statement=sql)
     db_path = _get_state_db_path(worktree_root=worktree_root)
     if not db_path.exists():
-        raise FileNotFoundError(f"State store does not exist yet at: {db_path}. Run `che state rebuild-index` first.")
+        fail("STATE_DB_MISSING", path=db_path)
     conn = _connect(db_path, read_only=(not force))
     try:
         cur = conn.execute(sql, binds)

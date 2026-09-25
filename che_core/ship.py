@@ -3,10 +3,10 @@ import fnmatch
 import os
 import shutil
 import subprocess
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from che_core.diagnostics import diagnosed, fail
 from che_core.paths import compute_paths, ensure_session_dirs
 from che_core.project_layout import hermetic_git_env
 
@@ -78,8 +78,7 @@ def run_preflight(worktree_root: str, session_id: str):
     wt_root = Path(worktree_root).resolve()
 
     if not wt_root.is_dir():
-        print(f"[che-ship] ❌ WORKTREE_ROOT {wt_root} is not a valid directory.", file=sys.stderr)
-        sys.exit(1)
+        fail("NOT_A_DIRECTORY", path=wt_root)
 
     paths = compute_paths(str(wt_root), session_id)
     ensure_session_dirs(str(wt_root), session_id)
@@ -178,14 +177,12 @@ def run_blacklist_check(worktree_root: str, session_id: str):
             tracked_found.append(bf)
 
     if tracked_found:
-        print("\n🔴 PLANNING ARTIFACTS BLACKLIST — TRACKED FILES FOUND (committed before):")
-        for f in tracked_found:
-            print(f"  · {f}")
-        print("\nThese are che internal files and MUST NOT live in user-code git history.")
+        # The A/B remedy has no equivalent in the diagnostics catalog, so it stays a print; the
+        # catalogued failure below carries the file list and the boundary explanation.
         print("Options:")
         print(f"  A = Untrack them (git rm --cached each), KEEP local copies MOVED to {backup_dir}")
         print("  B = I will handle manually. Cancel ship.")
-        sys.exit(2)
+        fail("PLANNING_ARTIFACTS_TRACKED", files=", ".join(tracked_found))
 
     if untracked_moved:
         print("\n🧹 Moved untracked files to backup:")
@@ -193,7 +190,8 @@ def run_blacklist_check(worktree_root: str, session_id: str):
             print(f"  · {f}")
 
 
-def main():
+@diagnosed
+def main(argv=None):
     parser = argparse.ArgumentParser(description="Che Ship Helper")
     subparsers = parser.add_subparsers(dest="cmd", required=True)
 
@@ -205,7 +203,7 @@ def main():
     p_blacklist.add_argument("worktree_root")
     p_blacklist.add_argument("session_id")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.cmd == "preflight":
         run_preflight(args.worktree_root, args.session_id)

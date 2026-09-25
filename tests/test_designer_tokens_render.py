@@ -4,8 +4,8 @@ Contract:
 - B-3 (positive): running `tokens render <wt>` twice produces byte-identical DESIGN.md and tokens.styles.css (sha256 stable).
 - B-3 (positive): tokens.styles.css is generated and contains --color-primary from tokens.json.
 - B-3 (positive): DESIGN.md frontmatter is rewritten from tokens.json (single-source invariant R4).
-- A-1 (assertive): missing design/ → sys.exit(2) before any file is written.
-- A-2 (assertive): tokens.json without `colors` key → sys.exit(2).
+- A-1 (assertive): missing design/ → DESIGN_TREE_MISSING (exit 2) before any file is written.
+- A-2 (assertive): tokens.json without `colors` key → TOKENS_MISSING_COLORS (exit 2).
 - AB-5 (negative): tampered DESIGN.md frontmatter diverging from tokens.json → re-running tokens render
   restores consistency (single-source enforcement).
 """
@@ -143,22 +143,25 @@ def test_tokens_render_syncs_frontmatter(tmp_path: Path) -> None:
     )
 
 
-# @ac A-1 — design root missing → sys.exit(2) and zero side-effects
+# @ac A-1 — design root missing → DESIGN_TREE_MISSING (exit 2) and zero side-effects
 def test_tokens_render_a1_missing_design_root(tmp_path: Path) -> None:
-    """A-1: design/ does not exist → sys.exit(2) before any file is written."""
+    """A-1: design/ does not exist → DESIGN_TREE_MISSING (exit 2) before any file is written."""
     from che_core import designer as designer_mod
+    from che_core.diagnostics import CheError
 
     wt = tmp_path  # no init ran
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         designer_mod.run_tokens_render(str(wt))
-    assert exc.value.code == 2, f"A-1 must exit 2; got {exc.value.code}"
+    assert exc.value.code == "DESIGN_TREE_MISSING"
+    assert exc.value.exit_code == 2, f"A-1 must exit 2; got {exc.value.exit_code}"
     assert not (wt / "design").exists(), "design/ must not be created by render (init must run first)"
 
 
-# @ac A-2 — tokens.json without `colors` → sys.exit(2)
+# @ac A-2 — tokens.json without `colors` → TOKENS_MISSING_COLORS (exit 2)
 def test_tokens_render_a2_tokens_missing_colors(tmp_path: Path) -> None:
-    """A-2: tokens.json missing `colors` key → sys.exit(2)."""
+    """A-2: tokens.json missing `colors` key → TOKENS_MISSING_COLORS (exit 2)."""
     from che_core import designer as designer_mod
+    from che_core.diagnostics import CheError
 
     wt = tmp_path
     _bootstrap_minimal_design_tree(wt)
@@ -166,9 +169,10 @@ def test_tokens_render_a2_tokens_missing_colors(tmp_path: Path) -> None:
     bad = {"version": 1, "sub_product": "acme", "no_colors_key": True}
     tokens_path.write_text(json.dumps(bad), encoding="utf-8")
 
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(CheError) as exc:
         designer_mod.run_tokens_render(str(wt))
-    assert exc.value.code == 2, f"A-2 must exit 2; got {exc.value.code}"
+    assert exc.value.code == "TOKENS_MISSING_COLORS"
+    assert exc.value.exit_code == 2, f"A-2 must exit 2; got {exc.value.exit_code}"
 
 
 # @ac CLI — subparser is registered

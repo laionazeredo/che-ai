@@ -94,38 +94,25 @@ def test_init_writes_design_tree(tmp_path: Path) -> None:
 
 # @ac AB-1 — path traversal rejection
 def test_init_rejects_path_traversal(tmp_path: Path) -> None:
-    """A slug like '../../etc' must NOT create files anywhere on disk; must sys.exit with non-zero."""
+    """A slug like '../../etc' must NOT create files anywhere on disk; must fail with a non-zero exit code."""
     from che_core import designer as designer_mod
+    from che_core.diagnostics import CheError
 
     wt = tmp_path
     sess = "sess-test-f0-ab1"
     bad_slug = "../../etc"
 
-    captured_stderr: list[str] = []
+    with pytest.raises(CheError) as exc_info:
+        designer_mod.run_init(str(wt), sess, bad_slug)
 
-    class _FakeStderr:
-        def write(self, s: str) -> int:
-            captured_stderr.append(s)
-            return len(s)
+    assert exc_info.value.code == "INVALID_SUB_PRODUCT_SLUG", "run_init must reject path traversal"
+    assert exc_info.value.exit_code != 0, "run_init must fail with a non-zero exit code on path traversal"
 
-        def flush(self) -> None:
-            pass
-
-    real_stderr = sys.stderr
-    sys.stderr = _FakeStderr()
-    try:
-        with pytest.raises(SystemExit) as exc_info:
-            designer_mod.run_init(str(wt), sess, bad_slug)
-    finally:
-        sys.stderr = real_stderr
-
-    assert exc_info.value.code != 0, "run_init must exit with non-zero code on path traversal"
-
-    # stderr must contain the rejected slug (validation message)
-    joined = "".join(captured_stderr)
-    assert "invalid sub-product slug" in joined, f"stderr must explain the rejection; got: {joined!r}"
-    assert bad_slug in joined or re.search(r"\.\./\.\./etc", joined), (
-        f"stderr must name the rejected slug; got: {joined!r}"
+    # The failure message must name the rejected slug (validation message)
+    message = exc_info.value.message
+    assert "invalid sub-product slug" in message, f"message must explain the rejection; got: {message!r}"
+    assert bad_slug in message or re.search(r"\.\./\.\./etc", message), (
+        f"message must name the rejected slug; got: {message!r}"
     )
 
     # ZERO files written anywhere under tmp_path

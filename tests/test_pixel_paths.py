@@ -297,7 +297,8 @@ def test_a_missing_worktree_is_refused(tmp_path: Path) -> None:
     )
 
     assert proc.returncode == 2
-    assert "not a valid worktree directory" in proc.stderr
+    assert str(tmp_path / "nope") in proc.stderr
+    assert "is not a valid directory" in proc.stderr
 
 
 # --- The output is meant to be eval'd ----------------------------------------
