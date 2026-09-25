@@ -53,6 +53,15 @@ mkdir -p "$COMMANDS_TARGET"
 mkdir -p "$RULES_TARGET/che-domains"
 mkdir -p "$RULES_TARGET/che-user"
 
+# Prune BEFORE linking. A rename upstream leaves the old symlink behind and
+# creates no new one, so Claude Code would keep listing a command that resolves
+# to nothing.
+PRUNER="$CHE_REPO/scripts/prune-che-symlinks.sh"
+if [ -f "$PRUNER" ]; then
+  bash "$PRUNER" "$CHE_REPO" "$SKILLS_TARGET" "$COMMANDS_TARGET" \
+    "$RULES_TARGET/che-domains" "$RULES_TARGET/che-user"
+fi
+
 # 1. Link CLAUDE.md (user-scope adapter, canonical location ~/.claude/CLAUDE.md)
 AGENTS_TARGET="$CLAUDE_CONFIG_DIR/CLAUDE.md"
 AGENTS_SOURCE="$SCRIPT_DIR/CLAUDE.md"

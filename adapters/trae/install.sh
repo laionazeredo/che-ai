@@ -25,6 +25,9 @@
 #   • Never deletes. Never overwrites a real (non-symlink) file silently: a real
 #     target is either SKIPped (per-item collections) or backed up to .bak
 #     (root pointer files, which must resolve for Trae to boot with Che rules).
+#   • Prunes only its own orphans: a dangling symlink pointing into $CHE_REPO is
+#     removed — a rename upstream leaves exactly that behind — never a real file,
+#     never a symlink pointing somewhere else.
 #   • Rollback = remove the symlink (see adapters/trae/uninstall.sh).
 set -euo pipefail
 
@@ -78,6 +81,15 @@ PY
 }
 
 mkdir -p "$COMMANDS_TARGET" "$SKILLS_TARGET" "$HOOKS_TARGET"
+
+# 0. Prune BEFORE linking. A rename upstream leaves the old symlink behind and
+#    creates no new one, so Trae would keep listing a command that resolves to
+#    nothing. Scoped to the per-item collections: the pointer files in step 1 are
+#    five fixed names, not a collection that churns.
+PRUNER="$CHE_REPO/scripts/prune-che-symlinks.sh"
+if [ -f "$PRUNER" ]; then
+  bash "$PRUNER" "$CHE_REPO" "$COMMANDS_TARGET" "$SKILLS_TARGET" "$HOOKS_TARGET"
+fi
 
 # 1. Root pointer files + rule directories.
 #    These must resolve for Trae to load Che rules/domains/user overrides, so a
