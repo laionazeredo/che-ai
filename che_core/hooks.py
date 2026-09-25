@@ -7,6 +7,29 @@ from typing import Any, Dict, List
 from che_core.paths import get_che_home, get_workspaces_root
 from che_core.registry import get_registry_path, registry_lookup_last
 
+#: Prefix marking a hook that CRASHED, as opposed to one that deliberately allowed the call.
+HOOK_FAILURE_MARKER = "CHE_HOOK_FAILED"
+
+
+def hook_failure(exc: BaseException) -> Dict[str, Any]:
+    """Render a crashed hook as a failure an operator can see, without blocking the tool call.
+
+    A hook must never break the IDE, so the decision stays ``allow``. But ``allow`` carrying
+    ``"Hook error: ..."`` is indistinguishable from a hook that ran and chose to allow — which is
+    exactly how a broken hook goes unnoticed for weeks. The marker makes the crash greppable, the
+    extra key makes it machine-detectable, and neither changes whether the tool call proceeds.
+    """
+    detail = f"{type(exc).__name__}: {exc}"
+    return {
+        "decision": "allow",
+        "che_hook_failed": True,
+        "reason": f"{HOOK_FAILURE_MARKER}: {detail}",
+        "additionalContext": (
+            f"{HOOK_FAILURE_MARKER}: this hook crashed and let the call through. {detail}. "
+            "Re-run it by hand with the same stdin to see the full traceback."
+        ),
+    }
+
 
 def _extract_paths(tool_args: Dict[str, Any]) -> List[str]:
     paths = []

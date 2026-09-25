@@ -25,7 +25,7 @@ if che_home not in sys.path:
     sys.path.insert(0, che_home)
 
 # ruff: noqa: E402
-from che_core.hooks import pretooluse_worktree_binding
+from che_core.hooks import hook_failure, pretooluse_worktree_binding
 
 
 def main():
@@ -40,7 +40,7 @@ def main():
         print(json.dumps(result))
     except Exception as e:
         # Fallback to allow if hook crashes, to avoid breaking IDE
-        print(json.dumps({"decision": "allow", "reason": f"Hook error: {e}"}))
+        print(json.dumps(hook_failure(e)))
 
 
 if __name__ == "__main__":
