@@ -3,6 +3,7 @@ import fnmatch
 import os
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -135,10 +136,10 @@ def run_blacklist_check(worktree_root: str, session_id: str):
     blacklisted = [f for f in all_files if is_blacklisted(f)]
 
     if not blacklisted:
-        print("✅ No blacklisted planning artifacts found in the worktree.")
+        print("✅ No blacklisted planning artifacts found in the worktree.", file=sys.stderr)
         return
 
-    print(f"⚠️ Found {len(blacklisted)} blacklisted files in the worktree.")
+    print(f"⚠️ Found {len(blacklisted)} blacklisted files in the worktree.", file=sys.stderr)
 
     untracked_moved = []
     tracked_found = []
@@ -177,17 +178,21 @@ def run_blacklist_check(worktree_root: str, session_id: str):
             tracked_found.append(bf)
 
     if tracked_found:
-        # The A/B remedy has no equivalent in the diagnostics catalog, so it stays a print; the
-        # catalogued failure below carries the file list and the boundary explanation.
-        print("Options:")
-        print(f"  A = Untrack them (git rm --cached each), KEEP local copies MOVED to {backup_dir}")
-        print("  B = I will handle manually. Cancel ship.")
+        # The A/B remedy has no equivalent in the diagnostics catalog, so it stays a print — on
+        # STDERR: the catalogued failure below writes the JSON envelope to stdout when `--json` was
+        # requested, and prose printed here first would leave that stream unparseable.
+        print("Options:", file=sys.stderr)
+        print(
+            f"  A = Untrack them (git rm --cached each), KEEP local copies MOVED to {backup_dir}",
+            file=sys.stderr,
+        )
+        print("  B = I will handle manually. Cancel ship.", file=sys.stderr)
         fail("PLANNING_ARTIFACTS_TRACKED", files=", ".join(tracked_found))
 
     if untracked_moved:
-        print("\n🧹 Moved untracked files to backup:")
+        print("\n🧹 Moved untracked files to backup:", file=sys.stderr)
         for f in untracked_moved:
-            print(f"  · {f}")
+            print(f"  · {f}", file=sys.stderr)
 
 
 @diagnosed
