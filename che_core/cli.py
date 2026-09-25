@@ -153,30 +153,15 @@ def _pixel_artifact_paths(
     }
 
 
-@diagnosed
-def main(argv=None):
-    argv = list(sys.argv[1:] if argv is None else argv)
+def build_parser():
+    """Declare the whole CLI surface and return the parser.
 
-    # The global `--json` may precede the subcommand, but the dispatch below runs before argparse
-    # and can only look at `argv[0]`. Drop the flag here so `che --json designer …` is forwarded
-    # exactly like `che designer …` is — otherwise it reaches argparse, which has no handler for the
-    # `designer` subparser (it is registered for `--help` discoverability only) and rejects the
-    # designer's own arguments as unrecognized. `diagnosed` holds the original list, so the failure
-    # envelope still knows JSON was requested.
-    if argv and argv[0] == "--json":
-        argv = argv[1:]
-
-    # `che designer …` is forwarded verbatim to the domain sub-CLI before argparse
-    # runs, because argparse's REMAINDER does not forward leading optionals
-    # (e.g. `che designer --help`) — see bpo-17050.
-    if argv and argv[0] == "designer":
-        # `dispatch`, not `main`: this wrapper owns failure rendering, and it is the layer that saw
-        # the global `--json`. Letting the designer wrap too would render the failure first, as prose.
-        from che_core.designer import dispatch as designer_dispatch
-
-        designer_dispatch(argv[1:])
-        return
-
+    Extracted from `main` so the surface can be **read**, not only executed. `che capabilities --json`
+    walks this parser to describe every command, its arguments and their types, and the MCP adapter
+    derives its tool list from the same walk. One declaration, three surfaces: a hand-written manifest
+    beside a hand-written parser would be a second source of truth, and the drift between them is the
+    class of bug this arrangement makes impossible rather than merely detectable.
+    """
     parser = argparse.ArgumentParser(description="Che Core CLI")
     # One flag an agent can always pass, whatever the command: `che --json <anything>`.
     # The per-subcommand `--json` flags keep working unchanged, so no existing caller breaks.
@@ -184,9 +169,28 @@ def main(argv=None):
         "--json",
         action="store_true",
         dest="json_global",
-        help="Machine-readable result for any command, success or failure. Goes before the command.",
+        help="Render any failure as a JSON envelope on stdout. Goes before the command.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # capabilities — the surface itself, so an agent reads it instead of guessing it.
+    parser_caps = subparsers.add_parser(
+        "capabilities",
+        help="Describe the CLI surface as data: commands, exit codes, failures.",
+    )
+    parser_caps.add_argument(
+        "--command",
+        dest="command_name",
+        default=None,
+        help="Narrow to one command, by name or alias (e.g. 'worktree add'). Adds its arguments and types.",
+    )
+    parser_caps.add_argument(
+        "--errors",
+        action="store_true",
+        default=False,
+        help="Also include the failure catalogue. Omitted by default; a caller holding a failure already has its remedy.",
+    )
+    parser_caps.add_argument("--json", action="store_true", dest="json_out", help="Print the manifest as JSON.")
 
     # paths
     parser_paths = subparsers.add_parser("compute_paths")
@@ -724,7 +728,60 @@ def main(argv=None):
     px_crop.add_argument("--threshold", type=float, default=0.1, help="pixelmatch matching threshold (0-1).")
     px_crop.add_argument("--json", action="store_true", default=False, help="Print the report as JSON.")
 
+    return parser
+
+
+@diagnosed
+def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+
+    # The global `--json` may precede the subcommand, but the dispatch below runs before argparse
+    # and can only look at `argv[0]`. Drop the flag here so `che --json designer …` is forwarded
+    # exactly like `che designer …` is — otherwise it reaches argparse, which has no handler for the
+    # `designer` subparser (it is registered for `--help` discoverability only) and rejects the
+    # designer's own arguments as unrecognized. `diagnosed` holds the original list, so the failure
+    # envelope still knows JSON was requested.
+    if argv and argv[0] == "--json":
+        argv = argv[1:]
+
+    # `che designer …` is forwarded verbatim to the domain sub-CLI before argparse
+    # runs, because argparse's REMAINDER does not forward leading optionals
+    # (e.g. `che designer --help`) — see bpo-17050.
+    if argv and argv[0] == "designer":
+        # `dispatch`, not `main`: this wrapper owns failure rendering, and it is the layer that saw
+        # the global `--json`. Letting the designer wrap too would render the failure first, as prose.
+        from che_core.designer import dispatch as designer_dispatch
+
+        designer_dispatch(argv[1:])
+        return
+
+    parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "capabilities":
+        from che_core.manifest import build_manifest, find_command
+
+        # `--command` is what asks for the argument detail: the compact default answers "what can I
+        # do?", which is the question an agent has before it has chosen a command.
+        manifest = build_manifest(
+            parser,
+            include_arguments=args.command_name is not None,
+            include_errors=args.errors,
+        )
+        if args.command_name:
+            command = find_command(manifest, args.command_name)
+            if command is None:
+                fail("UNKNOWN_COMMAND", command=args.command_name)
+            manifest["commands"] = [command]
+
+        if args.json_out:
+            _print_json(manifest)
+        else:
+            for command in manifest["commands"]:
+                aliases = f"  (aliases: {', '.join(command['aliases'])})" if command["aliases"] else ""
+                print(f"{command['name']}{aliases}")
+                print(f"    {command['summary']}")
+        return
 
     if args.command == "compute_paths":
         paths = compute_paths(args.worktree_root, args.session_id, args.cwd)

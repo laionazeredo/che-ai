@@ -165,20 +165,21 @@ pip uninstall che-ai
 
 ## 2. Command Map
 
-| Group        | Subcommands                                                         | Scope    | Surface |
-| :----------- | :------------------------------------------------------------------ | :------- | :------ |
-| `project`    | `create` (`add`, `init`), `list`, `remove`, `restore`, `trash-list` | Project  | Terminal CLI |
-| `worktree`   | `add`, `list`, `show`, `remove`                                     | Worktree | Terminal CLI |
-| `config`     | (flags: `--lang-chat`, `--lang-docs`, `--lang-report`, `--pt-check`, `--flags`) | Session | Terminal CLI |
-| `task`       | `list`, `show`, `resume`, `set-status`, `graph-summary`           | Worktree | Terminal CLI |
-| `state`      | `rebuild-index`, `query`, `search`, `sanitize`                     | Project  | Terminal CLI |
-| `rag`        | `build`, `search`, `list`, `prune`                                 | Project  | Terminal CLI |
-| `export`     | (project → portable `.tar.gz`)                                     | Project  | Terminal CLI |
-| `import`     | (portable `.tar.gz` → project)                                     | Project  | Terminal CLI |
-| `eject`      | `plan`, `execute`, `restore`                                       | All      | Terminal CLI |
-| `update`     | (alias: `self-update`, `upgrade`) — flags: `--check`, `--che-home`, `--remote`, `--json` | All | Terminal CLI |
-| `pixel`      | `check`                                                            | Worktree | Terminal CLI |
-| plumbing     | `compute_paths`, `ensure_dirs`, `output_path`, `write_file_atomic`, `assert_outside_worktree`, `registry_append`, `registry_lookup`, `decision_append` | Any | Terminal CLI |
+| Group          | Subcommands                                                         | Scope    | Surface      |
+| :------------- | :------------------------------------------------------------------ | :------- | :----------- |
+| `capabilities` | (flags: `--command`, `--errors`, `--json`) — see §2.3               | All      | Terminal CLI |
+| `project`      | `create` (`add`, `init`), `list`, `remove`, `restore`, `trash-list` | Project  | Terminal CLI |
+| `worktree`     | `add`, `list`, `show`, `remove`                                     | Worktree | Terminal CLI |
+| `config`       | (flags: `--lang-chat`, `--lang-docs`, `--lang-report`, `--pt-check`, `--flags`) | Session | Terminal CLI |
+| `task`         | `list`, `show`, `resume`, `set-status`, `graph-summary`             | Worktree | Terminal CLI |
+| `state`        | `rebuild-index`, `query`, `search`, `sanitize`                      | Project  | Terminal CLI |
+| `rag`          | `build`, `search`, `list`, `prune`                                  | Project  | Terminal CLI |
+| `export`       | (project → portable `.tar.gz`)                                      | Project  | Terminal CLI |
+| `import`       | (portable `.tar.gz` → project)                                      | Project  | Terminal CLI |
+| `eject`        | `plan`, `execute`, `restore`                                        | All      | Terminal CLI |
+| `update`       | (alias: `self-update`, `upgrade`) — flags: `--check`, `--che-home`, `--remote`, `--json` | All | Terminal CLI |
+| `pixel`        | `check`                                                             | Worktree | Terminal CLI |
+| plumbing       | `compute_paths`, `ensure_dirs`, `output_path`, `write_file_atomic`, `assert_outside_worktree`, `registry_append`, `registry_lookup`, `decision_append` | Any | Terminal CLI |
 
 ### 2.1 Help Discovery
 
@@ -243,6 +244,68 @@ there, on stdout, for any command.
 > The per-command `--json` flags (`che state query --json`, `che pixel check --json`, …) are what
 > select JSON output on success where the command supports it. Making the global flag do that
 > everywhere is a separate change, because it has to keep the `eval` recipes working.
+
+### 2.3 The surface is data — `che capabilities`
+
+The commands, their arguments, the exit codes and the failure catalogue are emitted as JSON from the
+**same parser that runs them**. Read this before guessing a flag.
+
+```bash
+che capabilities                                # human list: every command + one-line meaning
+che capabilities --json                         # the whole surface, compact
+che capabilities --json --command "worktree add"  # one command, with its arguments
+che capabilities --json --errors                # + the failure catalogue (§2.2)
+```
+
+```jsonc
+{
+  "global_options": [
+    { "name": "--json", "dest": "json_global", "kind": "option", "type": "boolean",
+      "required": false, "default": false, "help": "Render any failure as a JSON envelope…" }
+  ],
+  "exit_codes": [ { "code": 0, "name": "OK", "meaning": "Success." }, … ],  // §10
+  "commands": [
+    {
+      "name": "worktree add",
+      "aliases": [],
+      "summary": "Bind a git checkout to a project. Idempotent: re-running reuses the existing tree.",
+      "mutates": true,
+      "requires_bound_worktree": false,
+      "output": "json",
+      "arguments": [ /* present only when narrowed with --command */ ]
+    }
+  ],
+  "errors": [ /* present only with --errors */ ]
+}
+```
+
+| Field                     | Meaning                                                                              |
+| :------------------------ | :----------------------------------------------------------------------------------- |
+| `summary`                 | One sentence stating what the command does — enough to decide whether to run it.      |
+| `mutates`                 | The command writes state. A caller checks this before running it unattended.          |
+| `requires_bound_worktree` | `che worktree add` must have run first; without it the command exits 3.               |
+| `output`                  | Which success shape the command emits — `json`, `shell`, `kv`, `text`, `prose`, `none` (§2.2). |
+| `arguments[]`             | `name` (longest form), `dest`, `kind` (`positional`\|`option`), `type`, `required`, `default`, `choices` when constrained, `aliases` for the short forms, `group` for a mutually-exclusive set. |
+
+`-h`/`--help` is omitted from `arguments` on purpose: it exists on all 45 commands and would be noise.
+
+Sizes are what make progressive disclosure work: **12.7 KB** for the whole surface, **~2 KB** for one
+command, **~29 KB** with `--errors`. Read the compact form first; narrow only when you need arguments.
+
+**Why it cannot drift.** `build_manifest()` walks the live `argparse` parser (`_SubParsersAction`,
+`_actions`, `_mutually_exclusive_groups`) instead of a hand-written table, so it cannot advertise a
+flag that does not exist. `che designer …` is dispatched before `argparse` sees it, so the walk
+reaches it through a declared delegated parser. The four semantic fields per command are declared in
+`che_core/manifest.py` (`COMMAND_SEMANTICS`), and tests fail in **both** directions: a command
+without a declared meaning, and a declared meaning whose command no longer exists. Reading private
+`argparse` state is the price of that guarantee, and it is pinned by a test rather than assumed.
+
+An unknown `--command` is a catalogued failure, not a traceback:
+
+```bash
+che --json capabilities --command "worktree destroy"
+# → {"status":"error","code":"UNKNOWN_COMMAND","exit_code":2,"next_actions":["che capabilities"], …}
+```
 
 ---
 

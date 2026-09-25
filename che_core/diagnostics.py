@@ -266,6 +266,14 @@ ERROR_CATALOG: Dict[str, ErrorSpec] = dict(
             ("che project init <repo> --slug {project_slug}", "che project list"),
         ),
         _spec(
+            "UNKNOWN_COMMAND",
+            "resolve",
+            EXIT_USAGE,
+            "no such command: {command!r}",
+            "`che capabilities` lists every command and alias, and `che --help` prints the tree.",
+            ("che capabilities",),
+        ),
+        _spec(
             "UNKNOWN_WORKTREE",
             "resolve",
             EXIT_NOT_FOUND,

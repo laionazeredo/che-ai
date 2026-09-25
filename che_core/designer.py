@@ -413,13 +413,12 @@ def run_bootstrap(worktree_root: str, session_id: str, mode: str, slug: str):
     print("\nBootstrap complete. Export these variables to use in the subsequent design gates.")
 
 
-def dispatch(argv=None):
-    """Parse one `che designer …` invocation and run the selected command.
+def build_parser():
+    """Declare the `che designer` surface and return the parser.
 
-    Deliberately **undecorated**: ``che designer …`` reaches this through ``che_core.cli``, whose own
-    ``@diagnosed`` wrapper owns failure rendering and is the only layer that saw the global ``--json``.
-    Wrapping here as well would render the failure first — and always as prose, because the flag was
-    consumed by the outer parser. Standalone use goes through :func:`main`, which does wrap.
+    Separate from :func:`dispatch` so ``che_core.manifest`` can walk it: `che designer …` is forwarded
+    before argparse runs, so the `che` parser knows the command exists but nothing about its
+    arguments. Walking this parser is what lets `che capabilities --json` describe it honestly.
     """
     parser = argparse.ArgumentParser(prog="che designer", description="Che Social UI Designer Helper")
     subparsers = parser.add_subparsers(dest="cmd", required=True)
@@ -474,6 +473,18 @@ def dispatch(argv=None):
     p_stock_add.add_argument("--license", required=True, dest="license_id", help="Licence identifier (e.g. CC0)")
     p_stock_add.add_argument("--source-url", required=True, help="Source URL of the asset")
 
+    return parser
+
+
+def dispatch(argv=None):
+    """Parse one `che designer …` invocation and run the selected command.
+
+    Deliberately **undecorated**: ``che designer …`` reaches this through ``che_core.cli``, whose own
+    ``@diagnosed`` wrapper owns failure rendering and is the only layer that saw the global ``--json``.
+    Wrapping here as well would render the failure first — and always as prose, because the flag was
+    consumed by the outer parser. Standalone use goes through :func:`main`, which does wrap.
+    """
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     if args.cmd == "bootstrap":
