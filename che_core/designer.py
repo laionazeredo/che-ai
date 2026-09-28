@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from che_core.diagnostics import diagnosed, fail
+from che_core.output import emit_mapping, print_json
 from che_core.paths import compute_paths, ensure_session_dirs
 
 # Sub-product slug contract: lowercase, digits, dash, underscore; must START with
@@ -55,7 +56,7 @@ def _che_home_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def run_init(worktree_root: str, session_id: str, sub_product: str) -> int:
+def run_init(worktree_root: str, session_id: str, sub_product: str, as_json: bool = False) -> int:
     """F0 Tracer — write the git-native design tree inside the worktree.
 
     PRE: worktree_root exists; session_id is non-empty; sub_product matches _SUB_PRODUCT_SLUG_RE.
@@ -144,15 +145,20 @@ def run_init(worktree_root: str, session_id: str, sub_product: str) -> int:
     except (Exception, SystemExit):
         pass
 
-    print(f"CHE_DESIGN_DIR={design_root}")
-    print(f"CHE_DESIGN_SUB_PRODUCT_DIR={sub_product_dir}")
-    print(f"CHE_DESIGN_TOKENS_FILE={tokens_json}")
-    print(f"CHE_DESIGN_SUB_PRODUCT_DESIGN_MD={sub_design_md}")
-    print(f"CHE_DESIGN_SUB_PRODUCT_TOKENS_FILE={sub_tokens_json}")
+    emit_mapping(
+        {
+            "CHE_DESIGN_DIR": design_root,
+            "CHE_DESIGN_SUB_PRODUCT_DIR": sub_product_dir,
+            "CHE_DESIGN_TOKENS_FILE": tokens_json,
+            "CHE_DESIGN_SUB_PRODUCT_DESIGN_MD": sub_design_md,
+            "CHE_DESIGN_SUB_PRODUCT_TOKENS_FILE": sub_tokens_json,
+        },
+        as_json=as_json,
+    )
     return 0
 
 
-def run_tokens_render(worktree_root: str) -> int:
+def run_tokens_render(worktree_root: str, as_json: bool = False) -> int:
     """F2 Tokens render — re-render DESIGN.md frontmatter + tokens.styles.css from tokens.json.
 
     SPEC §4.2 B-3 (positive): two renders → byte-identical DESIGN.md + tokens.styles.css (idempotent).
@@ -241,12 +247,14 @@ def run_tokens_render(worktree_root: str) -> int:
     styles_path = design_root / "tokens" / "tokens.styles.css"
     styles_path.write_text("\n".join(css_lines) + "\n", encoding="utf-8")
 
-    print(f"CHE_DESIGN_MD={design_md}")
-    print(f"CHE_TOKENS_STYLES_CSS={styles_path}")
+    emit_mapping(
+        {"CHE_DESIGN_MD": design_md, "CHE_TOKENS_STYLES_CSS": styles_path},
+        as_json=as_json,
+    )
     return 0
 
 
-def run_validate(design_md_path: str) -> int:
+def run_validate(design_md_path: str, as_json: bool = False) -> int:
     """F1 Validator — check DESIGN.md against the Stitch DESIGN.md spec.
 
     SPEC §4.2 B-2 (positive): frontmatter + 8 canonical sections in order → exit 0.
@@ -310,12 +318,15 @@ def run_validate(design_md_path: str) -> int:
     if not order_correct and seen:
         issues.append("section order: canonical sections must appear in canonical order")
 
-    print(f"errors={len(issues)}")
-    for issue in issues:
-        print(f"  - {issue}")
-    # Echo canonical sections so callers can grep `## Overview` etc.
-    for s in seen:
-        print(f"## {s}")
+    if as_json:
+        print_json({"errors": len(issues), "issues": issues, "sections": seen})
+    else:
+        print(f"errors={len(issues)}")
+        for issue in issues:
+            print(f"  - {issue}")
+        # Echo canonical sections so callers can grep `## Overview` etc.
+        for s in seen:
+            print(f"## {s}")
 
     return 0 if not issues else 1
 
@@ -338,6 +349,7 @@ def run_stock_add(
     provider: str,
     license_id: str,
     source_url: str,
+    as_json: bool = False,
 ) -> int:
     """F4 Stock asset — copy a downloaded asset into design/assets/ + record provenance.
 
@@ -387,12 +399,14 @@ def run_stock_add(
     else:
         credits.write_text(header + entry, encoding="utf-8")
 
-    print(f"CHE_ASSET_FILE={dest}")
-    print(f"CHE_CREDITS_FILE={credits}")
+    emit_mapping(
+        {"CHE_ASSET_FILE": dest, "CHE_CREDITS_FILE": credits},
+        as_json=as_json,
+    )
     return 0
 
 
-def run_bootstrap(worktree_root: str, session_id: str, mode: str, slug: str):
+def run_bootstrap(worktree_root: str, session_id: str, mode: str, slug: str, as_json: bool = False):
     wt_root = Path(worktree_root).resolve()
 
     if not wt_root.is_dir():
@@ -408,9 +422,9 @@ def run_bootstrap(worktree_root: str, session_id: str, mode: str, slug: str):
 
     design_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"CHE_DESIGN_ROOT={design_root}")
-    print(f"CHE_DESIGN_DIR={design_dir}")
-    print("\nBootstrap complete. Export these variables to use in the subsequent design gates.")
+    emit_mapping({"CHE_DESIGN_ROOT": design_root, "CHE_DESIGN_DIR": design_dir}, as_json=as_json)
+    if not as_json:
+        print("\nBootstrap complete. Export these variables to use in the subsequent design gates.")
 
 
 def build_parser():
@@ -421,6 +435,14 @@ def build_parser():
     arguments. Walking this parser is what lets `che capabilities --json` describe it honestly.
     """
     parser = argparse.ArgumentParser(prog="che designer", description="Che Social UI Designer Helper")
+    # Same question, same answer as the rest of Che (ADR-0004): the global `che --json` is
+    # forwarded here as a leading `--json`, so this parser has to accept it in that position.
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_out",
+        help="Print the result as a JSON object instead of `K=v` lines. Goes before the subcommand.",
+    )
     subparsers = parser.add_subparsers(dest="cmd", required=True)
 
     p_boot = subparsers.add_parser("bootstrap")
@@ -486,21 +508,22 @@ def dispatch(argv=None):
     """
     parser = build_parser()
     args = parser.parse_args(argv)
+    as_json = args.json_out
 
     if args.cmd == "bootstrap":
-        run_bootstrap(args.worktree_root, args.session_id, args.mode, args.slug)
+        run_bootstrap(args.worktree_root, args.session_id, args.mode, args.slug, as_json=as_json)
         return
 
     if args.cmd == "init":
-        rc = run_init(args.worktree_root, args.session_id, args.sub_product)
+        rc = run_init(args.worktree_root, args.session_id, args.sub_product, as_json=as_json)
         sys.exit(rc)
 
     if args.cmd == "validate":
-        rc = run_validate(args.design_md_path)
+        rc = run_validate(args.design_md_path, as_json=as_json)
         sys.exit(rc)
 
     if args.cmd == "tokens" and args.tokens_cmd == "render":
-        rc = run_tokens_render(args.worktree_root)
+        rc = run_tokens_render(args.worktree_root, as_json=as_json)
         sys.exit(rc)
 
     if args.cmd == "stock" and args.stock_cmd == "add":
@@ -510,6 +533,7 @@ def dispatch(argv=None):
             args.provider,
             args.license_id,
             args.source_url,
+            as_json=as_json,
         )
         sys.exit(rc)
 
