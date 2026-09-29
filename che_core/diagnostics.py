@@ -409,6 +409,20 @@ ERROR_CATALOG: Dict[str, ErrorSpec] = dict(
             "AB-4 — asset {name} is not a real image (HTML/placeholder payload); discarded.",
             "The download returned a placeholder page rather than the asset.",
         ),
+        _spec(
+            "WIREFRAME_INVALID",
+            "input",
+            EXIT_USAGE,
+            "{path}: not a usable wireframe — {detail}",
+            "An .excalidraw file is JSON with a non-empty top-level `elements` array.",
+        ),
+        _spec(
+            "THEME_INVALID",
+            "input",
+            EXIT_USAGE,
+            "{path}: not a usable theme — {detail}",
+            "A proposed theme is JSON with a `colors` map of #RRGGBB values.",
+        ),
         # ------------------------------------------------------------------ boundaries
         _spec(
             "STORAGE_BOUNDARY_VIOLATION",

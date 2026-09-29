@@ -302,12 +302,12 @@ che capabilities --json --errors                # + the failure catalogue (§2.2
 | `requires_bound_worktree` | `che worktree add` must have run first; without it the command exits 3.               |
 | `output`                  | Which success shape the command emits **by default** — `json`, `shell`, `kv`, `text`, `prose`, `none`, `stream`. Under `--json` each becomes a JSON value except `none` and `stream` (§2.2). |
 | `stdin`                   | The payload arrives on stdin, not as an argument. Only `write_file_atomic` sets it.   |
-| `arguments[]`             | `name` (longest form), `dest`, `kind` (`positional`\|`option`), `type`, `required`, `default`, `choices` when constrained, `aliases` for the short forms, `nargs` when the argument is optional or takes a list, `const` for what a flag stores when passed. |
+| `arguments[]`             | `name` (longest form), `dest`, `kind` (`positional`\|`option`), `type`, `required`, `default`, `choices` when constrained, `aliases` for the short forms, `group` for a mutually-exclusive set, `nargs` when the argument is optional or takes a list, `const` for what a flag stores when passed. |
 
-`-h`/`--help` is omitted from `arguments` on purpose: it exists on all 46 commands and would be noise.
+`-h`/`--help` is omitted from `arguments` on purpose: it exists on all 49 commands and would be noise.
 
-Sizes are what make progressive disclosure work: **13.7 KB** for the whole surface, **~3 KB** for one
-command, **~29 KB** with `--errors`. Read the compact form first; narrow only when you need arguments.
+Sizes are what make progressive disclosure work: **14.5 KB** for the whole surface, **~2.8 KB** for one
+command, **~31 KB** with `--errors`. Read the compact form first; narrow only when you need arguments.
 
 **Why it cannot drift.** `build_manifest()` walks the live `argparse` parser (`_SubParsersAction`,
 `_actions`, `_mutually_exclusive_groups`) instead of a hand-written table, so it cannot advertise a

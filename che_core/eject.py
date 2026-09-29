@@ -456,7 +456,7 @@ def eject_apply(plan: dict, dry_run: bool = True, confirmed: bool = False, i_kno
     # Final hint
     result["hints"] = [
         "No files were deleted. Moved items are in: " + str(trash_dir),
-        f"To undo: python3 -m che_core.cli eject restore --trash-slug {plan['trash_slug']}",
+        f"To undo: python3 -m che_core.cli eject restore {plan['trash_slug']}",
         "If you also want to remove ~/.che-workspaces/.registry/ (L2 projects), do it manually "
         "(it is blacklisted from eject as it contains project metadata tied to worktrees still in use).",
     ]

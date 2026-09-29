@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "che/wireframe-ir/v1",
+  "title": "Che Wireframe IR (v1)",
+  "description": "Source-agnostic intermediate representation of a wireframe. Produced by `che designer ingest wireframe` (excalidraw). The single contract every source adapter (excalidraw, png, svg, figma) must emit so downstream stages (theme extraction, tokens, screens) stay source-agnostic.",
+  "type": "object",
+  "required": ["version", "source", "frames", "elements", "relations"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "source": {
+      "type": "object",
+      "required": ["format", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "format": { "enum": ["excalidraw", "png", "svg", "figma"] },
+        "name": { "type": "string" }
+      }
+    },
+    "frames": { "type": "array", "items": { "$ref": "#/$defs/element" } },
+    "elements": { "type": "array", "items": { "$ref": "#/$defs/element" } },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from_id", "to_id", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "from_id": { "type": "string", "minLength": 1 },
+          "to_id": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["arrow"] }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "element": {
+      "type": "object",
+      "required": ["id", "type", "bbox", "label", "role"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string" },
+        "bbox": {
+          "type": "object",
+          "required": ["x", "y", "w", "h"],
+          "additionalProperties": false,
+          "properties": {
+            "x": { "type": "number" },
+            "y": { "type": "number" },
+            "w": { "type": "number" },
+            "h": { "type": "number" }
+          }
+        },
+        "label": { "type": ["string", "null"] },
+        "role": { "type": ["string", "null"] }
+      }
+    }
+  }
+}
