@@ -11,6 +11,7 @@
 | Branding | `skills/che-social-ui-designer/SKILL.md` | MODE D — brand discovery → brandbook |
 | Logo & iconography | `skills/che-social-ui-designer/SKILL.md` | MODE D §12 — pure-vector SVG gates |
 | UI web | `skills/che-social-ui-designer/SKILL.md` | MODE B — wireframe → hi-fi → dev-spec |
+| Wireframe ingest → UI | `skills/che-wireframe-to-ui/SKILL.md` | /che-wireframe-to-ui — wireframe + references → tokens.json + DESIGN.md + screens |
 | UI mobile-first | `domains/ux/playbook.md` | breakpoints + responsive layout |
 | Design system | `skills/che-social-ui-designer/SKILL.md` | MODE C — Tailwind 4 ↔ OpenPencil variables |
 | Social | `skills/che-social-ui-designer/SKILL.md` | MODE A — social creatives 1:1 / 9:16 |

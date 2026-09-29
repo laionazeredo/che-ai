@@ -57,3 +57,17 @@ Never attempt a cross-engine conversion.
 - `openpencil` → `skills/che-social-ui-designer/references/backends/OPENPENCIL.md`
 - `penpot` → none. STOP at the refusal above; there is no driver reference to dispatch to yet.
 - `spec-only` → SPEC/dev-spec only; STOP before pixel execution.
+
+## Ingestion front-end sources (wireframe + theme)
+
+The same fail-closed principle governs the ingestion front-end (`skills/che-wireframe-to-ui/SKILL.md`):
+
+- `wireframe_source` ∈ `{ excalidraw, png, svg, figma }` — parsed into the normalised wireframe IR
+  (`domains/ux/templates/wireframe-ir.schema.json`). `.excalidraw` is deterministic
+  (`che designer ingest wireframe`); `png` is a vision pass that must emit the same IR shape and then
+  pass `che designer ir validate`.
+- `theme_source` ∈ `{ url, image_set, tokens_json }` — reduced to a proposed palette and applied with
+  `che designer ingest theme`.
+
+A source is never silently relabelled: an Excalidraw wireframe is not recorded as a Figma one, and a
+proposed theme is validated (`#RRGGBB`) before it touches `tokens.json`.

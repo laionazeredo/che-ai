@@ -397,6 +397,24 @@ COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
         "requires_bound_worktree": False,
         "output": "kv",
     },
+    "designer ingest wireframe": {
+        "summary": "Read an .excalidraw wireframe and write its normalised IR JSON.",
+        "mutates": True,
+        "requires_bound_worktree": False,
+        "output": "kv",
+    },
+    "designer ingest theme": {
+        "summary": "Patch design/tokens/tokens.json with a proposed colour theme.",
+        "mutates": True,
+        "requires_bound_worktree": False,
+        "output": "kv",
+    },
+    "designer ir validate": {
+        "summary": "Validate a normalised wireframe IR JSON. Exit 1 when it is invalid.",
+        "mutates": False,
+        "requires_bound_worktree": False,
+        "output": "prose",
+    },
 }
 
 #: Commands whose real argument surface lives in a different parser, because `cli.py` forwards them
