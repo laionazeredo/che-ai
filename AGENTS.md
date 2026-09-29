@@ -75,9 +75,12 @@ The L1 "workspace" grouping level (`workspaces/<workspace>/<project>/`) was reti
 ### Agent Guidance — Invoke the CLI, do NOT hardcode paths:
 
 - **Discover the surface**: `che capabilities --json` before guessing a flag. It emits every command
-  (`summary`, `mutates`, `requires_bound_worktree`, `output`) straight from the argparse parser that
-  runs them; add `--command "<name>"` for arguments and `--errors` for the failure catalogue. Never
-  infer flags from `--help` prose or from this file.
+  (`summary`, `mutates`, `requires_bound_worktree`, `output`, `stdin`) straight from the argparse parser
+  that runs them; add `--command "<name>"` for arguments and `--errors` for the failure catalogue.
+  Never infer flags from `--help` prose or from this file.
+- **Reach the same surface as MCP tools**: `che mcp serve` speaks JSON-RPC on stdin/stdout, one tool per
+  command, generated from that same manifest. It is not a daemon — the client spawns it as a child and
+  it ends when the pipe closes. See [docs/cli-reference.md §2.4](./docs/cli-reference.md) to register it.
 - **Project creation**: `che project init <repo-path> --slug <slug>` → **never** `mkdir` a project folder by hand. The slug is explicit and mandatory (never inferred), and the path must be a git checkout.
 - **Worktree binding**: `che worktree add <repo-path> --project <slug> --name <name>` → the only way to bind a path. Idempotent: re-running reuses the existing tree.
 - **Config flags**: `che config <session_id> <worktree_root> --lang-chat pt-BR --lang-docs pt-BR` → never edit `registry.jsonl` directly.

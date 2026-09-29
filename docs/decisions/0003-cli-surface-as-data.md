@@ -79,6 +79,6 @@ agent actually has first ("what can I do?") is answered by the cheap one.
 - **The manifest is a contract with agents, not a dump of argparse.** `summary` is written for a
   caller deciding whether this is the command they want, which is deliberately not the terse `help`
   label written for a human scanning a list. The two are allowed to differ.
-- **Still to come, in its own change:** honouring the global `--json` on the success path (today it
-  shapes only the failure channel, because `eval "$(che compute_paths …)"` is a contract with the
-  shell), and the MCP adapter generated from this walk.
+- **Delivered since, in two later changes:** the global `--json` now governs the success path as well
+  as the failure channel (ADR-0004), and the MCP tool list is generated from this same walk
+  (ADR-0005).

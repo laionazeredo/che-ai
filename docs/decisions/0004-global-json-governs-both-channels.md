@@ -79,4 +79,4 @@ nothing at all.**
   the decision: "every command honours `--json`" would be false without it.
 - **No new manifest field.** If the rule under `--json` is uniform, `output` needs no companion flag
   saying whether `--json` applies — a second field would be a second thing to keep true.
-- **Still to come:** the MCP adapter generated from the same walk (ADR-0003).
+- **Delivered since:** the MCP adapter generated from the same walk — ADR-0005.
