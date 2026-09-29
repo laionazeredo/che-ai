@@ -1,0 +1,50 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {
+      "id": "rect-a",
+      "type": "rectangle",
+      "x": 100,
+      "y": 100,
+      "width": 200,
+      "height": 80,
+      "boundElements": [{ "id": "text-a", "type": "text" }]
+    },
+    {
+      "id": "text-a",
+      "type": "text",
+      "x": 120,
+      "y": 130,
+      "width": 160,
+      "height": 25,
+      "text": "Home",
+      "containerId": "rect-a"
+    },
+    { "id": "rect-b", "type": "rectangle", "x": 400, "y": 100, "width": 200, "height": 80 },
+    { "id": "rect-c", "type": "rectangle", "x": 700, "y": 100, "width": 200, "height": 80 },
+    {
+      "id": "arrow-ab",
+      "type": "arrow",
+      "x": 300,
+      "y": 140,
+      "width": 100,
+      "height": 0,
+      "startBinding": { "elementId": "rect-a" },
+      "endBinding": { "elementId": "rect-b" }
+    },
+    {
+      "id": "arrow-bc",
+      "type": "arrow",
+      "x": 600,
+      "y": 140,
+      "width": 100,
+      "height": 0,
+      "startBinding": { "elementId": "rect-b" },
+      "endBinding": { "elementId": "rect-c" }
+    }
+  ],
+  "appState": { "viewBackgroundColor": "#ffffff" },
+  "files": {}
+}

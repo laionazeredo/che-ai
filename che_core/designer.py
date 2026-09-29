@@ -473,6 +473,36 @@ def build_parser():
     p_stock_add.add_argument("--license", required=True, dest="license_id", help="Licence identifier (e.g. CC0)")
     p_stock_add.add_argument("--source-url", required=True, help="Source URL of the asset")
 
+    p_ingest = subparsers.add_parser(
+        "ingest",
+        help="F0 Ingest — read an external wireframe into the normalised IR (B-1 + AB-1).",
+    )
+    p_ingest_sub = p_ingest.add_subparsers(dest="ingest_cmd", required=True)
+    p_ingest_wf = p_ingest_sub.add_parser(
+        "wireframe",
+        help="Read an .excalidraw file and write its normalised IR (B-1).",
+    )
+    p_ingest_wf.add_argument("wireframe_path", help="Absolute path to an .excalidraw file")
+    p_ingest_wf.add_argument("--out", required=True, help="Absolute path to write the IR JSON")
+    p_ingest_theme = p_ingest_sub.add_parser(
+        "theme",
+        help="F1 Ingest theme — patch design/tokens/tokens.json with proposed colours (B-3 + AB-2).",
+    )
+    p_ingest_theme.add_argument("worktree_root", help="Absolute path to the user worktree")
+    p_ingest_theme.add_argument("--sub-product", required=True, help="Sub-product slug")
+    p_ingest_theme.add_argument("--colors", required=True, help="Absolute path to the proposed colours JSON")
+
+    p_ir = subparsers.add_parser(
+        "ir",
+        help="F1 IR — validate a normalised wireframe IR (B-2).",
+    )
+    p_ir_sub = p_ir.add_subparsers(dest="ir_cmd", required=True)
+    p_ir_validate = p_ir_sub.add_parser(
+        "validate",
+        help="Validate an IR JSON against the wireframe IR contract (B-2).",
+    )
+    p_ir_validate.add_argument("ir_path", help="Absolute path to an IR JSON file")
+
     return parser
 
 
@@ -511,6 +541,24 @@ def dispatch(argv=None):
             args.license_id,
             args.source_url,
         )
+        sys.exit(rc)
+
+    if args.cmd == "ingest" and args.ingest_cmd == "wireframe":
+        from che_core.designer_ingest import ingest_wireframe
+
+        rc = ingest_wireframe(args.wireframe_path, args.out)
+        sys.exit(rc)
+
+    if args.cmd == "ingest" and args.ingest_cmd == "theme":
+        from che_core.designer_ingest import ingest_theme
+
+        rc = ingest_theme(args.worktree_root, args.sub_product, args.colors)
+        sys.exit(rc)
+
+    if args.cmd == "ir" and args.ir_cmd == "validate":
+        from che_core.designer_ingest import validate_ir
+
+        rc = validate_ir(args.ir_path)
         sys.exit(rc)
 
 
