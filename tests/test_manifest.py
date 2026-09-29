@@ -21,6 +21,7 @@ from che_core.cli import build_parser
 from che_core.diagnostics import ERROR_CATALOG
 from che_core.manifest import (
     COMMAND_SEMANTICS,
+    COMMANDS_READING_STDIN,
     DELEGATED_PARSERS,
     EXIT_CODES,
     OUTPUT_SHAPES,
@@ -197,6 +198,47 @@ def test_an_alias_is_reported_against_its_canonical_name() -> None:
     assert commands["project create"]["aliases"] == ["add", "init"]
     assert commands["update"]["aliases"] == ["self-update", "upgrade"]
     assert "add" not in commands, "an alias must not appear as a command of its own"
+
+
+def test_a_variable_count_argument_is_exported_so_a_schema_can_see_the_list() -> None:
+    """`--bind` takes many values and `suffix` may be absent.
+
+    Both are invisible in the other fields: `type` is `str` for a scalar and for a list alike, so a
+    schema generator that could not see `nargs` would describe an array as a string.
+    """
+    assert _arguments(_detailed("state query"))["--bind"]["nargs"] == "*"
+    assert _arguments(_detailed("output_path"))["suffix"]["nargs"] == "?"
+
+
+def test_a_flag_states_what_passing_it_stores_so_a_pair_can_be_told_apart() -> None:
+    """`--dry-run` and `--apply` share a `dest` and report the same default.
+
+    `const` is the only field that says which of them turns the setting on, and without it a schema
+    would offer one property that cannot express both requests.
+    """
+    restore = _arguments(_detailed("eject restore"))
+
+    assert restore["--dry-run"]["const"] is True
+    assert restore["--apply"]["const"] is False
+    assert restore["--dry-run"]["dest"] == restore["--apply"]["dest"] == "dry_run"
+
+
+def test_a_command_that_reads_stdin_says_so() -> None:
+    """A pipe and a positional look the same to argparse, and they are not the same to a caller.
+
+    One that speaks a protocol with no stdin would otherwise write an empty file and report it as a
+    success, which is the worst available outcome.
+    """
+    commands = _commands()
+
+    assert commands["write_file_atomic"]["stdin"] is True
+    assert commands["registry_append"]["stdin"] is False
+
+
+def test_no_stdin_declaration_outlives_its_command() -> None:
+    stale = sorted(COMMANDS_READING_STDIN - set(_commands()))
+
+    assert not stale, f"COMMANDS_READING_STDIN names commands that do not exist: {stale}"
 
 
 # ---------------------------------------------------------------------------------------------

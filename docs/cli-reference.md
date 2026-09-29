@@ -168,6 +168,7 @@ pip uninstall che-ai
 | Group          | Subcommands                                                         | Scope    | Surface      |
 | :------------- | :------------------------------------------------------------------ | :------- | :----------- |
 | `capabilities` | (flags: `--command`, `--errors`, `--json`) — see §2.3               | All      | Terminal CLI |
+| `mcp`          | `serve` (no flags) — see §2.4                                       | All      | stdio (MCP)  |
 | `project`      | `create` (`add`, `init`), `list`, `remove`, `restore`, `trash-list` | Project  | Terminal CLI |
 | `worktree`     | `add`, `list`, `show`, `remove`                                     | Worktree | Terminal CLI |
 | `config`       | (flags: `--lang-chat`, `--lang-docs`, `--lang-report`, `--pt-check`, `--flags`) | Session | Terminal CLI |
@@ -246,10 +247,12 @@ command's default shape; see the scope note below and §2.3.
 > | A bare path | `output_path` | One value, printed to be captured. |
 > | Prose | `config`, `export`, a few confirmations | Written for a human reading a terminal. |
 > | Nothing | `ensure_dirs`, `write_file_atomic`, `assert_outside_worktree`, `registry_append`, `decision_append` | The side effect *is* the result; exit 0 says it happened. |
+> | A protocol | `mcp serve` | The command *is* the server: it answers many requests on stdin and returns once, when its pipe closes (§2.4). |
 >
-> Under `--json` every row above renders as a JSON value, except the last: a command with no result
+> Under `--json` every row above renders as a JSON value, except the last two: a command with no result
 > has nothing to report, and inventing `{"status":"ok"}` would not match the domain payloads the
-> always-JSON commands return. **The defaults do not move**, so the ~30 recipes that do
+> always-JSON commands return; a command that never returns has no single value to render at all.
+> **The defaults do not move**, so the ~30 recipes that do
 > `eval "$(che compute_paths …)"` are unaffected — none of them passes `--json`, which was verified
 > by searching for the flag next to every recipe rather than assumed from the fact that they work.
 >
@@ -297,13 +300,14 @@ che capabilities --json --errors                # + the failure catalogue (§2.2
 | `summary`                 | One sentence stating what the command does — enough to decide whether to run it.      |
 | `mutates`                 | The command writes state. A caller checks this before running it unattended.          |
 | `requires_bound_worktree` | `che worktree add` must have run first; without it the command exits 3.               |
-| `output`                  | Which success shape the command emits **by default** — `json`, `shell`, `kv`, `text`, `prose`, `none`. Under `--json` each becomes a JSON value except `none` (§2.2). |
-| `arguments[]`             | `name` (longest form), `dest`, `kind` (`positional`\|`option`), `type`, `required`, `default`, `choices` when constrained, `aliases` for the short forms, `group` for a mutually-exclusive set. |
+| `output`                  | Which success shape the command emits **by default** — `json`, `shell`, `kv`, `text`, `prose`, `none`, `stream`. Under `--json` each becomes a JSON value except `none` and `stream` (§2.2). |
+| `stdin`                   | The payload arrives on stdin, not as an argument. Only `write_file_atomic` sets it.   |
+| `arguments[]`             | `name` (longest form), `dest`, `kind` (`positional`\|`option`), `type`, `required`, `default`, `choices` when constrained, `aliases` for the short forms, `group` for a mutually-exclusive set, `nargs` when the argument is optional or takes a list, `const` for what a flag stores when passed. |
 
-`-h`/`--help` is omitted from `arguments` on purpose: it exists on all 45 commands and would be noise.
+`-h`/`--help` is omitted from `arguments` on purpose: it exists on all 49 commands and would be noise.
 
-Sizes are what make progressive disclosure work: **12.7 KB** for the whole surface, **~2 KB** for one
-command, **~29 KB** with `--errors`. Read the compact form first; narrow only when you need arguments.
+Sizes are what make progressive disclosure work: **14.5 KB** for the whole surface, **~2.8 KB** for one
+command, **~31 KB** with `--errors`. Read the compact form first; narrow only when you need arguments.
 
 **Why it cannot drift.** `build_manifest()` walks the live `argparse` parser (`_SubParsersAction`,
 `_actions`, `_mutually_exclusive_groups`) instead of a hand-written table, so it cannot advertise a
@@ -319,6 +323,41 @@ An unknown `--command` is a catalogued failure, not a traceback:
 che --json capabilities --command "worktree destroy"
 # → {"status":"error","code":"UNKNOWN_COMMAND","exit_code":2,"next_actions":["che capabilities"], …}
 ```
+
+### 2.4 The same surface over MCP — `che mcp serve`
+
+An MCP client can call the whole surface as tools. The list is **generated from the same manifest**, so
+it is the commands above and nothing else — no second declaration to keep in step.
+
+```bash
+che mcp serve          # speaks JSON-RPC 2.0 on stdin/stdout until the pipe closes
+```
+
+It is **not a daemon**: there is no port, no listener and no state that outlives the session. The MCP
+client launches the process as a child and talks to it over the pipe it already owns; when the client
+exits, the pipe closes and the process ends. Nothing needs supervising, and Che keeps working exactly
+as before if the server is never started — the CLI is still the interface.
+
+Each tool call is translated back into the argv you would have typed and run as a child process
+(`python -m che_core.cli --json …`), so a tool and its command can never behave differently. The
+child's exit code becomes `isError`, and its stdout becomes both the text block and the structured
+content (wrapped under `result`, because MCP requires an object and several commands return lists).
+
+To register it, add one entry to the client's MCP config — `che` must be on `PATH`:
+
+```jsonc
+// ~/.claude.json  ·  ~/.cursor/mcp.json  (both take the same shape)
+{ "mcpServers": { "che": { "command": "che", "args": ["mcp", "serve"] } } }
+```
+
+```bash
+claude mcp add che -- che mcp serve      # Claude Code can also do it for you
+```
+
+Tool names are the command paths with `-` and spaces as `_`: `che worktree add` → `worktree_add`,
+`che eject trash-list` → `eject_trash_list`. `mcp serve` itself is not a tool — it never returns.
+Nothing is auto-registered by the installers: spawning a process on every session start is your
+decision, not theirs (ADR-0005).
 
 ---
 

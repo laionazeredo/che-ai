@@ -100,7 +100,7 @@ EXIT_CODES: Tuple[Dict[str, Any], ...] = (
 )
 
 #: The values ``output`` may take — what lands on stdout, so a caller knows what it is parsing.
-OUTPUT_SHAPES = ("json", "shell", "kv", "text", "prose", "none")
+OUTPUT_SHAPES = ("json", "shell", "kv", "text", "prose", "none", "stream")
 
 #: What argparse cannot know: the consequence of running a command.
 #:
@@ -115,7 +115,8 @@ OUTPUT_SHAPES = ("json", "shell", "kv", "text", "prose", "none")
 #: * ``requires_bound_worktree`` — does it need a path already bound via ``che worktree add``?
 #: * ``output`` — what lands on stdout, so a caller knows what it is parsing:
 #:   ``json`` (a JSON value) · ``shell`` (`export K="v"` lines, for `eval`) · ``kv`` (`K=v` lines) ·
-#:   ``text`` (one bare value) · ``prose`` (human text, not for parsing) · ``none`` (nothing).
+#:   ``text`` (one bare value) · ``prose`` (human text, not for parsing) · ``none`` (nothing) ·
+#:   ``stream`` (a protocol that does not return, e.g. the MCP server).
 COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
     # --- plumbing ---------------------------------------------------------------
     "compute_paths": {
@@ -177,6 +178,14 @@ COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
         "mutates": False,
         "requires_bound_worktree": False,
         "output": "json",
+    },
+    "mcp serve": {
+        "summary": "Serve the same surface over the Model Context Protocol on stdin/stdout, until closed.",
+        "mutates": False,
+        "requires_bound_worktree": False,
+        # The one command that is a protocol rather than a program: it answers many requests and
+        # returns once. The MCP adapter reads this and leaves it out of its own tool list.
+        "output": "stream",
     },
     # --- portability ------------------------------------------------------------
     "export": {
@@ -417,6 +426,11 @@ COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+#: Commands whose payload arrives on stdin instead of as an argument. argparse cannot see this — a
+#: pipe and a positional look the same to it — and a caller that speaks a protocol with no stdin
+#: (the MCP adapter) has to know, or it would write an empty file and report it as a success.
+COMMANDS_READING_STDIN = frozenset({"write_file_atomic"})
+
 #: Commands whose real argument surface lives in a different parser, because `cli.py` forwards them
 #: verbatim before argparse runs (argparse cannot forward leading optionals through a subparser —
 #: bpo-17050). Without this the manifest would describe `designer` as taking no arguments at all,
@@ -533,8 +547,17 @@ def _describe_argument(argument: argparse.Action) -> Dict[str, Any]:
 
     if argument.choices is not None:
         described["choices"] = [str(choice) for choice in argument.choices]
-    if isinstance(argument.nargs, int) and argument.nargs > 0:
-        described["nargs"] = argument.nargs
+    if argument.nargs == 0 and hasattr(argument, "const"):
+        # What *passing* the flag stores. `store_true` stores True, `store_false` stores False, and
+        # when two flags share a `dest` — a `--dry-run` / `--apply` pair — this is the only thing
+        # that tells them apart: both report `dest: dry_run` and the same `default`.
+        described["const"] = _jsonable(argument.const)
+    # argparse leaves `nargs` as None for the single-value case, and `0` for a flag — which `type`
+    # already reports as `boolean`. Everything else changes what the caller must supply: `?` makes a
+    # positional optional, `*` and `+` make the value a list, and a number fixes the count. A schema
+    # generator that cannot see this would describe an array as a scalar.
+    if argument.nargs is not None and argument.nargs != 0:
+        described["nargs"] = argument.nargs if isinstance(argument.nargs, int) else str(argument.nargs)
     if argument.default is not argparse.SUPPRESS and argument.default is not None:
         described["default"] = _jsonable(argument.default)
     if argument.help:
@@ -581,6 +604,7 @@ def _describe_command(
         "mutates": semantics.get("mutates"),
         "requires_bound_worktree": semantics.get("requires_bound_worktree"),
         "output": semantics.get("output"),
+        "stdin": name in COMMANDS_READING_STDIN,
     }
     if include_arguments:
         described["arguments"] = _describe_arguments(parser)

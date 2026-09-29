@@ -170,7 +170,11 @@ def build_parser():
     beside a hand-written parser would be a second source of truth, and the drift between them is the
     class of bug this arrangement makes impossible rather than merely detectable.
     """
-    parser = argparse.ArgumentParser(description="Che Core CLI")
+    # `prog` is named rather than left to `sys.argv[0]`: the same parser is reached as `che`,
+    # as `che-ai`, and as `python -m che_core.cli`, and usage text that names the launcher instead
+    # of the program is a puzzle for whoever reads it — including the MCP adapter, which spawns the
+    # module form and would otherwise report `usage: cli.py …` to a caller who never typed that.
+    parser = argparse.ArgumentParser(prog="che", description="Che Core CLI")
     # One flag an agent can always pass, whatever the command: `che --json <anything>`.
     # The per-subcommand `--json` flags keep working unchanged, so no existing caller breaks.
     parser.add_argument(
@@ -199,6 +203,17 @@ def build_parser():
         help="Also include the failure catalogue. Omitted by default; a caller holding a failure already has its remedy.",
     )
     parser_caps.add_argument("--json", action="store_true", dest="json_out", help="Print the manifest as JSON.")
+
+    # mcp — the same surface again, in the dialect a Model Context Protocol client reads.
+    parser_mcp = subparsers.add_parser(
+        "mcp",
+        help="Serve the CLI surface over the Model Context Protocol (stdio).",
+    )
+    mcp_subs = parser_mcp.add_subparsers(dest="mcp_cmd", required=True)
+    mcp_subs.add_parser(
+        "serve",
+        help="Speak JSON-RPC on stdin/stdout until the client closes the pipe. Never returns on its own.",
+    )
 
     # paths
     parser_paths = subparsers.add_parser("compute_paths")
@@ -783,6 +798,14 @@ def main(argv=None):
                 aliases = f"  (aliases: {', '.join(command['aliases'])})" if command["aliases"] else ""
                 print(f"{command['name']}{aliases}")
                 print(f"    {command['summary']}")
+        return
+
+    if args.command == "mcp":
+        # Imported here rather than at module scope: the adapter is only needed by the one command
+        # that runs it, and it pulls in nothing else Che does not already use.
+        from che_core.mcp_server import serve
+
+        serve()
         return
 
     if args.command == "compute_paths":
