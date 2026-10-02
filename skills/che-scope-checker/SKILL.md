@@ -462,21 +462,23 @@ Each NEW env var vs diff marked:
 
 ---
 
-## 6. CHECK 5 — 🧩 LEAN / KISS / YAGNI — Overengineering Scanner (12 generic categories L1-L12 + 13 Ousterhout RED FLAGS Appendix D)
+## 6. CHECK 5 — 🧩 LEAN / KISS / YAGNI — Overengineering Scanner (13 generic categories L1-L13 + 13 Ousterhout RED FLAGS Appendix D)
 
 > **New pillar introduced 2026-09.** Combats LLM overengineering by default. Every line of new code must justify its existence against the explicit scope of the diff. NOT "clean code personal taste"; it is YAGNI + blast-radius reduction + reuse-before-create from engineering-contracts §1 §4.
 >
-> **Ousterhout integration (APoSD canonical Appendix D):** After running the 12 categories L1-L12, also apply the 13 RED FLAGS from Appendix D (D.1). Same finding format with same AC scope justifier downgrade. Default severity in scope-checker: HIGH (RF01-RF04), MEDIUM (RF05-RF13). Cross-reference with che-code-review findings in ship gate.
+> **Simplicity Bias (engineering-contracts §1 — the touchstone):** also weigh **reversibility** (cheap to change or undo) and **observability** (cheap to see in production). A solution that is complete but hard to reverse, or blind at the seam it touches, is a finding even when it has no unused abstraction (L13).
+>
+> **Ousterhout integration (APoSD canonical Appendix D):** After running the 13 categories L1-L13, also apply the 13 RED FLAGS from Appendix D (D.1). Same finding format with same AC scope justifier downgrade. Default severity in scope-checker: HIGH (RF01-RF04), MEDIUM (RF05-RF13). Cross-reference with che-code-review findings in ship gate.
 
 ### 6.0 Pre-step — Automatic scope justifier (downgrade severity when abstraction is requested in scope)
 
-Before applying the 12 categories, build:
+Before applying the 13 categories, build:
 - `SET_AC_SCOPED_KEYWORDS`: all behavioural keywords from CHECK 1 ACs that mention "extensibility / multiple backends / strategy / abstract X / replace Y with Z in the future" / items that EXPLICITLY request flexibility.
-- For each L1-L12 finding:
+- For each L1-L13 finding:
   - IF finding matches ANY keyword in SET_AC_SCOPED_KEYWORDS → **DOWNGRADE 1 level of severity AUTOMATICALLY** (HIGH→MEDIUM, MEDIUM→LOW, LOW→INFO allowlisted in report). The abstraction was requested in the scope; it is not overengineering.
   - IF NOT matched → original severity.
 
-### 6.1 Procedure per category — 12 mandatory checks
+### 6.1 Procedure per category — 13 mandatory checks
 
 For EACH category below, apply steps on the cumulative diff (NEW + MODIFIED files, NOT entire repo).
 
@@ -494,6 +496,7 @@ For EACH category below, apply steps on the cumulative diff (NEW + MODIFIED file
 | L10 | Dead code comment-out / `// TODO` without #ticket number / `FIXME` without reference | MEDIUM if TODO/FIXME without ticket; LOW for commented dead code | 1. Regex `/\/\/\s*TODO(?!\s*[:(]?\s*[A-Z]{2,}-?\d+)/` (TODO without ticket). 2. Regex `\/\*[\s\S]*?\*\/` commented blocks with syntactically valid code (not docstring). 3. Commented blocks + TODO without id → flag L10. |
 | L11 | Function parameter that ALL diff call sites pass the SAME hardcoded value | MEDIUM | 1. For each new/modified exported function: list params. 2. For each non-trivial param that is not last: grep all call sites in diff. 3. 100% of calls pass exact same literal value (e.g.: all `fn(..., "gbp")`). 4. No call site uses another value. → flag L11. |
 | L12 | Lookup table / Record / Config table with only 1 ENTRY | LOW (except if 1 entry + >30 lines total block → MEDIUM) | 1. Regex `=\s*\{\s*\w+\s*:\s*` + close brace in < 5 lines AFTER → only 1 key. 2. `Record<K,V>` + initialization only 1 key. 3. No other key added in other diff files. → flag L12. |
+| L13 | Premature completeness: edge-case / error-branch / validation / fallback handling with NO current AC demand (Simplicity Bias, engineering-contracts §1) | MEDIUM (HIGH if it adds a new dependency or module to support a case no AC requires) | 1. For each NEW branch / `try-catch` / validation / fallback / extra param in the diff, check if ANY CHECK 1 AC demands it. 2. If NONE demands it AND the SPEC §1 Non-goals lists it as deferred by design → flag L13. 3. Remedy = defer + record, do NOT implement. |
 
 ### 6.2 CHECK 5 report format — 4-column RULE 7.9 table
 
