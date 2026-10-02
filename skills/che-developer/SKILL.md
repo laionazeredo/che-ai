@@ -220,6 +220,7 @@ Rules from engineering-contracts are ACTIVE:
 - Immutable, declarative (map/filter/reduce) over mutable loops
 - Strong TS (or equivalent for the language)
 - **Reuse before create** — if Q2 found reusable code, use it
+- **Simplicity Bias (engineering-contracts §1)** — when solutions compete, take the smallest-first, most reversible, most observable one; DEFER edge cases / generalisations no current AC demands and record each deferral (never a silent omission)
 
 ### 3.5 Refactor (green → clean)
 
@@ -283,6 +284,7 @@ Append a `## Dev Pre-Report` section to the task envelope file:
 - [ ] Refactor pass (only after green)
 - [ ] Max 2 consecutive comment lines per file block (engineering-contracts §16) OR decision.log exception logged
 - [ ] Agile BDD smallest increment delivered — no scope creep, no future anticipation (engineering-contracts §15)
+- [ ] Simplicity Bias applied — smallest-first / most-reversible option chosen; deferred items recorded (engineering-contracts §1)
 - [ ] Blast radius ≤ 10 files OR exception logged + SM-approved
 - [ ] All touched files in blast-radius list OR exception logged
 - [ ] No new dependencies added without checking reuse (Q2)
