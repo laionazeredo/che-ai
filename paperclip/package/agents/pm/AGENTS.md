@@ -4,6 +4,7 @@ title: Product Manager (Che orchestrator)
 skills:
   - che-act
   - che-pair
+  - che-simplify
   - che-spec
   - che-plan
   - che-onboarding

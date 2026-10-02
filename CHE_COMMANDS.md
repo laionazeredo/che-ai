@@ -13,7 +13,7 @@ The agent MUST recognise these and react immediately.
 > **Conceptual difference:** Commands = UX entry point (slash `/che-X`) ↔ Skills = content/executor of work.
 > DO NOT turn ALL commands into skills. The separation below is intentional (KISS).
 
-### Category A — 22 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
+### Category A — 29 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
 | Command | Skill / module | Why separate wrapper? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
@@ -27,6 +27,8 @@ The agent MUST recognise these and react immediately.
 | `/che-ship` | `che-ship` | Worktree preflight + `gh auth` + no-secret-staged check → skill commits/push/PR. |
 | `/che-fix` | `che-debugger-bugfix` | Worktree preflight + capture 4 required inputs → skill runs scientific debug loop. |
 | `/che-review` | `che-code-review` | Preflight `gh auth` + parseable PR URL → skill pulls diff + metadata + 4-category review. |
+| `/che-simplify [target] [--goals=...]` | `che-simplify` | Plan reduction under fixed goals: classifies essential vs accidental complexity, proposes the smallest plan that still meets the goals, with a decision trail. Target = task-graph / gh-stack / spec / worktree. |
+| `/che-refactor <worktree> --scope=...` | `che-refactor` | Behaviour-preserving refactoring (Fowler). Precondition: green test safety net (missing coverage → characterization tests first). Never runs inside /che-ship. |
 | `/che-explain` | `che-explain` | Input preflight (gh auth for PR / MCP for ticket / worktree for branch) → DIDACTIC explanation with Mermaid diagrams + attention points. Default = simple and short; `--deep` = technical depth (3 diagrams, walkthrough, design decisions, contracts, edge cases, how to test). DIFFERENT from /che-review (blocking verdict) and /che-spec (formal plan). |
 | `/che-manual-test` | `che-manual-test-executor` | Worktree preflight + §19 session binding + finds manual_test_plan.md via --task-id or --plan-path → mandatory setup approval GATE → executes steps via Playwright MCP + screenshot evidence + final 8-section report. DIFFERENT from /che-qa (QA = only automated build/lint/test commands; Manual = step-by-step browser with evidence). |
 | `/che-pr-comments` | `che-pr-comments` | Preflight `gh auth` + PR URL → skill downloads comments + classification + triage. |

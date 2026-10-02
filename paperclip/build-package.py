@@ -64,6 +64,7 @@ AGENT_SKILLS = {
     "pm": [
         "che-act",
         "che-pair",
+        "che-simplify",
         "che-spec",
         "che-plan",
         "che-onboarding",
@@ -82,6 +83,7 @@ AGENT_SKILLS = {
     "engineer": [
         "engineering-contracts",
         "che-developer",
+        "che-refactor",
         "che-graph",
         "che-merge-resolver",
         "che-debugger-bugfix",
