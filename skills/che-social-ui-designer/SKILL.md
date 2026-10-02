@@ -239,6 +239,8 @@ Goal: Deep brand discovery → validated briefing → 3 logo concepts (low-fidel
 ## ✅ 4. QUALITY GATES (HARD FAIL if not passed → fix before delivery)
 All gates 1-7 apply to **ANY MODE** and **every final stage**. Gates D1-D5 are **MODE D exclusive (HARD)**:
 
+> **Simplicity Bias (engineering-contracts §1):** propose the smallest-first, most reversible, most observable design. Defer variants, edge-case polish and extras no current spec demands — record them as deferred, do not build them in this iteration.
+
 ### Global gates (all modes)
 1. **WCAG AA CONTRAST**: Body text ≥ 4.5:1; large text ≥ 3:1. Check with `analyze_colors` MCP if in doubt. Dark overlay mandatory if white text + bright photo.
 2. **VALIDATED IMAGES**: (a) `unique colors > 25,000` (§3.3) PER PIECE expecting photo; (b) NO endpoint placeholder (check bytes + MD5); (c) Photo theme matches piece.

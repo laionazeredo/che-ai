@@ -112,6 +112,7 @@ Print the results of the creation:
 - **BDD Check**: Every sub-task MUST have at least one B-ID or AB-ID mapped to a BDD scenario.
 - **Dependency Check**: Epic MUST have at least one dependency link between sub-tasks if `count > 1`.
 - **Language Consistency**: Do not mix languages in the same field.
+- **Simplicity Bias Check (engineering-contracts §1)**: Prefer the smallest slice that delivers the behaviour; do NOT split or add sub-tasks for completeness. A sub-task MUST NOT carry edge cases the SPEC §1 Non-goals deferred by design.
 - **🔴 Gate #4: Vertical Decomposition Compliance (G-VS-2 — CANONICAL #0)**: Run ALL 5 sub-checks below. Any fail → HARD STOP before tool tickets are created; return structured error to user.
   1. **Every sub-task has Vertical Slice Ref filled**: Parse `> **🔴 Vertical Slice Ref (CANONICAL #0)**:` line in every ticket template. If any is empty, `TODO`, or does not match a valid ID from SPEC §4.5 table → FAIL: "Sub-task TITLE missing or invalid Vertical Slice Ref. Must be exactly F0 or F1..FN from the approved SPEC §4.5 VERTICAL SLICES table."
   2. **Sub-task count = SPEC slice count**: If Epic structure: count of sub-tasks generated MUST EQUAL count of non-empty rows in SPEC §4.5 VERTICAL SLICES table. If override case (H-OVERRIDE tickets): slice count may be ≤ 1 per H-OVERRIDE-* tag suffix. Otherwise FAIL: "Number of sub-tasks ($N) ≠ number of slices in §4.5 table ($M). 1 sub-task per vertical slice is the canonical rule. Either add the missing slices to §4.5 table in SPEC or declare override."
