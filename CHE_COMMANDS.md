@@ -13,7 +13,7 @@ The agent MUST recognise these and react immediately.
 > **Conceptual difference:** Commands = UX entry point (slash `/che-X`) ↔ Skills = content/executor of work.
 > DO NOT turn ALL commands into skills. The separation below is intentional (KISS).
 
-### Category A — 24 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
+### Category A — 29 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
 | Command | Skill / module | Why separate wrapper? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |

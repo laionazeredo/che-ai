@@ -7,6 +7,7 @@ nothing at runtime, so these assertions are the only thing that turns silent dri
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -62,6 +63,26 @@ def test_che_commands_lists_both() -> None:
 
     assert "/che-simplify" in commands
     assert "/che-refactor" in commands
+
+
+def _category_a_counts(text: str) -> tuple[int, int]:
+    """Return (advertised, actual) row counts for the Category A table."""
+    lines = text.splitlines()
+    heading = next(line for line in lines if line.startswith("### Category A"))
+    advertised = int(re.search(r"\d+", heading).group())
+    actual = 0
+    for line in lines[lines.index(heading) + 1 :]:
+        if line.startswith("###"):
+            break
+        if line.startswith("| `/che-"):
+            actual += 1
+    return advertised, actual
+
+
+def test_che_commands_advertised_count_matches_the_table() -> None:
+    advertised, actual = _category_a_counts(_read("CHE_COMMANDS.md"))
+
+    assert advertised == actual, f"CHE_COMMANDS.md advertises {advertised} heavy commands but lists {actual} rows"
 
 
 @pytest.mark.parametrize("skill", ["che-simplify", "che-refactor"])
