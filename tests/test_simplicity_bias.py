@@ -2,11 +2,13 @@
 
 The bias is a *rule*, so deleting it breaks nothing at runtime: planning silently drifts back to
 maximalist solutions and no test goes red. These assertions turn that silence into a CI failure.
-They are deliberately narrow — they pin the canonical body and its references, not the prose.
+They pin the canonical body, a real reference at every decision point, and the Paperclip mirror —
+not the prose around them.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -29,8 +31,23 @@ REFERENCING_FILES = [
     "skills/che-social-ui-designer/SKILL.md",
 ]
 
-#: The ordered criteria the bias must state — and must state in this priority order.
+#: The ordered criteria the canonical body must state — and must state in this priority order.
 ORDERED_CRITERIA = ["Smallest first increment", "Most reversible", "Most observable"]
+
+#: A reference to the canonical rule, tolerant of markdown/backticks around the section sign.
+CANONICAL_REF = re.compile(r"engineering-contracts\W{0,3}§1", re.IGNORECASE)
+
+#: Skills mirrored into the Paperclip package that must carry the same reference.
+PACKAGED_SKILLS = [
+    "che-spec",
+    "che-architect",
+    "che-plan",
+    "che-act",
+    "che-developer",
+    "che-scope-checker",
+    "che-code-review",
+    "che-social-ui-designer",
+]
 
 
 def _read(relative: str) -> str:
@@ -58,5 +75,30 @@ def test_bias_never_overrides_security() -> None:
 
 
 @pytest.mark.parametrize("relative", REFERENCING_FILES)
-def test_every_decision_point_references_the_bias(relative: str) -> None:
-    assert "simplicity bias" in _read(relative).lower(), f"{relative} no longer references the Simplicity Bias"
+def test_every_decision_point_references_the_canonical_rule(relative: str) -> None:
+    mentions = [line for line in _read(relative).splitlines() if "simplicity bias" in line.lower()]
+
+    assert mentions, f"{relative} no longer mentions the Simplicity Bias"
+    assert any(CANONICAL_REF.search(line) for line in mentions), (
+        f"{relative} mentions the Simplicity Bias without referencing engineering-contracts §1"
+    )
+
+
+@pytest.mark.parametrize("relative", REFERENCING_FILES)
+def test_referencing_files_do_not_duplicate_the_canonical_body(relative: str) -> None:
+    lowered = _read(relative).lower()
+    restated = [criterion for criterion in ORDERED_CRITERIA if criterion.lower() in lowered]
+
+    assert not restated, f"{relative} restates the canonical body instead of referencing it: {restated}"
+
+
+def test_paperclip_package_mirrors_the_canonical_bias() -> None:
+    assert "SIMPLICITY BIAS" in _read("paperclip/package/skills/engineering-contracts/SKILL.md")
+
+
+@pytest.mark.parametrize("skill", PACKAGED_SKILLS)
+def test_paperclip_package_skills_reference_the_bias(skill: str) -> None:
+    packaged = _read(f"paperclip/package/skills/{skill}/SKILL.md")
+
+    assert "simplicity bias" in packaged.lower(), f"packaged {skill} is out of sync with skills/{skill}"
+    assert CANONICAL_REF.search(packaged), f"packaged {skill} lost the engineering-contracts §1 reference"
