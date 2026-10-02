@@ -23,6 +23,8 @@ SIMPLIFY_ANCHORS = [
     "Accidental",
     "Decision trail",
     "Never cut essential complexity",
+    "che compute_paths",
+    "CHE_WORKSPACE_SHARED",
 ]
 
 REFACTOR_ANCHORS = [
@@ -31,6 +33,8 @@ REFACTOR_ANCHORS = [
     "must be green",
     "NEVER inside `che-ship`",
     "Measurable target",
+    "che compute_paths",
+    "CHE_WORKSPACE_SHARED",
 ]
 
 COMMANDS = {
