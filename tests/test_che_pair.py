@@ -26,6 +26,9 @@ CONTRACT_ANCHORS = [
     "CRITICAL",
     "deferred by design",
     "ESCALATION MENU",
+    "che compute_paths",
+    "CHE_WORKSPACE_SHARED",
+    "stdin",
 ]
 
 #: Files that must reference the pair at their decision point.
