@@ -229,6 +229,13 @@ Only now:
 - Extract small helpers if readability suffers
 - Add missing inline type narrowing
 
+### 3.6 Slice boundary — return control for pair review
+
+When the task is decomposed into vertical slices (SPEC §4.5), implement ONE slice at a time. When the
+current slice's tests are green, **STOP and return control to the SM** so `che-pair` can review that
+slice before you start the next one. Do NOT start the next slice until the pair returns `PASS` (or the
+finding is resolved / escalated per the `che-pair` §7 menu).
+
 ---
 
 ## 4. STEP 3 — BLAST RADIUS SELF-CHECK (hard gate)
@@ -285,6 +292,7 @@ Append a `## Dev Pre-Report` section to the task envelope file:
 - [ ] Max 2 consecutive comment lines per file block (engineering-contracts §16) OR decision.log exception logged
 - [ ] Agile BDD smallest increment delivered — no scope creep, no future anticipation (engineering-contracts §15)
 - [ ] Simplicity Bias applied — smallest-first / most-reversible option chosen; deferred items recorded (engineering-contracts §1)
+- [ ] Worked slice-by-slice; returned control at each slice boundary for `che-pair` (SPEC §4.5 tasks)
 - [ ] Blast radius ≤ 10 files OR exception logged + SM-approved
 - [ ] All touched files in blast-radius list OR exception logged
 - [ ] No new dependencies added without checking reuse (Q2)
