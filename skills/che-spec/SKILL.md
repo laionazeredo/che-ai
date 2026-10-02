@@ -182,10 +182,10 @@ Header: `## §1 WHY (Problem Statement)`
 - 3–5 bullets only. Example structure:
   - Current: <what breaks today, 1 line concrete>
   - Risk: <security or business impact or UX pain>
-  - Goal: <outcome in 1 line> — reached via the smallest-first, most-reversible option (Simplicity Bias)
+  - Goal: <outcome in 1 line> — reached via the simplest option (Simplicity Bias, engineering-contracts §1)
   - Success metric: <curl / behavioural assertion>
   - Non-goals (deferred by design): <what this SPEC deliberately does NOT build in this iteration, and why it is safe to defer>
-- **SIMPLICITY BIAS (mandatory — engineering-contracts §1):** the Goal bullet MUST name the smallest-first / most-reversible option chosen; the Non-goals bullet MUST list every edge case or generalisation deliberately deferred. A missing deferral line = V23 FAIL.
+- **SIMPLICITY BIAS (mandatory — engineering-contracts §1):** the Goal bullet MUST name the simplest option chosen; the Non-goals bullet MUST list what is deliberately deferred. A missing deferral line = V23 FAIL.
 
 ### §2 SCOPE — Blast Radius (3 lists, each ≤ 10 items)
 Header: `## §2 SCOPE BOUNDARIES & BLAST RADIUS`
