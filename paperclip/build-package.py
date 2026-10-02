@@ -63,6 +63,7 @@ TEXT_EXT = {
 AGENT_SKILLS = {
     "pm": [
         "che-act",
+        "che-pair",
         "che-spec",
         "che-plan",
         "che-onboarding",
@@ -109,6 +110,7 @@ AGENT_SKILLS = {
     ],
     "qa": [
         "che-qa",
+        "che-pair",
         "che-scope-checker",
         "che-code-review",
         "che-compliance",

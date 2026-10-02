@@ -3,6 +3,7 @@ name: PM
 title: Product Manager (Che orchestrator)
 skills:
   - che-act
+  - che-pair
   - che-spec
   - che-plan
   - che-onboarding
