@@ -110,7 +110,7 @@ smallest increment); the disagreement is logged. The skeptic only stops the line
   1. `eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"`
   2. `PAIR_REPORT="$(che output_path report pair-review "$RELATED_ID" workspace md)"`
      → `$CHE_WORKSPACE_SHARED/reports/<related_id>/<YYYYMMDD-HHMMSS>-pair-review.md`
-  3. `che write_file_atomic "$PAIR_REPORT"`.
+  3. Write it with the content on **stdin**: `che write_file_atomic "$PAIR_REPORT" <<'REPORT_EOF' … REPORT_EOF`.
 - `decisions.log` entries via `che decision_append`: `PAIR_REVIEW` (verdict/rounds/counts, path),
   `PAIR_OVERRIDE` (HIGH only), `PAIR_ESCALATION` (on stop).
 - Returns control to `che-act` §2 with `{verdict, rounds, blocking_findings[]}`.

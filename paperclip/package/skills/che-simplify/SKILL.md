@@ -69,7 +69,8 @@ Write the plan as a **worktree artifact** — never inside the worktree, never t
    repo): `eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"`
 2. Resolve the path: `SIMPLIFY_PLAN="$(che output_path report simplify-plan "$RELATED_ID" workspace md)"`
    → `$CHE_WORKSPACE_SHARED/reports/<related_id>/<YYYYMMDD-HHMMSS>-simplify-plan.md`
-3. Write it with `che write_file_atomic "$SIMPLIFY_PLAN"`.
+3. Write it with the content on **stdin** (the helper reads stdin, not an argument):
+   `che write_file_atomic "$SIMPLIFY_PLAN" <<'PLAN_EOF' … PLAN_EOF`.
 
 > **Never** write it under `specs/` — `che-act` discovers the approved SPEC via `specs/**/*.md` and
 > would mistake the plan for one.

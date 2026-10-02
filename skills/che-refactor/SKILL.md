@@ -70,7 +70,8 @@ it is a feature or a fix. This skill refuses to mix the two.
   1. `eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"`
   2. `REFACTOR_LOG="$(che output_path report refactor-log "$RELATED_ID" workspace md)"`
      → `$CHE_WORKSPACE_SHARED/reports/<related_id>/<YYYYMMDD-HHMMSS>-refactor-log.md`
-  3. `che write_file_atomic "$REFACTOR_LOG"` with: smell → refactoring → files → signal improved.
+  3. Write it with the content on **stdin**: `che write_file_atomic "$REFACTOR_LOG" <<'LOG_EOF' … LOG_EOF`
+     — smell → refactoring → files → signal improved.
 - `decisions.log` entries via `che decision_append`: `REFACTOR_STEP` per step, `REFACTOR_DONE`
   (smells, signals, coverage, path).
 

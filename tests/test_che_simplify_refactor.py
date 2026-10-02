@@ -25,6 +25,7 @@ SIMPLIFY_ANCHORS = [
     "Never cut essential complexity",
     "che compute_paths",
     "CHE_WORKSPACE_SHARED",
+    "stdin",
 ]
 
 REFACTOR_ANCHORS = [
@@ -35,6 +36,7 @@ REFACTOR_ANCHORS = [
     "Measurable target",
     "che compute_paths",
     "CHE_WORKSPACE_SHARED",
+    "stdin",
 ]
 
 COMMANDS = {
