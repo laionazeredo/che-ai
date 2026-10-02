@@ -63,9 +63,19 @@ Cut accidental complexity; keep essential complexity; record every cut.
 
 ## §5 OUTPUT
 
-- A **simplification plan** (spec-shaped) written OUTSIDE the worktree via `che output_path`.
+Write the plan as a **worktree artifact** — never inside the worktree, never the fallback:
+
+1. Resolve the storage env FIRST (without it, `che output_path` falls back to a folder inside the Che
+   repo): `eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"`
+2. Resolve the path: `SIMPLIFY_PLAN="$(che output_path report simplify-plan "$RELATED_ID" workspace md)"`
+   → `$CHE_WORKSPACE_SHARED/reports/<related_id>/<YYYYMMDD-HHMMSS>-simplify-plan.md`
+3. Write it with `che write_file_atomic "$SIMPLIFY_PLAN"`.
+
+> **Never** write it under `specs/` — `che-act` discovers the approved SPEC via `specs/**/*.md` and
+> would mistake the plan for one.
+
 - `decisions.log` entry via `che decision_append`: `SIMPLIFY_PLAN` (elements, essential, accidental,
-  cuts).
+  cuts, path).
 - Sections: Goals (verbatim) · Inventory · Essential vs Accidental table · Reduced plan ·
   Decision trail · Deferred by design.
 
