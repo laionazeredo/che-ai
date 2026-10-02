@@ -182,9 +182,10 @@ Header: `## §1 WHY (Problem Statement)`
 - 3–5 bullets only. Example structure:
   - Current: <what breaks today, 1 line concrete>
   - Risk: <security or business impact or UX pain>
-  - Goal: <outcome in 1 line>
+  - Goal: <outcome in 1 line> — reached via the simplest option (Simplicity Bias, engineering-contracts §1)
   - Success metric: <curl / behavioural assertion>
-  - Non-goals: <what this SPEC does NOT do>
+  - Non-goals (deferred by design): <what this SPEC deliberately does NOT build in this iteration, and why it is safe to defer>
+- **SIMPLICITY BIAS (mandatory — engineering-contracts §1):** the Goal bullet MUST name the simplest option chosen; the Non-goals bullet MUST list what is deliberately deferred. A missing deferral line = V23 FAIL.
 
 ### §2 SCOPE — Blast Radius (3 lists, each ≤ 10 items)
 Header: `## §2 SCOPE BOUNDARIES & BLAST RADIUS`
@@ -477,6 +478,8 @@ Reject draft and loop back to §2 source if ANY check fails. Run in order.
 21. **V22 Orthogonality Coupling Map (pragmatic-programmer #2 Orthogonality):** TRIGGER_V22 = `(COUNT(DISTINCT top-level packages in §2 CAN TOUCH paths) >= 3)`. If false → SKIP silently. Else:
     - Header `§4.9` table exists with ≥ 3 rows.
     - Each row column 4 = either `OK` or starts with `COUPLING_RISK:` followed by non-empty mitigation.
+
+22. **V23 Simplicity Bias declaration (engineering-contracts §1):** §1 WHY MUST contain a non-empty `Non-goals (deferred by design)` bullet AND a Goal bullet naming the smallest-first / most-reversible option. Missing → REJECT: "§1 WHY has no explicit deferral. State what is deliberately NOT built in this iteration and why it is safe to defer (Simplicity Bias, engineering-contracts §1)."
 
 ### Bilateral cross-ref scope-checker CHECK2 (ONDA2 next block)
 When this VALIDATION PASS runs GREEN (all pass), che also prints a 1-line footer:

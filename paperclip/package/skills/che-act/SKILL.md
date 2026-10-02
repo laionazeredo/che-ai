@@ -569,6 +569,7 @@ Output = `$CHE_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope
 **CRITICAL fields:**
 - **Blast radius**: explicit list of files / directories MAY be touched. If Dev needs outside → come back to SM, log to `decisions.log.jsonl`.
 - **Reuse mandate**: specific existing symbols MUST be reused.
+- **Simplicity Bias (engineering-contracts §1)**: envelope MUST name the simplest approach AND carry the SPEC §1 "deferred by design" list forward, so Dev does not implement deferred completeness.
 - **Max files heuristic**: if > 10 files → SM re-evaluate and justify in decision.log.
 
 ### 2.2 Call Developer (skill: che-developer)

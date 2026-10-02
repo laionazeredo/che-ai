@@ -220,7 +220,7 @@ Rules from engineering-contracts are ACTIVE:
 - Immutable, declarative (map/filter/reduce) over mutable loops
 - Strong TS (or equivalent for the language)
 - **Reuse before create** — if Q2 found reusable code, use it
-- **Simplicity Bias (engineering-contracts §1)** — when solutions compete, take the smallest-first, most reversible, most observable one; DEFER edge cases / generalisations no current AC demands and record each deferral (never a silent omission)
+- **Simplicity Bias (engineering-contracts §1)** — apply the ordered solution-selection rule; DEFER edge cases / generalisations no current AC demands and record each deferral (never a silent omission)
 
 ### 3.5 Refactor (green → clean)
 

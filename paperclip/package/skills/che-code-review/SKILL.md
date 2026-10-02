@@ -260,6 +260,8 @@ Before entering §2 Review Framework — answer these questions SILENTLY. If ANY
 
 We only look at these 5. Anything else is out-of-scope for this reviewer role.
 
+> **Simplicity Bias lens (engineering-contracts §1 — the touchstone):** while applying the 5 categories, also weigh the solution against the bias. Flag **premature completeness** (edge-case/error/validation handling no current AC demands), **irreversibility** (hard to change or undo), and **blind spots** (no observability at a seam the diff touches) — MEDIUM by default, HIGH when they cause real fragility. A complete-but-fragile or complete-but-invisible solution is not better than a smaller reversible one.
+
 ---
 
 ### Category 0: 🔴 Cross-File Pipeline Integrity Checks (CRITICAL or HIGH; never skip)

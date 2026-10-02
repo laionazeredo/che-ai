@@ -44,6 +44,20 @@ It is invoked by `che-developer` FIRST, and its rules **trump local repo convent
     - ✋ N extra layers of indirection "because clean architecture says so" without any of them solving a real product problem
     - ✋ Generic function `<T>` when only 1 concrete type is being passed today
 
+**🔴 SIMPLICITY BIAS — solution-selection order (the touchstone for planning, execution and review).**
+
+When more than one solution can satisfy the current Acceptance Criteria, rank the candidates by this order and take the highest:
+
+1. **Smallest first increment** — fewest files, fewest lines, fewest new dependencies/patterns (KISS + blast radius).
+2. **Most reversible** — cheapest to change or undo later (thin seams, small surface, no lock-in).
+3. **Most observable** — cheapest to see what it does in production (logs/metrics/health at a seam you already touch).
+
+**Prefer (2) and (3) over upfront completeness.** Do NOT implement edge cases, error branches, generalisations or configuration that no current AC demands. Defer them **by design** and RECORD each deferral in one line (Non-Goals / decisions log) — a visible, conscious debt, never a silent omission.
+
+**JUSTIFY-OR-DEFER:** a new abstraction, parameter, dependency, config or generalisation needs a **present concrete need** (a second real case *today*). Without it → defer. Tie-break: fewer new patterns and dependencies always wins.
+
+> This bias outranks every rule below it (§2–§18) **except §2 Security** — never trade safety for simplicity (see Appendix A).
+
 ### 2. 🔴 SECURITY & PII COMPLIANCE (hard stop)
 
 If you detect a security or PII leak risk:

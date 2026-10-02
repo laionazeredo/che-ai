@@ -92,7 +92,7 @@ Every generated architecture document MUST include:
 ---
 
 ## §3 QUALITY GATES
-- **Simplicity Bias Check (engineering-contracts §1 — the touchstone)**: For each major decision (stack, pattern, module, data model), pick the **smallest-first, most reversible, most observable** option and prefer it over the most complete/robust one. Record the simplest candidate chosen AND the capabilities deliberately deferred in `intent.md` (Non-Goals). Never recommend Kubernetes / Kafka / microservices / a DI container for a problem a monolith + 1 DB solves. Never overrides Security (§2).
+- **Simplicity Bias Check (engineering-contracts §1 — the touchstone)**: for each major decision (stack, pattern, module, data model), apply the ordered solution-selection rule and prefer the simplest candidate over the most complete/robust one. Record the simplest candidate chosen AND the capabilities deliberately deferred in `intent.md` (Non-Goals). Never recommend Kubernetes / Kafka / microservices / a DI container for a problem a monolith + 1 DB solves. Never overrides Security (§2).
 - **KISS/YAGNI Check**: Avoid over-engineering. If the user asks for a simple app, don't recommend Kubernetes.
 - **Portability Check**: Ensure the architecture isn't locked into a single vendor unless requested.
 - **Cohesion Check**: Ensure modules have clear boundaries and low coupling.
