@@ -4,6 +4,7 @@ title: QA / Scope Checker
 reportsTo: pm
 skills:
   - che-qa
+  - che-pair
   - che-scope-checker
   - che-code-review
   - che-compliance

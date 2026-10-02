@@ -570,11 +570,26 @@ Output = `$CHE_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope
 - **Blast radius**: explicit list of files / directories MAY be touched. If Dev needs outside → come back to SM, log to `decisions.log.jsonl`.
 - **Reuse mandate**: specific existing symbols MUST be reused.
 - **Simplicity Bias (engineering-contracts §1)**: envelope MUST name the simplest approach AND carry the SPEC §1 "deferred by design" list forward, so Dev does not implement deferred completeness.
+- **Vertical slices (SPEC §4.5)**: the ordered F0..FN list the Dev executes one at a time; each slice ends with a `che-pair` review (§2.2).
 - **Max files heuristic**: if > 10 files → SM re-evaluate and justify in decision.log.
 
-### 2.2 Call Developer (skill: che-developer)
+### 2.2 Call Developer + PAIR REVIEW (slice loop)
 
-Pass **full TASK ENVELOPE**. Wait for return: implementation pre-report, files touched list, auto-checks.
+The Developer implements the task **slice by slice** (SPEC §4.5 `F0..FN`). For EACH vertical slice, in order:
+
+1. **Implement the slice** — invoke `che-developer` scoped to that slice (not the whole task). Wait until
+   the slice's tests are green.
+2. **PAIR REVIEW** — invoke `che-pair` (skill) as a distinct subagent with the slice diff + TASK ENVELOPE
+   + SPEC §1. It returns `{verdict, rounds, blocking_findings[]}`.
+3. **Resolve:**
+   - CRITICAL/HIGH **with citation** → dev fixes (round 2) and `che-pair` re-reviews once. Still failing →
+     escalate via the `che-pair` §7 menu (A fix / B override logged / C back to SPEC). Never a round 3.
+   - MEDIUM/LOW → logged and deferred; advance.
+   - `verdict = PASS` → advance to the next slice.
+4. After the LAST slice → proceed to §2.3.
+
+> Pair contract, loop bounds and escalation live in the `che-pair` skill (single source of truth) — do
+> NOT restate them here.
 
 ### 2.3 SCOPE VALIDATION (SM + Dev)
 

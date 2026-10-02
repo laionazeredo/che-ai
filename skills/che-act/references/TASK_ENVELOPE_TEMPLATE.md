@@ -27,6 +27,19 @@
 - ...
 - ...
 
+## Vertical Slices (SPEC §4.5 — executed one at a time)
+
+| Slice | Behaviour delivered | Files / layers touched | DONE criterion |
+|---|---|---|---|
+| F0 | ... | ... | ... |
+| F1 | ... | ... | ... |
+
+Each slice ends with a `che-pair` review (che-act §2.2) before the next slice starts.
+
+## Deferred by design (SPEC §1 Non-goals — the pair MUST NOT demand these)
+
+- ...
+
 ---
 
 ## Acceptance Criteria (MUST be testable)
