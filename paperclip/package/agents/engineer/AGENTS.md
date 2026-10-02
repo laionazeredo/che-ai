@@ -5,6 +5,7 @@ reportsTo: pm
 skills:
   - engineering-contracts
   - che-developer
+  - che-refactor
   - che-graph
   - che-merge-resolver
   - che-debugger-bugfix
