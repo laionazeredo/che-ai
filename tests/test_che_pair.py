@@ -22,6 +22,7 @@ CONTRACT_ANCHORS = [
     "Citation required",
     "Max 2 rounds per slice",
     "No-progress stop",
+    "Per-slice ceiling",
     "CRITICAL",
     "deferred by design",
     "ESCALATION MENU",

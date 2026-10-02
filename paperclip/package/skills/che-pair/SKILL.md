@@ -87,12 +87,16 @@ smallest increment); the disagreement is logged. The skeptic only stops the line
 3. **Fix is scoped to the finding** — no new code beyond the flagged item.
 4. **Frozen lenses + stable ids** — no moving goalposts.
 5. On stop → escalate (§7). Never a silent round 3.
+6. **Per-slice ceiling (absolute):** at most **2 review rounds + 1 escalation rerun = 3 passes** per
+   slice. The 4th pass is refused by the runner. Escalation A consumes the escalation rerun; a second
+   stop on the same slice allows only **B** or **C** — never another rerun.
 
 ---
 
 ## §7 ESCALATION MENU (on stop — never a silent loop)
 
-- **A** = dev fixes manually and re-runs the slice.
+- **A** = dev fixes manually and re-runs the slice **once** (consumes the single escalation rerun; a
+  second stop on the same slice allows only **B** or **C**).
 - **B** = override with a verbatim justification logged to `decisions.log` (**HIGH only**;
   CRITICAL is never overridable).
 - **C** = back to SPEC — the scope was wrong, not the code.
