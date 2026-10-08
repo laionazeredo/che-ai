@@ -35,7 +35,7 @@ che --help       # 23 structural subcommand groups: project/worktree/config/task
 
 > 💻 **Platform Compatibility (installer fail-fast):** `scripts/install-che.sh` runs ONLY on **Linux + macOS POSIX bash/zsh shells**. On Windows PowerShell / CMD, the installer exits with error code 5; users must use **WSL2 Ubuntu 22.04 LTS** and run the installer from inside the Linux userland.
 
-All structural/admin operations (`workspace create`, `project init`, `config` flags, state rebuild, export/import, eject) are implemented first as deterministic Python in `che_core/` and routed through the CLI before any agent skill is allowed to perform them. This is the Che **structural-first principle**: CLI gives you the canonical behaviour; agent skills call the CLI; agent skills **never** reimplement L1–L4 filesystem logic inside Markdown Python blocks. The full CLI contract with flags, exit codes, and examples lives at [docs/cli-reference.md](./docs/cli-reference.md).
+All structural/admin operations (`project init`, `worktree add`, `config` flags, state rebuild, export/import, eject) are implemented first as deterministic Python in `che_core/` and routed through the CLI before any agent skill is allowed to perform them. This is the Che **structural-first principle**: CLI gives you the canonical behaviour; agent skills call the CLI; agent skills **never** reimplement L1–L4 filesystem logic inside Markdown Python blocks. The full CLI contract with flags, exit codes, and examples lives at [docs/cli-reference.md](./docs/cli-reference.md).
 
 ---
 
