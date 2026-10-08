@@ -74,14 +74,14 @@ Three reasons, ordered by importance to the *shared team brain* promise:
 If you set `CHE_OFFLINE=true` and unplug your network, the following still all work identically:
 
 ```
-che workspace create x
-che project init ~/code/repo --workspace x --domain product
+che project init ~/code/repo --slug my-product
+che worktree add ~/code/repo --project my-product --name main
 che config s1 ~/code/repo --lang-chat pt-BR
-che workspace list | jq
-che project list
+che project list | jq
+che worktree list --project my-product | jq
 che state rebuild-index ~/code/repo
-che export slug --workspace x --out /tmp/x.tar.gz
-che import /tmp/x.tar.gz --workspace x
+che export ~/code/repo /tmp/my-product.tar.gz
+che import /tmp/my-product.tar.gz
 che eject plan
 ```
 
@@ -143,46 +143,53 @@ The other half of the architecture is **project memory** — where Che puts the 
 $CHE_WORKSPACES_ROOT
   (default: ~/.che-workspaces, never ~/.che-ai, never inside a user repo)
 │
-└─ workspaces/<ws-slug>/                 ← L1 WORKSPACE. One per "concern space"
-   │                                      (example per-company: "acme", "my-company").
-   │                                      Shared: yes, across all projects inside.
-   │                                      Durability: long-lived (months → years).
+├─ .state/
+│  └─ registry.jsonl                    ← L1 STATE. Session → worktree → project
+│                                          bindings. Never lives inside a project.
+│
+└─ <project-slug>/                      ← L2 PROJECT. One per product/system.
+   │                                      Shared: yes, across all worktrees.
+   │                                      Durability: lifetime of the system.
    │
-   └─ <project-slug>/                    ← L2 PROJECT. One per product/system.
-      │                                   Shared: yes, across all worktrees.
-      │                                   Durability: lifetime of the system.
+   ├─ architecture.md                   ← CANONICAL DURABLE MEMORY (Markdown).
+   ├─ project_profile.md                ←   Stack, onboarding, key contacts.
+   ├─ product_context.md                ←   Intent, personas, constraints.
+   ├─ roadmap.md                        ←   Outcomes, timeline, priorities.
+   ├─ glossary.md                       ←   Project vocabulary (`/che-knowledge`).
+   ├─ registry.jsonl                    ←   Append-only bindings/flags stream.
+   ├─ _db/                              ←   Shared blobs: SQLite DBs, CSVs.
+   ├─ <domain>/conventions.md           ←   Per-domain conventions (business, product,
+   │                                        design, engineering, devops, …).
+   │
+   ├─ .sessions/<session_id>/           ← L4 SESSION. One agent run.
+   │                                      Shared: NO (single writer).
+   │                                      Durability: hours → days. Ephemeral.
+   │
+   └─ worktrees/<wt-slug>/              ← L3 WORKTREE SHARED. One per git branch.
+      │                                   Shared: yes, all sessions on that branch.
+      │                                   Durability: lifetime of the branch.
       │
-      ├─ project/                        ← CANONICAL DURABLE MEMORY (Markdown).
-      │   ├─ architecture.md             ←   Decisions that won't change often.
-      │   ├─ project_profile.md          ←   Stack, onboarding, key contacts.
-      │   ├─ product_context.md          ←   Intent, personas, constraints.
-      │   ├─ roadmap.md                  ←   Outcomes, timeline, priorities.
-      │   ├─ roles/index.md              ←   Who (human or agent) plays what role.
-      │   └─ registry.jsonl              ←   Append-only bindings/flags stream.
-      │
-      ├─ _db/                            ←   Shared blobs: SQLite DBs, CSVs.
-      │
-      └─ worktrees/<wt-slug>/            ← L3 WORKTREE SHARED. One per git branch.
-         │                                Shared: yes, all sessions on that branch.
-         │                                Durability: lifetime of the branch.
-         │
-         ├─ decisions.log.jsonl          ←   ADR-style decisions (CDJ body).
-         ├─ qa/                          ←   QA reports, screenshots, evidence.
-         ├─ designs/                     ←   Figma exports, Penpot files, imagery.
-         │
-         └─ sessions/<session_id>/       ← L4 SESSION. One agent run.
-                                          Shared: NO (single writer).
-                                          Durability: hours → days. Ephemeral.
+      ├─ decisions.log.jsonl            ←   ADR-style decisions (CDJ body).
+      ├─ specs/                         ←   Approved SPECs.
+      ├─ tasks/                         ←   Task graphs + envelopes.
+      ├─ qa/evidence/                   ←   QA reports, screenshots, evidence.
+      ├─ reports/                       ←   Ship-gate reports.
+      ├─ pr_plans/                      ←   gh-stack plans.
+      └─ .quarantine/                   ←   Planning artifacts evicted from a repo.
 ```
+
+> The L1 "workspace" grouping level (`workspaces/<workspace>/<project>/`) was retired in Sep 2026:
+> projects live directly under the storage root. The contract is in
+> [contracts/path-canonicity-che.md](../contracts/path-canonicity-che.md).
 
 ### 5.2 The Visibility Contract
 
 | Level | Who writes            | Who reads                     | Mutable?  | Backed up? |
 | :---- | :-------------------- | :---------------------------- | :-------- | :--------- |
-| L1    | Humans + CLI          | Everything                    | Rare      | ✅ Yes     |
-| L2    | Humans + `/che-spec`  | Every skill, every agent      | Rare      | ✅ Yes     |
-| L3    | CLI + agent skills    | Every agent, every human      | Often     | ✅ Yes     |
-| L4    | Exactly one agent     | That agent + `/che-act` dispatcher | Append-only | ⚠️ Optional |
+| L1 State (`.state/`) | CLI + hooks | Every command (binding resolution) | Append-only | ✅ Yes |
+| L2 Project (`<slug>/`) | Humans + `/che-spec` + `/che-knowledge` | Every skill, every agent | Rare | ✅ Yes |
+| L3 Worktree (`worktrees/<wt>/`) | CLI + agent skills | Every agent, every human | Often | ✅ Yes |
+| L4 Session (`.sessions/<id>/`) | Exactly one agent | That agent + `/che-act` dispatcher | Append-only | ⚠️ Optional |
 
 ### 5.3 Why the hierarchy nests this way
 
@@ -260,12 +267,12 @@ The combined principle, in one line:
 
 > **Before any destructive operation, show me what would happen and make it trivially reversible. If I can't restore it in < 1 command, the feature is not shipped.**
 
-Applied uniformly across `workspace remove`, `project remove`, `eject execute`, and every future command that mutates durable state, this means:
+Applied uniformly across `project remove`, `worktree remove`, `eject plan --apply`, and every future command that mutates durable state, this means:
 
 1. **Double-gated API.** All destructive commands have a `--dry-run` mode that prints the plan and stops, and an execute mode that requires `--confirm` (explicit).
 2. **Move, don't unlink.** The execute step calls `shutil.move(target, trash_path)`, **never** `shutil.rmtree(target)`.
 3. **Deterministic restore.** Every successful move prints the one-liner `che <kind> restore <trash-slug>` that reverses it. No searching for timestamps, no re-typing paths.
-4. **Trash-listing visibility.** `che workspace trash-list` always shows the full contents of `.trash/` so users can self-serve a restore without asking support.
+4. **Trash-listing visibility.** `che eject trash-list` always shows the full contents of `.trash/` so users can self-serve a restore without asking support.
 
 Yes, this costs a few lines of code. Yes, it is worth every one.
 
@@ -277,7 +284,7 @@ Yes, this costs a few lines of code. Yes, it is worth every one.
 
 These are often confused. Keep them distinct — the distinction comes directly from [The Pragmatic Programmer](https://pragprog.com/the-pragmatic-programmer/) ch. 2 (DRY Principle) and the append-only contract comes from DbC invariants:
 
-- **SSoT (Single Source of Truth)** = a given fact lives in exactly one canonical file across the whole installation. `LANG_CHAT` default value lives in `che_core/constants.py`. The scores table lives in the domain playbook that owns it. It does **not** also appear in 3 skill files. This is the Pragmatic DRY principle, verbatim.
+- **SSoT (Single Source of Truth)** = a given fact lives in exactly one canonical file across the whole installation. The `--lang-*` flag choices live in the `parser_config` block of `che_core/cli.py`. The scores table lives in the domain playbook that owns it. It does **not** also appear in 3 skill files. This is the Pragmatic DRY principle, verbatim.
 - **Append-only** = a given file grows by lines at the end; lines already written are never edited in place. Applies to: `registry.jsonl`, `decisions.log.jsonl`, any log, any binding stream. This is a DbC *immutability invariant* on audit streams — once a row is written, it is never overwritten.
 
 ### 8.2 Why append-only for the JSONL files
