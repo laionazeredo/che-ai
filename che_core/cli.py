@@ -499,6 +499,41 @@ def build_parser():
         "--confirm", dest="confirmed", action="store_true", default=False, help="Mandatory safety gate."
     )
 
+    # PROJECT KNOWLEDGE =======================================================
+    parser_know = subparsers.add_parser(
+        "knowledge",
+        help="Maintain the project's durable knowledge (glossary + per-domain conventions).",
+    )
+    know_subs = parser_know.add_subparsers(dest="knowledge_cmd", required=True)
+
+    know_scaffold = know_subs.add_parser(
+        "scaffold",
+        help="Create a domain's conventions.md from the canonical skeleton. Idempotent.",
+    )
+    know_scaffold.add_argument("--project", required=True, help="Project slug.")
+    know_scaffold.add_argument("--domain", required=True, help="Domain slug (e.g. engineering).")
+
+    know_show = know_subs.add_parser(
+        "show",
+        help="Read the project's knowledge. Omit --domain for the per-domain inventory.",
+    )
+    know_show.add_argument("--project", required=True, help="Project slug.")
+    know_show.add_argument("--domain", default=None, help="Optional domain slug.")
+
+    know_apply = know_subs.add_parser(
+        "apply",
+        help="Preview (dry-run) or apply a knowledge change set. Dry-run by default.",
+    )
+    know_apply.add_argument("--project", required=True, help="Project slug.")
+    know_apply.add_argument("--ops", required=True, help="Change set JSON: inline, @file, or - for stdin.")
+    know_apply.add_argument("--dry-run", action="store_true", default=True, help="Default: only show, DO NOT write.")
+    know_apply.add_argument(
+        "--no-dry-run", dest="dry_run", action="store_false", help="Effectively write. Requires --confirm as well."
+    )
+    know_apply.add_argument(
+        "--confirm", dest="confirmed", action="store_true", default=False, help="Mandatory safety gate."
+    )
+
     # CHE SELF-UPDATE =========================================================
     parser_update = subparsers.add_parser(
         "update",
@@ -1209,6 +1244,54 @@ def main(argv=None):
             parser.error(f"Unknown worktree subcommand: {args.wt_cmd}")
             return
         _print_json(res)
+        return
+
+    if args.command == "knowledge":
+        from che_core.knowledge import apply_ops, scaffold_conventions, show_knowledge
+
+        if args.knowledge_cmd == "scaffold":
+            res = scaffold_conventions(args.project, args.domain)
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                state = "created" if res["created"] else "already present"
+                print(f"{res['path']} ({state}, {res['sections']} sections)")
+        elif args.knowledge_cmd == "show":
+            res = show_knowledge(args.project, args.domain)
+            if _wants_json(args):
+                _print_json(res)
+            elif args.domain is not None:
+                print(res["content"].rstrip("\n") if res["exists"] else f"no conventions for domain {res['domain']}")
+            else:
+                for entry in res["domains"]:
+                    print(f"{entry['domain']}: {entry['path']}")
+                for row in res["glossary"].values():
+                    print(f"{row['Term']}: {row['Definition']}")
+        elif args.knowledge_cmd == "apply":
+            raw = args.ops
+            if raw == "-":
+                raw = sys.stdin.read()
+            elif raw.startswith("@"):
+                try:
+                    raw = Path(raw[1:]).read_text(encoding="utf-8")
+                except OSError as exc:
+                    fail("KNOWLEDGE_INPUT_INVALID", detail=f"cannot read ops file {raw[1:]!r}: {exc}")
+            try:
+                ops = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                fail("KNOWLEDGE_INPUT_INVALID", detail=f"ops is not valid JSON: {exc}")
+            if not args.dry_run and not args.confirmed:
+                fail("REFUSED_WITHOUT_CONFIRM")
+            res = apply_ops(args.project, ops, dry_run=args.dry_run)
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                for change in res["changes"]:
+                    print(change["diff"], end="")
+                verb = "applied" if res["applied"] else "dry-run"
+                print(f"{verb}: {len(res['changes'])} document(s)")
+        else:
+            parser.error(f"Unknown knowledge subcommand: {args.knowledge_cmd}")
         return
 
     if args.command in ("update", "self-update", "upgrade"):

@@ -13,7 +13,7 @@ The agent MUST recognise these and react immediately.
 > **Conceptual difference:** Commands = UX entry point (slash `/che-X`) ↔ Skills = content/executor of work.
 > DO NOT turn ALL commands into skills. The separation below is intentional (KISS).
 
-### Category A — 29 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
+### Category A — 30 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
 | Command | Skill / module | Why separate wrapper? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
@@ -45,6 +45,7 @@ The agent MUST recognise these and react immediately.
 | `/che-sanitize [--max-age-days=N] [--max-decisions=N] [--dry-run]` | `che_core.state_store` | Sanitize state store: purge old decisions/bindings/sessions + VACUUM. **MANDATORY `--dry-run` default** before effective (flag only passes on 2nd command without dry-run. **Filesystem SSOT INTACT**: reversible purge via `rebuild-index`. |
 | `/che-search "..." [--top-k=N] [--scope=all\|tasks\|specs\|decisions\|envelopes]` | `che_core.state_store` | Full-text search FTS5 + BM25 ranking. Pre-flight: rebuild if DB older than decisions.log mtime. |
 | `/che-rag [build-index|search] [--provider=auto\|none\|openai\|st] [--top-k=N] [--no-hybrid]` | `che_core.rag` | Hybrid RAG BM25(40%) + vector(60%). Incremental build by chunk hash. OPTIONAL sqlite-vec. `none` zero-dep fallback ALWAYS works without pip install. |
+| `/che-knowledge [show\|scaffold\|apply] [--project=<slug>] [--domain=<slug>] [--ops=<json\|@file\|->]` | `che_core.knowledge` | **NEW:** Project knowledge base — `glossary.md` (vocabulary) + `<domain>/conventions.md` (observed practice per domain). Dry-run diff by default; `--no-dry-run --confirm` writes. Feeds the planning (che-architect, che-archeology, che-spec) and execution (che-act) phases. |
 
 ### Category B — 5 "light" commands = lightweight inline (5 lines to read/write markdown) → **DO NOT become skills (KISS)**:
 | Command | Inline implementation | Why NOT a skill? |

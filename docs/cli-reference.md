@@ -17,6 +17,7 @@
 4. [State & Memory (SQLite FTS5)](#4-state--memory-sqlite-fts5)
 5. [Task Graph Engine](#5-task-graph-engine)
 6. [RAG (Hybrid Search)](#6-rag-hybrid-search)
+6.5. [Project Knowledge](#65-project-knowledge)
 7. [Portability: Export / Import](#7-portability-export--import)
 8. [Safe Eject / Uninstall](#8-safe-eject--uninstall)
 9. [Low-level Plumbing](#9-low-level-plumbing)
@@ -725,6 +726,41 @@ che rag search ~/code/my-company/web-app "RLS policy on events"
 che rag list   ~/code/my-company/web-app
 che rag prune  ~/code/my-company/web-app     # removes stale chunks
 ```
+
+---
+
+## 6.5 Project Knowledge
+
+The durable, agent-maintained record of **how a project works**: `glossary.md` (vocabulary) plus one
+`conventions.md` per domain. Both live under the project folder (`~/.che-workspaces/<slug>/`), never
+inside the user worktree. Every mutation is previewed as a unified diff and only written with
+`--no-dry-run --confirm`.
+
+```bash
+che knowledge scaffold --project my-app --domain engineering    # writes the 11-section skeleton
+che knowledge show     --project my-app                         # glossary + domains inventory
+che knowledge show     --project my-app --domain engineering     # one domain's conventions
+che knowledge apply    --project my-app --ops ops.json           # dry-run: prints the diff, writes nothing
+che knowledge apply    --project my-app --ops ops.json --no-dry-run --confirm
+```
+
+`--ops` accepts inline JSON, `@path/to/file.json`, or `-` for stdin. A change set is an object with
+`glossary` and/or `conventions` lists:
+
+```json
+{
+  "glossary": [
+    {"op": "insert", "term": "Envelope", "definition": "A task handoff contract", "aliases": ["handoff"]}
+  ],
+  "conventions": [
+    {"domain": "engineering", "op": "update_topic", "topic": "CI Gates", "body": "ruff + pytest must pass."}
+  ]
+}
+```
+
+Glossary ops: `insert` | `update` | `delete`. Conventions ops: `update_topic` | `insert_topic`.
+Inserting an existing term/topic, or updating/deleting a missing one, fails with `KNOWLEDGE_CONFLICT`
+and leaves the document untouched. A malformed change set fails with `KNOWLEDGE_INPUT_INVALID`.
 
 ---
 
