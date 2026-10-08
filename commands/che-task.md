@@ -9,7 +9,7 @@ arguments:
     required: true
 ---
 
-Invokes the **task engine** (`che_core.task_engine`) on top of the L3 shared `task_graph.md` and per-task `envelope.md` artifacts. This is the **entry point for multi-session and cross-domain work**: any agent or developer window can call `che-task resume TID` to take ownership of a task from the shared graph; the engine auto-loads the correct domain profile/playbook and suggests the right downstream slash command (UX → `/che-design`, Product → `/che-prd`, Engineering/DevOps/Copy/Social/SEO → `/che-act`).
+Invokes the **task engine** (`che_core.task_engine`) on top of the L3 shared `task_graph.md` and per-task `envelope.md` artifacts. This is the **entry point for multi-session and cross-domain work**: any agent or developer window can call `che-task resume TID` to take ownership of a task from the shared graph; the engine auto-loads the correct domain profile/playbook and suggests the right downstream slash command (UX → `/che-design`, Product → `/che-spec`, Engineering/DevOps/Copy/Social/SEO → `/che-act`).
 
 **Preflight:**
 1. If session already has a BOUND Level 1 registry entry with WORKTREE_ROOT → use that as default. If user passed an explicit `worktree` and it differs → warn and ask confirm switch (che-act §0.1 rule 4).
