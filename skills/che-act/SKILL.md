@@ -12,6 +12,14 @@ description: "Orchestrates the full Agile simulated team: scope capture, TASK GR
 > - Nx/pnpm for task target hints: `_shared_checklists/NX_PNPM_COMMON.md`
 > - Security/PII validation gates for compliance handoff: `_shared_checklists/SECURITY_PII_COMMON.md`
 
+## §K PROJECT KNOWLEDGE STEP (execution — consume + propose)
+
+Runs at the phase boundary. Ask: **any new term, or any term to update or remove?** Load the conventions of
+the domains in play with `che knowledge show --project <slug> --domain <domain>` and apply them; if nothing
+exists, this is a **no-op** — skip it. Propose changes with `che knowledge apply --ops @ops.json`
+(dry-run), show the diff, and gate on **keep / alter / revert** before `--no-dry-run --confirm`.
+Full contract: `che-knowledge` skill §6.
+
 This is the **top-level orchestrator skill** for the global engineering che.
 It represents the Scrum Master role in the simulated Agile team.
 All other che skills (Developer, QA, Compliance) are called by this skill.
