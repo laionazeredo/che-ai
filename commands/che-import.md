@@ -12,5 +12,5 @@ arguments:
 Imports a previously exported Che project archive. Handles naming conflicts by appending a unique suffix if the project or worktree already exists on this machine.
 
 **Agent action:**
-1. Execute: `python3 -m che_core.cli import "$PATH" ${WORKSPACE:+--workspace "$WORKSPACE"}`.
+1. Execute: `python3 -m che_core.cli import "$PATH"`. The legacy `--workspace` flag is accepted but **deprecated and ignored** — the slug comes from the archive.
 2. Parse JSON response and report the new slugs and directories to the user.

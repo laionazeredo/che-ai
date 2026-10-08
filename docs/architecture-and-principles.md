@@ -119,7 +119,7 @@ This 3-layer topology is **directly inspired by [SpecFlow](https://www.specflow.
 
 - **1 layer** (a single 10,000 line `RULES.md`) was tried and failed: it drifts, gets copy-pasted, nobody reads it end-to-end. SpecFlow solved this exact problem 15 years ago with Feature Files vs Step Definitions separation.
 - **2 layers** (skills + one router) was almost enough but collapsed the **domain context** into skills, making skills non-composable across domains (the same code-review skill should read *different* L1 guidance when invoked in a UX-heavy project vs a pure-infra project).
-- **4+ layers** becomes bureaucracy. Che is not an ISO standard; it is a harness for 5–30 person teams. 3 layers hit the sweet spot — same conclusion SpecFlow reached for 500-person release trains.
+- **4+ layers** becomes bureaucracy. Che is not an ISO standard; it is a harness for 3–30 person teams. 3 layers hit the sweet spot — same conclusion SpecFlow reached for 500-person release trains.
 
 ### 4.2 Hard consequences of violating the 3-layer rule
 

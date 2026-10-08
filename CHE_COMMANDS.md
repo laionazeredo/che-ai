@@ -463,11 +463,11 @@ Agent action: ask confirmation first.
 
 ---
 
-## `/che-import <archive_path> [--workspace name]`
+## `/che-import <archive_path>`
 **What it does:** Imports a previously exported Che project archive. Recreates the L2 and L3 structures on the new machine.
 **When to invoke:** When you receive a Che archive and want to set it up in your local environment.
 **Agent action:**
-1. Execute: `python3 -m che_core.cli import "$PATH" ${WORKSPACE:+--workspace "$WORKSPACE"}`.
+1. Execute: `python3 -m che_core.cli import "$PATH"`. The legacy `--workspace` flag is accepted but **deprecated and ignored** — the slug comes from the archive.
 2. Resolve naming conflicts by appending `--import-YYYYMMDD-HHMM` to slugs if they already exist.
 3. Parse JSON response and report the new slugs and directories to the user.
 
