@@ -13,7 +13,7 @@ The agent MUST recognise these and react immediately.
 > **Conceptual difference:** Commands = UX entry point (slash `/che-X`) ↔ Skills = content/executor of work.
 > DO NOT turn ALL commands into skills. The separation below is intentional (KISS).
 
-### Category A — 30 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
+### Category A — 35 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
 | Command | Skill / module | Why separate wrapper? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
@@ -46,6 +46,11 @@ The agent MUST recognise these and react immediately.
 | `/che-search "..." [--top-k=N] [--scope=all\|tasks\|specs\|decisions\|envelopes]` | `che_core.state_store` | Full-text search FTS5 + BM25 ranking. Pre-flight: rebuild if DB older than decisions.log mtime. |
 | `/che-rag [build-index|search] [--provider=auto\|none\|openai\|st] [--top-k=N] [--no-hybrid]` | `che_core.rag` | Hybrid RAG BM25(40%) + vector(60%). Incremental build by chunk hash. OPTIONAL sqlite-vec. `none` zero-dep fallback ALWAYS works without pip install. |
 | `/che-knowledge [show\|scaffold\|apply] [--project=<slug>] [--domain=<slug>] [--ops=<json\|@file\|->]` | `che_core.knowledge` | **NEW:** Project knowledge base — `glossary.md` (vocabulary) + `<domain>/conventions.md` (observed practice per domain). Dry-run diff by default; `--no-dry-run --confirm` writes. Feeds the planning (che-architect, che-archeology, che-spec) and execution (che-act) phases. |
+| `/che-figma [mode]` | `che-social-ui-designer` | Alias of `/che-design` — same 4-mode pipeline (Social, UI-UX, Design System, Logo & Branding) with an explicit Figma-backend preference. |
+| `/che-graph [worktree]` | `che-graph` | Local AST knowledge graph over the repo (`refresh` / `query` / `path` / `stats`). No network. |
+| `/che-merge [worktree]` | `che-merge-resolver` | Per-hunk merge-conflict resolution with minimum blast radius; ambiguous hunks always ask. |
+| `/che-scope-check <target>` | `che-scope-checker` | Scope + LEAN audit of a PR or local worktree against the spec / task graph. |
+| `/che-ui-testing [scope]` | `ui-testing-contracts` (helper skill — **not yet shipped**) | RTL priority order, Playwright `byTestId` boilerplate and the `data-testid` convention lint. |
 
 ### Category B — 5 "light" commands = lightweight inline (5 lines to read/write markdown) → **DO NOT become skills (KISS)**:
 | Command | Inline implementation | Why NOT a skill? |
@@ -458,11 +463,11 @@ Agent action: ask confirmation first.
 
 ---
 
-## `/che-import <archive_path> [--workspace name]`
+## `/che-import <archive_path>`
 **What it does:** Imports a previously exported Che project archive. Recreates the L2 and L3 structures on the new machine.
 **When to invoke:** When you receive a Che archive and want to set it up in your local environment.
 **Agent action:**
-1. Execute: `python3 -m che_core.cli import "$PATH" ${WORKSPACE:+--workspace "$WORKSPACE"}`.
+1. Execute: `python3 -m che_core.cli import "$PATH"`. The legacy `--workspace` flag is accepted but **deprecated and ignored** — the slug comes from the archive.
 2. Resolve naming conflicts by appending `--import-YYYYMMDD-HHMM` to slugs if they already exist.
 3. Parse JSON response and report the new slugs and directories to the user.
 

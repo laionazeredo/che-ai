@@ -245,9 +245,9 @@ def _recommended_action(domain: str, task: Dict[str, Any]) -> Dict[str, Any]:
             }
     elif domain == "product":
         cmd = {
-            "slash": "/che-prd",
+            "slash": "/che-spec",
             "alt": None,
-            "description": "Generate approvable PRD in product domain.",
+            "description": "Generate an approvable SPEC in the product domain.",
             "gate_after": "product gates if they exist.",
         }
     elif domain == "devops":

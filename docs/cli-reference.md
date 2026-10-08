@@ -30,7 +30,7 @@
 
 > ⚠️ **This CLI does NOT replace in-IDE slash commands. It is the structural administrative sidecar that complements them.**
 >
-> `/che-project`, `/che-spec`, `/che-act`, `/che-ship`, `/che-review`, `/che-prd`, `/che-tasks`, `/che-notes`, `/che-graph` **(built-in) plus community custom skills (examples: `/figma-pixel-check`, `/flockr-*`, `/my-company-*`) continue to exist and are maintained**. They remain the recommended entry point for flows that require LLM reasoning (spec authoring, implementation loops, code review, PR gating) — **used inside Claude Code by default**.
+> `/che-project`, `/che-spec`, `/che-act`, `/che-ship`, `/che-review`, `/che-graph` **(built-in) plus community custom skills (examples: `/figma-pixel-check`, `/flockr-*`, `/my-company-*`) continue to exist and are maintained**. They remain the recommended entry point for flows that require LLM reasoning (spec authoring, implementation loops, code review, PR gating) — **used inside Claude Code by default**.
 >
 > Use **this `che-ai` CLI** for team bootstrap, project & worktree admin, CI wiring, trash-safe operations, offline state work, bulk listing, and portable export/import. A standard team flow is: `che project init <repo> --slug <slug>` + `che worktree add <repo> --project <slug> --name main` (terminal or CI setup) → `/che-spec` (IDE agent) → `/che-act` (IDE agent) → `/che-ship` (IDE agent).
 
@@ -175,12 +175,14 @@ pip uninstall che-ai
 | `config`       | (flags: `--lang-chat`, `--lang-docs`, `--lang-report`, `--pt-check`, `--flags`) | Session | Terminal CLI |
 | `task`         | `list`, `show`, `resume`, `set-status`, `graph-summary`             | Worktree | Terminal CLI |
 | `state`        | `rebuild-index`, `query`, `search`, `sanitize`                      | Project  | Terminal CLI |
-| `rag`          | `build`, `search`, `list`, `prune`                                  | Project  | Terminal CLI |
+| `rag`          | `build-index`, `search`                                             | Project  | Terminal CLI |
+| `knowledge`    | `scaffold`, `show`, `apply`                                         | Project  | Terminal CLI |
 | `export`       | (project → portable `.tar.gz`)                                      | Project  | Terminal CLI |
 | `import`       | (portable `.tar.gz` → project)                                      | Project  | Terminal CLI |
-| `eject`        | `plan`, `execute`, `restore`                                        | All      | Terminal CLI |
+| `eject`        | `plan`, `trash-list`, `restore`                                     | All      | Terminal CLI |
 | `update`       | (alias: `self-update`, `upgrade`) — flags: `--check`, `--che-home`, `--remote`, `--json` | All | Terminal CLI |
-| `pixel`        | `check`                                                             | Worktree | Terminal CLI |
+| `pixel`        | `check`, `paths`, `diff`, `crop`                                    | Worktree | Terminal CLI |
+| `designer`     | `bootstrap`, `init`, `validate`, `tokens`, `stock`, `ingest`, `ir`  | Worktree | Terminal CLI |
 | plumbing       | `compute_paths`, `ensure_dirs`, `output_path`, `write_file_atomic`, `assert_outside_worktree`, `registry_append`, `registry_lookup`, `decision_append` | Any | Terminal CLI |
 
 ### 2.1 Help Discovery
@@ -305,7 +307,7 @@ che capabilities --json --errors                # + the failure catalogue (§2.2
 | `stdin`                   | The payload arrives on stdin, not as an argument. Only `write_file_atomic` sets it.   |
 | `arguments[]`             | `name` (longest form), `dest`, `kind` (`positional`\|`option`), `type`, `required`, `default`, `choices` when constrained, `aliases` for the short forms, `group` for a mutually-exclusive set, `nargs` when the argument is optional or takes a list, `const` for what a flag stores when passed. |
 
-`-h`/`--help` is omitted from `arguments` on purpose: it exists on all 49 commands and would be noise.
+`-h`/`--help` is omitted from `arguments` on purpose: it exists on all 52 commands and would be noise.
 
 Sizes are what make progressive disclosure work: **14.5 KB** for the whole surface, **~2.8 KB** for one
 command, **~31 KB** with `--errors`. Read the compact form first; narrow only when you need arguments.
@@ -547,7 +549,7 @@ Valid choices (see `che config --help` for the up-to-date list):
 | `--pt-check`      | Portuguese hook        | `ENABLED`, `DISABLED`  | `DISABLED` |
 | `--flags`         | Escape hatch (JSON)    | free-form object       | `{}`    |
 
-The canonical flags enum lives in `che_core/constants.py`. Always treat that file as SSoT — do **not** copy the flag list into docs, specs, or prompt templates.
+The canonical flags enum lives in `che_core/cli.py` (the `parser_config` block, the single `add_argument` site for each `--lang-*` flag). Always treat that as SSoT — do **not** copy the flag list into docs, specs, or prompt templates.
 
 ---
 
@@ -721,10 +723,8 @@ che task graph-summary ~/code/my-company/web-app         # topo-sort, critical p
 The RAG layer is built on sqlite-vec. Everything runs locally; you can opt-in at any time and opt-out at any time (no network calls made by `che rag` itself).
 
 ```bash
-che rag build ~/code/my-company/web-app      # ingests markdown, code, decisions
-che rag search ~/code/my-company/web-app "RLS policy on events"
-che rag list   ~/code/my-company/web-app
-che rag prune  ~/code/my-company/web-app     # removes stale chunks
+che rag build-index ~/code/my-company/web-app   # ingests markdown, code, decisions
+che rag search      ~/code/my-company/web-app "RLS policy on events"
 ```
 
 ---
@@ -790,10 +790,10 @@ See `che export --help` and `che import --help` for the full blacklist.
 
 ## 8. Safe Eject / Uninstall
 
-If you ever want to stop using Che without losing anything, the eject flow is a **two-gate** safety check:
+If you ever want to stop using Che without losing anything, the eject flow is a **three-gate** safety check:
 
 1. **`che eject plan`** — prints exactly what would move to `.trash/`, every adapter that would be unlinked, and the exact restore command. **Makes no changes.**
-2. **`che eject execute --confirm`** — performs the plan.
+2. **`che eject plan --apply --confirmed --i-know-what-im-doing`** — performs the plan. All three flags are required; missing one blocks with `blocked-safety-gates` and moves nothing.
 3. **`che eject restore <ts>`** — undoes step 2 at any time.
 
 We intentionally do not provide a "hard delete" command. Everything is trash + restore.
