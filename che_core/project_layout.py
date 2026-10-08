@@ -69,6 +69,7 @@ PROJECT_DOCS = {
     "CHE_PROJECT_PROFILE": "project_profile.md",
     "CHE_PRODUCT_CONTEXT": "product_context.md",
     "CHE_ROADMAP_DOC": "roadmap.md",
+    "CHE_GLOSSARY_DOC": "glossary.md",
 }
 
 

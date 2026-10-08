@@ -325,6 +325,25 @@ COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
         "requires_bound_worktree": False,
         "output": "json",
     },
+    # --- project knowledge ------------------------------------------------------
+    "knowledge scaffold": {
+        "summary": "Create a domain's conventions.md from the canonical knowledge skeleton. Idempotent.",
+        "mutates": True,
+        "requires_bound_worktree": False,
+        "output": "prose",
+    },
+    "knowledge show": {
+        "summary": "Read the project's durable knowledge: glossary + per-domain conventions.",
+        "mutates": False,
+        "requires_bound_worktree": False,
+        "output": "prose",
+    },
+    "knowledge apply": {
+        "summary": "Preview (dry-run) or apply a knowledge change set. Dry-run unless --no-dry-run --confirm.",
+        "mutates": True,
+        "requires_bound_worktree": False,
+        "output": "prose",
+    },
     # --- update / eject ---------------------------------------------------------
     "update": {
         "summary": "Fast-forward this Che checkout to the latest main and re-link the host adapters.",

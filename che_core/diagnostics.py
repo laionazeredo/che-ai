@@ -423,6 +423,21 @@ ERROR_CATALOG: Dict[str, ErrorSpec] = dict(
             "{path}: not a usable theme — {detail}",
             "A proposed theme is JSON with a `colors` map of #RRGGBB values.",
         ),
+        # ------------------------------------------------------------------ knowledge
+        _spec(
+            "KNOWLEDGE_INPUT_INVALID",
+            "input",
+            EXIT_USAGE,
+            "{detail}",
+            "A change set is a JSON object with `glossary` and/or `conventions` lists of operations.",
+        ),
+        _spec(
+            "KNOWLEDGE_CONFLICT",
+            "input",
+            EXIT_USAGE,
+            "{detail}",
+            "Insert only terms/topics that do not exist; update or delete only those that do.",
+        ),
         # ------------------------------------------------------------------ boundaries
         _spec(
             "STORAGE_BOUNDARY_VIOLATION",
