@@ -10,6 +10,13 @@ description: "Generate or validate a Che Execution Specification (SPEC). 4 input
 > - Path resolution (WORKSPACE_NAME, WORKTREE_SLUG, CHE_WORKSPACE_SHARED, CHE_SESSION_DIR): `che` CLI — `eval "$(che compute_paths WT SID --cwd "$PWD")"`
 > - 2-LEVEL worktree binding (Level1 registry, Level2 sessions dir): engineering-contracts §19
 
+## §K PROJECT KNOWLEDGE STEP (planning — consume + propose)
+
+Ask: **any new term, or any term to update or remove?** Load with `che knowledge show --project <slug>`;
+if nothing exists, this is a **no-op** — skip it. Propose changes with
+`che knowledge apply --ops @ops.json` (dry-run), show the diff, and gate on **keep / alter / revert**
+before `--no-dry-run --confirm`. Never hand-edit the documents. Full contract: `che-knowledge` skill §6.
+
 Produces **1 file per feature/bug/refactor:** a compact, agent-optimised spec (~60–120 lines, 7 sections). Replaces project-specific legacy PRD artifacts. Gate before scope capture in `/che-act` and standalone runnable via `/che-spec`.
 
 ---
