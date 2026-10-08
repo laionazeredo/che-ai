@@ -12,7 +12,7 @@ This document defines the rules and architectural boundaries for **AI coding age
 
 > 🔴 **MANDATORY NOTICE for agents and humans — slash commands stay.**
 >
-> `/che-project`, `/che-worktree`, `/che-spec`, `/che-act`, `/che-ship`, `/che-review`, `/che-prd`, `/che-tasks`, `/che-notes`, `/che-graph` **(built-in) plus community custom skills (examples: `/figma-pixel-check`, `/flockr-*`, `/my-company-*`) and every other in-IDE slash command are kept, maintained and continue to be the RECOMMENDED entry point for agentic / creative work inside Claude Code** (spec writing, implementation, reviews, PR gating — flows that require LLM reasoning).
+> `/che-project`, `/che-worktree`, `/che-spec`, `/che-act`, `/che-ship`, `/che-review`, `/che-graph` **(built-in) plus community custom skills (examples: `/figma-pixel-check`, `/flockr-*`, `/my-company-*`) and every other in-IDE slash command are kept, maintained and continue to be the RECOMMENDED entry point for agentic / creative work inside Claude Code** (spec writing, implementation, reviews, PR gating — flows that require LLM reasoning).
 >
 > The `che-ai` / `che` terminal CLI **is NOT a replacement** — it is the **structural administrative sidecar** for team bootstrap, project admin, CI wiring, trash-safe removal, bulk listing/exporting, and offline structural operations. A normal team flow is **(1) `che project init` + `che worktree add` (terminal or CI setup) → (2) in-IDE `/che-spec` (inside Claude Code) → (3) `/che-act` → (4) `/che-ship`**. Not one or the other.
 
@@ -30,7 +30,7 @@ cd ~/.che-ai                      # Che config repo (canonical default, Sep 2026
                                   # $CHE_HOME env var always has top precedence.
 pipx install -e . --force          # user-isolated venv, ~/.local/bin/ on PATH
 which che        # → ~/.local/bin/che
-che --help       # 18 structural subcommand groups: project/worktree/config/task/state/rag/export/import/eject + plumbing
+che --help       # 23 structural subcommand groups: project/worktree/config/task/state/rag/knowledge/export/import/eject/update/pixel/designer/capabilities/mcp + plumbing
 ```
 
 > 💻 **Platform Compatibility (installer fail-fast):** `scripts/install-che.sh` runs ONLY on **Linux + macOS POSIX bash/zsh shells**. On Windows PowerShell / CMD, the installer exits with error code 5; users must use **WSL2 Ubuntu 22.04 LTS** and run the installer from inside the Linux userland.
@@ -48,7 +48,7 @@ This 3-layer topology is **directly inspired by [SpecFlow](https://www.specflow.
 - **L2 (Framework)**: `CHE_RULES.md` and `CHE_COMMANDS.md` ↔ **SpecFlow Step Bindings Registry** (`[Binding]` classes in C#). Routers containing **titles and links ONLY**, never rule bodies.
 - **L3 (Skills)**: `skills/*/SKILL.md` ↔ **SpecFlow Step Definitions + Hooks**. Declarative rules and task boundaries. Smallest reusable unit of Che behaviour.
 
-Why three layers and why SpecFlow? Short answer plus full trade-off rationale in [docs/architecture-and-principles.md §4](./docs/architecture-and-principles.md#4-3-layer-rule-framework-structure).
+Why three layers and why SpecFlow? Short answer plus full trade-off rationale in [docs/architecture-and-principles.md §4](./docs/architecture-and-principles.md#4-3-layer-rule-framework-structure--topology-inspired-by-specflow--cucumber-bdd).
 
 ---
 
@@ -105,7 +105,7 @@ Based on [The Pragmatic Programmer](https://pragprog.com/the-pragmatic-programme
 
 ## 5. Quality & Security
 
-- **CI Pipeline**: All changes must pass `ruff check .` (lint/format) and `python3 -m pytest tests/ -q` (unit tests). CI = 0 ruff errors + 114 tests passing is the bar.
+- **CI Pipeline**: All changes must pass `ruff check .` (lint/format) and `python3 -m pytest tests/ -q` (unit tests). CI = 0 ruff errors + 789 tests passing is the bar.
 - **PII & Secrets**: **NEVER** log or persist raw emails, JWTs, or API keys. Use `NOTIFICATION_PII_HASH_SECRET` for correlation when you need to link a log entry to a recipient without leaking the address.
 - **Skill Security**: Markdown files are analyzed for destructive bash commands. Python blocks in Markdown must not exceed 15 lines. If your agent wrote 20 lines of Python inside a `SKILL.md`, that is your signal to move it into `che_core/` as a proper CLI subcommand.
 - **Planning-artifact hygiene**: Che deliberately ships a fail-closed gitignore blacklist (see root `.gitignore`, section **CHE PLANNING ARTIFACTS — NEVER COMMIT**). If a spec file, decision log or task graph ends up in a user repo's `git status`, treat that as a bug in `install-che.sh` or the skill that wrote it — not as user error.

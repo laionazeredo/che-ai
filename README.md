@@ -30,8 +30,8 @@ The result is a harness that:
 | Path | Audience | Content |
 | :--- | :------- | :------ |
 | **[AGENTS.md](./AGENTS.md)** | AI coding agents + core contributors | Technical contracts, 3-layer rulebook, project → worktree memory, Python-only core rule. |
-| **[docs/cli-reference.md](./docs/cli-reference.md)** | End users, DevOps, terminal-first engineers | Full `che-ai` / `che` binary reference, 15 commands, exit codes, troubleshooting. |
-| **[docs/architecture-and-principles.md](./docs/architecture-and-principles.md)** | Architects, curious users, future maintainers | The **why** of Che: positioning, 8 opinionated stances, 5 anti-goals, methodology citations (Pragmatic, DbC, SBE, SpecFlow). |
+| **[docs/cli-reference.md](./docs/cli-reference.md)** | End users, DevOps, terminal-first engineers | Full `che-ai` / `che` binary reference, 52 commands across 23 groups, exit codes, troubleshooting. |
+| **[docs/architecture-and-principles.md](./docs/architecture-and-principles.md)** | Architects, curious users, future maintainers | The **why** of Che: positioning, 9 opinionated stances, 5 anti-goals, methodology citations (Pragmatic, DbC, SBE, SpecFlow). |
 | **[CHE_RULES.md](./CHE_RULES.md)** | Everyone (3-Layer router, L2 SpecFlow-style) | Titles + links only — routes to all domain playbooks and skills. |
 | **[CHE_COMMANDS.md](./CHE_COMMANDS.md)** | Everyone (3-Layer router, L2 SpecFlow-style) | Titles + links only — routes to the full command surface (spec/act/ship/fix). |
 
@@ -78,7 +78,7 @@ pipx install -e . --force
 # ✅ Confirm install
 which che-ai          # → /home/you/.local/bin/che-ai
 which che             # → /home/you/.local/bin/che
-che --help            # 15 subcommands, 0 tokens, 0 network
+che --help            # 23 subcommand groups, 0 tokens, 0 network
 ```
 
 > **Troubleshooting:** If `che` shows "command not found" after pipx: `export PATH="$HOME/.local/bin:$PATH" ; pipx ensurepath`. See _§11 Troubleshooting_ in [docs/cli-reference.md](./docs/cli-reference.md).
@@ -89,7 +89,7 @@ che --help            # 15 subcommands, 0 tokens, 0 network
 che --help                                            # CLI surface
 che project list                                      # List flat projects
 che config --help                                     # Session flags (LANG_CHAT etc)
-python3 -m pytest tests/ -q                           # 114 unit tests (core harness)
+python3 -m pytest tests/ -q                           # 789 unit tests (core harness)
 ```
 
 ### 4. Keep it up to date — `che update`
@@ -331,7 +331,7 @@ Two complementary hierarchies: one **3-layer** for the rulebook, one **project �
 2. **L2 (Routers)** → SpecFlow *step bindings registry (links only)*: Link lists in `CHE_RULES.md` and `CHE_COMMANDS.md`. **Titles and links ONLY.** Rule bodies never live here (just like `[Binding]` C# classes in SpecFlow are a registration table, not the prose).
 3. **L3 (Skills)** → SpecFlow *Step Definitions + Hooks*: Declarative rule bodies in `skills/<id>/SKILL.md`. Smallest reusable unit of behaviour.
 
-> Why SpecFlow instead of "just a folder structure with docs"? Because this exact topology has shipped enterprise BDD for 15+ years. We're not inventing a new rulebook layout — we're reusing one that already survives 500-person release trains. See [docs/architecture-and-principles.md §4](./docs/architecture-and-principles.md#4-3-layer-rule-framework-structure) for full rationale.
+> Why SpecFlow instead of "just a folder structure with docs"? Because this exact topology has shipped enterprise BDD for 15+ years. We're not inventing a new rulebook layout — we're reusing one that already survives 500-person release trains. See [docs/architecture-and-principles.md §4](./docs/architecture-and-principles.md#4-3-layer-rule-framework-structure--topology-inspired-by-specflow--cucumber-bdd) for full rationale.
 
 ### Project Memory (what lives inside `~/.che-workspaces`)
 
@@ -357,10 +357,15 @@ The full rationale, 8 opinionated stances, 5 anti-goals and methodology referenc
 | `/che-ship` (IDE)      | Delivery | Agent slash-command (Claude Code) + ✅ CLI gates | Four DbC precondition gates (scope → review → compliance → QA), then Draft PR. |
 | `che task {list,show,resume,set-status,graph-summary}` | Worktree | Terminal CLI | Task graph read-only inspection. |
 | `che state {rebuild-index,query,search,sanitize}` | Project | Terminal CLI | SQLite FTS5 append-only memory (`<project>/_db/`). |
-| `che rag {build,search,list,prune}` | Project | Terminal CLI | Local sqlite-vec hybrid search. |
+| `che rag {build-index,search}` | Project | Terminal CLI | Local sqlite-vec hybrid search. |
 | `che export` / `che import` | Project | Terminal CLI | Portable project `.tar.gz` — no `.git`, no code, only memory. |
-| `che eject {plan,execute,restore}` | All | Terminal CLI | Two-gated safe uninstall. Always trash, never rm. |
+| `che eject {plan,trash-list,restore}` | All | Terminal CLI | Two-gated safe uninstall. Always trash, never rm. |
 | `che update` (alias `self-update`, `upgrade`) | All | Terminal CLI | Fast-forward the checkout to the remote's default branch; reinstall the CLI only if `pyproject.toml` moved. |
+| `che knowledge {scaffold,show,apply}` | Project | Terminal CLI | Durable project knowledge: `glossary.md` + per-domain `conventions.md` (`/che-knowledge`). |
+| `che designer {bootstrap,init,validate,tokens,stock,ingest,ir}` | Worktree | Terminal CLI | Git-native design tree + `DESIGN.md` validation (`/che-design`). |
+| `che pixel {check,paths,diff,crop}` | Worktree | Terminal CLI | Numeric design-vs-DOM gate runner (`domains/ux/gates/pixel-check-gate.md`). |
+| `che capabilities [--command <name>] [--errors] [--json]` | All | Terminal CLI | The CLI surface **as data** — every command, its flags and semantics. |
+| `che mcp serve` | All | stdio (MCP) | The same surface as MCP tools, one per command. |
 
 > **Full command reference with examples, exit codes and troubleshooting → [docs/cli-reference.md](./docs/cli-reference.md).**
 

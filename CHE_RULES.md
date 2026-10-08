@@ -15,7 +15,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 > - GitHub integration + ship + **gh-stack multi-PR hierarchy**
 > - Preferred tools by integration
 >
-> **PURE ENGINEERING RULES (14 precedence, KISS/YAGNI, strong typing, DbC, TDD, SOLID, agile BDD, security, PII, conventional commits, Database Security by Default Provider-Agnostic Pointer (see engineering-contracts SKILL §17 → postgres-supabase-expert SKILL §R-01 for PostgreSQL/Supabase specifics), code review optimisation, max 2 lines comments) → CANONICAL = `engineering-contracts` SKILL. DO NOT DUPLICATE HERE.**
+> **PURE ENGINEERING RULES (17 precedence, KISS/YAGNI, strong typing, DbC, TDD, SOLID, agile BDD, security, PII, conventional commits, Database Security by Default Provider-Agnostic Pointer (see engineering-contracts SKILL §17 → postgres-supabase-expert SKILL §R-01 for PostgreSQL/Supabase specifics), code review optimisation, max 2 lines comments) → CANONICAL = `engineering-contracts` SKILL. DO NOT DUPLICATE HERE.**
 
 ---
 
@@ -45,7 +45,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 > ONLY POSSIBLE EXCEPTION: User explicitly and clearly asks VERBATIM for a SPECIFIC file to be saved inside the worktree. Without this verbal request, default = **OUTSIDE WORKTREE**.
 >
 > - **IMMUTABLE che CODE (skills/commands/hooks/user_rules/contracts):** lives in Che home, resolved via 5-tier cascade: `$CHE_HOME` (top precedence, user override) → `$HARNESS_HOME` (compat alias) → `$HOME/.che-ai` (canonical default, Sep 2026+) → `$HOME/.trae` if CHE_RULES.md exists there (legacy pre-Sep-2026, originally inside Trae IDE home folder, historical accident) → final fallback `$HOME/.che-ai`.
-> - **DATA/GENERATED/MUTABLE (specs, plans, decisions, reports, QA evidence, bindings, diff contexts, PR comments):** must go to `$CHE_SESSIONS_ROOT` (default `$HOME/code/che-sessions`), **OUTSIDE USER WORKTREES**, under `<WORKSPACE_NAME>/<WORKTREE_SLUG>/`.
+> - **DATA/GENERATED/MUTABLE (specs, plans, decisions, reports, QA evidence, bindings, diff contexts, PR comments):** must go to the canonical workspace root (`$CHE_WORKSPACES_ROOT`, default `$HOME/.che-workspaces`), **OUTSIDE USER WORKTREES** — durable docs under `<project-slug>/`, tactical artifacts under `<project-slug>/worktrees/<worktree-slug>/`, ephemeral session data under `<project-slug>/.sessions/<session_id>/`.
 >
 > Canonical paths SINGLE SOURCE OF TRUTH: the `che` CLI (`che_core/paths.py`). Resolve with `eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")"` then `che ensure_dirs "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD"`. **Hardcoded path construction (e.g. `~/.trae/...`) is prohibited.** The CLI owns the 5-tier Che-home cascade.
 >
