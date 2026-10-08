@@ -156,6 +156,7 @@ $CHE_WORKSPACES_ROOT
    ├─ product_context.md                ←   Intent, personas, constraints.
    ├─ roadmap.md                        ←   Outcomes, timeline, priorities.
    ├─ glossary.md                       ←   Project vocabulary (`/che-knowledge`).
+   ├─ roles/index.md                    ←   Who (human or agent) plays what role.
    ├─ registry.jsonl                    ←   Append-only bindings/flags stream.
    ├─ _db/                              ←   Shared blobs: SQLite DBs, CSVs.
    ├─ <domain>/conventions.md           ←   Per-domain conventions (business, product,

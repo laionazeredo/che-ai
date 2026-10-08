@@ -341,7 +341,7 @@ Two complementary hierarchies: one **3-layer** for the rulebook, one **project �
 
 Session → worktree → project bindings are recorded in `~/.che-workspaces/.state/registry.jsonl`.
 
-The full rationale, 8 opinionated stances, 5 anti-goals and methodology references live in [docs/architecture-and-principles.md](./docs/architecture-and-principles.md). Do **not** propose a core change without having read it first — the document explicitly lists the trade-offs we deliberately refuse to revisit.
+The full rationale, 9 opinionated stances, 5 anti-goals and methodology references live in [docs/architecture-and-principles.md](./docs/architecture-and-principles.md). Do **not** propose a core change without having read it first — the document explicitly lists the trade-offs we deliberately refuse to revisit.
 
 ***
 

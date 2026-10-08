@@ -50,7 +50,7 @@ The agent MUST recognise these and react immediately.
 | `/che-graph [worktree]` | `che-graph` | Local AST knowledge graph over the repo (`refresh` / `query` / `path` / `stats`). No network. |
 | `/che-merge [worktree]` | `che-merge-resolver` | Per-hunk merge-conflict resolution with minimum blast radius; ambiguous hunks always ask. |
 | `/che-scope-check <target>` | `che-scope-checker` | Scope + LEAN audit of a PR or local worktree against the spec / task graph. |
-| `/che-ui-testing [scope]` | `ui-testing-contracts` | RTL priority order, Playwright `byTestId` boilerplate and the `data-testid` convention lint. |
+| `/che-ui-testing [scope]` | `ui-testing-contracts` (helper skill — **not yet shipped**) | RTL priority order, Playwright `byTestId` boilerplate and the `data-testid` convention lint. |
 
 ### Category B — 5 "light" commands = lightweight inline (5 lines to read/write markdown) → **DO NOT become skills (KISS)**:
 | Command | Inline implementation | Why NOT a skill? |

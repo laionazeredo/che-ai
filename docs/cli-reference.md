@@ -790,10 +790,10 @@ See `che export --help` and `che import --help` for the full blacklist.
 
 ## 8. Safe Eject / Uninstall
 
-If you ever want to stop using Che without losing anything, the eject flow is a **two-gate** safety check:
+If you ever want to stop using Che without losing anything, the eject flow is a **three-gate** safety check:
 
 1. **`che eject plan`** — prints exactly what would move to `.trash/`, every adapter that would be unlinked, and the exact restore command. **Makes no changes.**
-2. **`che eject plan --apply --confirmed`** — performs the plan.
+2. **`che eject plan --apply --confirmed --i-know-what-im-doing`** — performs the plan. All three flags are required; missing one blocks with `blocked-safety-gates` and moves nothing.
 3. **`che eject restore <ts>`** — undoes step 2 at any time.
 
 We intentionally do not provide a "hard delete" command. Everything is trash + restore.
