@@ -395,8 +395,9 @@ For any `/che-ship` command or similar:
 - ALWAYS use `gh` CLI (user rules: GitHub = gh CLI).
 - Atomic commits + conventional commits.
   - **Full body of conventional commits (valid types + regex + examples):** `engineering-contracts` SKILL Appendix B.
-- Commit plan ALWAYS presented to the user BEFORE any `git commit`.
-- Wait for EXPLICIT user approval before committing.
+- **Slice commits from `che-act` (1 vertical slice = 1 commit) are kept as-is — never re-grouped or squashed by default.**
+- Commit plan ALWAYS presented to the user BEFORE any `git commit` **not already approved slice-by-slice**.
+- Wait for EXPLICIT user approval before committing. `REVIEW_MODE=FINAL` (chosen at the task-graph gate, overridable mid-run) moves that approval to the ship commit plan instead of a per-slice gate.
 
 ### B) Push
 - ALWAYS `git push --no-verify` (user rules). Normal push only with explicit approval.
