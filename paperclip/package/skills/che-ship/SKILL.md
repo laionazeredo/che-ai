@@ -425,6 +425,14 @@ Look at the diff. `git diff --name-only <DEFAULT_BRANCH>...HEAD` (or vs staged).
 From the diff-name-only output, REMOVE all files matching the patterns in §0.8 BLACKLIST (`.trae/**`, `decisions.log*`, `decision.log*`, `task_graph.md`, `manual_test_plan.md`, `final_summary.md`, `execution_batches.md`, `batch_execution_report.md`, `merge_audit.*`, `scope-report.*`, `scope_check_report.*`, `spec_*.md`, `gh_stack_plan.md`, `session.md`, `envelope.md`, `task_envelope.md`, `graphify-out/**`, `*review-report.md`).
 - If any of those files appear in the diff → §0.8 preflight SHOULD have cleaned them already. If still present → **DO NOT ADD TO ANY COMMIT.** Skip silently and add 1 note at the bottom of the commit plan: "Note: N planning-artifact files auto-skipped (never committed)."
 
+**SLICE COMMITS ALREADY EXIST? (che-act §2.2.1 — 1 vertical slice = 1 commit)**
+Inspect `git log <DEFAULT_BRANCH>..HEAD --oneline`. If the history already carries the per-slice commits
+created during `che-act`, **DO NOT re-group them**:
+- Validate the chain instead: conventional, English, one slice each, no planning artifacts, tests inside
+  the same commit as their code.
+- Add commits ONLY for work done AFTER the act (review remediation, QA fixes, docs).
+- Keep the original slice commits intact — rewriting them destroys the slice↔commit traceability.
+
 Group the remaining (filtered) changes into atomic, logical commits:
 
 - **feat(scope):** new functionality, new endpoints, new UI components
@@ -444,6 +452,7 @@ Rule for grouping:
 - Tests for a feature go WITH the feature commit, not in separate, unless the feature is already merged.
 - Migrations: usually `chore(db): add migration for X` separate commit.
 - Max 15 commits per ship. If > 15 → offer user option to squash into fewer + plan, or proceed with 15+.
+  This cap applies to NEW commits added here; existing slice commits are not squashed by default.
 
 Present commit plan to the user as a **numbered list**, in order of application. Add the "N planning artifacts skipped" note at the bottom if applicable.
 Wait for explicit user APPROVAL before running any `git commit`.
