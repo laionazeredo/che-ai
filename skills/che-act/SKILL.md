@@ -1,6 +1,6 @@
 ---
 name: "che-act"
-description: "Orchestrates the full Agile simulated team: scope capture, TASK GRAPH with deps, TASK ENVELOPE handoff, per-task scope validation, and final delivery summary. Invoke ONLY when user asks to start a feature/bug implementation through the che or when /che-act is called."
+description: "Orchestrates the full Agile simulated team: scope capture, TASK GRAPH with deps, TASK ENVELOPE handoff, per-task scope validation, and final delivery summary. Runs the che-interrogate readiness gate (§0.6) between the Approved-SPEC gate and scope capture, so no task plan is built on a thin, contradictory or stale SPEC. Invoke ONLY when user asks to start a feature/bug implementation through the che or when /che-act is called."
 ---
 
 # Che — Scrum Master (Orchestrator)
@@ -279,9 +279,42 @@ This gate runs **AFTER** preflight 0.1 (binding), contract path resolution, and 
         ```
 8. **Downstream propagation:** If gates 4+6+7 all passed → unlock scope capture §1.1. Persist into session L3 ephemeral: `SESSION_WRAPPERS = all rows from §4.6.1`, `SESSION_ASSERTIONS = all A-IDs from §4.7`, `SESSION_DRY_RULES = all Business Rule rows from §4.8`. Proceed to §1.
 
+### 0.6 PRE-PLAN READINESS GATE (MANDATORY — che-interrogate, BEFORE scope capture)
+
+> **Why here:** the SPEC may be Approved and still be unusable as a planning input — stale against the
+> current code, missing a behaviour→slice mapping, or resting on assumptions nobody confirmed. This gate
+> runs **before** §1.1 so the task graph is never built on an incoherent plan.
+> Full contract: `che-interrogate` skill (single source of truth — do NOT restate it here).
+
+1. **Select the mode:**
+   - SPEC frontmatter has `readiness` + `readiness_report` → invoke `che-interrogate` with **`mode=act`**
+     (cheaper; `intake` is already settled).
+   - Fields missing (legacy SPEC) → invoke with **`mode=intake`** on the SPEC content. **Never skip.**
+2. **Anti re-ask:** pass the existing `open_assumptions` + the readiness report path. Question ids already
+   resolved are **not** re-asked; only the `act` lenses are re-evaluated against the current worktree.
+3. **Capture the return:**
+   ```
+   READINESS_VERDICT=READY|READY_WITH_ASSUMPTIONS|BLOCKED
+   READINESS_REPORT=<absolute path>
+   ```
+4. **Gate enforcement (HARD):**
+   - `BLOCKED` → **STOP.** Do NOT unlock §1.1, do NOT write `task_graph.md`. Present the question table
+     with `A = answer (re-runs the gate once) / C = abort and fix the SPEC via /che-spec`. BLOCKER items
+     are never overridable.
+   - `READY_WITH_ASSUMPTIONS` → proceed. Set `SESSION_ASSUMPTIONS = open_assumptions` and carry them into
+     every TASK ENVELOPE (§2.1) so the Developer does not silently re-decide them.
+   - `READY` → proceed.
+5. **Persist:** `che decision_append "$WORKTREE_ROOT" "READINESS_GATE" "mode=<act|intake> verdict=<...> questions=<n> blockers=<n> majors=<n> report=<path>"`.
+6. **Escape hatch (user verbatim only):** the literal `EXPLICIT_OVERRIDE_READINESS_GATE: <1-line reason ≤120 chars>`
+   → log `READINESS_GATE_OVERRIDE` and proceed. **Never applies to BLOCKER items** — a BLOCKED verdict
+   can only be overridden after the underlying question is answered.
+
+---
+
 ### 1.1 Input validation
 
 Check if user provided:
+- [ ] Readiness gate passed (§0.6): `READY` or `READY_WITH_ASSUMPTIONS` (a `BLOCKED` verdict never reaches this point)
 - [ ] Approved SPEC file (session SPEC_PATH set by §0.5) — OR explicit SPEC-OVERRIDE decision logged
 - [ ] Goals / problem statement
 - [ ] Constraints (tech, time, architectural, business)
@@ -298,11 +331,15 @@ If user said "decompose into tasks" or did not provide a list:
    - **Atomicity (CANONICAL #0 — VERTICAL SLICING)**: 1 task = 1 MINIMUM VERTICAL SLICE. Every task MUST touch ≥ 2 distinct architectural layers (UI · API · DB · External service · Config). PROHIBITED: task touching only 1 layer (only `models/`, only `pages/`, only `routes/` isolated). Exception: task ID suffix `-H-OVERRIDE-<N>` + corresponding entry in decisions.log via `EXPLICIT_OVERRIDE_HORIZONTAL_PLAN`.
    - **Precedence**: slice-to-slice dependencies only (F0 always first with no blockers). Never "API blocks UI" layer-style dependencies.
    - **Size**: completable in < 1 day (conceptually); 1 vertical slice = 1 deliverable DONE observable by user.
-2. Present to user:
-   - For each task: short title + `Vertical Slice Ref: <F0/F1/FN>` + `Layers Touched: <layer1 · layer2 · ...>` + coverage + what it explicitly DOES NOT cover
+2. Present to user, in this order:
+   - **First — the Executive Summary + Plan at a glance** (human-first, ≤15 lines + 1 row per task). This is
+     what the user approves; the detailed tables are the contract behind it.
+   - **Then — per-task detail only on request:** `Vertical Slice Ref: <F0/F1/FN>` + `Layers Touched:
+     <layer1 · layer2 · ...>` + coverage + what it explicitly DOES NOT cover.
+   - Legend: `A = approve plan · B = adjust <what> · D = show full task list`.
 3. If any task has `Layers Touched distinct count < 2` AND no `-H-OVERRIDE-` suffix → REJECT task list, present 2 options:
    > "(A) Expand task to touch ≥2 layers (make it vertical) / (B) Add `-H-OVERRIDE-N` suffix + log EXPLICIT_OVERRIDE_HORIZONTAL_PLAN in decisions.log with 1-line justification."
-4. Wait for user APPROVAL.
+4. Wait for user APPROVAL. On `B`, regenerate the Executive Summary from the revised table — it is derived, never hand-patched.
 
 ### 1.3 Build TASK GRAPH
 
@@ -320,6 +357,22 @@ TASK_GRAPH_EOF
 - Created: <ISO datetime>
 - Worktree: <path>
 - Vertical Slicing Compliance (CANONICAL #0): <F0 defined in SPEC §4.5 | H-OVERRIDE logged | INVALID — reason>
+
+## Executive Summary (human-first — ≤15 lines, DERIVED never authoritative)
+> Projection of the tables below. If they disagree, the tables win and this block is regenerated.
+- What ships: <1 sentence, plain language — what the user can do after this lands>
+- Why: <1 sentence — risk/pain of not shipping>
+- Shape: <N> tasks · <S> vertical slices (F0..F<S-1>) · <P> PR(s) · ~<K> files
+- Critical path: <T1 → T2 → T4>
+- Main risk: <1 sentence + rollback clause>
+- Assumptions carried from the readiness gate: <SESSION_ASSUMPTIONS or "none">
+- Decisions needed from you: <none | readiness ids still open>
+
+## Plan at a glance
+| # | Slice | What ships (publicly observable) | Layers | Depends on | Risk | Est. files |
+|---|---|---|---|---|---|---|
+| T1 | F0 | <1 line, literal outcome — no "works correctly"> | UI · API · DB | — | low | 6 |
+| T2 | F1 | ... | ... | T1 | med | 5 |
 
 ## Task Table
 
@@ -363,6 +416,11 @@ For EVERY row (T1..TN), run EXACT checks, STOP on first 🔴:
    - Let `MATCHING_DRY = filter DRY Rule IDs whose SSoT path intersects any task file`.
    - **If `MATCHING_DRY.length > 0` AND `DRY Rules Touched` column === "-" → 🔴 REJECT individual row.** Fill column with comma-separated matching Rule IDs (R-3, R-7 etc).
    - If no SSoT path edited → column stays "-" = OK. Rule consumers (imports / reads only) do NOT trigger this check — only edits to the authoritative source.
+8. **EXECUTIVE SUMMARY consistency (G-ES):**
+   - `## Executive Summary` exists and has ≤15 non-empty lines; `Decisions needed from you` is `none` or lists ≥1 readiness id.
+   - `## Plan at a glance` has EXACTLY 1 row per Task Table row — same IDs, same order, no orphan on either side.
+   - Every `What ships` cell is publicly observable (no `works correctly|as expected|properly`).
+   - Any divergence → 🔴 regenerate BOTH blocks from the Task Table (derived, never hand-patched).
 
 **IMPORTANT:** TASK GRAPH with ANY 🔴 from validation above MUST NOT be written to `$TASK_GRAPH_PATH` until user resolves ALL 🔴 items. Present findings FIRST as a table, then ask for explicit resolution before atomic write.
 
@@ -578,6 +636,7 @@ Output = `$CHE_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope
 - **Blast radius**: explicit list of files / directories MAY be touched. If Dev needs outside → come back to SM, log to `decisions.log.jsonl`.
 - **Reuse mandate**: specific existing symbols MUST be reused.
 - **Simplicity Bias (engineering-contracts §1)**: envelope MUST name the simplest approach AND carry the SPEC §1 "deferred by design" list forward, so Dev does not implement deferred completeness.
+- **Readiness assumptions (§0.6)**: envelope MUST carry `SESSION_ASSUMPTIONS` verbatim; the Developer must not silently re-decide any of them.
 - **Vertical slices (SPEC §4.5)**: the ordered F0..FN list the Dev executes one at a time; each slice ends with a `che-pair` review (§2.2).
 - **Max files heuristic**: if > 10 files → SM re-evaluate and justify in decision.log.
 
@@ -697,6 +756,7 @@ Print concise English summary:
 
 - [ ] Preflight: worktree path confirmed
 - [ ] Preflight: `che compute_paths` + `che ensure_dirs` executed WITHOUT CONTRACT VIOLATION (all paths OUTSIDE worktree)
+- [ ] Readiness gate (§0.6) ran and returned `READY` or `READY_WITH_ASSUMPTIONS` (never skipped, never silently bypassed)
 - [ ] Scope capture: ACs explicit and user-approved
 - [ ] TASK GRAPH: user approved or provided
 - [ ] Per task: ENVELOPE written with blast radius + DONE criteria

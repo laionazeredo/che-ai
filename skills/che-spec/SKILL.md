@@ -1,6 +1,6 @@
 ---
 name: "che-spec"
-description: "Generate or validate a Che Execution Specification (SPEC). 4 inputs: existing spec file, ticket URL (Linear/ClickUp/GitHub), legacy-project PRD .md path, or inline brief. Produces 7 sections + machine-parsable YAML frontmatter, user-approved before save into $CHE_WORKSPACE_SHARED/specs/<slug>/<ts>-spec.md (DURABLE workspace area OUTSIDE user worktree code)."
+description: "Generate or validate a Che Execution Specification (SPEC). 4 inputs: existing spec file, ticket URL (Linear/ClickUp/GitHub), legacy-project PRD .md path, or inline brief. Runs the che-interrogate intake readiness gate on the RAW input BEFORE drafting (thin tickets, logical gaps, contradictory multi-ticket input). Produces a human-first §0 executive summary (≤15 lines) plus 7 machine sections + YAML frontmatter, user-approved before save into $CHE_WORKSPACE_SHARED/specs/<slug>/<ts>-spec.md (DURABLE workspace area OUTSIDE user worktree code)."
 ---
 
 # Che Spec Generator (SPEC)
@@ -132,6 +132,35 @@ fi
 
 ---
 
+## §1.6 INTAKE READINESS GATE (MANDATORY — runs on the RAW input, BEFORE any draft)
+
+> **Why here:** thin tickets, logical gaps and contradictory tickets must be caught **before** §2 source
+> selection — not after a draft exists. A SPEC cannot be more precise than the input it was derived from.
+> Full contract: `che-interrogate` skill (single source of truth — do NOT restate it here).
+
+1. **Invoke `che-interrogate` with `mode=intake`**, passing the raw material exactly as received: ticket
+   URL(s)/text, legacy PRD path, inline brief, or the existing SPEC file. **Multiple tickets handed over
+   together are passed together** — cross-ticket contradictions are one of the gate's primary lenses.
+2. Capture the return:
+   ```
+   READINESS_VERDICT=READY|READY_WITH_ASSUMPTIONS|BLOCKED
+   READINESS_REPORT=<absolute path>
+   ```
+3. **Gate enforcement (HARD, not advisory):**
+   - `BLOCKED` → **STOP.** No §2, no draft, no save. Show the question table + `A answer / C abort`
+     (option `B assume` is unavailable for BLOCKER items). End the skill with `SPEC_STATUS=Draft` and
+     no file written.
+   - `READY_WITH_ASSUMPTIONS` → proceed. The assumptions are recorded in the frontmatter
+     (`open_assumptions`) and surfaced again in §5 approval.
+   - `READY` → proceed.
+4. **Persist in the draft frontmatter** (see §HEAD): `readiness`, `readiness_report`, `open_assumptions`.
+5. **Legacy/manual bypass is not allowed.** If the gate cannot run (no `che` CLI, no worktree), STOP with
+   the failure — do not silently skip. The only escape is the user typing verbatim
+   `EXPLICIT_OVERRIDE_READINESS_GATE: <1-line reason ≤120 chars>`, logged via
+   `che decision_append "$WORKTREE_ROOT" "READINESS_GATE_OVERRIDE" "<reason>"`.
+
+---
+
 ## §2 SOURCE SELECTION (4 inputs)
 
 Present choices when input arg is missing or ambiguous. First match wins, never fallback silently.
@@ -145,9 +174,9 @@ Present choices when input arg is missing or ambiguous. First match wins, never 
 
 ---
 
-## §3 SPEC DRAFT STRUCTURE (9 sections — SbE CENTRIC, canonical)
+## §3 SPEC DRAFT STRUCTURE (SbE CENTRIC, canonical)
 
-Write the draft in-memory first. File starts with YAML frontmatter, THEN 9 markdown sections (§1-§9). **§4 SbE is the MANDATORY CENTRAL SECTION** (observable behaviours, NOT implementation). Fixed order — DO NOT reorder.
+Write the draft in-memory first. File starts with YAML frontmatter, THEN `§0 EXECUTIVE SUMMARY` (human-first), THEN the canonical sections (§1-§7). **§4 SbE is the MANDATORY CENTRAL SECTION** (observable behaviours, NOT implementation). Fixed order — DO NOT reorder.
 
 ### §HEAD — YAML Frontmatter (REQUIRED fields — validate all present)
 ```yaml
@@ -164,6 +193,10 @@ domain: engineering                  # accepted values: engineering | product | 
 risk_level: low|medium|high           # NEW SbE. default = low. If medium/high → mandatory §4.4 Mermaid trigger.
 source_merge_order: [user_prompt, prd_file, linear_ticket, implementer_hints]   # NEW CANONICAL SbE. DO NOT reorder without EXPLICIT_OVERRIDE + decision log.
 status: Draft
+# Readiness gate (che-interrogate §1.6) — MANDATORY, filled BEFORE the draft exists:
+readiness: passed|assumptions|blocked   # passed = READY · assumptions = READY_WITH_ASSUMPTIONS · blocked = BLOCKED
+readiness_report: <absolute path to the readiness report>
+open_assumptions: [ ]                   # MAJOR items converted into assumptions (option B), verbatim
 estimated_files_max: <integer; default 15 per S03 CHE_RULES §X; hard stop if ceiling exceeded>
 estimated_max_lines_add: <integer; default 400 per S04 CHE_RULES §X; advisory ≥400 yellow, MUST gh-stack ≥800 red>
 new_dependencies: [ ]
@@ -183,6 +216,26 @@ vertical_slice_required: true         # CANONICAL #0 (CHE_RULES.md). Default tru
 tracer_f0_defined: false              # CANONICAL #0 (CHE_RULES.md F0 rule). Auto-calculated: flips to true when §4.5 VERTICAL SLICES table has 1+ row with ID=F0 · Layers Touched count>=2 · B-IDs >= 1 · DONE != empty. Auto-validated by V16.
 ---
 ```
+
+### §0 EXECUTIVE SUMMARY (human-first — ≤15 lines, DERIVED never authoritative)
+Header: `## §0 EXECUTIVE SUMMARY (read this first)`
+
+> **Audience:** the human who must approve. The sections below (§1-§7) remain the machine contract and the
+> source of truth; this block is a **projection** of them. If they ever disagree, the sections win and the
+> summary is regenerated — it never introduces a new requirement.
+> **Cap: 15 lines total** (table rows included). Readable in 60 seconds. No internal symbols, no file paths
+> beyond the count, no jargon the requester would not use.
+
+| Field | Content |
+|---|---|
+| What changes | 1 sentence, plain language — what the user will be able to do after this ships |
+| Why now | 1 sentence — the risk or pain of not doing it |
+| In scope | ≤3 bullets, each 1 line |
+| Out of scope | ≤2 bullets — MUST mirror §1 `Non-goals (deferred by design)` in meaning (V25) |
+| Decisions needed from you | `none` **OR** the open ids from the readiness gate: `<id> — <question> (recommended: <option>)` |
+| Main risk | 1 sentence + rollback in 1 clause |
+| How we'll know it worked | 1–2 outcomes with literal values (HTTP code, UI text, row count) — the §4 B-IDs that matter most |
+| Shape of the work | `<n> vertical slices (F0..F<n-1>) · <m> PR(s) · ~<k> files` |
 
 ### §1 WHY — Problem Statement (max 5 bullets)
 Header: `## §1 WHY (Problem Statement)`
@@ -488,6 +541,14 @@ Reject draft and loop back to §2 source if ANY check fails. Run in order.
 
 22. **V23 Simplicity Bias declaration (engineering-contracts §1):** §1 WHY MUST contain a non-empty `Non-goals (deferred by design)` bullet AND a Goal bullet naming the smallest-first / most-reversible option. Missing → REJECT: "§1 WHY has no explicit deferral. State what is deliberately NOT built in this iteration and why it is safe to defer (Simplicity Bias, engineering-contracts §1)."
 
+23. **V24 Readiness gate recorded (che-interrogate §1.6):** frontmatter MUST contain all three keys — `readiness` ∈ `{passed, assumptions, blocked}`, a non-empty `readiness_report` absolute path, and `open_assumptions` (array, possibly empty). If `readiness: blocked` → REJECT unconditionally (no draft may exist). If the report path does not exist on disk → REJECT. Missing keys → REJECT: "Readiness gate (che-interrogate §1.6) not recorded. Run the intake gate before drafting — thin tickets, logical gaps and contradictory tickets must be caught on the raw input, not after the draft."
+
+24. **V25 Executive summary present and faithful (§0):** the draft MUST contain the header `## §0 EXECUTIVE SUMMARY`, positioned BEFORE `## §1 WHY`. Then:
+    a. **Line cap:** count non-empty lines from the §0 header to the last row before `## §1` — if `> 15` → REJECT: "§0 EXECUTIVE SUMMARY has $N lines (cap 15). Move detail into §1/§2; the summary is a projection, not a second spec."
+    b. **Decisions row:** the `Decisions needed from you` row MUST be non-empty — either literal `none` or ≥ 1 readiness id. Empty → REJECT.
+    c. **Non-goals parity:** every item in §1 `Non-goals (deferred by design)` MUST appear (semantically) in the `Out of scope` row, and the row MUST NOT list an out-of-scope item that §1 does not defer. Divergence → REJECT: "§0 Out of scope diverges from §1 Non-goals. Regenerate §0 from §1 — it is derived, never authoritative."
+    d. **No new requirement:** if §0 names a behaviour absent from §4 B-IDs or a constraint absent from §3, REJECT and regenerate.
+
 ### Bilateral cross-ref scope-checker CHECK2 (ONDA2 next block)
 When this VALIDATION PASS runs GREEN (all pass), che also prints a 1-line footer:
 > `SbE spec valid: B=$B_COUNT AB=$AB_COUNT AB_ratio=$RATIO% Mermaid=$TRIG ERD=$ERD_TRIG.`
@@ -497,18 +558,25 @@ This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bila
 
 ## §5 APPROVAL LOOP (1 main pass, 1 edit pass MAX — KISS)
 
-1. **Show draft** to user as compact markdown, WITH a legend at the top saying "Draft SPEC. Reply A = Approve as-is. Reply B = adjust <tell what to change>."
-2. **If A (Approved verbatim):**
+0. **Surface the readiness result FIRST:** if `open_assumptions` is non-empty, list every assumption
+   verbatim above the summary, with the note "these were assumed, not confirmed — reply B to correct any".
+   If `readiness: passed`, print one line: `Readiness: READY (report: <path>)`.
+1. **Show ONLY the §0 EXECUTIVE SUMMARY** (+ readiness assumptions + open questions), with this legend:
+   `Draft SPEC ready. A = Approve as-is · B = adjust <what to change> · D = show full draft`.
+   The machine sections are NOT printed by default — they are the contract, not the pitch.
+2. **If D (show full draft):** print the complete draft compactly, then re-ask `A / B`. D is not an edit pass.
+3. **If A (Approved verbatim):**
    - Update frontmatter → `status: Approved`
    - Set `approver: "user-verbatim: A"`
    - Set `approved_at: <ISO timestamp local tz>`
    - Jump to §6 SAVE.
-3. **If B (adjust X):**
+4. **If B (adjust X):**
    - Apply edits literally to the sections user indicated (no scope creep beyond what the user typed).
+   - **Regenerate §0** from the edited sections (it is derived — never hand-patched).
    - Re-run §4 VALIDATION.
-   - Re-show ONE TIME only.
+   - Re-show ONE TIME only (summary + what changed).
    - User now either Approves → update frontmatter Approved → SAVE. OR says "more edits" → tell user to re-run `/che-spec` fresh (avoid infinite loops).
-4. **If user says "Cancel":** Write Draft (no Approved flag) → SAVE anyway for future work. Print warning: `SPEC_STATUS=Draft (not Approved — che-act will re-prompt when you run it)`. End.
+5. **If user says "Cancel":** Write Draft (no Approved flag) → SAVE anyway for future work. Print warning: `SPEC_STATUS=Draft (not Approved — che-act will re-prompt when you run it)`. End.
 
 ---
 
