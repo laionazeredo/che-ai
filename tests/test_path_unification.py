@@ -46,7 +46,6 @@ def _cli(*args: str, cwd: str | None = None) -> subprocess.CompletedProcess:
 
 
 def test_compute_paths_is_identical_regardless_of_cwd(bound_worktree, tmp_path: Path):
-    # @ac B-4
     repo, expected = bind_worktree(tmp_path)
 
     for cwd in ("/", str(tmp_path), str(repo)):
@@ -56,7 +55,7 @@ def test_compute_paths_is_identical_regardless_of_cwd(bound_worktree, tmp_path: 
 
 
 def test_compute_paths_ignores_ambient_process_cwd(bound_worktree, tmp_path: Path, monkeypatch):
-    # @ac B-4 — resolution must be argument-driven, never os.getcwd()-driven.
+    # resolution must be argument-driven, never os.getcwd()-driven.
     repo, expected = bind_worktree(tmp_path)
 
     elsewhere = tmp_path / "elsewhere"
@@ -67,7 +66,7 @@ def test_compute_paths_ignores_ambient_process_cwd(bound_worktree, tmp_path: Pat
 
 
 def test_compute_paths_refuses_an_unbound_path(che_ws_root: Path, tmp_path: Path):
-    # @ac B-4 — an unbound checkout must fail loudly instead of guessing a project.
+    # an unbound checkout must fail loudly instead of guessing a project.
     from tests.conftest import make_git_repo
 
     repo = make_git_repo(tmp_path / "unbound")
@@ -108,7 +107,7 @@ def test_git_probes_ignore_ambient_git_dir(che_ws_root: Path, tmp_path: Path, mo
 
 
 def test_compute_paths_accepts_explicit_project_and_worktree(che_ws_root: Path, tmp_path: Path):
-    # @ac B-4 — explicit arguments win, so a path need not be pre-bound yet.
+    # explicit arguments win, so a path need not be pre-bound yet.
     from che_core.workspaces import init_project
     from tests.conftest import make_git_repo
 
@@ -125,7 +124,6 @@ def test_compute_paths_accepts_explicit_project_and_worktree(che_ws_root: Path, 
 
 
 def test_decisions_and_artifacts_share_the_same_tree(bound_worktree, tmp_path: Path):
-    # @ac B-5
     repo, paths = bind_worktree(tmp_path)
     worktree_dir = paths["CHE_WORKTREE_DIR"]
 
@@ -146,7 +144,7 @@ def test_decisions_and_artifacts_share_the_same_tree(bound_worktree, tmp_path: P
 
 
 def test_decisions_path_no_longer_uses_the_legacy_wt_formula(bound_worktree, tmp_path: Path, che_ws_root):
-    # @ac B-5 — regression lock for the duplicated `.wt/` formula.
+    # regression lock for the duplicated `.wt/` formula.
     repo, _ = bind_worktree(tmp_path)
     decisions = get_decisions_path(str(repo))
 
@@ -158,7 +156,6 @@ def test_decisions_path_no_longer_uses_the_legacy_wt_formula(bound_worktree, tmp
 
 
 def test_registry_lives_in_the_workspace_root_not_the_source_package(che_ws_root: Path):
-    # @ac B-6
     registry = get_registry_path()
     assert registry == get_state_registry_path()
     assert registry == che_ws_root / ".state" / "registry.jsonl"
@@ -168,7 +165,6 @@ def test_registry_lives_in_the_workspace_root_not_the_source_package(che_ws_root
 
 
 def test_registry_append_creates_the_state_dir(che_ws_root: Path):
-    # @ac B-6
     from che_core.registry import registry_append_jsonl
 
     registry_append_jsonl("sess-b6", "BOUND", "/tmp/some-repo", json.dumps({"workspace_name": "acme"}))
@@ -186,7 +182,6 @@ MAX_PARALLEL = 16
 
 
 def test_concurrent_appends_produce_only_valid_jsonl_lines(bound_worktree, tmp_path: Path):
-    # @ac B-7
     repo, paths = bind_worktree(tmp_path)
     log = Path(paths["CHE_WORKTREE_DIR"]) / "decisions.log.jsonl"
 
@@ -213,7 +208,6 @@ def test_concurrent_appends_produce_only_valid_jsonl_lines(bound_worktree, tmp_p
 
 
 def test_oversized_decision_payload_is_refused_without_corrupting_the_log(bound_worktree, tmp_path: Path):
-    # @ac AB-3
     repo, paths = bind_worktree(tmp_path)
     log = Path(paths["CHE_WORKTREE_DIR"]) / "decisions.log.jsonl"
 
@@ -233,7 +227,6 @@ def test_oversized_decision_payload_is_refused_without_corrupting_the_log(bound_
 
 
 def test_readding_a_worktree_reuses_the_existing_tree(bound_worktree, tmp_path: Path):
-    # @ac B-2
     repo, paths = bind_worktree(tmp_path)
     # Che creates artifact folders lazily, so the seed makes its own — a fixture
     # must not depend on production code having pre-created it.

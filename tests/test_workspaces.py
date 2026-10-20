@@ -71,7 +71,6 @@ def _add_origin(repo: Path, url: str) -> None:
 
 
 def test_cli_project_init_creates_flat_skeleton(tmp_path, _isolate_workspaces_root):
-    # @ac B-1
     """`che project init <git-repo> --slug acme` → exit 0 and the flat skeleton + durable docs."""
     repo = make_git_repo(tmp_path / "repo")
     code, out, err = _run_cli("project", "init", str(repo), "--slug", "acme")
@@ -90,7 +89,6 @@ def test_cli_project_init_creates_flat_skeleton(tmp_path, _isolate_workspaces_ro
 
 
 def test_cli_worktree_add_reuses_existing_tree_on_second_run(tmp_path, _isolate_workspaces_root):
-    # @ac B-2
     """`che worktree add` is idempotent: the second run reports reused=true and does not duplicate."""
     repo = make_git_repo(tmp_path / "repo")
     assert _run_cli("project", "init", str(repo), "--slug", "acme")[0] == 0
@@ -116,7 +114,6 @@ def test_cli_worktree_add_reuses_existing_tree_on_second_run(tmp_path, _isolate_
 
 
 def test_cli_worktree_list_lists_bound_worktree_without_sessions_folder(tmp_path, _isolate_workspaces_root):
-    # @ac B-3
     """`che worktree list --project acme` → exit 0, lists the binding, no sessions/ inside it."""
     repo = make_git_repo(tmp_path / "repo")
     assert _run_cli("project", "init", str(repo), "--slug", "acme")[0] == 0
@@ -135,7 +132,6 @@ def test_cli_worktree_list_lists_bound_worktree_without_sessions_folder(tmp_path
 
 
 def test_cli_worktree_add_refuses_non_git_path(tmp_path, _isolate_workspaces_root):
-    # @ac AB-1
     """A non-git path is a usage error (exit 2) and must not create the worktree folder."""
     repo = make_git_repo(tmp_path / "repo")
     assert _run_cli("project", "init", str(repo), "--slug", "acme")[0] == 0
@@ -148,7 +144,6 @@ def test_cli_worktree_add_refuses_non_git_path(tmp_path, _isolate_workspaces_roo
 
 
 def test_cli_project_init_twice_preserves_edited_roadmap(tmp_path, _isolate_workspaces_root):
-    # @ac AB-2
     """Re-running `che project init` must not rewrite an already-edited roadmap.md."""
     repo = make_git_repo(tmp_path / "repo")
     assert _run_cli("project", "init", str(repo), "--slug", "acme")[0] == 0

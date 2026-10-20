@@ -16,14 +16,12 @@ PHASE_SKILLS = ["che-spec", "che-architect", "che-archeology", "che-act"]
 
 
 def test_knowledge_skill_and_command_exist():
-    # @ac B-7
     assert (WORKTREE / "skills" / "che-knowledge" / "SKILL.md").is_file()
     assert (WORKTREE / "commands" / "che-knowledge.md").is_file()
 
 
 @pytest.mark.parametrize("skill", PHASE_SKILLS)
 def test_phase_skills_carry_the_knowledge_step(skill):
-    # @ac B-7
     text = (WORKTREE / "skills" / skill / "SKILL.md").read_text(encoding="utf-8")
     assert "PROJECT KNOWLEDGE STEP" in text
     assert "che knowledge apply" in text

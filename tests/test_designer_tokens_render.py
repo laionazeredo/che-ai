@@ -67,7 +67,7 @@ def _bootstrap_minimal_design_tree(wt: Path, *, primary: str = "#3B82F6") -> Pat
     return wt / "design" / "DESIGN.md"
 
 
-# @ac B-3 — idempotency: two renders produce byte-identical files
+# idempotency: two renders produce byte-identical files
 def test_tokens_render_idempotent(tmp_path: Path) -> None:
     """Two consecutive `tokens render` runs must produce byte-identical DESIGN.md + tokens.styles.css (sha256 stable)."""
     from che_core.designer import run_tokens_render
@@ -95,7 +95,7 @@ def test_tokens_render_idempotent(tmp_path: Path) -> None:
     )
 
 
-# @ac B-3 — tokens.styles.css is generated and reflects tokens.json
+# tokens.styles.css is generated and reflects tokens.json
 def test_tokens_render_generates_css(tmp_path: Path) -> None:
     """tokens.styles.css must be created with --color-* CSS variables sourced from tokens.json."""
     from che_core.designer import run_tokens_render
@@ -116,7 +116,7 @@ def test_tokens_render_generates_css(tmp_path: Path) -> None:
     assert ":root" in css_text, "tokens.styles.css must be a :root { ... } declaration block"
 
 
-# @ac B-3 — DESIGN.md frontmatter mirrors tokens.json (single-source invariant R4)
+# DESIGN.md frontmatter mirrors tokens.json (single-source invariant R4)
 def test_tokens_render_syncs_frontmatter(tmp_path: Path) -> None:
     """Editing tokens.json colors and re-running render must rewrite DESIGN.md frontmatter to match (R4)."""
     from che_core.designer import run_tokens_render
@@ -143,7 +143,7 @@ def test_tokens_render_syncs_frontmatter(tmp_path: Path) -> None:
     )
 
 
-# @ac A-1 — design root missing → DESIGN_TREE_MISSING (exit 2) and zero side-effects
+# design root missing → DESIGN_TREE_MISSING (exit 2) and zero side-effects
 def test_tokens_render_a1_missing_design_root(tmp_path: Path) -> None:
     """A-1: design/ does not exist → DESIGN_TREE_MISSING (exit 2) before any file is written."""
     from che_core import designer as designer_mod
@@ -157,7 +157,7 @@ def test_tokens_render_a1_missing_design_root(tmp_path: Path) -> None:
     assert not (wt / "design").exists(), "design/ must not be created by render (init must run first)"
 
 
-# @ac A-2 — tokens.json without `colors` → TOKENS_MISSING_COLORS (exit 2)
+# tokens.json without `colors` → TOKENS_MISSING_COLORS (exit 2)
 def test_tokens_render_a2_tokens_missing_colors(tmp_path: Path) -> None:
     """A-2: tokens.json missing `colors` key → TOKENS_MISSING_COLORS (exit 2)."""
     from che_core import designer as designer_mod
@@ -175,7 +175,7 @@ def test_tokens_render_a2_tokens_missing_colors(tmp_path: Path) -> None:
     assert exc.value.exit_code == 2, f"A-2 must exit 2; got {exc.value.exit_code}"
 
 
-# @ac CLI — subparser is registered
+# subparser is registered
 def test_tokens_render_subcommand_registered() -> None:
     """`che designer tokens --help` and `che designer tokens render --help` exit 0 and document the wt arg."""
     r1 = subprocess.run(

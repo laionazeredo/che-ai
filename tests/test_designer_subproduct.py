@@ -83,7 +83,7 @@ def _init_git_repo(wt: Path) -> None:
     )
 
 
-# @ac B-4 — init for `beta` writes files under design/beta/
+# init for `beta` writes files under design/beta/
 def test_sub_product_init_creates_beta_files(tmp_path: Path) -> None:
     """Init with --sub-product beta must create design/beta/DESIGN.md + design/beta/tokens/tokens.json."""
     from che_core.designer import run_init
@@ -103,7 +103,7 @@ def test_sub_product_init_creates_beta_files(tmp_path: Path) -> None:
     assert "{{sub_product}}" not in text, "DESIGN.md must not retain placeholder after substitution"
 
 
-# @ac B-4 / R5 — `git diff --name-only` after init for beta touches ONLY design/beta/ + top-level aggregating
+# `git diff --name-only` after init for beta touches ONLY design/beta/ + top-level aggregating
 def test_sub_product_isolation_git_diff(tmp_path: Path) -> None:
     """R5: after acme is committed, init for beta must NOT touch design/acme/ at all."""
     from che_core.designer import run_init
@@ -166,7 +166,7 @@ def test_sub_product_isolation_git_diff(tmp_path: Path) -> None:
     #    The contract only forbids touching OTHER sub-products' paths.
 
 
-# @ac B-4 reviewability — files are text, not opaque binary
+# files are text, not opaque binary
 def test_sub_product_files_are_text_reviewable(tmp_path: Path) -> None:
     """`git diff` for the new sub-product files must show line-level hunks (text), not a single binary blob."""
     from che_core.designer import run_init
@@ -194,7 +194,7 @@ def test_sub_product_files_are_text_reviewable(tmp_path: Path) -> None:
     )
 
 
-# @ac CLI smoke — `che designer init --sub-product beta` end-to-end via subprocess
+# `che designer init --sub-product beta` end-to-end via subprocess
 def test_init_cli_sub_product_isolation(tmp_path: Path) -> None:
     """CLI smoke: invoking `che designer init` twice for different sub-products produces the isolation contract."""
     _init_git_repo(tmp_path)
