@@ -30,11 +30,13 @@
 
 ## 🧭 SbE Traceability Matrix
 
-> **Auto-filled when SbE SPEC is approved and `// @ac B-X` anchors are extracted from the diff. If it is a legacy spec (without B-IDs) → REMOVE THIS ENTIRE SECTION in the real PR.**
+> **Auto-filled when an SbE SPEC is approved: one row per behaviour, derived by reading the test titles and doc comments in the diff and matching them to the §4.2 Behavior Table. If it is a legacy spec (without B-IDs) → REMOVE THIS ENTIRE SECTION in the real PR.**
 >
 > Each row = a B-ID behavior or AB-ID anti-behavior approved in §4.2 Behavior Table of the SbE spec. Coverage < 70% → see action items from bilateral scope-checker CHECK2.
+>
+> **This matrix is the traceability record.** Tests never carry `@ac` / `@ticket` / `@task` anchors — the mapping lives here and in the SPEC §5 Verification Matrix.
 
-| Behavior ID (B or AB) | Test file path (extracted from `// @ac B-X` anchors in diff — include :line-range if it is an it() block) |
+| Behavior ID (B or AB) | Test file path (include :line-range of the it() block that verifies the behaviour) |
 |---|---|
 | B-1 | `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts:112-145` |
 | B-3 | `packages/payments/services/__tests__/RefundService.unit.test.ts:45-60` |

@@ -9,6 +9,14 @@ description: "Infers project Intent and Roadmap from git history and merged PRs.
 > - SDLC Specflow Phase 1 & 2: `engineering-contracts` Rule 15
 > - Path resolution: `che` CLI (`che compute_paths`, `che ensure_dirs`)
 
+## §K PROJECT KNOWLEDGE STEP (planning — bootstrap from history)
+
+The historical scan already reads this evidence. Before finishing, ask: **which vocabulary and conventions
+did the git history and merged PRs reveal?** Load with `che knowledge show --project <slug>`; if nothing
+exists, this is a **no-op** — skip it. Scaffold with `che knowledge scaffold --domain <domain>`, propose
+changes with `che knowledge apply --ops @ops.json` (dry-run), show the diff, and gate on
+**keep / alter / revert** before `--no-dry-run --confirm`. Full contract: `che-knowledge` skill §6.
+
 This skill performs a "historical scan" of a repository to reconstruct its strategic backbone. It bridges the gap between legacy development and the Specflow-driven Che SDLC.
 
 ---
