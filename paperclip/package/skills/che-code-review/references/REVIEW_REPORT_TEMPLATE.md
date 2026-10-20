@@ -158,8 +158,8 @@ return user.profile.phone;
 ### #F-5 🟡 MEDIUM — Category: Testing Gaps (G7.3) — `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts:78-111`
 
 **Why it matters:**
-- New test case `"refund pending booking with settled Stripe capture"` (lines 78-111) does **NOT** have the mandatory traceability comment as the first line inside the `it()` block. SbE verification matrix §5 (ONDA2) relies on regex match `// @(ac|ticket|task|bug) B-\d+|FLO-\d+` inside every new/modified `it()` body to prove B-ID → test file bilateral coverage. Without it, scope-checker CHECK2 flags the behavior as "implemented but unverified" and score drops.
-- Isolated bug: 1 of 6 new test blocks missing the anchor — not systemic.
+- New test case `"refund pending booking with settled Stripe capture"` (lines 78-111) opens with `// @ac B-3 | @ticket FLO-513`. The body of the test now depends on two planning artefacts (`B-3` in the SPEC §4.2 table and ticket `FLO-513`) to be understood. Whoever reads the CI report in six months — or a new hire opening the file — cannot tell what is arranged, which input is used or what the invariant is.
+- Isolated case: 1 of 6 new test blocks carries the anchor — not systemic.
 
 **Diff snippet:**
 ```diff
@@ -168,11 +168,14 @@ return user.profile.phone;
      const { booking } = await seedBooking({ status: "pending_settlement" })
 ```
 
-**Recommended fix (1-line drop-in):**
+**Recommended fix (drop-in):**
 ```typescript
 it("refund pending booking with settled Stripe capture", async () => {
-  // @ac B-3 | @ticket FLO-513
-  // @bug regression: v2.1.4 allow double-capture edge
+  /**
+   * Seeds a booking awaiting settlement, requests a full refund and expects
+   * the capture to be reversed, the row to move to "Refunded" and exactly
+   * one Stripe transfer to be returned to the platform account.
+   */
   const { booking } = await seedBooking({ status: "pending_settlement" })
   // ... rest unchanged
 ```
@@ -221,7 +224,7 @@ User should trust we actually ran the full process:
 | 2. Security / PII / Compliance (LIGHT level + **per-procedure READ/WRITE split** authz audit 2.8-2.10 — cookie org check + assertCan cache threading + authz BEFORE writes) | ✅ Yes | Each procedure audit: `trpc.ts:46-49`, `context.ts:51` + `bookingRouter` 3 procedures scanned SEPARATELY |
 | 3. Architecture layering / Repo boundary **(per-procedure direct repo instantiation check)** + **Migration Hygiene (timestamps fabricated/intra-branch patch/RLS TO PUBLIC defaults)** + Entity dupe + deps scope | ✅ Yes | Router business logic + direct repo instantiation scanned per procedure; 5 migration files scanned for fabricated timestamps/intra-branch enum patch |
 | 4. Scope deviation / **UI demo 5-pass scan** (fake latency + random fail + discarded idempotencyKey + toast no API call + demo data imports) / test naming rules / 4.8 route-level test gaps | ✅ Yes — ACs mapped to changed files | RefundBookingAction.tsx 5-pass demo check applied; test behavioral naming rules validated |
-| **🟢 7. Testing Gaps & Regression Lock (G7.1 HIGH src 20+ln no test / G7.2 HIGH API+UI new without integ or Playwright / G7.3 MEDIUM @ac/@ticket traceability comment missing / G7.4 LOW skip without TODO)** | ✅ Yes — diff matched dirty src vs test files | 42 src lines added in `RefundService.ts` + 2 tests written (`refundFlow.api.test.ts` + `RefundBookingAction.spec.ts`) · traceability comments G7.3 validated in every new `it()` block |
+| **🟢 7. Testing Gaps & Regression Lock (G7.1 HIGH src 20+ln no test / G7.2 HIGH API+UI new without integ or Playwright / G7.3 MEDIUM planning reference in test title or comment / G7.4 LOW skip without TODO)** | ✅ Yes — diff matched dirty src vs test files | 42 src lines added in `RefundService.ts` + 2 tests written (`refundFlow.api.test.ts` + `RefundBookingAction.spec.ts`) · titles and comments checked for self-containment (no @ac/@ticket/@task) |
 | **🟣 8. UI Selector Contract Hygiene & data-testid 3-part (G8.1 HIGH interactive no data-testid fragile / G8.2 HIGH test selector XPath/nth/css-class / G8.3 MEDIUM non-standard regex / G8.4 LOW map-loop no unique suffix)** | ✅ Yes — every interactive component checked | Kent C. Dodds Testing Library priority order enforced; 5 new data-testids created (`refund__action-btn__confirm`, `refund__status-toast__success` etc); XPath/nth-child not used once; 0 duplicates in ticket line-item map |
 | Non-goals (style / formatting / naming / coverage %) | ⚠️ Skipped intentionally — that's CI/lint job | |
 
@@ -237,7 +240,7 @@ Blocking:
 
 Non-blocking nice-to-haves:
 - F-4 (deps) — up to you.
-- F-5 (testing traceability) — up to you.
+- F-5 (self-contained test comment) — up to you.
 
 After fixes: re-run a short follow-up review, then OK to move to /che-ship or merge.
 

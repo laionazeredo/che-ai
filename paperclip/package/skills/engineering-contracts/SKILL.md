@@ -272,12 +272,12 @@ This rule turns "agility" from vague talk into enforceable checkpoints:
 5. **Behaviour golden rule:**
    - NEVER break existing behaviour without an EXPLICIT AC asking for the break.
    - If you need behaviour breaking: NON-GOALS, Data Model + Migration with rollback plan, and explicit user approval.
-6. **Test-suite naming = behaviour observable ONLY (Che RULE 7.9).**
+6. **Test titles AND test comments = self-contained behaviour (Che RULE 7.9).**
 
-   **🔴 HARD RULE — PROHIBITED EXTERNAL REFERENCES IN CODE (NEVER do this):**
-   > ❌ **WRONG:** Write `// @ac 3.1 | @task T2` or put IDs in test titles.
-   > ❌ **REASON:** The strategic and tactical plan (Specflow/SbE) lives OUTSIDE the codebase (in the Che Workspace). Referencing ephemeral management IDs in the source code pollutes the codebase and creates references that are impossible to validate without the harness.
-   > ✅ **CORRECT:** Test titles must describe the **observable behaviour** clearly and humanely. Traceability between Code ↔ Spec is handled by the agent via `decisions.log.jsonl` and `task_graph.md` (L3), never injected into `.ts/.py/.go`.
+   **🔴 HARD RULE — NO EXTERNAL REFERENCES IN CODE (titles and comments alike):**
+   > ❌ **WRONG:** `it("Task T2.3 validates §4.2")`, `// @ac 3.1 | @task T2 | @ticket FLO-513`, `/** @spec spec_api-fail-closed */`.
+   > ❌ **REASON:** the plan (SPEC, task graph, tickets, PRD) lives OUTSIDE the codebase. Whoever reads the test — or the CI report — must understand it with zero access to the harness, and those IDs rot as soon as the plan is reorganised.
+   > ✅ **CORRECT:** the title states the observable behaviour; an optional doc comment explains the scenario in detail (setup, input, expected outcome, invariant protected) using domain vocabulary only. Traceability Code ↔ Spec lives in `decisions.log.jsonl`, `task_graph.md` and the SPEC §5 Verification Matrix (test path + line range) — never inside `.ts/.py/.go`.
 
    - **`describe("...")`** = module/feature/context UNDER TEST (domain grouping).
      ✅ `describe("POST /api/payments/refund")`
@@ -285,7 +285,17 @@ This rule turns "agility" from vague talk into enforceable checkpoints:
    - **`it("...")` / `test("...")`** = ONE observable behaviour, starts with verb (returns/allows/blocks/calculates/emits/saves…) + condition + expected outcome. ONE assert when possible.
      ✅ `it("returns 409 Conflict when refunding an already-refunded payment")`
      ❌ `it("Task T2.3 validates §4.2 rule if payment was already refunded")`
-   - **NEVER embed internal IDs (FLO-XXX / task T\d+ / AC\d+ / SPEC-\w+ / §N) ANYWHERE in the code.** If you need traceability, the agent must consult the `decisions.log.jsonl` or `task_graph.md` at Level 3.
+   - **Doc comment (JSDoc / TSDoc / docstring) — optional, preferred when the scenario is not obvious.** Self-contained only: what is arranged, the input, the expected result and the invariant it protects. Never a planning reference.
+     ✅
+     ```typescript
+     /**
+      * A payment already refunded must never be refunded a second time.
+      * Arranges a settled payment, requests a refund twice and expects the
+      * second call to be rejected with 409 and no extra Stripe transfer.
+      */
+     ```
+     ❌ `/** @task T1.3 · @ac 4.2 · @ticket FLO-513 */`
+   - **NEVER embed internal IDs (FLO-XXX / task T\d+ / AC\d+ / B-\d+ / SPEC-\w+ / §N) in a title or a comment.** If traceability is needed, the agent consults `decisions.log.jsonl`, `task_graph.md` or the SPEC §5 matrix at Level 3.
    - Suite organisation: group tests BY DOMAIN / CONTEXT. Nested `describe()` = more specific context (e.g. `describe("POST /refund").describe("with currency GBP")`).
 
 ### 16. 🔴 CODE REVIEW OPTIMISATION + COMMENT LINE LIMIT (NEW — HARD RULE)

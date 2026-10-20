@@ -186,11 +186,12 @@ Before production code:
 - Use the testing framework the repo already uses (Vitest, Jest, pytest, Go test, etc.)
 - If the repo has NO test infrastructure → note and ask SM/user how to proceed
 
-**MANDATORY (Che RULE 7.9): TEST NAMES = OBSERVABLE BEHAVIOUR. NO INTERNAL IDs.**
+**MANDATORY (Che RULE 7.9): TEST NAMES AND COMMENTS = SELF-CONTAINED OBSERVABLE BEHAVIOUR. NO INTERNAL IDs.**
 
 **🔴 HARD RULE — PROHIBITED INVERSION:**
 > ❌ **WRONG:** `it("FLO-714 validates deploy workflow")` → ID IN TITLE = bad anti-pattern. Furthermore, NEVER complain that a title DOES NOT have FLO/T/AC.
-> ✅ **CORRECT:** `it("returns 409 Conflict when refunding an already-refunded payment", () => {` → observable behaviour. Traceability goes in the COMMENT.
+> ❌ **WRONG:** `// @ac 4.2 | @task T2.3 | @ticket FLO-513` inside the block, or `/** @task T1.3 · @ac 4.2 */` above it. Planning references are equally forbidden in comments.
+> ✅ **CORRECT:** `it("returns 409 Conflict when refunding an already-refunded payment", () => {` → observable behaviour. An optional doc comment explains the scenario in plain domain language.
 
 ```
 ✗ describe("FLO-513 T2 refund", () => {})
@@ -198,14 +199,18 @@ Before production code:
 
 ✗ it("Task T2.3 validates AC 4.2 already refunded", () => {})
 ✓ it("returns 409 Conflict when refunding an already-refunded payment", () => {
-    // @ac 4.2 | @task T2.3 | @ticket FLO-513   ← traceability goes HERE (1st line inside block)
+    /**
+     * A settled payment is refunded once, then a second refund is requested.
+     * Expects 409 Conflict and no second Stripe transfer.
+     */
   })
 ```
 
-PROHIBITED anti-patterns exclusively in the **title STRING** of `describe()` / `it()` / `test()`:
-`FLO-XXX`, `Task? T\d(\.\d+)?`, `AC? \d+`, `SPEC_XXX`, `§\d(\.\d+)?`, `REGRA \d`, `Item \d`, `Fase \d`, `Story \d+`.
+PROHIBITED anti-patterns in the **title STRING** of `describe()` / `it()` / `test()` AND in the **comment/JSDoc block**:
+`FLO-XXX`, `Task? T\d(\.\d+)?`, `AC? \d+`, `B-\d+` / `AB-\d+`, `SPEC_XXX`, `§\d(\.\d+)?`, `REGRA \d`, `Item \d`, `Fase \d`, `Story \d+`, `@ac` / `@task` / `@ticket` / `@spec` / `@bug` tags.
 
-**❌ NEVER** generate warning / ask for rename because a title DOES NOT contain FLO/T/AC. It SHOULD NOT contain them. Title without internal ID = COMPLIANT / GOOD.
+**❌ NEVER** generate a warning or ask for a rename because a title DOES NOT contain FLO/T/AC. It SHOULD NOT contain them. A test with no internal ID anywhere = COMPLIANT / GOOD.
+**❌ NEVER** add a traceability comment as a substitute for a self-contained explanation.
 
 ### 3.3 Run tests → confirm they FAIL
 

@@ -112,16 +112,19 @@ Once reproduced: try to make reproduction steps even shorter.
   - Bug crosses 2+ modules (service→DB→stripe) → **integration test** (`__tests__/integration/...` or `__tests__/e2e/*.api.test.ts` for route-level)
   - UI-only visual / event-handler bug → **Playwright E2E** or **React Testing Library** component spec (NEVER manual-only repro for UI bugs unless literally impossible)
 - If repo has NO test framework installed → install the minimum matching the AGENTS/docs (e.g. Vitest for TS Node.js + React). If repo cannot have tests → EXPLICIT_OVERRIDE path below.
-- The test body MUST contain this EXACT structure as the FIRST lines INSIDE `it(...)` / `test(...)`:
+- The test MUST be self-contained: a behavioural title (no ticket id) plus a doc comment stating the symptom in plain English and what the fix must preserve. Never a planning reference (`@ticket`, `@bug`, `@ac`, `B-\d+`).
   ```typescript
-  it("describes the bug symptom behaviourally — NO ticket id in title", async () => {
-    // @ticket FLO-123 | @bug reproduces: <1-line symptom plain English> | @ac B-7
+  it("rejects a second refund of an already-refunded payment", async () => {
+    /**
+     * Reproduces: a refunded booking could be refunded again, reversing the
+     * capture twice. Expects the second call to be rejected with 409.
+     */
     // arrange: ...
     // act: ...
     // assert: expect(...).rejects.toThrow(...) or similar
   })
   ```
-  Exception for Playwright / non-JS runners: place `@ticket | @bug | @ac` as a comment line on the FIRST executable line after the `test(...)` declaration, or as the `test.describe` JSDoc. Never put FLO-id in the display title string.
+  Exception for Playwright / non-JS runners: place the same self-contained doc comment above the `test(...)` declaration or the `test.describe`. Never put a ticket id in the display title or in a comment.
 
 **Step 1.2.5.2 — Run the test, confirm FAIL (red)**
 - Execute ONLY the single test file with the repo's documented runner (e.g. `corepack pnpm vitest run packages/platform/server/__tests__/unit/refund-repro.test.ts`).
@@ -143,7 +146,7 @@ Append to `$BUGFIX_SESSION_MD`:
 - **repro_bug_ticket_ref:** `<FLO-123 or N/A>`
 - **repro_ac_trace:** `<B-7 or N/A — SbE behavior-id this test locks>`
 
-> Assertion verified: test FAILS deterministically. Fix must make SAME test PASS without changing its body (only @ticket/@bug/@ac comment line can be adjusted).
+> Assertion verified: test FAILS deterministically. Fix must make SAME test PASS without changing its body (only the explanatory doc comment may be adjusted).
 ```
 
 **Step 1.2.5.4 — Decision path to Phase 1 hypotheses**
@@ -161,10 +164,13 @@ Append "✅ REPRO LOCK FLIPPED — same test now PASSES + exit_code=0 + sha256=<
 
 **[G5 NOTE — REGRESSION LOCK LOCATION POLICY (MANDATORY AT THE END OF STEP 3.3):**
 - **DEFAULT 95% OF CASES (Fix Every Bug Twice — Stripe Playbook):** regression test (repro lock + behaviour tests) MUST be **IN THE FEATURE/DOMAIN FOLDER WHERE THE BUG OCCURRED** along with other tests for that area. **DO NOT put ticket ID in filename.**
-- **Example:** Bug FLO-513 Refund: `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts` (standard refund / server tests folder) with **FIRST LINE INSIDE `it()` BLOCK** (NOT in title):
+- **Example:** Bug FLO-513 Refund: `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts` (standard refund / server tests folder) with a self-contained doc comment (NOT an anchor, NOT in the title):
   ```typescript
   it('confirms a full refund succeeds with reason and shows correct status row', async () => {
-    // @ticket FLO-513 @bug reproduces refund amount not reversed on row status @ac B-3
+    /**
+     * Reproduces: the row status stayed "Paid" after a successful refund.
+     * Expects the reversed amount on the row and the status to become "Refunded".
+     */
     // ... rest of test
   });
   ```

@@ -11,6 +11,14 @@ description: "Iteratively helps architect complete systems from business ideas. 
 > - Database modeling: `database-design-expert` skill
 > - Engineering principles: `engineering-contracts` (KISS, YAGNI, SOLID)
 
+## §K PROJECT KNOWLEDGE STEP (planning — bootstrap)
+
+Once the stack, modules and data model are agreed, ask: **which terms and conventions should be recorded
+now?** Load with `che knowledge show --project <slug>`; if nothing exists, this is a **no-op** — skip it.
+Scaffold a domain with `che knowledge scaffold --project <slug> --domain <domain>`, propose changes with
+`che knowledge apply --ops @ops.json` (dry-run), show the diff, and gate on **keep / alter / revert**
+before `--no-dry-run --confirm`. Full contract: `che-knowledge` skill §6.
+
 This skill acts as a Strategic Technical Partner. It doesn't just write code; it designs the foundations of a system through an iterative dialogue with the user.
 
 ---

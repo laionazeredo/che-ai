@@ -427,29 +427,30 @@ How:
    - **Pass E — Demo data source scan**: Search for `/demoBookings|demo-data|mock-data|seed-demo/` imports in component, or variables named `demoXXX`, `mockXXX` used as data source (not test fixtures). If match → E = YES.
    - **Severity check**: IF (A OR B OR C OR D) YES **AND** (commit/PR/ticket ACs) claim feature is "wired to backend" / "complete UI integration" / not "demo/scaffold" → **HIGH severity finding**. Reason: misleading commit makes reviewer/PM think feature integrated when it's fake.
    - Fix: (1) wire handler correctly (call tRPC mutation with generated idempotencyKey, gate visibility with service call), or (2) prominent DEMO label and separate from shipping code (move to `components/demo/*` + `// TODO REMOVE BEFORE SHIP`).
-5. **4.7 Test-suite naming behavioural check (RULE 7.9, MEDIUM / WARN).**
+5. **4.7 Test-suite naming + comment self-containment check (RULE 7.9, MEDIUM / WARN).**
 
    **🔴 HARD RULE — PROHIBITED INVERSION (NEVER do this):**
    > ❌ **WRONG:** Complain that a test DOES NOT have `FLO-xxx` / `T<N>` / `AC<N>` in title.
-   > ✅ **CORRECT:** Having these references IN TITLE is ANTI-PATTERN (bad). NOT having them and describing ONLY observable behaviour is GOOD / COMPLIANT.
+   > ✅ **CORRECT:** Having these references IN THE TITLE OR IN A COMMENT is ANTI-PATTERN (bad). NOT having them and describing ONLY observable behaviour is GOOD / COMPLIANT.
    >
-   > **1-sentence decision:** `Title contains FLO-ID? → BAD = FINDING. Title DOES NOT contain FLO-ID? → GOOD = NEVER report finding for this.`
-   > **Correct traceability (NOT violating RULE 7.9):** JSDoc comment `/** @ticket FLO-714 */` ABOVE block, OR `// @ticket FLO-714 | @ac 3.2 | @task T1.4` line AS 1st LINE INSIDE block. NEVER in title string.
+   > **1-sentence decision:** `Title or comment contains FLO-ID? → BAD = FINDING. Neither contains an ID? → GOOD = NEVER report finding for this.`
+   > **Self-contained comment (NOT a violation):** doc comment describing arrangement, input, expected result and invariant — with NO `@ticket` / `@ac` / `@task` / `@spec` tags.
 
-   Scan added/modified test files (`*.test.*`, `*.spec.*`, `__tests__/`). Detect anti-patterns **EXCLUSIVELY in TITLE STRING** of `describe("...")` / `it("...")` / `test("...")`:
-   - Ticket IDs: `FLO-\d+`, codes like `ABC-123` (ANY 2+ letters prefix + hyphen + number in TITLE = BAD)
+   Scan added/modified test files (`*.test.*`, `*.spec.*`, `__tests__/`). Detect anti-patterns in the **TITLE STRING** of `describe("...")` / `it("...")` / `test("...")` **and in the comment/JSDoc block attached to it**:
+   - Ticket IDs: `FLO-\d+`, codes like `ABC-123` (ANY 2+ letters prefix + hyphen + number = BAD)
    - Task/item IDs: `Task? T\d+(\.\d+)?`, `Item \d+`
    - AC/section IDs: `AC\d+`, `§\d+(\.\d+)?`, `REGRA \d+`, `SPEC_XXX`, `PRD §`
    - Phase/story IDs: `Fase \d+`, `Story #?\d+`
+   - Planning anchors: `@(ac|task|ticket|spec|bug)\b`, `B-\d+` / `AB-\d+`
 
-   Severity (FINDING = BAD title = contains patterns ABOVE):
-   - 1–4 bad titles → **LOW WARN** (non-blocking, "Nice-to-have" list)
-   - 5–9 bad titles → **MEDIUM** (main findings; rename required or explicit override)
-   - ≥10 bad titles → **HIGH** (blocking: CI report useless, breaking rule at scale)
+   Severity (FINDING = BAD title/comment = contains patterns ABOVE):
+   - 1–4 bad titles/comments → **LOW WARN** (non-blocking, "Nice-to-have" list)
+   - 5–9 bad titles/comments → **MEDIUM** (main findings; rename required or explicit override)
+   - ≥10 bad titles/comments → **HIGH** (blocking: CI report useless, breaking rule at scale)
 
    **❌ NEVER generate finding for "missing FLO-xxx in title"** → Desired behavior, compliant. Any report flagging missing task-id in title is a REGRESSION, invalidates section.
 
-   Never flag JSDoc traceability comment ABOVE block or `// @ac X | @task Y | @ticket Z` INSIDE block as bad. They are RECOMMENDED for traceability without title pollution.
+   Never flag a self-contained doc comment as bad. Never ask for a traceability anchor to be added — traceability belongs to the SPEC §5 matrix and the PR body, not to the code.
 6. **4.8 Route-level / failure-path test gap check (MEDIUM if missing)**. If Category 0 found new webhook route event type → require 1 route-level signed-payload POST test. If Category 0.3 flagged tx pattern → require 1 failure path test: Stripe 5xx → tx rollback + retry with same idempotency key → no double-effect. MEDIUM (waivable ONLY with PR body sign-off override).
 
 ---
@@ -520,7 +521,7 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md`. Never f
 
 ---
 
-### Category 7: 🟢 Testing Gaps & Regression Lock (QA-Centric ONDA1) — HIGH for missing tests, MEDIUM for traceability, LOW for skip without ticket
+### Category 7: 🟢 Testing Gaps & Regression Lock (QA-Centric ONDA1) — HIGH for missing tests, MEDIUM for planning references in tests, LOW for skip without ticket
 
 > **Enforcement companion:** che-debugger-bugfix Step 1.2.5 REPRO AUTOMATION LOCK enforces SAME rules for bug-fix. Category 7 applies for feature diffs touching runtime behaviour / routes / UI.
 
@@ -543,14 +544,13 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md`. Never f
    - **Exemptions:** explicitly marked DEMO/SCAFFOLD (`*Demo*.tsx`, `*Scaffold*.tsx`) + PR body warning. OR strictly internal / health-check (`/healthz`).
    - **Fix:** Add 1 route-level test (API branch A) calling `trpcClient.xxx(...)` / `POST /api/xxx` with signed payload + valid auth; for UI add 1 RTL spec calling `fireEvent.click` + assertions.
 
-3. **G7.3 🟡 MEDIUM → 🟠 HIGH SEVERITY UPGRADE CROSS-CUTTING REGRESSION FOLDER (G5 policy):**
-   - **Current MEDIUM default:** New/modified test WITHOUT traceability comment linking to SbE behaviour or ticket.
-   - Scope: scan EVERY new/modified test file (`*.test.*`, `*.spec.*`). Check FIRST 3 non-empty lines inside `it()` / `test()` body (or JSDoc `/** ... */` ABOVE nearest `describe()`).
-   - Look for comment MATCHING regex: `^\s*//\s*@(ac|ticket|task|bug)\s+(B-\d+|FLO-\d+|AC\d+(\.\d+)?|T\d+(\.\d+)?|AB-\d+)` or JSDoc tag `@ticket`, `@ac`, `@task`.
-   - If ZERO such comment → **MEDIUM G7.3 default = NO TRACEABILITY.**
-   - **Exception:** pure test infra refactor (rename, package.json, jest/vitest config). OR well-known canonical test (e.g. `it("sums 2+2")`).
-   - **Fix:** Add 1 line as FIRST executable line inside `it()/test()`: `// @ac B-3 | @ticket FLO-123` (or JSDoc for describe). Canonical SbE traceability anchor for scope-checker CHECK2 bilateral verification.
-   - **🔴 AUTOMATIC SEVERITY UPGRADE TO HIGH (G5 cross-cutting exception):** IF (test located in **`tests/regression/<TICKET_ID>--<slug>.test.ts` (with ticket ID in filename) AND NO `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER` logged in decisions.log.jsonl justifying ≥4 independent domains OR pure infra**) → **G7.3 automatically becomes 🟠 HIGH severity** (counts toward §0.9.2 ≤ 2 HIGH auto-fix rule). If test in feature folder with correct anchor → no upgrade.
+3. **G7.3 🟡 MEDIUM — Planning artefact referenced inside a test (title or comment).**
+   - Scope: scan EVERY new/modified test file (`*.test.*`, `*.spec.*`). Check the `describe()` / `it()` / `test()` title string AND the comment/JSDoc block attached to it.
+   - Detect regex: `@(ac|task|ticket|spec|bug)\b`, `\b(AB|B)-\d+\b`, `FLO-\d+`, `Task? T\d+(\.\d+)?`, `AC\d+`, `§\d+(\.\d+)?`, `SPEC[_-]\w+`.
+   - If any match → **MEDIUM G7.3 default = EXTERNAL REFERENCE IN TEST.**
+   - **Exception:** pure test infra refactor (rename, package.json, jest/vitest config). Ticket IDs in the *filename* are governed by the G5 regression-folder policy below, not by this check.
+   - **Fix:** rewrite the title as observable behaviour and replace the anchor with a self-contained doc comment (arrangement, input, expected result, invariant). Traceability moves to the SPEC §5 Verification Matrix and the PR body.
+   - **🔴 AUTOMATIC SEVERITY UPGRADE TO HIGH (G5 cross-cutting exception):** IF (test located in **`tests/regression/<TICKET_ID>--<slug>.test.ts` (with ticket ID in filename) AND NO `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER` logged in decisions.log.jsonl justifying ≥4 independent domains OR pure infra**) → **G7.3 automatically becomes 🟠 HIGH severity** (counts toward §0.9.2 ≤ 2 HIGH auto-fix rule). If test is colocated in the feature folder → no upgrade.
 
 4. **G7.4 🔵 LOW — `.skip()` / `xit()` / `it.todo()` used WITHOUT follow-up ticket reference.**
    - Scan for `.skip(`, `xit(`, `it.todo(`, `test.skip(`, `test.todo(`.

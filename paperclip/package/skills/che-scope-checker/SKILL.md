@@ -300,8 +300,8 @@ RULE 7.9: Suite/test names MUST be observable behaviour. Poor names (FLO-123, te
 > ❌ **WRONG:** "Title does not have FLO-714 as prefix → invalid evidence / deduct points". **THIS IS A REGRESSION.**
 > ✅ **CORRECT:** Title describes observable behaviour + DOES NOT have FLO/T/AC in the STRING → GOOD, compliant, counts as evidence.
 >
-> **What INVALIDATES evidence (bad):** title STRING contains anti-patterns `FLO-\d+` / `Task? T\d+` / `AC\d+` / `§\d+` / `SPEC_XXX`.
-> **What VALIDATES evidence (good):** title contains AC keywords (behaviour verbs + nouns) + has no IDs. Traceability via `// @ac 2.1 | @ticket FLO-732` comment INSIDE the block = also GOOD and not penalised.
+> **What INVALIDATES evidence (bad):** title STRING contains anti-patterns `FLO-\d+` / `Task? T\d+` / `AC\d+` / `§\d+` / `SPEC_XXX`, OR the test carries a planning anchor in a comment (`@ac`, `@ticket`, `@task`, `@bug`, `B-\d+`). The test must be understandable on its own.
+> **What VALIDATES evidence (good):** title contains AC keywords (behaviour verbs + nouns) + has no IDs; an optional doc comment explains arrangement, input and expected result in domain language.
 
 Reasoning per AC:
 - For each behavioural AC like "user can apply stripe connect refund" → search tests for strings like: `refund`, `stripe connect`, `connected account`, `refund succeeded`, `refund failed`
@@ -319,22 +319,22 @@ Reasoning per AC:
 
 ### Step 3.5 — ⚡ CHECK 2 EXTENSION SbE BILATERAL ENFORCEMENT (3 sub-checks) — ONLY RUNS IF `SBE_EXTENSION_ENABLED = true` (§0.4)
 
-> **ONDA2 bilateral verification loop pillar:** Spec §4 Behavior → Test anchor → Evidence SHA → Updated Spec §5. Scope-checker validates the reverse loop as well (which B-coverage vs reality).
+> **ONDA2 bilateral verification loop pillar:** Spec §4 Behavior → test verifying that behaviour → Evidence SHA → Updated Spec §5. Scope-checker validates the reverse loop as well (which B-coverage vs reality).
 
-**3.5.1 Bilateral 1/3 — Anchor @ac B-X → it() body coverage (traces each B-ID → real test file)**
+**3.5.1 Bilateral 1/3 — Behaviour coverage: each B-ID mapped to a test whose title or doc comment verifies it**
 
 Scanning rule:
-1. **Anchor detection regex (exact che-code-review Category 7 G7.3):** `^\/\/\s*@(ac|ticket|task|bug)\s+(B-\d+|FLO-\d+|[A-Z]+-\d+)` — **MUST be the FIRST LINE INSIDE the `it(...) { ... }` or `test(...) { ... }` block**. Outside the block = DOES NOT count as bilateral evidence (could be a casual comment).
+1. **There is no in-code anchor (RULE 7.9).** A test file must contain no `@ac` / `@ticket` / `@task` / `@bug` tag and no `B-\d+` reference; if one appears, report it as a RULE 7.9 violation (Check 2) instead of counting it as coverage. Match each B-ID **semantically**: read the `it()`/`test()` title and its doc comment and decide whether the test verifies the same behaviour (same actor, same trigger, same observable outcome). Record `file:line-range` of the `it()` block as evidence.
 2. **Scan universe:** ALL test files detected in §3.2 (test/spec/__tests__/e2e/playwright files in diff) + corresponding SUTs if they have embedded tests. DO NOT scan entire repo — only current diff (blast radius).
-3. **Anchor coverage calculation:**
+3. **Coverage calculation:**
    ```
-   B_COUNT_SPEC = len(SBE_BEHAVIORS[])           // real §4.2 table
-   B_COVERED_BY_ANCHOR = count(SBE_BEHAVIORS.b_id ∋ appears in at least 1 regex match)
-   BILATERAL_ANCHOR_COVERAGE_PCT = B_COVERED_BY_ANCHOR ÷ max(1, B_COUNT_SPEC) × 100
+   B_COUNT_SPEC = len(SBE_BEHAVIORS[])                  // real §4.2 table
+   B_COVERED    = count(SBE_BEHAVIORS.b_id where >=1 test title/doc comment verifies that behaviour)
+   BILATERAL_BEHAVIOUR_COVERAGE_PCT = B_COVERED ÷ max(1, B_COUNT_SPEC) × 100
    ```
-4. **Severity / Verdict (per S15 CHE_RULES §X Bilateral Anchors Table):**
-   - **🔴 BLOCK (hard stop):** BILATERAL_ANCHOR_COVERAGE_PCT = 0% → NO SbE behaviour has bilateral anchor. **Require EXPLICIT_OVERRIDE_BILATERAL_SKIP with justification + decision.log entry.** (S15 threshold 0%)
-   - **🟡 WARN (action item):** BILATERAL_ANCHOR_COVERAGE_PCT < 70% OR ≥2 B-IDs missing individually even if global ≥70 → list missing B-IDs + expected test file(s) by keyword mapping. (S15 threshold <70%)
+4. **Severity / Verdict (per S15 CHE_RULES §X Bilateral Coverage Table):**
+   - **🔴 BLOCK (hard stop):** BILATERAL_BEHAVIOUR_COVERAGE_PCT = 0% → NO SbE behaviour is verified by any test in the diff. **Require EXPLICIT_OVERRIDE_BILATERAL_SKIP with justification + decision.log entry.** (S15 threshold 0%)
+   - **🟡 WARN (action item):** BILATERAL_BEHAVIOUR_COVERAGE_PCT < 70% OR ≥2 B-IDs uncovered individually even if global ≥70 → list missing B-IDs + expected test file(s) by keyword mapping. (S15 threshold <70%)
    - **🟢 FULLY LINKED:** ≥70% AND <2 individual missing B-IDs → green. §7.1 bonus score applied if ≥90%. (S15 thresholds ≥70% + ≥90% bonus)
 
 **3.5.2 Bilateral 2/3 — SPEC §4.4 Mermaid B-ID refs set vs §4.2 real Behavior Table set (diagrams don't lie)**
@@ -366,10 +366,10 @@ Cross-check procedure:
 
 | Anchor ID | Behavioural rule | Verdict | Evidence + Action item if 🟡/🔴 |
 |---|---|---|---|
-| SBE-B1 | `bilateral_anchor_coverage_for_spec_Behaviors_test_files` | 🟢 FULLY LINKED | 9/10 B-IDs have `// @ac B-X` on 1st line inside it() block. Coverage=90%. Files: [refundFlow.api.test.ts](file:///...) + [RefundService.unit.test.ts](file:///...). **+0.5 §7.1 SCOPE_score bonus applied.** |
+| SBE-B1 | `bilateral_behaviour_coverage_for_spec_Behaviors_test_files` | 🟢 FULLY LINKED | 9/10 B-IDs have a test whose title or doc comment verifies the behaviour. Coverage=90%. Files: [refundFlow.api.test.ts](file:///...) + [RefundService.unit.test.ts](file:///...). **+0.5 §7.1 SCOPE_score bonus applied.** |
 | SBE-B2 | `bilateral_mermaid_bid_refs_real_table_behaviour` | 🟡 WARN ORPHAN | Orphan refs: `B-11` exists in §4.4.1 sequenceDiagram but has NO corresponding entry in Behavior Table. Add B-11 to table OR remove from diagram. Missing refs count = 0 (ok, mermaid_required=true). |
 | SBE-B3 | `bilateral_erd_cardinalities_constraints_migration_and_typeorm` | 🟡 WARN MISMATCH | ERD `OrderItem → Order }|--|{` (ON DELETE CASCADE expected). Migration `20260415_refund.sql#L80` uses `ON DELETE RESTRICT`. Adjust migration to CASCADE (order without items = deleted without orphans risk). ERD declared UK `uk_refund_payment_id` → found in unique @Index ✅. |
-| SBE-B2-alt | `(0% example — hard block)` | 🔴 BLOCK ZERO ANCHORS | 0/7 B-IDs have bilateral anchor. NO test file modified in this diff contains `// @ac B-X` pattern. Resolve: add anchors OR justified EXPLICIT_OVERRIDE_BILATERAL_SKIP + decision.log entry. |
+| SBE-B2-alt | `(0% example — hard block)` | 🔴 BLOCK ZERO COVERAGE | 0/7 B-IDs are verified by any test in this diff — no title or doc comment describes those behaviours. Resolve: write the missing behaviour tests OR justified EXPLICIT_OVERRIDE_BILATERAL_SKIP + decision.log entry. |
 
 ---
 
@@ -522,18 +522,18 @@ PARTIAL_weighted   = count(🟡 PARTIAL)                 × 0.5   (per S11)
 SCOPE_score = 10 × (DELIVERED_weighted + PARTIAL_weighted) / max(1, TOTAL_ACs)   (per S11 base)
 ```
 
-**⚡ SbE Bilateral Anchor Coverage adjustment (per S11 bilateral + S15 CHE_RULES §X — only applies if SBE_EXTENSION_ENABLED=true):**
+**⚡ SbE Bilateral Behaviour Coverage adjustment (per S11 bilateral + S15 CHE_RULES §X — only applies if SBE_EXTENSION_ENABLED=true):**
 ```
-BILATERAL_ANCHOR_COVERAGE_PCT = (B_COVERED_BY_ANCHOR ÷ max(1, B_COUNT_SPEC)) × 100
-if (BILATERAL_ANCHOR_COVERAGE_PCT >= 90):                                      # per S11 / S15 bonus 90%
+BILATERAL_BEHAVIOUR_COVERAGE_PCT = (B_COVERED ÷ max(1, B_COUNT_SPEC)) × 100
+if (BILATERAL_BEHAVIOUR_COVERAGE_PCT >= 90):                                      # per S11 / S15 bonus 90%
     SCOPE_score = clamp(SCOPE_score + 0.5, 0, 10)
-elif (BILATERAL_ANCHOR_COVERAGE_PCT < 70 AND BILATERAL_ANCHOR_COVERAGE_PCT > 0):  # per S11 / S15 penalty <70%
+elif (BILATERAL_BEHAVIOUR_COVERAGE_PCT < 70 AND BILATERAL_BEHAVIOUR_COVERAGE_PCT > 0):  # per S11 / S15 penalty <70%
     SCOPE_score = clamp(SCOPE_score - 1.0, 0, 10)
-# 0% anchors = BLOCK regardless of score (§8.1 verdict has 🔴 check item — S15)
+# 0% behaviour coverage = BLOCK regardless of score (§8.1 verdict has 🔴 check item — S15)
 ```
 
 Example (per S11): 8🟢 + 1🟡 + 1🔴 → base SCOPE = 10 × (8 + 0.5)/10 = **8.5**
-With 92% bilateral anchor coverage (SbE ON, per S15 bonus) → adjusted SCOPE = clamp(8.5 + 0.5, 0, 10) = **9.0**
+With 92% bilateral behaviour coverage (SbE ON, per S15 bonus) → adjusted SCOPE = clamp(8.5 + 0.5, 0, 10) = **9.0**
 
 ### 7.2 LEAN sub-score calculation (0-10) — per S12 CHE_RULES §X
 
@@ -637,7 +637,7 @@ First page of report (always at the TOP):
 |---|---|---|---|---|---|
 | 1 | 🔍 Full scope delivery | 8 | 1 | 1 | 2 OOS |
 | 2 | 🧪 Unit/e2e test coverage | 6 | 2 | 1 | 0 |
-| 2-ext | ⚡ Bilateral SbE (anchors + diagrams + ERD) | 2 rows ok | 1 ERD mismatch | 0 | 1 N/A erd_required=false |
+| 2-ext | ⚡ Bilateral SbE (behaviour coverage + diagrams + ERD) | 2 rows ok | 1 ERD mismatch | 0 | 1 N/A erd_required=false |
 | 3 | 📘 Updated docs | 3 | 1 | 0 | 5 N/A |
 | 4 | 🔐 Declared new env vars | 1 | 1 | 1 | 0 |
 | 5 | 🧩 Lean/YAGNI Overengineering | — | 5 L (MED) | 1 H (L6) | 7 allowlisted |
