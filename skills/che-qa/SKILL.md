@@ -388,21 +388,22 @@ Reproduction command:
 
 ### 2.5 Stage E — Test Naming Behavioral Lint (Che RULE 7.9)
 
-Goal: ensures `describe()` / `it()` / `test()` describe OBSERVABLE BEHAVIOR, not internal IDs. Runs ONLY if `*.test.*`, `*.spec.*` or `__tests__/` modified.
+Goal: ensures `describe()` / `it()` / `test()` titles AND their comments describe OBSERVABLE BEHAVIOUR in self-contained domain language, never planning artefacts. Runs ONLY if `*.test.*`, `*.spec.*` or `__tests__/` modified.
 
 **🔴 HARD RULE — PROHIBITED INVERSION (NEVER do this):**
 > ❌ **WRONG:** Report WARN / FAIL because a test title DOES NOT CONTAIN `FLO-xxx` / `T<N>` / `AC<N>`.
-> ✅ **CORRECT:** Having these IDs IN THE TITLE is BAD = finding. NOT HAVING THEM and describing behavior is GOOD = compliant = NEVER report finding for missing ID.
+> ✅ **CORRECT:** Having these IDs IN THE TITLE OR IN A COMMENT is BAD = finding. NOT HAVING THEM and describing behavior is GOOD = compliant = NEVER report finding for missing ID.
 >
-> **1-sentence decision:** `title contains FLO-ID → BAD finding. title does NOT contain FLO-ID → GOOD (no finding).`
-> **Correct traceability** (always OK): JSDoc comment `/** @ticket FLO-714 · @ac 3.1 */` ABOVE block OR `// @ticket FLO-714 | @ac 3.1 | @task T1.2` 1st line INSIDE block.
+> **1-sentence decision:** `title or comment contains FLO-ID → BAD finding. neither contains an ID → GOOD (no finding).`
+> **Self-contained comment** (always OK): doc comment explaining arrangement, input, expected result and invariant — no `@ticket` / `@ac` / `@task` tags.
 
-**What to detect (regex ONLY IN TITLE STRING — comments ignored):**
-Scan string passed to `describe(...)`, `it(...)`, or `test(...)`:
-- Ticket IDs in TITLE: `FLO-\d+`, `[A-Z]{2,}-\d+`
-- Task/item IDs in TITLE: `Task?\s*T\d+(\.\d+)?`, `Item\s*\d+`
-- AC/section IDs in TITLE: `AC\s*\d+`, `§\s*\d+(\.\d+)?`, `REGRA\s*\d+`, `SPEC[_-]\w+`
-- Phase/story IDs in TITLE: `Fase\s*\d+`, `Story\s*#?\d+`, `PRD\s*§`
+**What to detect (regex in TITLE STRING and in attached comments/JSDoc):**
+Scan strings passed to `describe(...)`, `it(...)`, or `test(...)` plus the comment block above/inside each block:
+- Ticket IDs: `FLO-\d+`, `[A-Z]{2,}-\d+`
+- Task/item IDs: `Task?\s*T\d+(\.\d+)?`, `Item\s*\d+`
+- AC/section IDs: `AC\s*\d+`, `§\s*\d+(\.\d+)?`, `REGRA\s*\d+`, `SPEC[_-]\w+`
+- Phase/story IDs: `Fase\s*\d+`, `Story\s*#?\d+`, `PRD\s*§`
+- Planning anchors: `@(ac|task|ticket|spec|bug)\b`, `\b(AB|B)-\d+\b`
 
 **How to scan (simplest possible — grep -E):**
 ```bash
@@ -413,15 +414,15 @@ git diff --cached --unified=0 -- <changed spec files> | grep -E '^\s*\+' \
 Then for each title found check anti-patterns ABOVE only. Ignore JSDoc + body comments.
 ```
 
-**Report output format (WARNINGS only when BAD titles PRESENT — NEVER flag "missing FLO prefix"):**
+**Report output format (WARNINGS only when BAD titles/comments PRESENT — NEVER flag "missing FLO prefix"):**
 ```
-Stage E — TEST NAMING (RULE 7.9)
+Stage E — TEST NAMING + COMMENTS (RULE 7.9)
 Total test titles scanned: 42
-Behavioral (good, NO internal IDs in TITLE): 40
-Bad titles detected (WARNING — internal IDs IN TITLE STRING): 2
+Self-contained (good, NO internal IDs in title or comment): 40
+Bad tests detected (WARNING — internal ID in TITLE or COMMENT): 2
   - <file>: it("Task T2.3 — validates AC 4.2 refund") — BAD in TITLE: contains "Task T2.3" and "AC 4.2"
   - <file>: describe("FLO-513 refund process")      — BAD in TITLE: contains "FLO-513"
-Fix guidance: rename TITLES to describe BEHAVIOR only. Keep traceability links (@ac / @task / @ticket) in JSDoc comment above or 1-line comment inside block.
+Fix guidance: rename TITLES to describe BEHAVIOR only and replace planning anchors (@ac / @task / @ticket) with a self-contained doc comment explaining the scenario.
 ```
 
 ---

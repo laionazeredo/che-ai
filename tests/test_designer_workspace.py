@@ -62,7 +62,7 @@ def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     )
 
 
-# @ac B-1 — F0 tracer: init writes the git-native design tree
+# init writes the git-native design tree
 def test_init_writes_design_tree(tmp_path: Path) -> None:
     """Run run_init on a fresh tmp worktree; expect DESIGN.md + tokens.json inside worktree."""
     # Lazy import so test module loads even when che_core is partially built
@@ -93,7 +93,7 @@ def test_init_writes_design_tree(tmp_path: Path) -> None:
     assert "colors" in data, "tokens.json invariant: colors group required (A-2 future-proof)"
 
 
-# @ac AB-1 — path traversal rejection
+# path traversal rejection
 def test_init_rejects_path_traversal(tmp_path: Path) -> None:
     """A slug like '../../etc' must NOT create files anywhere on disk; must fail with a non-zero exit code."""
     from che_core import designer as designer_mod
@@ -121,7 +121,7 @@ def test_init_rejects_path_traversal(tmp_path: Path) -> None:
     assert remaining == [], f"no files must be created on rejection; found: {remaining}"
 
 
-# @ac regression — existing bootstrap subcommand still parses
+# existing bootstrap subcommand still parses
 def test_bootstrap_subcommand_still_parses() -> None:
     """T1 must NOT remove the existing bootstrap parser; it is additive only."""
     result = subprocess.run(
@@ -135,7 +135,7 @@ def test_bootstrap_subcommand_still_parses() -> None:
     assert "slug" in result.stdout, "bootstrap parser must still expose the `slug` argument"
 
 
-# @ac B-1 follow-up — init subcommand is registered on the CLI parser
+# init subcommand is registered on the CLI parser
 def test_init_subcommand_registered() -> None:
     """`che designer init --help` must exit 0 and document the --sub-product flag."""
     result = subprocess.run(
@@ -148,7 +148,7 @@ def test_init_subcommand_registered() -> None:
     assert "--sub-product" in result.stdout, "init parser must expose --sub-product"
 
 
-# @ac regression — a leading global flag must not divert the designer dispatch
+# a leading global flag must not divert the designer dispatch
 def test_global_json_flag_before_designer_still_dispatches() -> None:
     """`che --json designer …` must reach the designer sub-CLI, not argparse.
 
@@ -192,7 +192,7 @@ def test_the_designer_dispatch_still_forwards_help() -> None:
     assert "Che Social UI Designer Helper" in result.stdout
 
 
-# @ac B-1 git status — porcelain output after init on a real git worktree
+# porcelain output after init on a real git worktree
 def test_init_git_status_porcelain(tmp_path: Path) -> None:
     """Init inside a git-initialised tmp_path; `git status --porcelain` lists exactly the two untracked paths."""
     from che_core.designer import run_init

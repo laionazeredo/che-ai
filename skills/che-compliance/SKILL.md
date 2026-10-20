@@ -201,43 +201,45 @@ Scan for NEW code:
 
 **Applies ONLY to:** new/edited files matching `*.test.*`, `*.spec.*`, or inside `__tests__/` folder. If task did not touch tests → SKIP this category.
 
-**Goal:** avoid `describe()` / `it()` / `test()` names containing ONLY internal IDs, forcing title to describe OBSERVABLE BEHAVIOR (valid for months, not just task duration).
+**Goal:** keep every test self-contained: titles and comments describe OBSERVABLE BEHAVIOUR in domain language (valid for months, not just task duration), with no reference to planning artefacts.
 
 **🔴 HARD RULE — PROHIBITED INVERSION (NEVER do this):**
 > ❌ **WRONG:** Complain / report finding because a test DOES NOT HAVE `FLO-xxx` / `T<N>` / `AC<N>` in the title string.
-> ✅ **CORRECT:** Having these references IN THE TITLE is ANTI-PATTERN (bad = finding). NOT having them and describing behavior is GOOD / COMPLIANT.
+> ✅ **CORRECT:** Having these references IN THE TITLE OR IN A COMMENT is ANTI-PATTERN (bad = finding). NOT having them and describing behavior is GOOD / COMPLIANT.
 >
-> **1-sentence decision:** `title contains FLO-ID? → BAD = FINDING. title does NOT contain FLO-ID? → GOOD = NEVER generate finding for missing ID.`
+> **1-sentence decision:** `title or comment contains FLO-ID? → BAD = FINDING. neither contains an ID? → GOOD = NEVER generate finding for missing ID.`
 
-**Scan pattern:** look for strings inside `describe("...")`, `it("...")`, `test("...")`. For each title found, check anti-patterns:
+**Scan pattern:** look for strings inside `describe("...")`, `it("...")`, `test("...")` AND for comment/JSDoc blocks attached to them. For each title/comment found, check anti-patterns:
 
 | Anti-pattern (regex case-insensitive) | Reason | Severity |
 |---|---|---|
-| `FLO-\d+` / `[A-Z]{2,}-\d+` | Linear/Jira Ticket IDs in TITLE. Valid only while ticket open; invalidates CI report in 6 months. | WARN |
-| `Task?\s*T\d+(\.\d+)?` / `Item\s*\d+` | Che Task IDs in TITLE. Task rearrangement breaks name. | WARN |
-| `AC\s*\d+` / `Criteria\s*\d+` | SPEC/PRD Acceptance Criteria IDs in TITLE. | WARN |
-| `§\s*\d+(\.\d+)?` / `RULE\s*\d+` / `SPEC[_-]\w+` / `PRD\s*§` | Planning doc section references IN TITLE. | WARN |
-| `Phase\s*\d+` / `Story\s*#?\d+` | Temporary phase/story IDs in TITLE. | WARN |
+| `FLO-\d+` / `[A-Z]{2,}-\d+` | Linear/Jira Ticket IDs in TITLE or COMMENT. Valid only while ticket open; invalidates CI report in 6 months. | WARN |
+| `Task?\s*T\d+(\.\d+)?` / `Item\s*\d+` | Che Task IDs in TITLE or COMMENT. Task rearrangement breaks the reference. | WARN |
+| `AC\s*\d+` / `Criteria\s*\d+` | SPEC/PRD Acceptance Criteria IDs in TITLE or COMMENT. | WARN |
+| `§\s*\d+(\.\d+)?` / `RULE\s*\d+` / `SPEC[_-]\w+` / `PRD\s*§` | Planning doc section references in TITLE or COMMENT. | WARN |
+| `Phase\s*\d+` / `Story\s*#?\d+` | Temporary phase/story IDs in TITLE or COMMENT. | WARN |
+| `@(ac|task|ticket|spec|bug)\b` / `\b(AB|B)-\d+\b` | SbE / planning anchors in COMMENT or JSDoc. Context must be self-contained. | WARN |
 
-**Correct traceability (DOES NOT generate finding — use these):**
-1. JSDoc comment ABOVE block: `/** @ticket FLO-714 · @ac 3.2 · @task T1.4 */`
-2. 1st line comment INSIDE block: `// @ticket FLO-714 | @ac 3.2 | @task T1.4`
+**Comments are in scope too — self-contained only:**
+1. ✅ Optional doc comment (JSDoc / TSDoc / docstring) explaining scenario, input, expected result and invariant in domain language.
+2. ❌ `/** @ticket FLO-714 · @ac 3.2 · @task T1.4 */` or `// @ac 3.2 | @task T1.4` inside the block → **WARN** (planning reference in code, same family as an ID in the title).
+3. ❌ Any `@ac` / `@task` / `@ticket` / `@spec` / `@bug` tag, or `B-\d+` / `AB-\d+` anchor, anywhere in the test file.
 
-**Severity rule (FINDING only if BAD patterns ABOVE present in TITLE):**
-- 1–9 bad titles → **WARN** (non-blocking; detailed list in report)
-- ≥10 bad titles in same diff → **HIGH** (blocking; engineering-contracts becomes non-review-friendly)
-- Good titles = contain action verb + condition + result; DO NOT have regexes above. A GOOD title not having FLO-xxx or Task-id IS EXPECTED.
+**Severity rule (FINDING only if BAD patterns ABOVE present in TITLE or COMMENT):**
+- 1–9 bad titles/comments → **WARN** (non-blocking; detailed list in report)
+- ≥10 bad titles/comments in same diff → **HIGH** (blocking; engineering-contracts becomes non-review-friendly)
+- Good titles = contain action verb + condition + result; comments = self-contained scenario. Neither has the regexes above. A GOOD test not having FLO-xxx or Task-id IS EXPECTED.
 
 **❌ NEVER generate finding for missing FLO/T/AC in title** → this is default correct. If your report has "missing FLO prefix in title" it's a REGRESSION of this category, discard the line before output.
 
 **How to report:**
 ```
-## Scan 7 — Test naming (RULE 7.9)
+## Scan 7 — Test naming + comments (RULE 7.9)
 Total spec files modified: 3 | Test titles inspected: 24
-Good (behavioral, NO internal IDs): 20 | Bad (contains internal IDs in TITLE STRING): 4
+Good (behavioural, self-contained, NO internal IDs): 20 | Bad (internal IDs in TITLE or COMMENT): 4
   1. /src/__tests__/auth.test.ts:88 — it("Task T2.3 validates AC 4.2 service role") → BAD in title: "Task T2.3" + "AC 4.2"
      Suggest rename: it("blocks non-service-role callers with 403 Forbidden when anon key used")
-     Keep traceability: inside block line 1: // @ac 4.2 | @task T2.3 | @ticket FLO-745
+     Add a self-contained doc comment describing the arrangement, the input and the expected 403 — no ticket/AC/task reference.
   2. ...
 ```
 

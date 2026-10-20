@@ -420,13 +420,13 @@ Required IF `COUNT(DISTINCT top-level packages touched from §2 CAN TOUCH) ≥ 3
 Header: `## §5 VERIFICATION MATRIX (Bilateral — B → Test → B)`
 
 > **Purpose:** Living TODO checklist that che updates AUTOMATICALLY in each SM/Developer/QA loop.
-> **Bilateral anchors:** (1) Spec §4 B-ID → (2) `// @ac B-X` comment 1st line inside `it()`/`test()` → (3) Resultado/evidence sha256.
+> **Traceability chain:** (1) Spec §4 B-ID → (2) test whose title/doc comment verifies that behaviour → (3) Resultado/evidence sha256. The link lives in THIS matrix (path + line range), never as an anchor inside the test file (RULE 7.9).
 > **Scope-checker CHECK2 validates the reverse: (2) → (1) + (3).**
 
 MANDATORY Markdown table (B-IDs first, then AB-IDs below):
 | Anchor (B or AB) | Status (Planned|Written|Passed|Failed|Skipped) | Test file ABSOLUTE PATH (real path inside bound worktree) | Evidence sha256 (stdout/err hash or screenshot png hash) | QA Owner Assigned | Notes |
 |---|---|---|---|---|---|---|
-| B-1 | Planned | `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts` L:78-111 | | Developer (SM) | // @ac B-3 | @ticket FLO-513 anchor |
+| B-1 | Planned | `packages/platform/server/__tests__/e2e/refundFlow.api.test.ts` L:78-111 | | Developer (SM) | Behaviour verified: full refund of a settled payment |
 | B-2 | Planned | ... | ... | ... | ... |
 | AB-1 | Planned | `packages/platform/server/__tests__/integration/refundIdempotency.integ.test.ts` | | QA | Double click — Playwright extra step after integ |
 | AB-2 | ... | ... | ... | ... | ... |
@@ -552,7 +552,7 @@ Reject draft and loop back to §2 source if ANY check fails. Run in order.
 ### Bilateral cross-ref scope-checker CHECK2 (ONDA2 next block)
 When this VALIDATION PASS runs GREEN (all pass), che also prints a 1-line footer:
 > `SbE spec valid: B=$B_COUNT AB=$AB_COUNT AB_ratio=$RATIO% Mermaid=$TRIG ERD=$ERD_TRIG.`
-This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bilateral B-ID ↔ test file cross-validation.
+This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bilateral behaviour coverage cross-validation.
 
 ---
 

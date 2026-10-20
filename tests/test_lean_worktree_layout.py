@@ -43,7 +43,6 @@ def _tracked_leak(repo: Path, name: str = "spec_leak.md") -> Path:
 
 
 def test_new_worktree_has_no_subdirs(tmp_path: Path) -> None:
-    # @ac B-1
     """A freshly bound worktree holds `.binding.json` and no directories.
 
     Covers BOTH eager sites at once: `bind_worktree` runs `add_worktree` and then
@@ -60,7 +59,6 @@ def test_new_worktree_has_no_subdirs(tmp_path: Path) -> None:
 
 
 def test_output_path_creates_parent_on_demand(tmp_path: Path, monkeypatch) -> None:
-    # @ac B-2
     """`output_path` creates a missing artifact folder at write time."""
     shared = tmp_path / "shared"
     shared.mkdir()
@@ -79,7 +77,6 @@ def test_output_path_creates_parent_on_demand(tmp_path: Path, monkeypatch) -> No
 
 
 def test_gh_stack_type_maps_to_pr_plans(tmp_path: Path, monkeypatch) -> None:
-    # @ac B-4
     """The `gh_stack` artifact type lands in `pr_plans/`, named for the artifact."""
     shared = tmp_path / "shared"
     shared.mkdir()
@@ -96,7 +93,6 @@ def test_gh_stack_type_maps_to_pr_plans(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_blacklist_moves_to_quarantine(tmp_path: Path) -> None:
-    # @ac B-3
     """An untracked planning artifact leaked into the repo is moved, not deleted."""
     repo, paths = bind_worktree(tmp_path)
     leak = Path(repo) / "spec_leak.md"
@@ -111,7 +107,6 @@ def test_blacklist_moves_to_quarantine(tmp_path: Path) -> None:
 
 
 def test_quarantine_never_deletes(tmp_path: Path) -> None:
-    # @ac AB-2
     """A TRACKED artifact aborts the run and survives — never silently removed."""
     repo, _ = bind_worktree(tmp_path)
     leak = _tracked_leak(repo)
@@ -149,7 +144,6 @@ def test_the_refusal_keeps_stdout_for_the_machine_channel(tmp_path: Path, capsys
 
 
 def test_idempotent_reuse_preserves_artifacts(tmp_path: Path) -> None:
-    # @ac AB-1
     """Re-binding reuses the tree: nothing is destroyed and nothing reappears.
 
     This is the regression lock for removing the eager `mkdir`. If the lazy

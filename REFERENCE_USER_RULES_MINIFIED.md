@@ -193,15 +193,15 @@ che registry_lookup "sess-abc123" | jq -r '.flags.LANG_PT_CHECK // "ENABLED"'
 
 ---
 
-## 🟢 RULE 7.9: TEST NAMES (describe / it / test) = OBSERVABLE BEHAVIOUR. NO INTERNAL IDs.
+## 🟢 RULE 7.9: TEST NAMES AND COMMENTS = SELF-CONTAINED OBSERVABLE BEHAVIOUR. NO INTERNAL IDs.
 
-**PROBLEM this rule solves:** agents often write `it("T1.2 validates token")` or `describe("FLO-745 — auth fail closed")`. This invalidates two goals: (a) someone reading the test report in CI doesn't understand the behaviour without opening the spec; (b) internal IDs change / tasks are reorganised and the test name becomes a lie.
+**PROBLEM this rule solves:** agents often write `it("T1.2 validates token")` or `describe("FLO-745 — auth fail closed")`, or hide the same reference in a `// @ac 4.2 | @ticket FLO-745` comment. This invalidates two goals: (a) someone reading the test report in CI doesn't understand the behaviour without opening the plan; (b) internal IDs change / tasks are reorganised and the reference becomes a lie. The test must be self-contained.
 
 **🔴 HARD RULE — PROHIBITED INVERSION (READ 2x BEFORE WRITING):**
-> ❌ **WRONG 1:** put any internal ID (FLO-xxx, T<N>, AC<N>, SPEC, §) IN THE TEST TITLE STRING.
+> ❌ **WRONG 1:** put any internal ID (FLO-xxx, T<N>, AC<N>, B-<N>, SPEC, §) IN THE TEST TITLE STRING **or in a comment/JSDoc**.
 > ❌ **EVEN MORE WRONG 2:** complaining that a title DOES NOT HAVE FLO-xxx / T<N> / AC<N>. **THIS IS THE DESIRED BEHAVIOUR, IT IS GOOD, IT IS COMPLIANT.** If you flag missing ID in the title → you generated a rule regression.
-> ✅ **CORRECT:** title = observable behaviour (comes with verb + condition + expected result). FLO/task/AC traceability = JSDoc comment ABOVE the block OR 1st line comment INSIDE the block. **NEVER in the title string.**
-> **1-sentence decision rule:** `Title contains FLO-ID? → BAD = anti-pattern. Title DOES NOT contain FLO-ID? → GOOD = 100% compliant (never generate a finding for this).`
+> ✅ **CORRECT:** title = observable behaviour (verb + condition + expected result). An optional doc comment explains the scenario in detail (arrangement, input, expected result, invariant) using domain vocabulary only. Traceability lives in the SPEC §5 Verification Matrix + PR body. **NEVER in the test file.**
+> **1-sentence decision rule:** `Title or comment contains an internal ID? → BAD = anti-pattern. Neither contains one? → GOOD = 100% compliant (never generate a finding for this).`
 
 ### 7.9.1 PRESCRIBED describe() and it() / test() format
 
@@ -209,18 +209,20 @@ che registry_lookup "sess-abc123" | jq -r '.flags.LANG_PT_CHECK // "ENABLED"'
 |---|---|---|
 | **`describe("...")`** | **MODULE / FUNCTIONALITY / CONTEXT** under test. Groups related behaviours. Never IDs. | `describe("POST /api/auth/login")` / `describe("JWT middleware — role checks")` |
 | **`it("...")` / `test("...")`** | **ONE single observable behaviour**, preferably starting with a verb (returns, allows, blocks, calculates, emits, saves...) + condition + expected result. **ONE assert PER it when possible.** | `it("returns 401 Unauthorized when Authorization header is missing")` |
+| **Doc comment (optional)** | Self-contained scenario: what is arranged, the input, the expected result and the invariant it protects. | `/** A settled payment is refunded twice; the second call must be rejected with 409 and no extra transfer. */` |
 
-### 7.9.2 DO NOT put in TITLE — put in JSDoc COMMENT ABOVE or inside the block as line comment
+### 7.9.2 NEVER put planning references in the test file (title OR comment)
 
-Prohibited anti-patterns in TITLE (describe/it/test STRING). If you need to reference, use a comment:
+Prohibited anti-patterns in the `describe`/`it`/`test` STRING and in any attached comment/JSDoc:
 
 ```
-✗ BAD (TITLE):  it("Task T1.3 — SPEC rule 4.2 api-fail-closed validates service role")
+✗ BAD (TITLE):   it("Task T1.3 — SPEC rule 4.2 api-fail-closed validates service role")
+✗ BAD (COMMENT): // @ac 4.2 | @task T1.3 | @ticket FLO-513
+✗ BAD (JSDOC):   /** @task T1.3 · @spec spec_api-fail-closed · @ac 4.2 */
 ✓ GOOD:
 /**
- * @task T1.3
- * @spec spec_api-fail-closed
- * @ac 4.2
+ * Blocks callers that present the public anon key where the service role is
+ * required, and expects 403 Forbidden with no database write.
  */
 it("blocks non-service-role callers by returning 403 Forbidden when client uses anon key", () => { ... })
 ```

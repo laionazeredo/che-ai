@@ -57,14 +57,12 @@ def _insert(term: str = "Envelope", definition: str = "A handoff contract") -> d
 
 
 def test_skeleton_contains_every_canonical_section():
-    # @ac B-1
     text = render_conventions_skeleton("acme", "engineering")
     for index, title in enumerate(UNIVERSAL_SECTIONS, start=1):
         assert f"## {index}. {title}" in text
 
 
 def test_skeleton_contains_the_domain_specific_authoring_topics():
-    # @ac B-1
     text = render_conventions_skeleton("acme", "engineering")
     assert "### 5.1 Code Style" in text
     for topic in CONVENTION_TOPICS["engineering"]:
@@ -86,7 +84,6 @@ def test_parse_sections_rejects_a_duplicate_heading():
 
 
 def test_scaffold_creates_the_file_then_is_idempotent(bound_worktree, monkeypatch):
-    # @ac B-1
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     first = scaffold_conventions("acme", "engineering")
     path = conventions_path("acme", "engineering")
@@ -99,7 +96,6 @@ def test_scaffold_creates_the_file_then_is_idempotent(bound_worktree, monkeypatc
 
 
 def test_show_returns_the_sections_of_a_scaffolded_domain(bound_worktree, monkeypatch):
-    # @ac B-1
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     scaffold_conventions("acme", "engineering")
     shown = show_knowledge("acme", "engineering")
@@ -108,7 +104,6 @@ def test_show_returns_the_sections_of_a_scaffolded_domain(bound_worktree, monkey
 
 
 def test_show_on_an_empty_project_returns_empty_without_creating_a_file(bound_worktree, monkeypatch):
-    # @ac B-5
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     shown = show_knowledge("acme", "devops")
     assert shown["exists"] is False and shown["sections"] == {}
@@ -116,7 +111,6 @@ def test_show_on_an_empty_project_returns_empty_without_creating_a_file(bound_wo
 
 
 def test_show_inventory_lists_only_domains_that_have_conventions(bound_worktree, monkeypatch):
-    # @ac B-5
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     assert show_knowledge("acme")["domains"] == []
     scaffold_conventions("acme", "product")
@@ -136,7 +130,6 @@ def test_unknown_project_is_rejected(che_ws_root):
 
 
 def test_scaffold_refuses_a_target_inside_the_worktree(bound_worktree, monkeypatch):
-    # @ac AB-3
     monkeypatch.setenv("WORKTREE_ROOT", str(get_workspaces_root()))
     with pytest.raises(CheError) as exc:
         scaffold_conventions("acme", "engineering")
@@ -165,7 +158,6 @@ def test_cli_rejects_an_unknown_domain(bound_worktree):
 
 
 def test_apply_dry_run_shows_a_diff_without_writing(bound_worktree, monkeypatch):
-    # @ac B-2
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     apply_ops("acme", _insert("Gate", "A blocking decision point"), dry_run=False)
     before = glossary_path("acme").read_bytes()
@@ -177,7 +169,6 @@ def test_apply_dry_run_shows_a_diff_without_writing(bound_worktree, monkeypatch)
 
 
 def test_apply_inserts_a_term_and_show_lists_it(bound_worktree, monkeypatch):
-    # @ac B-3
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     assert apply_ops("acme", _insert(), dry_run=False)["applied"] is True
     assert "Envelope" in glossary_path("acme").read_text(encoding="utf-8")
@@ -185,7 +176,6 @@ def test_apply_inserts_a_term_and_show_lists_it(bound_worktree, monkeypatch):
 
 
 def test_apply_rejects_an_insert_of_an_existing_term_case_insensitively(bound_worktree, monkeypatch):
-    # @ac AB-1
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     apply_ops("acme", _insert("Gate", "A blocking decision point"), dry_run=False)
     before = glossary_path("acme").read_bytes()
@@ -196,7 +186,6 @@ def test_apply_rejects_an_insert_of_an_existing_term_case_insensitively(bound_wo
 
 
 def test_apply_rejects_update_and_delete_of_a_missing_term(bound_worktree, monkeypatch):
-    # @ac AB-2
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     apply_ops("acme", _insert("Gate"), dry_run=False)
     before = glossary_path("acme").read_bytes()
@@ -208,7 +197,6 @@ def test_apply_rejects_update_and_delete_of_a_missing_term(bound_worktree, monke
 
 
 def test_cli_apply_dry_run_then_confirm_writes(bound_worktree):
-    # @ac B-3
     root = _root(bound_worktree)
     ops = '{"glossary":[{"op":"insert","term":"Envelope","definition":"A handoff contract"}]}'
 
@@ -223,7 +211,6 @@ def test_cli_apply_dry_run_then_confirm_writes(bound_worktree):
 
 
 def test_cli_apply_requires_confirm_to_write(bound_worktree):
-    # @ac B-3
     root = _root(bound_worktree)
     ops = '{"glossary":[{"op":"insert","term":"Envelope","definition":"x"}]}'
     result = _run_cli(root, "knowledge", "apply", "--project", "acme", "--ops", ops, "--no-dry-run")
@@ -235,7 +222,6 @@ def test_cli_apply_requires_confirm_to_write(bound_worktree):
 
 
 def test_apply_update_topic_changes_only_that_topic(bound_worktree, monkeypatch):
-    # @ac B-4
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     scaffold_conventions("acme", "engineering")
     path = conventions_path("acme", "engineering")
@@ -255,7 +241,6 @@ def test_apply_update_topic_changes_only_that_topic(bound_worktree, monkeypatch)
 
 
 def test_apply_insert_topic_appends_without_renumbering(bound_worktree, monkeypatch):
-    # @ac B-4
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     scaffold_conventions("acme", "engineering")
     path = conventions_path("acme", "engineering")
@@ -274,7 +259,6 @@ def test_apply_insert_topic_appends_without_renumbering(bound_worktree, monkeypa
 
 
 def test_apply_rejects_an_unknown_topic(bound_worktree, monkeypatch):
-    # @ac AB-4
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     scaffold_conventions("acme", "engineering")
     path = conventions_path("acme", "engineering")
@@ -287,7 +271,6 @@ def test_apply_rejects_an_unknown_topic(bound_worktree, monkeypatch):
 
 
 def test_apply_rejects_a_conventions_op_without_a_scaffolded_domain(bound_worktree, monkeypatch):
-    # @ac AB-4
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     ops = {"conventions": [{"domain": "devops", "op": "insert_topic", "topic": "New", "body": "x"}]}
     with pytest.raises(CheError) as exc:
@@ -296,7 +279,6 @@ def test_apply_rejects_a_conventions_op_without_a_scaffolded_domain(bound_worktr
 
 
 def test_cli_apply_rejects_malformed_ops_json(bound_worktree):
-    # @ac AB-4
     root = _root(bound_worktree)
     result = _run_cli(root, "--json", "knowledge", "apply", "--project", "acme", "--ops", "{not json")
     assert result.returncode == 2
@@ -312,7 +294,6 @@ def test_cli_apply_reads_ops_from_a_file(bound_worktree, tmp_path):
 
 
 def test_cli_apply_reports_a_missing_ops_file_actionably(bound_worktree):
-    # @ac AB-4
     root = _root(bound_worktree)
     result = _run_cli(root, "--json", "knowledge", "apply", "--project", "acme", "--ops", "@/no/such/ops.json")
     assert result.returncode == 2
@@ -323,7 +304,6 @@ def test_cli_apply_reports_a_missing_ops_file_actionably(bound_worktree):
 
 
 def test_glossary_renders_in_canonical_order_without_temp_residue(bound_worktree, monkeypatch):
-    # @ac B-6
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     ops = {
         "glossary": [
@@ -338,7 +318,6 @@ def test_glossary_renders_in_canonical_order_without_temp_residue(bound_worktree
 
 
 def test_glossary_render_is_order_independent():
-    # @ac B-6
     rows = {
         "alpha": {
             "Term": "Alpha",
@@ -356,7 +335,6 @@ def test_glossary_render_is_order_independent():
 
 
 def test_glossary_round_trips_special_characters(bound_worktree, monkeypatch):
-    # @ac B-6
     monkeypatch.delenv("WORKTREE_ROOT", raising=False)
     ops = {"glossary": [{"op": "insert", "term": "A|B", "definition": "line one\nline two | pipe"}]}
     apply_ops("acme", ops, dry_run=False)
@@ -366,7 +344,6 @@ def test_glossary_round_trips_special_characters(bound_worktree, monkeypatch):
 
 
 def test_capabilities_lists_the_knowledge_commands(bound_worktree):
-    # @ac B-7
     root = _root(bound_worktree)
     result = _run_cli(root, "--json", "capabilities")
     assert result.returncode == 0, result.stderr

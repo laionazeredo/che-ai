@@ -42,7 +42,7 @@ def _build_minimal_design_md(tmp_path: Path, *, duplicate_colors: bool = False, 
     return md
 
 
-# @ac B-2 — happy path: 8 sections + frontmatter
+# happy path: 8 sections + frontmatter
 def test_validate_happy_path(tmp_path: Path, capsys) -> None:
     """B-2: frontmatter + 8 canonical sections in order → errors=0, exit 0."""
     from che_core.designer import run_validate
@@ -64,7 +64,7 @@ def test_validate_happy_path(tmp_path: Path, capsys) -> None:
     )
 
 
-# @ac AB-2 — duplicate section header
+# duplicate section header
 def test_validate_duplicate_colors_section(tmp_path: Path, capsys) -> None:
     """AB-2: duplicate `## Colors` → exit 1, errors>=1."""
     from che_core.designer import run_validate
@@ -83,7 +83,7 @@ def test_validate_duplicate_colors_section(tmp_path: Path, capsys) -> None:
     )
 
 
-# @ac AB-3 — missing canonical section
+# missing canonical section
 def test_validate_missing_section(tmp_path: Path, capsys) -> None:
     """AB-3: drop one canonical section (e.g. Shapes) → exit 1, errors>=1."""
     from che_core.designer import run_validate
@@ -99,7 +99,7 @@ def test_validate_missing_section(tmp_path: Path, capsys) -> None:
     assert "Shapes" in out, f"validator must name the missing section (Shapes) in diagnostic; got {out!r}"
 
 
-# @ac AB-4 / A-3 — frontmatter delimiter count must be exactly 2
+# frontmatter delimiter count must be exactly 2
 def test_validate_no_frontmatter(tmp_path: Path, capsys) -> None:
     """AB-4 / A-3: frontmatter delimiter count must be exactly 2 lines (open + close)."""
     from che_core.designer import run_validate
@@ -121,7 +121,7 @@ def test_validate_no_frontmatter(tmp_path: Path, capsys) -> None:
     )
 
 
-# @ac CLI — `che designer validate` is registered and runs end-to-end via subprocess
+# `che designer validate` is registered and runs end-to-end via subprocess
 def test_validate_subcommand_registered_and_runs(tmp_path: Path) -> None:
     """CLI smoke: `che designer validate <md>` exits 0 on the happy path fixture."""
     md = _build_minimal_design_md(tmp_path)
