@@ -340,6 +340,16 @@ If user said "decompose into tasks" or did not provide a list:
 3. If any task has `Layers Touched distinct count < 2` AND no `-H-OVERRIDE-` suffix → REJECT task list, present 2 options:
    > "(A) Expand task to touch ≥2 layers (make it vertical) / (B) Add `-H-OVERRIDE-N` suffix + log EXPLICIT_OVERRIDE_HORIZONTAL_PLAN in decisions.log with 1-line justification."
 4. Wait for user APPROVAL. On `B`, regenerate the Executive Summary from the revised table — it is derived, never hand-patched.
+5. **REVIEW MODE — asked in the SAME approval turn (never a second round-trip):**
+   > "How do you want to review execution? (A) INCREMENTAL — I stop before EACH slice commit with a
+   > short report for your approval (default) / (B) FINAL — no per-slice gate, review only at the end."
+   - Persist `REVIEW_MODE: INCREMENTAL|FINAL` in `task_graph.md` Metadata + `session.md`:
+     `che decision_append "$WORKTREE_ROOT" "REVIEW_MODE_SET" "mode=<INCREMENTAL|FINAL>"`.
+   - Unanswered or ambiguous → default `INCREMENTAL`. **Never infer `FINAL` from silence.**
+   - **Override at ANY time** (explicit user words: "review mode final", "modo final", "sem revisão por
+     slice", "volta pro incremental"): `che decision_append "$WORKTREE_ROOT" "REVIEW_MODE_OVERRIDE"
+     "from=<old> to=<new> scope=next-slice"`, announce it in 📍 Status, apply from the NEXT slice. No
+     re-plan, no restart, no retroactive commits rewritten.
 
 ### 1.3 Build TASK GRAPH
 
@@ -357,6 +367,7 @@ TASK_GRAPH_EOF
 - Created: <ISO datetime>
 - Worktree: <path>
 - Vertical Slicing Compliance (CANONICAL #0): <F0 defined in SPEC §4.5 | H-OVERRIDE logged | INVALID — reason>
+- Review Mode: <INCREMENTAL | FINAL> (asked at plan approval §1.2; overridable mid-run)
 
 ## Executive Summary (human-first — ≤15 lines, DERIVED never authoritative)
 > Projection of the tables below. If they disagree, the tables win and this block is regenerated.
@@ -612,6 +623,8 @@ Proceed to original **Phase 1-6 — Per-Task Serial Execution Loop**.
    - **All DONE, 0 FAIL, 0 CONFLICT**: proceed to Phase 7.
    - **Any failures**: SM takes failed tasks into **SERIAL mode** one-by-one.
 8. Update `task_graph.md` `Status = DONE`.
+9. **Commits in parallel mode:** no per-slice commits (see §2.2.1). Commit once per task after its batch
+   MERGE AUDIT passes; verify 1 commit per task before marking the batch DONE.
 
 ---
 
@@ -640,7 +653,7 @@ Output = `$CHE_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope
 - **Vertical slices (SPEC §4.5)**: the ordered F0..FN list the Dev executes one at a time; each slice ends with a `che-pair` review (§2.2).
 - **Max files heuristic**: if > 10 files → SM re-evaluate and justify in decision.log.
 
-### 2.2 Call Developer + PAIR REVIEW (slice loop)
+### 2.2 Call Developer + PAIR REVIEW + SLICE COMMIT (slice loop)
 
 The Developer implements the task **slice by slice** (SPEC §4.5 `F0..FN`). For EACH vertical slice, in order:
 
@@ -652,11 +665,51 @@ The Developer implements the task **slice by slice** (SPEC §4.5 `F0..FN`). For 
    - CRITICAL/HIGH **with citation** → dev fixes (round 2) and `che-pair` re-reviews once. Still failing →
      escalate via the `che-pair` §7 menu (A fix / B override logged / C back to SPEC). Never a round 3.
    - MEDIUM/LOW → logged and deferred; advance.
-   - `verdict = PASS` → advance to the next slice.
-4. After the LAST slice → proceed to §2.3.
+   - `verdict = PASS` → continue to step 4.
+4. **HUMAN GATE — only when `REVIEW_MODE = INCREMENTAL`:**
+   - Present the **SLICE REVIEW REPORT** (format in §2.2.2) and **STOP**.
+   - `A` = approve → commit · `B` = adjust → back to Developer (if the diff changes, re-run `che-pair`
+     once) · `C` = stop the task → escalate to user.
+   - **No commit without `A`. Silence is never approval.**
+   - `REVIEW_MODE = FINAL` → skip this step (no user round-trip).
+5. **SLICE COMMIT** — the Developer commits the approved slice as **exactly ONE** conventional commit
+   (§2.2.1). Then advance to the next slice.
+6. After the LAST slice → proceed to §2.3.
 
 > Pair contract, loop bounds and escalation live in the `che-pair` skill (single source of truth) — do
 > NOT restate them here.
+
+#### 2.2.1 SLICE COMMIT CONTRACT — 1 vertical slice = 1 commit
+
+- **Exactly one commit per slice.** The slice diff IS the commit diff; nothing extra staged.
+- Conventional commit (`engineering-contracts` Appendix B), English, imperative, header ≤72 chars,
+  CDJ body when the "why" is not obvious.
+- The slice's tests go **in the same commit** — never a separate `test:` commit for the same behaviour.
+- Only files inside the TASK ENVELOPE blast radius. **NEVER** `git add .` / `git add -A`.
+- **NEVER** commit planning artifacts (`che-ship` §0.8 blacklist: specs, task graphs, decisions, reports).
+- Order is fixed: tests green → `che-pair` PASS → (INCREMENTAL) user `A` → commit.
+- **Parallel exception (`che-executor-dispatcher`):** slices of different tasks run concurrently, so a
+  per-slice commit would race on the git index. There, commit **once per task after the batch MERGE
+  AUDIT** passes, and log `SLICE_COMMIT_DEFERRED_PARALLEL`. One commit per task is the floor — never a
+  single commit for the whole batch.
+
+#### 2.2.2 SLICE REVIEW REPORT (INCREMENTAL gate — ≤10 lines, never a diff dump)
+
+```markdown
+| Slice | <F0> — <slice name> |
+| Delivers | <1 line, publicly observable outcome> |
+| ACs covered | <AC ids> |
+| Files | <n> files: <up to 4 paths, then "+N more"> |
+| Tests | `<command>` → <pass/fail + counts> |
+| Pair verdict | <PASS|FAIL> · <findings by severity> |
+| Commit (pending) | `type(scope): <proposed header>` |
+| Review this | `git diff` (unstaged) — start with <file:lines> |
+| Risk / deferrals | <1 line> |
+Options: A = approve & commit · B = adjust before commit · C = stop task
+```
+
+The report is derived from the actual slice diff — never hand-written from memory. It is the ONLY thing
+the user needs to read to decide; the full diff stays one command away.
 
 ### 2.3 SCOPE VALIDATION (SM + Dev)
 
@@ -668,6 +721,7 @@ Compare Developer's output against TASK ENVELOPE:
 | No files outside "blast radius" list (or approval logged)? | ▢ |
 | No scope creep — features not listed in envelope not added? | ▢ |
 | Atomic: task stands alone, no partial / WIP left behind? | ▢ |
+| Each slice landed as exactly ONE commit (or `SLICE_COMMIT_DEFERRED_PARALLEL` logged)? | ▢ |
 
 **If FAIL**: Return task to Developer with clear delta list.
 **If 2 consecutive iterations fail** → PAUSE and ask user.

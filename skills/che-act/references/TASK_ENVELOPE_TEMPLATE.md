@@ -16,6 +16,7 @@
 | Worktree | `<absolute path>` |
 | SM created on | `<ISO datetime>` |
 | Depends on tasks | `T1, T3` or `-` |
+| Review mode | `INCREMENTAL \| FINAL` (from TASK GRAPH metadata — overridable mid-run) |
 | handoff_output: (must exist before dependents run) | `[tasks/T3/dev-handoff-dashboard.md, ...]` or `[]` |
 
 ## Goal / Business Value
@@ -34,7 +35,9 @@
 | F0 | ... | ... | ... |
 | F1 | ... | ... | ... |
 
-Each slice ends with a `che-pair` review (che-act §2.2) before the next slice starts.
+Each slice ends with a `che-pair` review, then **exactly ONE conventional commit** (che-act §2.2.1).
+In `INCREMENTAL` mode the SM asks the user to approve the slice before that commit; in `FINAL` mode the
+commit follows the pair PASS directly.
 
 ## Deferred by design (SPEC §1 Non-goals — the pair MUST NOT demand these)
 

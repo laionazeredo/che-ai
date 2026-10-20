@@ -241,6 +241,24 @@ current slice's tests are green, **STOP and return control to the SM** so `che-p
 slice before you start the next one. Do NOT start the next slice until the pair returns `PASS` (or the
 finding is resolved / escalated per the `che-pair` §7 menu).
 
+### 3.7 Slice commit — 1 slice = 1 commit
+
+After the slice is green AND `che-pair` returns `PASS` AND (in `INCREMENTAL` mode) the SM relays the
+user's `A` approval:
+
+1. `git status --porcelain` — verify ONLY files in the TASK ENVELOPE blast radius are modified.
+2. `git add <explicit paths>` — **NEVER** `git add .` / `git add -A`.
+3. `git commit -m "type(scope): <slice outcome>"` — conventional, English, imperative, ≤72 chars.
+4. Append `che decision_append "$WORKTREE_ROOT" "SLICE_COMMIT" "slice=<F0> sha=<sha> files=<n>"`.
+
+Hard rules:
+- **NEVER** commit before the pair `PASS`; **NEVER** bundle two slices into one commit.
+- The slice's tests belong to the same commit as the code they cover.
+- **NEVER** commit planning artifacts (specs, task graph, decisions, reports — `che-ship` §0.8 blacklist).
+- `REVIEW_MODE = FINAL` does NOT relax this contract — it only removes the human gate, not the commit.
+- Under `che-executor-dispatcher` (parallel), do NOT commit per slice — the SM commits once per task after
+  the batch MERGE AUDIT (`che-act` §2.2.1).
+
 ---
 
 ## 4. STEP 3 — BLAST RADIUS SELF-CHECK (hard gate)
@@ -298,6 +316,7 @@ Append a `## Dev Pre-Report` section to the task envelope file:
 - [ ] Agile BDD smallest increment delivered — no scope creep, no future anticipation (engineering-contracts §15)
 - [ ] Simplicity Bias applied — smallest-first / most-reversible option chosen; deferred items recorded (engineering-contracts §1)
 - [ ] Worked slice-by-slice; returned control at each slice boundary for `che-pair` (SPEC §4.5 tasks)
+- [ ] Each slice committed as exactly ONE conventional commit (`SLICE_COMMIT` logged) or deferred under parallel mode
 - [ ] Blast radius ≤ 10 files OR exception logged + SM-approved
 - [ ] All touched files in blast-radius list OR exception logged
 - [ ] No new dependencies added without checking reuse (Q2)
