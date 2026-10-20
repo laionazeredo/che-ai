@@ -61,6 +61,11 @@ The agent MUST recognise these and react immediately.
 | `/che-summary` | Use SM logic to generate interim summary structure | 8 lines summary object assembly. |
 | `/che-abort` | Write ABORTED in `session.md` + `task_graph.md` | 2 writes + confirm. |
 
+### Category C — internal skills invoked by the flow (NO slash command):
+| Internal skill | Invoked by | Purpose |
+|---|---|---|
+| `che-interrogate` | `che-spec` §1.6 (mode `intake`, on the RAW ticket/brief) · `che-act` §0.6 (mode `act`, before scope capture) | Readiness gate: sufficiency, internal coherence (incl. contradictions across multiple tickets), consistency with implemented code / past decisions / conventions, market practice last. Max 5 questions per round, 2 rounds; blocks on BLOCKER + MAJOR only. |
+
 ### Strict rule (KISS):
 - If a "light" command DOES NOT exceed ~15 lines of logic → inline.
 - If it grows beyond → extract to skill.
