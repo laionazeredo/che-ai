@@ -14,6 +14,12 @@ The Che shared rule package loads into Claude Code via **five orthogonal injecti
 The authoritative engineering rulebook is the **engineering-contracts skill** (loaded via the skills folder above).
 Do **not** duplicate engineering rules in this file; follow the skill.
 
+## Skill resolution order (project → repository → global)
+
+Claude Code auto-discovers only user-scope (`~/.claude/skills/`) and repository-scope skills. **Project-scope skills are NOT auto-discovered**: before choosing any skill, run `che skills list --repo <repo-root>` — it resolves project → repository → global deterministically, marks shadowed duplicates, and never guesses the project slug.
+
+Closest scope wins on a name clash; a project skill may tighten but never loosen a Che gate. Canonical body: `CHE_RULES.md` § SKILL DISCOVERY ORDER.
+
 ## Canonical Che workflow
 
 Feature/refactor workflow:
