@@ -10,6 +10,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 
 > **Content of this file (PROCESS + FLOW only — DOES NOT duplicate pure engineering rules):**
 > - Che operation rules: worktree-first, che-sessions output, agile team order, gates, timeouts
+> - Skill discovery order: project scope → repository scope → global scope (closest scope wins)
 > - Parallelism (Kahn + conflict graph + locks)
 > - SPEC GATE RULES: 4 input sources + 7 canonical sections + mandatory YAML frontmatter validation + Approved gate BEFORE scope capture. Compatibility: Legacy PRD from any project (standard headings style) accepted as SOURCE C via che-spec (automatic headings parsing).
 > - GitHub integration + ship + **gh-stack multi-PR hierarchy**
@@ -753,6 +754,28 @@ KISS always wins. Parallelism is an OPTIMISATION, not a REQUIREMENT.
 | E05 Observability | **Grafana + Loki (LogQL: `{app="x"} |= "error" | json | line_format "{{.trace_id}} {{.message}}"`) + Tempo (TraceQL: `{span.http.route = "/api/users"}`) + datasource+dashboard provisioning via configMap** | 🔴 ZERO query language + provisioning · GAP P0 B05 #7 | → B05 §Tools Grafana Stack in devops-infra-expert |
 | E05 Observability | **Sentry SDK: beforeSend filter PII + integrations list + captureException tags/contexts + breadcrumbs + tracesSampleRate per env + ENVIRONMENTS SEPARATED DSNs dev/stg/prod (never mix)** | 🔴 ZERO SDK patterns · GAP P0 B05 #8 | → B05 §Tools Sentry in devops-infra-expert |
 | E05 Observability | **Datadog: unified-service-tagging env/service/version OTel standard + dogstatsd metrics naming + APM dd-trace injection env vars + synthetic monitors heartbeat + log pipeline grok parser** | 🔴 ZERO unified tags standard + patterns · GAP P0 B05 #9 | → B05 §Tools Datadog in devops-infra-expert |
+
+---
+
+## 🟢 SKILL DISCOVERY ORDER (project → repository → global — Non-negotiable)
+
+> Canonical body. Routers (`AGENTS.md`, `adapters/*/CLAUDE.md`, `adapters/*/AGENTS.md`) link here and MUST NOT repeat it.
+
+Before selecting or applying ANY skill, resolve the three scopes in this order and stop at the first one that answers the task:
+
+1. **Project scope** — `~/.che-workspaces/<project-slug>/skills/<skill-name>/SKILL.md`
+   - Resolve all three scopes deterministically with `che skills list --repo <repo-root>` (add `--project <slug>` only when the checkout is bound to more than one project). It returns `skills` (effective entries, closest scope first) and `shadowed`; never resolve the slug by hand.
+   - Read the `description` of each returned skill; read a skill in full only when its description matches the task.
+2. **Repository scope** — `<repo>/.claude/skills/` and `<repo>/.trae/skills/` (team conventions committed with the code).
+3. **Global scope** — the IDE user-scope skills folder (`~/.claude/skills/` in Claude Code, `~/.trae/skills/` in Trae): Che and community skills.
+
+Conflict resolution:
+- Same skill name in more than one scope → the **closest scope wins** (project > repository > global).
+- A project skill is ADDITIVE to Che global rules: it may tighten a constraint, NEVER loosen a Che gate (worktree-first, SPEC gate, compliance, ship gates).
+- Project folder exists but no skill matches → continue silently. Never invent a skill.
+- Name the project skill applied in the task summary so the user can audit it.
+
+Creating a project skill: `~/.che-workspaces/<project-slug>/skills/<skill-name>/SKILL.md` with YAML frontmatter `name` + `description` (the description is the discovery contract). Never write project skills inside the user repository.
 
 ---
 
