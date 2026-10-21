@@ -300,6 +300,13 @@ COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
         "requires_bound_worktree": False,
         "output": "json",
     },
+    # --- skill discovery --------------------------------------------------------
+    "skills list": {
+        "summary": "Resolve effective skills across project > repository > global, with shadowed duplicates.",
+        "mutates": False,
+        "requires_bound_worktree": False,
+        "output": "json",
+    },
     # --- worktrees --------------------------------------------------------------
     "worktree add": {
         "summary": "Bind a git checkout to a project. Idempotent: re-running reuses the existing tree.",

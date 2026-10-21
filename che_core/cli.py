@@ -471,6 +471,20 @@ def build_parser():
 
     proj_subs.add_parser("trash-list", help="Contents of the .trash/ folder.")
 
+    # SKILL DISCOVERY =========================================================
+    parser_skills = subparsers.add_parser(
+        "skills",
+        help="Resolve skills across project > repository > global scopes (deterministic).",
+    )
+    skills_subs = parser_skills.add_subparsers(dest="skills_cmd", required=True)
+
+    sk_list = skills_subs.add_parser(
+        "list",
+        help="Effective skills, plus the entries each closer scope shadows.",
+    )
+    sk_list.add_argument("--project", default=None, help="Project slug. Default: resolved from the bound worktree.")
+    sk_list.add_argument("--repo", default=None, help="Repository checkout. Default: the current directory.")
+
     # WORKTREE MGMT SUBCOMMANDS (the only thing that binds a filesystem path) ====
     parser_wt = subparsers.add_parser("worktree", help="Bind a checkout to a project (~/<project>/worktrees/<name>/).")
     wt_subs = parser_wt.add_subparsers(dest="wt_cmd", required=True)
@@ -1046,6 +1060,15 @@ def main(argv=None):
             parser.error(f"Unknown project subcommand: {args.proj_cmd}")
             return
         _print_json(res)
+        return
+
+    if args.command == "skills":
+        from che_core.skills import list_skills
+
+        if args.skills_cmd == "list":
+            _print_json(list_skills(project=args.project, repo=args.repo))
+        else:
+            parser.error(f"Unknown skills subcommand: {args.skills_cmd}")
         return
 
     if args.command == "pixel":

@@ -290,6 +290,14 @@ ERROR_CATALOG: Dict[str, ErrorSpec] = dict(
             ("che worktree add {path} --project <project> --name <name>", "che project list"),
         ),
         _spec(
+            "AMBIGUOUS_PROJECT_BINDING",
+            "resolve",
+            EXIT_USAGE,
+            "{path} is bound to more than one project: {projects}.",
+            "Che never picks one of several bindings; name the project explicitly.",
+            ("che skills list --project <project>", "che project list"),
+        ),
+        _spec(
             "NO_REGISTRY_ENTRY",
             "resolve",
             EXIT_UNEXPECTED,
