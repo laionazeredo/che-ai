@@ -446,6 +446,14 @@ ERROR_CATALOG: Dict[str, ErrorSpec] = dict(
             "{detail}",
             "Insert only terms/topics that do not exist; update or delete only those that do.",
         ),
+        _spec(
+            "INVALID_REVIEW_PARAMS",
+            "input",
+            EXIT_USAGE,
+            "invalid review parameter: {detail}",
+            "Review parameters live in the `review:` block of project_profile.md: min_severity, "
+            "blocking, ignore_paths, risk_paths, categories, max_findings, max_rules.",
+        ),
         # ------------------------------------------------------------------ boundaries
         _spec(
             "STORAGE_BOUNDARY_VIOLATION",
