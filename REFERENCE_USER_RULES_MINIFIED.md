@@ -193,7 +193,7 @@ che registry_lookup "sess-abc123" | jq -r '.flags.LANG_PT_CHECK // "ENABLED"'
 
 ---
 
-## 🟢 RULE 7.9: TEST NAMES AND COMMENTS = SELF-CONTAINED OBSERVABLE BEHAVIOUR. NO INTERNAL IDs.
+## 🟢 RULE 7.9: COMMENTS AND TEST NAMES = SELF-CONTAINED. NO PLANNING REFERENCES.
 
 **PROBLEM this rule solves:** agents often write `it("T1.2 validates token")` or `describe("FLO-745 — auth fail closed")`, or hide the same reference in a `// @ac 4.2 | @ticket FLO-745` comment. This invalidates two goals: (a) someone reading the test report in CI doesn't understand the behaviour without opening the plan; (b) internal IDs change / tasks are reorganised and the reference becomes a lie. The test must be self-contained.
 
@@ -226,6 +226,24 @@ Prohibited anti-patterns in the `describe`/`it`/`test` STRING and in any attache
  */
 it("blocks non-service-role callers by returning 403 Forbidden when client uses anon key", () => { ... })
 ```
+
+### 7.9.3 APPLICATION-CODE COMMENTS = SELF-CONTAINED (same rule, every file)
+
+The rule is not test-only. Any comment — `//`, `#`, `/* */`, docstring — must be understandable without the plan.
+
+```
+✗ BAD:  // AC-3: validate refund
+✗ BAD:  // T2.4
+✗ BAD:  // B-2 idempotency
+✗ BAD:  // SPEC_api-fail-closed
+✗ BAD:  // see §4.2
+✗ BAD:  // TODO(FLO-789)                      ← bare reference, no reason
+✓ GOOD: // Stripe rejects a second partial refund on the same charge, so refunds are serialised per charge.
+✓ GOOD: // TODO(FLO-789): batch the writes once the upstream API supports multi-row insert.
+        (the sentence explains itself; the ticket/URL is only extra context — removing it must not change the meaning)
+```
+
+External links are welcome **when they add context** (`// Stripe docs: a partial refund cannot exceed the remaining balance — https://…`); they are never a substitute for the explanation.
 
 ---
 

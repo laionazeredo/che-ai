@@ -42,9 +42,6 @@ def _cli(*args: str, cwd: str | None = None) -> subprocess.CompletedProcess:
     )
 
 
-# --- B-4 ---------------------------------------------------------------------
-
-
 def test_compute_paths_is_identical_regardless_of_cwd(bound_worktree, tmp_path: Path):
     repo, expected = bind_worktree(tmp_path)
 
@@ -120,9 +117,6 @@ def test_compute_paths_accepts_explicit_project_and_worktree(che_ws_root: Path, 
     assert paths["CHE_WORKTREE_DIR"] == str(che_ws_root / "acme" / "worktrees" / "feature-x")
 
 
-# --- B-5 ---------------------------------------------------------------------
-
-
 def test_decisions_and_artifacts_share_the_same_tree(bound_worktree, tmp_path: Path):
     repo, paths = bind_worktree(tmp_path)
     worktree_dir = paths["CHE_WORKTREE_DIR"]
@@ -152,9 +146,6 @@ def test_decisions_path_no_longer_uses_the_legacy_wt_formula(bound_worktree, tmp
     assert decisions.parts[: len(che_ws_root.parts)] == che_ws_root.parts
 
 
-# --- B-6 ---------------------------------------------------------------------
-
-
 def test_registry_lives_in_the_workspace_root_not_the_source_package(che_ws_root: Path):
     registry = get_registry_path()
     assert registry == get_state_registry_path()
@@ -174,8 +165,6 @@ def test_registry_append_creates_the_state_dir(che_ws_root: Path):
     assert entry["session_id"] == "sess-b6"
     assert entry["status"] == "BOUND"
 
-
-# --- B-7 ---------------------------------------------------------------------
 
 CONCURRENT_WRITERS = 200
 MAX_PARALLEL = 16
@@ -204,9 +193,6 @@ def test_concurrent_appends_produce_only_valid_jsonl_lines(bound_worktree, tmp_p
         json.loads(ln)  # every line must be complete and parseable
 
 
-# --- AB-3 --------------------------------------------------------------------
-
-
 def test_oversized_decision_payload_is_refused_without_corrupting_the_log(bound_worktree, tmp_path: Path):
     repo, paths = bind_worktree(tmp_path)
     log = Path(paths["CHE_WORKTREE_DIR"]) / "decisions.log.jsonl"
@@ -223,7 +209,7 @@ def test_oversized_decision_payload_is_refused_without_corrupting_the_log(bound_
     assert len(log.read_text(encoding="utf-8").strip().splitlines()) == 1
 
 
-# --- worktree reuse (B-2 companion, at the module level) ---------------------
+# --- worktree reuse (at the module level) ------------------------------------
 
 
 def test_readding_a_worktree_reuses_the_existing_tree(bound_worktree, tmp_path: Path):

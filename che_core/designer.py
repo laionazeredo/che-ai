@@ -14,7 +14,7 @@ from che_core.paths import compute_paths, ensure_session_dirs
 # alphanumeric. Hard-rejects path traversal (`../../etc`), absolute paths, dotfiles.
 _SUB_PRODUCT_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 
-# Canonical Stitch DESIGN.md section order (SPEC §4.5 + Stitch DESIGN.md spec).
+# Canonical Stitch DESIGN.md section order.
 # Single source of truth — validator, render and downstream tooling all reference this list.
 _CANONICAL_SECTIONS = (
     "Overview",
@@ -28,8 +28,8 @@ _CANONICAL_SECTIONS = (
 )
 
 # Image magic-byte signatures (stdlib only — no Pillow in the che runtime).
-# AB-4: a provider that returns an HTML error page / 403 / placeholder MUST be
-# rejected before any file is written under design/assets/.
+# A provider that returns an HTML error page / 403 / placeholder is rejected
+# before any file is written under design/assets/.
 _IMAGE_MAGIC = (
     (b"\x89PNG\r\n\x1a\n", ".png"),
     (b"\xff\xd8\xff", ".jpg"),
@@ -285,7 +285,7 @@ def run_validate(design_md_path: str, as_json: bool = False) -> int:
     section_re = re.compile(r"^## (.+?)\s*$", re.MULTILINE)
     found = section_re.findall(text)
 
-    # AB-2: duplicates among the canonical set.
+    # Duplicates among the canonical set.
     canonical_set = set(_CANONICAL_SECTIONS)
     seen: list[str] = []
     duplicates: list[str] = []
@@ -296,10 +296,10 @@ def run_validate(design_md_path: str, as_json: bool = False) -> int:
             else:
                 seen.append(s)
 
-    # AB-3: missing canonical sections.
+    # Missing canonical sections.
     missing_sections = [s for s in _CANONICAL_SECTIONS if s not in seen]
 
-    # B-2: relative order of canonical sections must match canonical order.
+    # Relative order of canonical sections must match the canonical order.
     order_correct = True
     last_idx = -1
     for s in seen:

@@ -129,7 +129,7 @@ def test_cli_ingest_wireframe_happy_path(tmp_path: Path) -> None:
     assert len(ir["relations"]) == 2
 
 
-# --- T2 (F1): IR validation + theme normalisation ---
+# --- IR validation + theme normalisation ---
 
 _VALID_IR = {
     "version": 1,
@@ -238,7 +238,7 @@ def test_ingest_theme_rejects_bad_hex(tmp_path: Path) -> None:
     assert tokens_path.read_text(encoding="utf-8") == before, "INV-1: tokens.json must not change on failure"
 
 
-# --- T3 (F2): end-to-end render + orchestration skill ---
+# --- end-to-end render + orchestration skill ---
 
 
 # init -> ingest theme -> render -> validate all succeed

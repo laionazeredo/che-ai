@@ -26,7 +26,7 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 from che_core.pixel import parse_color
 
-#: The five axes of one shadow (§1 #12). A shadow missing any of them cannot be compared.
+#: The five axes of one shadow. A shadow missing any of them cannot be compared.
 SHADOW_AXES = ("x", "y", "blur", "spread", "alpha")
 
 #: Plausible bands for the two ratio-valued categories. A reading outside one of these is
@@ -40,7 +40,7 @@ _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 
 #: Four-sided properties, in the order the gate compares them.
 _FOUR_SIDED = ("padding", "margin", "radius")
-#: Two-axis properties (row, column) — §1 #14.
+#: Two-axis properties, compared per row and per column.
 _TWO_AXIS = ("gap",)
 #: Boxes that must be objects of numbers.
 _BOXES = ("box_size", "box_origin")
@@ -51,13 +51,13 @@ _PX_SCALARS = ("border_width", "font_size")
 #: property outside this set, or a newly added category would silently skip validation —
 #: asserted by `tests/test_pixel_dom.py`.
 #:
-#: Two entries back no category. `coord_frame` is a precondition, not a measurement (§2.3):
+#: Two entries back no category. `coord_frame` is a precondition, not a measurement:
 #: the comparator reads it to decide whether `position` may be compared at all, so a wrong
 #: one yields a meaningless deviation rather than none. `kind` is provenance — it decides
 #: whether typography applies to the element. Checking the shape of something nothing compares
 #: is still worth doing — a malformed one means the extractor was replaced by something that
-#: does not follow §4.2 — but it claims nothing beyond well-formedness, which is why it is
-#: stated here rather than left implied.
+#: does not honour the property contract — but it claims nothing beyond well-formedness,
+#: which is why it is stated here rather than left implied.
 CHECKED_PROPERTIES = frozenset(
     {
         "kind",
@@ -133,12 +133,12 @@ def _check_record(selector: str, record: Any) -> List[str]:
         problems.append(f"{selector}: {message}")
 
     # `coord_frame` is the one declaration the comparator actually reads: without it
-    # `position` cannot be shown to be meaningful (§2.3). `kind` is recorded provenance —
+    # `position` cannot be shown to be meaningful. `kind` is recorded provenance —
     # the applicability rule that keeps a frame's missing font from escalating reads the
     # *design* node's kind — so it is validated when present and never demanded.
     frame = record.get("coord_frame")
     if not isinstance(frame, str) or not frame.strip():
-        bad("`coord_frame` is missing — §2.3 requires it, or position cannot be compared")
+        bad("`coord_frame` is missing — position cannot be compared without it")
 
     if "kind" in record:
         kind = record["kind"]

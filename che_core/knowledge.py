@@ -44,7 +44,8 @@ UNIVERSAL_SECTIONS: Tuple[str, ...] = (
     "Gaps & Open Questions",
 )
 
-# Domain-specific §5 sub-topics. The extension point: a new domain is one new key here.
+# Domain-specific sub-topics appended under the "Authoring Rules" heading.
+# The extension point: a new domain is one new key here.
 CONVENTION_TOPICS: Dict[str, Tuple[str, ...]] = {
     "engineering": (
         "Code Style",

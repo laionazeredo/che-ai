@@ -475,6 +475,12 @@ How:
 
    Never flag a self-contained doc comment as bad. Never ask for a traceability anchor to be added — traceability belongs to the SPEC §5 matrix and the PR body, not to the code.
 6. **4.8 Route-level / failure-path test gap check (MEDIUM if missing)**. If Category 0 found new webhook route event type → require 1 route-level signed-payload POST test. If Category 0.3 flagged tx pattern → require 1 failure path test: Stripe 5xx → tx rollback + retry with same idempotency key → no double-effect. MEDIUM (waivable ONLY with PR body sign-off override).
+7. **4.9 Application-code comment self-containment (RULE 7.9, LOW / MEDIUM).**
+   - Scan added/modified **non-test** files (`*.ts`, `*.tsx`, `*.py`, `*.go`, `*.sql`, `*.sh`, `*.toml`, `*.yml`): every comment (`//`, `#`, `/* */`, docstring).
+   - **BAD (LOW each, MEDIUM when ≥5 in the diff):** a comment whose meaning depends on a planning artefact — `// AC-3: validate refund`, `// T2.4`, `// B-2 idempotency`, `// SPEC_xxx`, `// see §4.2`, `// TODO(FLO-789)` with no stated reason.
+   - **ALLOWED:** the same comment **after** a complete explanation, where the ticket id, spec id or external URL is only extra context: `// TODO(FLO-789): batch the writes once the upstream API supports multi-row insert.` Removing the reference must not change the meaning.
+   - **Fix:** state the reason or constraint in the comment itself; keep or drop the reference.
+   - Never flag a reference that follows a self-contained explanation.
 
 ---
 
@@ -575,12 +581,12 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md`. Never f
    - **Fix:** rewrite the title as observable behaviour and replace the anchor with a self-contained doc comment (arrangement, input, expected result, invariant). Traceability moves to the SPEC §5 Verification Matrix and the PR body.
    - **🔴 AUTOMATIC SEVERITY UPGRADE TO HIGH (G5 cross-cutting exception):** IF (test located in **`tests/regression/<TICKET_ID>--<slug>.test.ts` (with ticket ID in filename) AND NO `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER` logged in decisions.log.jsonl justifying ≥4 independent domains OR pure infra**) → **G7.3 automatically becomes 🟠 HIGH severity** (counts toward §0.9.2 ≤ 2 HIGH auto-fix rule). If test is colocated in the feature folder → no upgrade.
 
-4. **G7.4 🔵 LOW — `.skip()` / `xit()` / `it.todo()` used WITHOUT follow-up ticket reference.**
+4. **G7.4 🔵 LOW — `.skip()` / `xit()` / `it.todo()` used WITHOUT a stated reason.**
    - Scan for `.skip(`, `xit(`, `it.todo(`, `test.skip(`, `test.todo(`.
-   - Check 10 lines around for comment MATCHING: `TODO\((FLO-\d+|PROJ-\d+|#\d+|issue #[^\s)]+)\)` or `Blocked on PR #\d+` or `Requires: <dependency>`.
-   - If `.skip` exists WITHOUT follow-up ticket → **LOW G7.4 = SKIPPED TEST WITH NO FOLLOWUP.**
+   - Check 10 lines around for a comment that explains WHY it is skipped in self-contained terms: `// Skipped: the payments API does not expose partial refunds yet`. A ticket id may follow as extra context (`// TODO(FLO-123): …`) but is not a substitute for the reason.
+   - If `.skip` exists WITHOUT a stated reason → **LOW G7.4 = SKIPPED TEST WITH NO EXPLANATION.**
    - **Exception:** `it.skip` inside Scratch `.test.ts` named `scratch.*` or `_WIP_*` (flag only if staged for commit).
-   - **Fix:** Add 1 line comment above skip: `// TODO(FLO-123): reason = blocked on PR #456`. OR remove skip and make test pass.
+   - **Fix:** state the blocking reason above the skip (ticket optional). OR remove skip and make test pass.
 
 **Severity defaults for ship-gate threshold (§0.9.2 auto-fix rule ≤ 2 HIGH):**
 - G7.1 + G7.2 = HIGH (BLOCKING if total HIGH ≥ 3 with other Category 0-8 HIGHs; if ≤ 2, auto-fix triggers).

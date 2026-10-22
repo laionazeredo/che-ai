@@ -212,6 +212,14 @@ PROHIBITED anti-patterns in the **title STRING** of `describe()` / `it()` / `tes
 **❌ NEVER** generate a warning or ask for a rename because a title DOES NOT contain FLO/T/AC. It SHOULD NOT contain them. A test with no internal ID anywhere = COMPLIANT / GOOD.
 **❌ NEVER** add a traceability comment as a substitute for a self-contained explanation.
 
+**MANDATORY (Che RULE 7.9): APPLICATION-CODE COMMENTS ARE SELF-CONTAINED TOO.**
+
+- Every comment must explain itself: `// AC-3: validate refund`, `// T2.4`, `// B-2 idempotency`, `// SPEC_api-fail-closed` are FORBIDDEN.
+- ✅ `// Stripe rejects a second partial refund on the same charge, so refunds are serialised per charge.`
+- ✅ A ticket id, spec id or external URL may follow **as extra context**, never as the whole comment: `// TODO(FLO-789): batch the writes once the upstream API supports multi-row insert.` Removing the reference must not change the meaning.
+- ❌ `// TODO(FLO-789)` with no stated reason, `// see SPEC §4.2`, `// AC-3` — all forbidden.
+- Test titles and test comments stay stricter: no planning reference at all.
+
 ### 3.3 Run tests → confirm they FAIL
 
 If tests pass without implementation → your tests are wrong. Fix them.

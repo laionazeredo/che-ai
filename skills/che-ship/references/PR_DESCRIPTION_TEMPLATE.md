@@ -34,7 +34,7 @@
 >
 > Each row = a B-ID behavior or AB-ID anti-behavior approved in §4.2 Behavior Table of the SbE spec. Coverage < 70% → see action items from bilateral scope-checker CHECK2.
 >
-> **This matrix is the traceability record.** Tests never carry `@ac` / `@ticket` / `@task` anchors — the mapping lives here and in the SPEC §5 Verification Matrix.
+> **This matrix is the traceability record.** Code never carries `@ac` / `@ticket` / `@task` anchors — the mapping lives here and in the SPEC §5 Verification Matrix.
 
 | Behavior ID (B or AB) | Test file path (include :line-range of the it() block that verifies the behaviour) |
 |---|---|
