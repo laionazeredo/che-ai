@@ -43,6 +43,20 @@ def _wants_json(args) -> bool:
     return bool(getattr(args, "json_global", False) or getattr(args, "json_out", False) or getattr(args, "json", False))
 
 
+def _print_review_resolution(result) -> None:
+    """Human form of `che review rules`: the rules that survived, and why the others did not."""
+    budget = result["budget"]
+    print(f"rules: {budget['rules_returned']}/{budget['rules_available']} (scope={result['scope_mode']})")
+    for row in result["rules"]:
+        print(f"  [{row['layer']}] {row['effective_severity']:<8} {row['source']}:{row['line']} — {row['title']}")
+    for conflict in result["conflicts"]:
+        print(
+            f"  conflict {conflict['kind']}: {conflict['topic']} — {conflict['winner_source']} vs {conflict['loser_source']}"
+        )
+    if result["ignored"]:
+        print(f"  ignored: {len(result['ignored'])}")
+
+
 def _load_json(path: str):
     """Read a JSON artefact, surfacing a path-bearing error instead of a bare traceback."""
     try:
@@ -547,6 +561,32 @@ def build_parser():
     know_apply.add_argument(
         "--confirm", dest="confirmed", action="store_true", default=False, help="Mandatory safety gate."
     )
+
+    # REVIEW RULE RESOLUTION ==================================================
+    parser_review = subparsers.add_parser(
+        "review",
+        help="Resolve the project rules that apply to a diff, with precedence and conflicts.",
+    )
+    review_subs = parser_review.add_subparsers(dest="review_cmd", required=True)
+
+    review_rules = review_subs.add_parser(
+        "rules",
+        help="Resolve applicable rules by authority layer. Read-only; never guesses a project.",
+    )
+    review_rules.add_argument("--worktree", required=True, help="Absolute path to the git checkout under review.")
+    review_rules.add_argument("--project", default=None, help="Project slug whose durable memory is read.")
+    review_rules.add_argument("--domain", default="engineering", help="Domain whose conventions.md is read.")
+    review_rules.add_argument(
+        "--changed", nargs="*", default=None, help="Changed paths. Default: the worktree's git status."
+    )
+    review_rules.add_argument(
+        "--min-severity", dest="min_severity", default=None, help="LOW | MEDIUM | HIGH | CRITICAL."
+    )
+    review_rules.add_argument("--blocking", default=None, help="Comma-separated severities that block.")
+    review_rules.add_argument(
+        "--ignore", dest="ignore_paths", action="append", default=None, help="Path glob to ignore. Repeatable."
+    )
+    review_rules.add_argument("--max-rules", dest="max_rules", type=int, default=None, help="Cap on returned rules.")
 
     # CHE SELF-UPDATE =========================================================
     parser_update = subparsers.add_parser(
@@ -1315,6 +1355,30 @@ def main(argv=None):
                 print(f"{verb}: {len(res['changes'])} document(s)")
         else:
             parser.error(f"Unknown knowledge subcommand: {args.knowledge_cmd}")
+        return
+
+    if args.command == "review":
+        from che_core.review_rules import resolve_review_rules
+
+        if args.review_cmd == "rules":
+            res = resolve_review_rules(
+                args.worktree,
+                project=args.project,
+                changed=args.changed,
+                domain=args.domain,
+                overrides={
+                    "min_severity": args.min_severity,
+                    "blocking": args.blocking,
+                    "ignore_paths": args.ignore_paths,
+                    "max_rules": args.max_rules,
+                },
+            )
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                _print_review_resolution(res)
+        else:
+            parser.error(f"Unknown review subcommand: {args.review_cmd}")
         return
 
     if args.command in ("update", "self-update", "upgrade"):

@@ -764,6 +764,37 @@ and leaves the document untouched. A malformed change set fails with `KNOWLEDGE_
 
 ---
 
+## 6.6 Review Rule Resolution
+
+One deterministic answer to "which project rules apply to this diff?". The resolver reads the
+repository's written rules and the project's durable memory, classifies each source into an
+authority layer, drops the rules that do not speak about the changed paths, and ranks the
+contradictions it finds. It never decides a verdict and never edits a file.
+
+```bash
+che review rules --worktree ~/code/acme --changed apps/api/route.ts --json
+che review rules --worktree ~/code/acme --project acme --min-severity HIGH --blocking CRITICAL,HIGH
+che review rules --worktree ~/code/acme --ignore '**/generated/**' --max-rules 60
+```
+
+| Layer | Rank | Source |
+|---|---|---|
+| `hard-floor` | 0 | Che invariants (security/PII, storage boundary, worktree binding) — never loosened |
+| `repo-explicit` | 1 | `AGENTS.md`, `CLAUDE.md`, `.claude|.agents|.cursor/rules/*`, package-level docs |
+| `machine` | 2 | eslint / biome / tsconfig / ruff / CI — listed, never re-flagged |
+| `project-memory` | 3 | `project_profile.md`, `architecture.md`, `product_context.md`, `<domain>/conventions.md` |
+
+The output carries `params`, `hard_floor`, `rules`, `conflicts`, `drift`, `sources`, `ignored` and
+`budget`. A contradiction between layers is `kind: precedence` (the lower rank wins, the loser gets
+`superseded_by`); a contradiction inside one layer is `kind: unresolved` and caps both rules at
+MEDIUM instead of picking one. Review parameters come from the `review:` block in the frontmatter of
+`project_profile.md`, overridable per session by the flags above.
+
+`--changed` defaults to the worktree's uncommitted paths (`git diff HEAD` + untracked). An empty
+result means "review the whole repository".
+
+---
+
 ## 7. Portability: Export / Import
 
 Any project can be snapshotted into a self-contained `.tar.gz` and moved between machines. The exporter never copies

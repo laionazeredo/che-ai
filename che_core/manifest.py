@@ -351,6 +351,13 @@ COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
         "requires_bound_worktree": False,
         "output": "prose",
     },
+    # --- review rule resolution -------------------------------------------------
+    "review rules": {
+        "summary": "Resolve the project rules that apply to a diff, with precedence and conflicts.",
+        "mutates": False,
+        "requires_bound_worktree": False,
+        "output": "json",
+    },
     # --- update / eject ---------------------------------------------------------
     "update": {
         "summary": "Fast-forward this Che checkout to the latest main and re-link the host adapters.",

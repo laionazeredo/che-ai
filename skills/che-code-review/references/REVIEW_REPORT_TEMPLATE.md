@@ -81,18 +81,31 @@ User must be able to verify that the review was context-aware (not superficial d
 
 | Bootstrap item (§1.5 framework) | Files actually read / checked |
 |---|---|
-| R1 Root AGENTS.md | `AGENTS.md` — read L1-L85 (router of context) |
-| R2 Root CLAUDE.md | `CLAUDE.md` — structure, packages, RLS migration rules |
-| R3 Root README.md | |
-| R4 docs/plan.md | |
-| R5 docs/decisions.md or docs/adr/*.md (last 5) | |
-| R6 graphify-out/GRAPH_REPORT.md | (N/A or path) |
-| `.claude/rules/*.md` ALL (or `.agents/rules/`) | list each file read: `security.md`, `architecture.md`, `data-layer.md`, `db.md`, `react.md`, `uk-market.md`, `db-caching.md`, `workflow.md`, `tooling.md` |
-| Package AGENTS.md (affected areas) | `packages/platform/AGENTS.md`, `packages/db/AGENTS.md`, `packages/notification/AGENTS.md` |
-| Package CLAUDE.md (affected areas) | `packages/platform/CLAUDE.md`, `packages/db/CLAUDE.md` |
-| Relevant docs/*.md area files | `docs/platform.md`, `docs/packages.md`, `docs/decisions.md` |
-| Local project review skill (if exists) | `.claude/skills/flockr-review/SKILL.md` read fully; 9 checklist categories absorbed |
+| `che review rules` (§1.5.0) | ran on `<worktree>` with `<n>` changed paths → `<n>` sources, `<n>` applicable rules, `<n>` conflicts, `<n>` drift |
+| R1 Root README.md | |
+| R2 docs/plan.md | |
+| R3 docs/decisions.md or docs/adr/*.md (last 5) | |
+| R4 graphify-out/GRAPH_REPORT.md | (N/A or path) |
+| R5 Package README.md / docs/<area>.md (affected areas) | `packages/platform/README.md`, `docs/platform.md` |
+| R6 Local project review skill (if exists) | `.claude/skills/flockr-review/SKILL.md` read fully; 9 checklist categories absorbed |
 | Cross-file pipeline reads (MANDATORY if diff matches keywords): <br> — Webhook route allowlist <br> — ALL PSP/Connect charge methods in the package | `app/api/webhooks/stripe/route.ts:7-16` (allowlist read) <br> `StripeClient.ts:285-313` (createPaymentIntent) + `RefundService.ts:~450` (createRefund) read |
+
+---
+
+## ⚖️ Rule Resolution (one block — never per finding)
+
+> Filled from the resolver JSON. An omitted block invalidates the review: the reader cannot tell which authority produced the verdict.
+
+| Item | Value |
+|---|---|
+| **Sources** | `<n>` read · `<n>` applicable · `<n>` path-scoped out · `<n>` below `min_severity` · `<n>` over budget |
+| **Params in force** | `min_severity=<X>` · `blocking=<CRITICAL,HIGH>` · `ignore_paths=<…>` · `max_rules=<n>` |
+| **Precedence** | `<topic>`: winner `<source:line>` ⟶ loser `<source:line>` (superseded) |
+| **Drift** | `<topic>`: repo rule `<source:line>` ≠ Che project memory `<source:line>` |
+| **Unresolved conflicts** | `<topic>`: `<source:line>` vs `<source:line>` — both capped at MEDIUM, non-blocking |
+| **Hard floor** | `<n>` invariants in force (never overridable) |
+
+If nothing was found: write `no contradictions detected` explicitly. Never leave the block out.
 
 ---
 
@@ -218,7 +231,7 @@ User should trust we actually ran the full process:
 
 | Category framework item | Checked? | Evidence from bootstrap |
 |---|---|---|
-| §1.5 Project Context Bootstrap (R1-R6 + Rules + Affected Packages + Local Skill + Cross-file pipelines) | ✅ Yes — see "Context Bootstrap Evidence" table above | |
+| §1.5 Project Rule Resolution (`che review rules` + R1-R6 context + Cross-file pipelines) | ✅ Yes — see "Context Bootstrap Evidence" and "⚖️ Rule Resolution" above | |
 | 0. Cross-File Pipeline Integrity (0.1 webhook allowlist / 0.2 3-pass Connect charge-model audit / 0.3 tx+locks overlap / 0.4 fire-and-forget Vercel) | ✅ Yes | Files read: `route.ts` allowlist, `StripeClient.ts` PI params 3-pass check, `RefundService.ts` tx span, setImmediate email paths |
 | 1. Runtime breakage / silent incorrect behavior + Crash-safety PROCESSING row + substring vs error.code + circular imports + index drift + idempotency null-cast | ✅ Yes — diff all files line-by-line | |
 | 2. Security / PII / Compliance (LIGHT level + **per-procedure READ/WRITE split** authz audit 2.8-2.10 — cookie org check + assertCan cache threading + authz BEFORE writes) | ✅ Yes | Each procedure audit: `trpc.ts:46-49`, `context.ts:51` + `bookingRouter` 3 procedures scanned SEPARATELY |
