@@ -1,6 +1,6 @@
 ---
 name: "che-code-review"
-description: "High-impact code review with TWO MODES: (A) GitHub PR URL as before, or (B) LOCAL WORKTREE MODE when user passes --worktree <path> WITHOUT a GitHub PR URL — reviews files currently in the modification/staging area (git status + git diff). Focuses ONLY on blocking issues: runtime regressions, security/PII leaks, unjustified dependencies, and scope deviations. Invoke when /che-review is called or user asks for code review."
+description: "High-impact code review with TWO MODES: (A) GitHub PR URL as before, or (B) LOCAL WORKTREE MODE when user passes --worktree <path> WITHOUT a GitHub PR URL — reviews files currently in the modification/staging area (git status + git diff). Resolves project rules deterministically via `che review rules` (layered precedence, path scoping, explicit conflict reporting) before reviewing. Focuses ONLY on blocking issues: runtime regressions, security/PII leaks, unjustified dependencies, and scope deviations. Invoke when /che-review is called or user asks for code review."
 ---
 
 # Che — Code Review (High Impact Focused)
@@ -180,79 +180,102 @@ Same as Mode A 1.2 — parse ticket (if provided) or use user's plain text scope
 
 ---
 
-## 1.5 GENERIC PROJECT CONTEXT BOOTSTRAP — (MANDATORY NEVER-SKIP; runs for BOTH Mode A and Mode B)
+## 1.5 PROJECT RULE RESOLUTION — (MANDATORY NEVER-SKIP; runs for BOTH Mode A and Mode B)
 
-> **GOAL:** Before looking at ANY diff finding, absorb rules, architecture, and conventions of the ACTUAL PROJECT where the diff lives. Without this, review only knows "generic common sense" and MISSES project architecture violations, route-level allowlists, charge-model conventions, local RLS rules, etc. This step is the ROOT CAUSE of the difference between a superficial 0C/0H review and one that catches 3C/8H production bugs. It is **NOT SPECIFIC** to any repo — discover everything automatically via existing file heuristics.
+> **GOAL:** before looking at ANY diff finding, know which project rules actually apply to THIS diff, and which of them outrank the others. Reading rule files ad hoc cannot do that: two contradictory rules read in file order produce a verdict that depends on the reading order, not on the project. The resolver ranks them once, deterministically, and reports what it could not rank.
 
-Execute **ALL** substeps below. For each item: "if file exists, MUST READ entirely; do not skip because 'I already know' or 'seems long'". None of these files takes more than 2–5s to read and each can account for multiple findings.
+**The resolver is the ONLY source of rule authority.** Never quote a project rule that did not come out of it. It remains your job to READ the files it points at — a citation is not context.
 
-### 1.5.1 Repository root context (MANDATORY TOP-DOWN)
+### 1.5.0 Resolve (one command, deterministic)
 
-For each FILE BELOW in `<WORKTREE_ROOT>` (or the repo directory where diff lives):
+```bash
+# Project memory is optional: without a bound project the resolver still returns repository rules.
+eval "$(che compute_paths "$WORKTREE_ROOT" "$SESSION_ID" --cwd "$PWD")" 2>/dev/null || true
 
-| # | File(s) to try (if exist, read ENTIREly) | Why |
+che review rules \
+  --worktree "$WORKTREE_ROOT" \
+  ${CHE_PROJECT_SLUG:+--project "$CHE_PROJECT_SLUG"} \
+  --changed <file1> <file2> ... \
+  --json > "$CHE_SESSION_DIR/review-rules.json"
+```
+
+- Pass `--changed` with the diff paths already known (Mode A: `gh pr diff <PR> --name-only`; Mode B: the B-1.1 list). Without it the resolver falls back to `git status`, which is not the PR diff.
+- Read the JSON once and keep it in context. Keys: `params`, `hard_floor`, `rules`, `conflicts`, `drift`, `sources`, `ignored`, `budget`.
+- If the command fails, report the failure and STOP. Do NOT fall back to reading `.claude/rules/*` by hand — that reintroduces the ordering bug this exists to remove.
+
+### 1.5.1 Authority layers (fixed — never invent a new one)
+
+| Layer | Source | Rank | Rule |
+|---|---|---|---|
+| `hard-floor` | Che invariants (security/PII, storage boundary, worktree binding) | 0 | Never loosened by any project rule. |
+| `repo-explicit` | `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `.github/copilot-instructions.md`, `.claude|.agents|.cursor/rules/*`, package-level `AGENTS.md`/`CLAUDE.md` | 1 | The project's written law. |
+| `machine` | eslint / biome / tsconfig / ruff / CI workflows | 2 | Already enforced by tooling — never re-flag as a review finding. |
+| `project-memory` | `project_profile.md`, `architecture.md`, `product_context.md`, `<domain>/conventions.md` | 3 | Derived memory. Layer 1 always wins; a divergence is `drift`. |
+
+Two authorities are NOT files, so the resolver cannot see them: the **Approved SPEC / ticket** (authority over scope, Category 4) and the **Che global defaults** (`engineering-contracts` §1-21 + Categories 0-8, the baseline). They sit above and below this table respectively and are never overridden by it.
+
+### 1.5.2 Apply the resolved set (tighten-only)
+
+1. **`hard_floor`** — always in force. A project rule may add to it, never relax it.
+2. **`rules`** — the applicable set. Cite `source:line` verbatim in every finding it supports.
+   - `superseded_by` is NOT null → **never cite that rule**; a higher layer already won.
+   - `conflicted: true` → cap the finding at MEDIUM and cite BOTH sides (§1.6).
+3. **`params`** — `min_severity` sets what may be reported, `blocking` decides the verdict, `ignore_paths` are excluded, `risk_paths` force the deep read in §1.5.4.
+4. **`machine` sources** — listed for completeness only. If a tool already catches it, it is not a review finding.
+5. **`ignored`** — read the reasons. A rule that is path-scoped out, below `min_severity`, or over budget must never be quoted later as if it applied.
+
+### 1.5.3 Context reads (NOT rule authority — read for rationale)
+
+For each file below in `<WORKTREE_ROOT>`, read it if it exists, as **context** for why the code looks the way it does. None of these can create a rule; only the resolver does that.
+
+| # | File(s) (read if exists) | Why |
 |---|---|---|
-| R1 | `AGENTS.md` at repo root | Project context router (points to where rules are by area). 99% of monorepos have this. |
-| R2 | `CLAUDE.md` at repo root | Agent context: package structure, deploy conventions, commands per package, RLS/DB migration rules. |
-| R3 | `README.md` at repo root | Stack used, how to run tests, high-level architecture (1 quick pass). |
-| R4 | `docs/plan.md` if any | Project fixed constraints (closed vs open scope). |
-| R5 | `docs/decisions.md` or `docs/adr/` (any `*.md` ADR in alphabetical order of 5 most recent) | Architectural decisions with RATIONALE — know why Router→Service→Repository, why destination charge-model, why `exports` field strategy. |
-| R6 | `graphify-out/GRAPH_REPORT.md` **(if exists)** | Community hubs, file paths for diff area — indicates WHERE to read specific rules (e.g.: "QR validation is in packages/db + packages/scanner"). |
+| R1 | `README.md` at repo root | Stack, commands, high-level architecture (one pass). |
+| R2 | `docs/plan.md` | Fixed constraints (closed vs open scope). |
+| R3 | `docs/decisions.md` or `docs/adr/*.md` (5 most recent) | Decisions with RATIONALE — why the layering is what it is. |
+| R4 | `graphify-out/GRAPH_REPORT.md` | Community hubs and file paths for the diff area. |
+| R5 | `<package>/README.md` and `docs/<area>.md` for every affected package | Package-level context (payment flow, scanner, db). |
+| R6 | Local review skill: `.claude/skills/*/SKILL.md`, `.agents/skills/*/SKILL.md` matching review/audit | The project's own checklist. Absorb its checks into Categories 0-8 — the resolver does not parse skills. If it names specific files to read, READ THEM NOW. |
 
-**All R1-R6:** use `Glob(pattern, path=<WORKTREE_ROOT>)` first; for each that exists → use `Read(file_path)`. Do not skip R6 if it exists — it is a huge shortcut.
+**All R1-R6:** `Glob` first, then `Read` each that exists. `AGENTS.md`/`CLAUDE.md` are deliberately NOT here — their rules arrive through the resolver (§1.5.0); reading them again adds prose, not authority.
 
-### 1.5.2 Project rules (all in `.claude/rules/` or `.agents/rules/`)
+### 1.5.4 Cross-file pipeline reads (driven by the diff, not by docs)
 
-1. **Glob all `.md` files in:**
-   - `<WORKTREE_ROOT>/.claude/rules/*.md` (Flockr/Lumos and most common path)
-   - `<WORKTREE_ROOT>/.agents/rules/*.md` (Alternative path in other stacks)
-2. **For each that exists, READ ENTIREly.** Classify mentally into buckets:
-   - **Security (e.g. `security.md`)** — authz inside each action, cookie vs membership validation, RLS defaults.
-   - **Architecture (e.g. `architecture.md`, `data-layer.md`)** — Router→Service→Repository layering, "No business logic in routers/procedures", Repositories own all TypeORM querying.
-   - **Database (e.g. `db.md`, `migrations-*.md`)** — Never hand-create migration files, fabricated timestamps, consolidation pre-merge, RLS policies with explicit TO role.
-   - **Market/TZ (e.g. `uk-market.md`)** — Store UTC / display Europe/London, GBP integer minor units currency.
-   - **Frontend/React (e.g. `react.md`)** — useTransition rules, error.code vs substring match.
-   - **Other (workflow.md, commits.md, tooling.md, testing.md, db-caching.md)** — PgBouncer pool ceilings, authzCache 4th arg threading rules, idempotency patterns.
-3. **MANDATORY 1-sentence mental summary per bucket after reading**: e.g. "Security = org check cannot be just raw cookie, Architecture = routers only authz+validate+call svc, DB = fabricated migration timestamps violate rule".
+The resolver says which RULES apply; these say which CODE to compare against code. Mandatory whenever the diff touches the area:
 
-### 1.5.3 Packages / Modules AFFECTED by diff (BOTTOM-UP context)
-
-1. **Compute `affected_areas`** — from `changedFiles[]` (B-1.1), extract top-level package/app paths:
-   - E.g.: `packages/platform/server/api/routers/bookingRouter.ts` → affects `packages/platform` + `packages/db` (if new table) + `packages/notification` (if email)
-   - E.g.: `apps/backend/src/webhooks/stripe/route.ts` → affects `apps/backend`
-2. **For EACH package/app in `affected_areas`, READ (if exists):**
-   - `<package_path>/AGENTS.md` (package-level rules — critical!)
-   - `<package_path>/CLAUDE.md` (directory map, package commands)
-   - `<package_path>/README.md` (if any)
-   - **Related area docs:** if `affected_areas` includes `packages/platform` → read `docs/platform.md` (payment flow, routers structure); if `packages/scanner` → `docs/scanner.md`; if db/entities → `docs/packages.md`. Use `Glob("docs/*.md")` and read matches.
-3. **MANDATORY rule for cross-file pipeline integrity (READ EVEN IF NO DOC):**
-   - If diff touches ANY webhook handler/service (`webhook`, `Webhook*`, `api/webhooks/*/route.ts`, `supportedTypes`): **READ NOW the ROUTE-LEVEL dispatcher file(s)** and compare with service supported types — even if no doc says to.
-   - If diff touches PSP/Connect charges/refunds/transfers: **READ NOW createPaymentIntent/createRefund/all calls touching the PSP client in the same package** — even if no doc exists.
-
-### 1.5.4 If PROJECT LOCAL review skill exists, absorb its checks
-
-1. **Glob for local skills in project:**
-   - `<WORKTREE_ROOT>/.claude/skills/*/SKILL.md`
-   - `<WORKTREE_ROOT>/.agents/skills/*/SKILL.md`
-2. **For each skill matching review/code-review/audit (e.g. `flockr-review/SKILL.md`, `project-review/SKILL.md`):**
-   - READ ENTIREly.
-   - **Extract its "what to check in Step 3 / Step Review" checklist.** INCORPORATE these checks INTO YOUR Category 0/1/2/3/4 framework (add checks as MANDATORY sub-items during evaluation — do not ignore for being "different skill").
-   - If local skill lists SPECIFIC file paths to read (e.g. "read route.ts in stripe webhook"), **READ THEM RIGHT NOW** — before starting review framework. Do not pretend you read them.
+1. **Webhooks** — diff touches `webhook`, `Webhook*`, `api/webhooks/*/route.ts`, `supportedTypes` → READ the ROUTE-level dispatcher and compare its allowlist with the service's supported types.
+2. **PSP / Connect** — diff touches charges, refunds or transfers → READ every PSP call in the same package, not just the diff hunk.
+3. **Affected packages** — for each package in the resolver's `sources`, read `<package>/AGENTS.md` and `<package>/CLAUDE.md` if they exist. Their rules already arrived resolved; this is for surrounding context.
 
 ### 1.5.5 Bootstrap confirmation checklist (DO NOT proceed without marking ALL)
 
-Before entering §2 Review Framework — answer these questions SILENTLY. If ANY is NO, go back and read.
+Before entering §2 Review Framework — answer these SILENTLY. If ANY is NO, go back.
 
 ```
-[ ] Root R1-R6 read (all that existed)
-[ ] ALL .claude/rules/*.md or .agents/rules/*.md read (all that existed)
-[ ] affected_areas packages: AGENTS.md and CLAUDE.md read
-[ ] Relevant docs/*.md (platform/scanner/packages/decisions) read if existed
-[ ] graphify-out/GRAPH_REPORT.md read if existed
-[ ] Local <project>-review/SKILL.md read and checks absorbed (if existed)
-[ ] diff touches webhooks? YES → route-level allowlist file ALREADY READ, not just service
-[ ] diff touches PSP/Connect charges/refunds/transfers? YES → ALL psp calls in same package ALREADY READ, not just diff hunk
+[ ] `che review rules` ran and its JSON is in context
+[ ] params internalised (min_severity, blocking, ignore_paths, risk_paths)
+[ ] hard_floor acknowledged as non-overridable
+[ ] every conflict and drift entry read; §1.6 applied to each
+[ ] ignored reasons read (no path-scoped / below-floor rule will be quoted later)
+[ ] context reads R1-R6 done for every file that existed
+[ ] diff touches webhooks? YES → route-level allowlist file ALREADY READ
+[ ] diff touches PSP/Connect charges/refunds/transfers? YES → ALL psp calls in the package ALREADY READ
 ```
+
+---
+
+## 1.6 CONFLICT PROTOCOL (the resolver reports; you obey)
+
+| Situation | What you do |
+|---|---|
+| `kind: precedence` | Cite ONLY `winner_source`. Never cite `loser_source` as authority. |
+| `kind: precedence` + a `drift` entry | Same as above, and surface the drift ONCE in the report (`⚖️ Rule Resolution`) — not per finding. If the user asks, propose `che knowledge apply` to fix the stale memory. |
+| `kind: unresolved` | Both rules stay in force for their own subjects. Any finding from that topic is capped at **MEDIUM**, never blocks, and cites BOTH sides. Ask the user ONLY if the cap changes the verdict (it would have been CRITICAL/HIGH). |
+| Rule needed but absent from `rules` | Say so explicitly ("no project rule returned for X; judged on Che defaults") instead of inventing authority. |
+| Project rule contradicts `hard_floor` | `hard_floor` wins. An override needs the user's verbatim justification logged via `che decision_append`, and is reported as an override — never silent. |
+| No project files at all | Proceed on `hard_floor` + Che defaults and say so in `⚖️ Rule Resolution`. An empty rule set is a finding about the repository, not a licence to improvise. |
+
+**Never** resolve a conflict yourself by preferring the rule you find more reasonable. That is exactly the non-determinism this protocol removes.
 
 ---
 
@@ -452,6 +475,12 @@ How:
 
    Never flag a self-contained doc comment as bad. Never ask for a traceability anchor to be added — traceability belongs to the SPEC §5 matrix and the PR body, not to the code.
 6. **4.8 Route-level / failure-path test gap check (MEDIUM if missing)**. If Category 0 found new webhook route event type → require 1 route-level signed-payload POST test. If Category 0.3 flagged tx pattern → require 1 failure path test: Stripe 5xx → tx rollback + retry with same idempotency key → no double-effect. MEDIUM (waivable ONLY with PR body sign-off override).
+7. **4.9 Application-code comment self-containment (RULE 7.9, LOW / MEDIUM).**
+   - Scan added/modified **non-test** files (`*.ts`, `*.tsx`, `*.py`, `*.go`, `*.sql`, `*.sh`, `*.toml`, `*.yml`): every comment (`//`, `#`, `/* */`, docstring).
+   - **BAD (LOW each, MEDIUM when ≥5 in the diff):** a comment whose meaning depends on a planning artefact — `// AC-3: validate refund`, `// T2.4`, `// B-2 idempotency`, `// SPEC_xxx`, `// see §4.2`, `// TODO(FLO-789)` with no stated reason.
+   - **ALLOWED:** the same comment **after** a complete explanation, where the ticket id, spec id or external URL is only extra context: `// TODO(FLO-789): batch the writes once the upstream API supports multi-row insert.` Removing the reference must not change the meaning.
+   - **Fix:** state the reason or constraint in the comment itself; keep or drop the reference.
+   - Never flag a reference that follows a self-contained explanation.
 
 ---
 
@@ -552,12 +581,12 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md`. Never f
    - **Fix:** rewrite the title as observable behaviour and replace the anchor with a self-contained doc comment (arrangement, input, expected result, invariant). Traceability moves to the SPEC §5 Verification Matrix and the PR body.
    - **🔴 AUTOMATIC SEVERITY UPGRADE TO HIGH (G5 cross-cutting exception):** IF (test located in **`tests/regression/<TICKET_ID>--<slug>.test.ts` (with ticket ID in filename) AND NO `EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER` logged in decisions.log.jsonl justifying ≥4 independent domains OR pure infra**) → **G7.3 automatically becomes 🟠 HIGH severity** (counts toward §0.9.2 ≤ 2 HIGH auto-fix rule). If test is colocated in the feature folder → no upgrade.
 
-4. **G7.4 🔵 LOW — `.skip()` / `xit()` / `it.todo()` used WITHOUT follow-up ticket reference.**
+4. **G7.4 🔵 LOW — `.skip()` / `xit()` / `it.todo()` used WITHOUT a stated reason.**
    - Scan for `.skip(`, `xit(`, `it.todo(`, `test.skip(`, `test.todo(`.
-   - Check 10 lines around for comment MATCHING: `TODO\((FLO-\d+|PROJ-\d+|#\d+|issue #[^\s)]+)\)` or `Blocked on PR #\d+` or `Requires: <dependency>`.
-   - If `.skip` exists WITHOUT follow-up ticket → **LOW G7.4 = SKIPPED TEST WITH NO FOLLOWUP.**
+   - Check 10 lines around for a comment that explains WHY it is skipped in self-contained terms: `// Skipped: the payments API does not expose partial refunds yet`. A ticket id may follow as extra context (`// TODO(FLO-123): …`) but is not a substitute for the reason.
+   - If `.skip` exists WITHOUT a stated reason → **LOW G7.4 = SKIPPED TEST WITH NO EXPLANATION.**
    - **Exception:** `it.skip` inside Scratch `.test.ts` named `scratch.*` or `_WIP_*` (flag only if staged for commit).
-   - **Fix:** Add 1 line comment above skip: `// TODO(FLO-123): reason = blocked on PR #456`. OR remove skip and make test pass.
+   - **Fix:** state the blocking reason above the skip (ticket optional). OR remove skip and make test pass.
 
 **Severity defaults for ship-gate threshold (§0.9.2 auto-fix rule ≤ 2 HIGH):**
 - G7.1 + G7.2 = HIGH (BLOCKING if total HIGH ≥ 3 with other Category 0-8 HIGHs; if ≤ 2, auto-fix triggers).
@@ -666,7 +695,15 @@ Follow template: `references/REVIEW_REPORT_TEMPLATE.md`
 - Blocker tally table: CRITICAL / HIGH / MEDIUM / LOW — counts
 
 **3. Context Bootstrap Evidence TABLE** (MANDATORY — never empty):
-- Fill template table. Each §1.5 item (R1-R6, rules, affected packages, local skill absorbed, cross-file pipeline reads). If file does not exist = "(N/A — file non-existent in repository)". DO NOT leave blank lines.
+- Fill template table. Each §1.5 item (resolver run, R1-R6 context reads, cross-file pipeline reads, local skill absorbed). If a file does not exist = "(N/A — file non-existent in repository)". DO NOT leave blank lines.
+
+**3.5 ⚖️ Rule Resolution** (MANDATORY — one block, never per finding):
+- `Sources`: `<n>` read, `<n>` applicable, `<n>` path-scoped out, `<n>` below `min_severity`.
+- `Params in force`: min_severity / blocking / ignore_paths / max_rules.
+- `Precedence`: one line per `kind: precedence` conflict — winner and loser with citations.
+- `Drift`: one line per `drift` entry (repo rule ≠ Che project memory).
+- `Unresolved conflicts`: one line per `kind: unresolved` — both citations + "capped at MEDIUM".
+- If there were no conflicts: say `no contradictions detected` explicitly (never omit the block).
 
 **4. Findings section:**
 
@@ -676,12 +713,12 @@ For each finding (both modes identical from here):
 - File:line
 - Snippet (3 lines before + 3 lines after, from patch)
 - Why this is a problem (evidence-based — never "I don't like it")
-- **Explicit rule citation (MANDATORY when possible)**: quote EXACT project rule file:line from .claude/rules/*.md / AGENTS.md / decision docs read during bootstrap. E.g.: "violates [architecture.md](file:///.../.claude/rules/architecture.md#L12) 'Router → Service → Repository: Routers must not contain business logic >30 lines'". Category 5: ALWAYS cite `engineering-contracts/SKILL.md` Appendix D D.1 with RF number.
+- **Explicit rule citation (MANDATORY when possible)**: quote EXACT `source:line` from the resolver's `rules[]`. E.g.: "violates [architecture.md](file:///.../.claude/rules/architecture.md#L12) 'Router → Service → Repository: Routers must not contain business logic >30 lines'". NEVER cite a rule whose `superseded_by` is set. A rule with `conflicted: true` is cited with BOTH sides and capped at MEDIUM. Category 5: ALWAYS cite `engineering-contracts/SKILL.md` Appendix D D.1 with RF number.
 - Actionable fix — specific lines/what should replace
 - Optional: suggest code change snippet ONLY if obvious. NEVER rewrite whole file.
 
 **N-1. Coverage of Review TABLE** (MANDATORY — user trusts audit):
-- 7 mandatory rows: §1.5 Bootstrap → Category 0 Pipeline Integrity → Category 1 Runtime → Category 2 Security+PII+Authz audit → Category 3 Architecture/Repo boundary → Category 4 Scope deviation / Demo UI / Test naming → Category 5 Design Quality / Ousterhout RF01-RF13
+- 7 mandatory rows: §1.5 Rule Resolution → Category 0 Pipeline Integrity → Category 1 Runtime → Category 2 Security+PII+Authz audit → Category 3 Architecture/Repo boundary → Category 4 Scope deviation / Demo UI / Test naming → Category 5 Design Quality / Ousterhout RF01-RF13
 - Non-goals (style/format/coverage%) → Skipped intentionally note.
 
 **N. Final verdict section (template):**

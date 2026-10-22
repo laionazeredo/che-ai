@@ -420,7 +420,7 @@ Required IF `COUNT(DISTINCT top-level packages touched from §2 CAN TOUCH) ≥ 3
 Header: `## §5 VERIFICATION MATRIX (Bilateral — B → Test → B)`
 
 > **Purpose:** Living TODO checklist that che updates AUTOMATICALLY in each SM/Developer/QA loop.
-> **Traceability chain:** (1) Spec §4 B-ID → (2) test whose title/doc comment verifies that behaviour → (3) Resultado/evidence sha256. The link lives in THIS matrix (path + line range), never as an anchor inside the test file (RULE 7.9).
+> **Traceability chain:** (1) Spec §4 B-ID → (2) test whose title/doc comment verifies that behaviour → (3) Resultado/evidence sha256. The link lives in THIS matrix (path + line range), never as a planning reference inside the code (RULE 7.9).
 > **Scope-checker CHECK2 validates the reverse: (2) → (1) + (3).**
 
 MANDATORY Markdown table (B-IDs first, then AB-IDs below):
