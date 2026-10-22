@@ -272,11 +272,21 @@ This rule turns "agility" from vague talk into enforceable checkpoints:
 5. **Behaviour golden rule:**
    - NEVER break existing behaviour without an EXPLICIT AC asking for the break.
    - If you need behaviour breaking: NON-GOALS, Data Model + Migration with rollback plan, and explicit user approval.
-6. **Test titles AND test comments = self-contained behaviour (Che RULE 7.9).**
+6. **Comments and test titles = self-contained (Che RULE 7.9).**
 
-   **🔴 HARD RULE — NO EXTERNAL REFERENCES IN CODE (titles and comments alike):**
+   Applies to **every comment in the repository** — application code, tests, migrations, scripts and config.
+
+   **🔴 HARD RULE — a comment must carry its own context:**
+   > ❌ **WRONG:** `// AC-3: validate refund`, `// T2.4`, `// B-2 idempotency`, `// SPEC_api-fail-closed`, `// @ac 4.2 | @task T2`, `// TODO(FLO-789)`.
+   > ❌ **REASON:** the plan (SPEC, task graph, tickets, PRD) lives OUTSIDE the codebase. A comment that only points at one carries no information for the next reader and rots as soon as the plan is reorganised.
+   > ✅ **CORRECT:** `// Stripe rejects a second partial refund on the same charge, so refunds are serialised per charge.`
+   > ✅ **Reference as extra context (allowed):** `// TODO(FLO-789): batch the writes once the upstream API supports multi-row insert.` The sentence explains itself; the ticket id, spec id or external URL only adds provenance. **Removing the reference must not change the meaning.**
+   > ❌ **Bare reference is never a comment:** `// TODO(FLO-789)` with no reason, `// see SPEC §4.2`, `// AC-3` are all forbidden.
+
+   **Test titles and test comments are stricter — no planning reference at all:**
+
+   **🔴 HARD RULE — NO EXTERNAL REFERENCES IN TESTS (titles and comments alike):**
    > ❌ **WRONG:** `it("Task T2.3 validates §4.2")`, `// @ac 3.1 | @task T2 | @ticket FLO-513`, `/** @spec spec_api-fail-closed */`.
-   > ❌ **REASON:** the plan (SPEC, task graph, tickets, PRD) lives OUTSIDE the codebase. Whoever reads the test — or the CI report — must understand it with zero access to the harness, and those IDs rot as soon as the plan is reorganised.
    > ✅ **CORRECT:** the title states the observable behaviour; an optional doc comment explains the scenario in detail (setup, input, expected outcome, invariant protected) using domain vocabulary only. Traceability Code ↔ Spec lives in `decisions.log.jsonl`, `task_graph.md` and the SPEC §5 Verification Matrix (test path + line range) — never inside `.ts/.py/.go`.
 
    - **`describe("...")`** = module/feature/context UNDER TEST (domain grouping).
@@ -311,7 +321,8 @@ Rules enforced on EVERY implementation:
 2. **Max 2 consecutive lines of comment block per file.** (HARD LIMIT, with explicit exceptions)
    - **Allowed comments (count toward limit):**
      - Non-obvious trade-off explanations (e.g. `// Using linear scan here because N <= 16 always and preallocated hashmap overhead wins for hot path`).
-     - TODO/FIXME flags with issue/ticket: `// TODO(FLO-789): Refactor to batch writes once the upstream API supports it.`
+     - TODO/FIXME flags that state the reason, with the ticket as extra context: `// TODO(FLO-789): Refactor to batch writes once the upstream API supports it.`
+     - A bare `// TODO(FLO-789)` with no stated reason is NOT a valid comment (§16.6).
    - **Exceptions that DO NOT count toward the 2-line limit:**
      - Docstrings/JSDoc/TSDoc of PUBLIC functions (API boundary) — describe pre/post-conditions (§6 DbC).
      - 1-line isolated inline comments not forming a contiguous block.

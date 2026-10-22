@@ -53,7 +53,7 @@ def _insert(term: str = "Envelope", definition: str = "A handoff contract") -> d
     return {"glossary": [{"op": "insert", "term": term, "definition": definition}]}
 
 
-# --- T1 (F0): scaffold + show -----------------------------------------------------
+# --- scaffold + show ---------------------------------------------------------
 
 
 def test_skeleton_contains_every_canonical_section():
@@ -154,7 +154,7 @@ def test_cli_rejects_an_unknown_domain(bound_worktree):
     assert "INVALID_DOMAIN" in result.stdout
 
 
-# --- T2 (F1): apply change-set engine ---------------------------------------------
+# --- apply change-set engine -------------------------------------------------
 
 
 def test_apply_dry_run_shows_a_diff_without_writing(bound_worktree, monkeypatch):
@@ -218,7 +218,7 @@ def test_cli_apply_requires_confirm_to_write(bound_worktree):
     assert not glossary_path("acme").is_file()
 
 
-# --- T3 (F2): conventions topic ops + fail-closed ---------------------------------
+# --- conventions topic ops + fail-closed -------------------------------------
 
 
 def test_apply_update_topic_changes_only_that_topic(bound_worktree, monkeypatch):
@@ -300,7 +300,7 @@ def test_cli_apply_reports_a_missing_ops_file_actionably(bound_worktree):
     assert "KNOWLEDGE_INPUT_INVALID" in result.stdout
 
 
-# --- T4 (F3): determinism + capabilities ------------------------------------------
+# --- determinism + capabilities ----------------------------------------------
 
 
 def test_glossary_renders_in_canonical_order_without_temp_residue(bound_worktree, monkeypatch):

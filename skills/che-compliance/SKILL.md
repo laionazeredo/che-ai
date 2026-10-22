@@ -197,11 +197,14 @@ Scan for NEW code:
 
 ---
 
-## 6.5 SCAN CATEGORY 7 — Test Naming Behavioral Conventions (Che RULE 7.9)
+## 6.5 SCAN CATEGORY 7 — Comment & Test Naming Self-Containment (Che RULE 7.9)
 
-**Applies ONLY to:** new/edited files matching `*.test.*`, `*.spec.*`, or inside `__tests__/` folder. If task did not touch tests → SKIP this category.
+**Applies to:** every new/edited file in the diff.
+- **Test files** (`*.test.*`, `*.spec.*`, `__tests__/`): titles AND comments are checked.
+- **Non-test files** (`.ts`, `.tsx`, `.py`, `.go`, `.sql`, `.sh`, `.toml`, `.yml`): every comment / docstring is checked for planning references.
+If the task touched no source or test file → SKIP this category.
 
-**Goal:** keep every test self-contained: titles and comments describe OBSERVABLE BEHAVIOUR in domain language (valid for months, not just task duration), with no reference to planning artefacts.
+**Goal:** keep every comment and test self-contained: it describes behaviour or the reason for the code in domain language (valid for months, not just task duration), with no dependency on planning artefacts.
 
 **🔴 HARD RULE — PROHIBITED INVERSION (NEVER do this):**
 > ❌ **WRONG:** Complain / report finding because a test DOES NOT HAVE `FLO-xxx` / `T<N>` / `AC<N>` in the title string.
@@ -224,6 +227,13 @@ Scan for NEW code:
 1. ✅ Optional doc comment (JSDoc / TSDoc / docstring) explaining scenario, input, expected result and invariant in domain language.
 2. ❌ `/** @ticket FLO-714 · @ac 3.2 · @task T1.4 */` or `// @ac 3.2 | @task T1.4` inside the block → **WARN** (planning reference in code, same family as an ID in the title).
 3. ❌ Any `@ac` / `@task` / `@ticket` / `@spec` / `@bug` tag, or `B-\d+` / `AB-\d+` anchor, anywhere in the test file.
+
+**Application-code comments (non-test files) — same principle:**
+1. ❌ A comment whose meaning depends on a planning artefact → **WARN** each, **MEDIUM** when ≥5 in the diff: `// AC-3: validate refund`, `// T2.4`, `// B-2 idempotency`, `// SPEC_api-fail-closed`, `// see §4.2`, `// TODO(FLO-789)` with no stated reason.
+2. ✅ A self-contained explanation: `// Stripe rejects a second partial refund on the same charge, so refunds are serialised per charge.`
+3. ✅ A reference **after** a complete explanation, adding provenance only: `// TODO(FLO-789): batch the writes once the upstream API supports multi-row insert.` Removing the reference must not change the meaning.
+4. ❌ A bare reference is never a comment (`// TODO(FLO-789)`, `// see SPEC §4.2`).
+5. Never flag a reference that follows a self-contained explanation.
 
 **Severity rule (FINDING only if BAD patterns ABOVE present in TITLE or COMMENT):**
 - 1–9 bad titles/comments → **WARN** (non-blocking; detailed list in report)

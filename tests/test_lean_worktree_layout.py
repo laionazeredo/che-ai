@@ -39,9 +39,6 @@ def _tracked_leak(repo: Path, name: str = "spec_leak.md") -> Path:
     return leak
 
 
-# --- B-1 ----------------------------------------------------------------------
-
-
 def test_new_worktree_has_no_subdirs(tmp_path: Path) -> None:
     """A freshly bound worktree holds `.binding.json` and no directories.
 
@@ -53,9 +50,6 @@ def test_new_worktree_has_no_subdirs(tmp_path: Path) -> None:
 
     assert _entries(wt_dir) == [".binding.json"]
     assert [p for p in wt_dir.iterdir() if p.is_dir()] == []
-
-
-# --- B-2 ----------------------------------------------------------------------
 
 
 def test_output_path_creates_parent_on_demand(tmp_path: Path, monkeypatch) -> None:
@@ -73,9 +67,6 @@ def test_output_path_creates_parent_on_demand(tmp_path: Path, monkeypatch) -> No
     assert (shared / "specs").is_dir()
 
 
-# --- B-4 ----------------------------------------------------------------------
-
-
 def test_gh_stack_type_maps_to_pr_plans(tmp_path: Path, monkeypatch) -> None:
     """The `gh_stack` artifact type lands in `pr_plans/`, named for the artifact."""
     shared = tmp_path / "shared"
@@ -87,9 +78,6 @@ def test_gh_stack_type_maps_to_pr_plans(tmp_path: Path, monkeypatch) -> None:
 
     assert Path(resolved).parent == shared / "pr_plans"
     assert not (shared / "gh_stack").exists()
-
-
-# --- B-3 / AB-2 ---------------------------------------------------------------
 
 
 def test_blacklist_moves_to_quarantine(tmp_path: Path) -> None:
@@ -138,9 +126,6 @@ def test_the_refusal_keeps_stdout_for_the_machine_channel(tmp_path: Path, capsys
     assert captured.out == "", "stdout is the machine channel and must stay empty here"
     assert "Options:" in captured.err
     assert "A = Untrack them" in captured.err
-
-
-# --- AB-1 ---------------------------------------------------------------------
 
 
 def test_idempotent_reuse_preserves_artifacts(tmp_path: Path) -> None:

@@ -110,7 +110,7 @@ def test_a_record_that_is_not_an_object_is_refused() -> None:
 
 
 def test_coord_frame_is_mandatory_and_kind_is_not() -> None:
-    """§2.3: only `coord_frame` changes a comparison, so only it is a precondition.
+    """Only `coord_frame` changes a comparison, so only it is a precondition.
 
     `kind` is recorded provenance. The applicability rule that keeps a frame's absent font
     from escalating INCONCLUSIVE reads the *design* node's kind, so demanding it here would
@@ -264,11 +264,11 @@ def test_every_category_property_is_covered_by_the_contract() -> None:
 def test_the_contract_invents_no_property_the_engine_never_reads() -> None:
     """Two properties are validated without being a scored category, and each earns it.
 
-    `coord_frame` is a precondition rather than a measurement (§2.3): the comparator reads
+    `coord_frame` is a precondition rather than a measurement: the comparator reads
     it to decide whether `position` may be compared at all, so a wrong one does not produce
     a deviation, it produces a meaningless one. `kind` decides whether typography applies to
     the element. Pinned as an exact set, so a third one cannot appear unnoticed and look like
-    a comparison — `line_count` was the third until §1 #18 gave it a category of its own.
+    a comparison — `line_count` was the third until it was given a category of its own.
     """
     assert CHECKED_PROPERTIES - {spec.prop for spec in CATEGORIES} == {
         "coord_frame",

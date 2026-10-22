@@ -388,7 +388,7 @@ Reproduction command:
 
 ### 2.5 Stage E — Test Naming Behavioral Lint (Che RULE 7.9)
 
-Goal: ensures `describe()` / `it()` / `test()` titles AND their comments describe OBSERVABLE BEHAVIOUR in self-contained domain language, never planning artefacts. Runs ONLY if `*.test.*`, `*.spec.*` or `__tests__/` modified.
+Goal: ensures `describe()` / `it()` / `test()` titles AND their comments describe OBSERVABLE BEHAVIOUR in self-contained domain language, never planning artefacts. Also checks application-code comments for the same dependency. Runs ONLY if source or test files were modified.
 
 **🔴 HARD RULE — PROHIBITED INVERSION (NEVER do this):**
 > ❌ **WRONG:** Report WARN / FAIL because a test title DOES NOT CONTAIN `FLO-xxx` / `T<N>` / `AC<N>`.
@@ -404,6 +404,8 @@ Scan strings passed to `describe(...)`, `it(...)`, or `test(...)` plus the comme
 - AC/section IDs: `AC\s*\d+`, `§\s*\d+(\.\d+)?`, `REGRA\s*\d+`, `SPEC[_-]\w+`
 - Phase/story IDs: `Fase\s*\d+`, `Story\s*#?\d+`, `PRD\s*§`
 - Planning anchors: `@(ac|task|ticket|spec|bug)\b`, `\b(AB|B)-\d+\b`
+
+**Application-code comments (non-test files):** the same anti-patterns apply when the comment's meaning depends on a planning artefact (`// AC-3: validate refund`, `// see §4.2`, bare `// TODO(FLO-789)`). A reference is fine only **after** a self-contained explanation, e.g. `// TODO(FLO-789): batch the writes once the upstream API supports multi-row insert.`
 
 **How to scan (simplest possible — grep -E):**
 ```bash

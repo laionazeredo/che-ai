@@ -49,8 +49,8 @@ _KEYS = {
     "CHE_PIXEL_CROP_SHEET",
 }
 
-#: The §4.5 pictures. Split out of `_KEYS` because no verdict reads them — they are named here so
-#: the recipe has somewhere to write, not because they are scored.
+#: The picture evidence artefacts. Split out of `_KEYS` because no verdict reads them — they are
+#: named here so the recipe has somewhere to write, not because they are scored.
 _EVIDENCE_KEYS = {
     "CHE_PIXEL_DESIGN_IMAGE",
     "CHE_PIXEL_DOM_SCREENSHOT",
@@ -59,7 +59,7 @@ _EVIDENCE_KEYS = {
 }
 
 #: The per-element crop's numbers. Its own set because it is the one evidence artefact that is not
-#: a picture, and because it is attempt-scoped like the report: §5's retry budget is only auditable
+#: a picture, and because it is attempt-scoped like the report: the retry budget is only auditable
 #: afterwards if the artefacts that describe one attempt are not overwritten by the next.
 _CROP_REPORT_KEY = "CHE_PIXEL_CROP_REPORT"
 
@@ -155,7 +155,7 @@ def test_every_key_of_the_set_is_resolved(bound_worktree) -> None:
     assert set(_parse(_paths(repo, "--breakpoint", "lg", "--backend", "figma").stdout)) == _KEYS
 
 
-# --- §4.5 evidence: named, session-side, and never the verdict ---------------
+# --- evidence artefacts: named, session-side, and never the verdict ----------
 
 
 def test_the_evidence_pictures_have_somewhere_to_go(bound_worktree) -> None:

@@ -4,8 +4,8 @@ version = "1.0.0"
 description = "IDE-agnostic Agentic Engineering Harness"
 requires-python = ">=3.9"
 dependencies = [
-  # The ONLY code outside the standard library, and it is one command's worth: §4.5's evidence
-  # lane (`che pixel diff` / `che pixel crop`). Pillow reads and writes PNG, which `zlib` +
+  # The ONLY code outside the standard library, and it is one command's worth: the pixel
+  # evidence lane (`che pixel diff` / `che pixel crop`). Pillow reads and writes PNG, which `zlib` +
   # `struct` can also do at the cost of owning a codec; numpy is what keeps the comparison
   # usable — 15 s rather than 202 s on a 1440x7500 frame pair (measured; see
   # `che_core/pixel_visual.py`). Everything else in the CLI still runs on a bare install.

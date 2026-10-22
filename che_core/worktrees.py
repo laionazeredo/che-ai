@@ -141,10 +141,10 @@ def add_worktree(
     with open(worktree_dir / BINDING_FILENAME, "w", encoding="utf-8") as f:
         json.dump(binding, f, ensure_ascii=False, indent=2, sort_keys=True)
 
-    # A-2 (SPEC lean-worktree-layout §4.7). With the artifact subfolders now
-    # created lazily by `output_path`, the binding is the ONLY thing this
-    # function produces — so if it is missing the worktree is unusable and the
-    # success report below would be a lie. Impossible in correct code: crash.
+    # The binding file is the only artifact this function produces; the artifact
+    # subfolders are created lazily by `output_path`. If it is missing the worktree
+    # is unusable and the success report below would be a lie. Impossible in
+    # correct code: crash.
     if not (worktree_dir / BINDING_FILENAME).is_file():
         fail(
             "UNEXPECTED",

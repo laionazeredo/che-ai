@@ -15,7 +15,7 @@ import pytest
 
 CHE_ROOT = Path(__file__).resolve().parent.parent
 
-#: The single source of truth for the bias body (engineering-contracts §1).
+#: The single source of truth for the simplicity-bias rule text.
 CANONICAL = "skills/engineering-contracts/SKILL.md"
 
 #: Every decision point that must reference the canonical body: planning, execution, review.
