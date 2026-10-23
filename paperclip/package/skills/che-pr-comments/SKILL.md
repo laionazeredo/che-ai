@@ -1,6 +1,6 @@
 ---
 name: "che-pr-comments"
-description: "Scans all comments on a GitHub PR, classifies them (human vs bot / valid vs invalid / actionable vs nitpick), produces a structured triage report, and prepares: (a) a numbered implementation plan for valid actionable comments, (b) pre-written English responses for comments we should reject/ignore. Invoke when user passes a PR URL and asks to process review comments, or when /che-pr-comments is called."
+description: "Scans all comments on a GitHub PR, classifies them (human vs bot / valid vs invalid / actionable vs nitpick), produces a structured triage report, and prepares: (a) a numbered implementation plan for valid actionable comments, (b) short (1-2 sentence) pre-written responses in the reviewer's own language, always thanking the reviewer and, when the suggestion is accepted, citing the commit that carries it. Invoke when user passes a PR URL and asks to process review comments, or when /che-pr-comments is called."
 ---
 
 # Che — PR Comments Triage & Response Drafts
@@ -47,6 +47,7 @@ id:
 author_username:
 author_association: OWNER / MEMBER / COLLABORATOR / CONTRIBUTOR / FIRST_TIME_CONTRIBUTOR / NONE
 body_text: raw markdown / text
+language: language detected in body_text (pt-BR, en, es, ...) — the reply MUST mirror it
 is_bot: true/false (check username ends with [bot], or known bot list: dependabot[bot], renovate[bot], codecov[bot], github-actions[bot], lintr[bot], snyk-bot, vercel[bot], deploy-preview, sonarcloud...)
 in_reply_to_comment_id: null or parent id
 file_path: null (issue-level) OR path (inline review)
@@ -174,7 +175,12 @@ Proposed code change plan:
 
 Estimated blast radius: N files (≤ 10 or flag for user re-evaluation)
 Estimated effort: XS / S / M / L
+
+Reply to post after the commit lands (SAME LANGUAGE AS THE COMMENT, 1-2 sentences, thanks first):
+Thanks for catching this, @<username> — fixed in <SHORT_SHA>.
 ```
+
+> Every Section 1 entry is an ACCEPT. Its reply is not optional and MUST carry the short sha of the commit that implements it (filled after the fix is committed — `<SHORT_SHA>` stays as a placeholder until then).
 
 ### Section 2: ✏️ TO RESPOND — Human comments, no code change
 
@@ -194,22 +200,27 @@ Original comment:
 Rationale (1 line):
 <why we are NOT making the code change. E.g.: "Repo convention uses manual guards everywhere already; moving to zod here is inconsistent + out of scope for this ticket. We can open a follow-up for the migration.">
 
-### Reply (ENGLISH, MAX 2 sentences, simple, ready to paste):
-Thanks for raising this, @<username> — the current approach matches the convention used in <file1> and <file2>, so I would rather keep it consistent here. I have noted the migration as a follow-up for a separate refactor PR so we do not lose it.
+### Reply (SAME LANGUAGE AS THE COMMENT, MAX 2 sentences, simple, ready to paste):
+Thanks for the review, @<username> — the current approach matches the convention used in <file1> and <file2>, so I would rather keep it consistent here. I have noted the migration as a follow-up for a separate refactor PR so we do not lose it.
 
 ### Post command (inline review comment):
 gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments/<COMMENT_ID>/replies \
-  -f body='Thanks for raising this, @<username> — the current approach matches the convention used in <file1> and <file2>, so I would rather keep it consistent here. I have noted the migration as a follow-up for a separate refactor PR so we do not lose it.'
+  -f body='Thanks for the review, @<username> — the current approach matches the convention used in <file1> and <file2>, so I would rather keep it consistent here. I have noted the migration as a follow-up for a separate refactor PR so we do not lose it.'
 ```
+
+> The example above is written in English only because the source comment was in English. If the reviewer wrote in pt-BR, the reply is in pt-BR; if in Spanish, in Spanish. Never translate the reviewer's language into English.
 
 HARD RULES for the reply command:
 
 1. **Two endpoints, pick by where the comment lives.** Inline review comment → `POST /repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments/<COMMENT_ID>/replies`. PR-level (issue) comment → `POST /repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments` (no `<COMMENT_ID>`).
 2. **`COMMENT_ID` is the numeric id of the comment being answered**, not the review id and not the thread id. Read it with `gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments --jq '.[] | {id, path, line, user: .user.login}'`.
-3. **MAX 2 sentences.** If the objection does not fit in two, we have not understood it yet — go back to classification, do not pad the reply.
-4. **Prefer phrasing without apostrophes** inside `-f body='...'` — English contractions ("doesn't", "won't", "I'd") break the shell string. Write "does not" / "I would" instead, or post from stdin with `-F body=@-` when the wording genuinely needs a contraction.
-5. **Replying works even when the comment is OUTDATED** — the endpoint targets the comment, not the line, so an outdated thread can still be answered in place.
-6. **Never auto-post.** Same rule as §5: only after the user explicitly says to post the responses, and only for the entries the user names.
+3. **1 sentence, 2 at the absolute most.** Short beats thorough: the reviewer wants a clear answer, not a report. If the objection does not fit in two, we have not understood it yet — go back to classification, do not pad the reply.
+4. **Mirror the comment language, one comment at a time.** English comment → English reply; pt-BR comment → pt-BR reply. The language is decided per comment from its `body_text`, never by repo default, team convention or the PR description. Code identifiers, commit shas and file paths stay untouched.
+5. **Always thank, always polite.** Every reply opens by thanking the review or the catch ("Thanks for the review", "Obrigado pelo review", "Good catch"). Never defensive, never dismissive, no irony.
+6. **Accept + implemented → cite the commit.** Any reply that confirms the suggestion was applied MUST name the commit that carries it: `Fixed in <SHORT_SHA> — thanks for catching this, @<username>.` Without the sha the reply is incomplete.
+7. **Prefer phrasing without apostrophes** inside `-f body='...'` — English contractions ("doesn't", "won't", "I'd") break the shell string. Write "does not" / "I would" instead, or post from stdin with `-F body=@-` when the wording genuinely needs a contraction.
+8. **Replying works even when the comment is OUTDATED** — the endpoint targets the comment, not the line, so an outdated thread can still be answered in place.
+9. **Never auto-post.** Same rule as §5: only after the user explicitly says to post the responses, and only for the entries the user names.
 
 ### Section 3: 💬 DISCUSSION — User decides (we draft BOTH sides)
 
@@ -226,11 +237,11 @@ Original comment:
 
 ### Action: PENDING USER — this reviewer is <owner|member|contributor>; do not decide alone.
 
-### Reply if we ACCEPT:
-<2-sentence English reply confirming the change, plus which commit will carry it>
+### Reply if we ACCEPT (SAME LANGUAGE AS THE COMMENT, 1-2 sentences, thanks first, MUST cite the commit):
+Thanks for the suggestion, @<username> — good point, applied in <SHORT_SHA>.
 
-### Reply if we DECLINE:
-<2-sentence English reply, same shape as Section 2>
+### Reply if we DECLINE (SAME LANGUAGE AS THE COMMENT, same shape as Section 2):
+<1-2 sentence reply, thanks first, then the one-line rationale>
 
 ### Post command (run only the draft the user picks):
 gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments/<COMMENT_ID>/replies -f body='<the chosen 2-sentence reply>'
@@ -241,7 +252,7 @@ gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments/<COMMENT_ID>/replies -f b
 ```
 ## N-1 — "rename var to snake_case"
 
-Action: DONE via trivial edit (≤ 5 min effort). We'll include in same commit batch.
+Action: DONE via trivial edit (≤ 5 min effort), same commit batch → reply "Thanks, applied in <SHORT_SHA>." (same language as the comment)
 OR
 Action: DECLINED + response (see Section 2 style).
 ```
@@ -278,7 +289,8 @@ Estimated total files touched: 6 (≤ 10 ✅)
 
 ## 5. Hard stops / rules
 
-- **Never write a response that sounds aggressive / dismissive.** Always: thank → explain rationale → offer follow-up / alternative path.
+- **Reply style is fixed:** 1-2 sentences, in the same language the reviewer used, opening with a thank-you for the review or the catch, and citing the implementing commit (`<SHORT_SHA>`) whenever we accepted the suggestion. No essays, no bullet lists, no restating the whole rationale.
+- **Never write a response that sounds aggressive / dismissive.** Always: thank → explain rationale (one line) → offer follow-up / alternative path.
 - **Never auto-decide ARCHITECTURE_REQUEST or DISCUSSION when reviewer is a repo OWNER/MEMBER.** Flag to user: "This reviewer is an owner/maintainer. I suggest implementing unless you strongly disagree."
 - **Never auto-post replies to GitHub.** Only do so when user explicitly types: "upload these responses" or similar, and AFTER user approves the full triage report + plan + response drafts.
 - If any comment says "Merge conflicts" / "This branch is out-of-date with base" — classify as BOT_MERGE_CONFLICT → HIGH priority, must resolve as part of Section 1 before anything else.
