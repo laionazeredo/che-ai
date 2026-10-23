@@ -729,20 +729,58 @@ At the end (both modes, except verdict notes):
 - **Blocker summary**: numbered list — each CRITICAL/HIGH fixed before merge (or before commit+push in Mode B)
 - **Non-blocker nice-to-have**: numbered list — MEDIUM/LOW, fix or ignore, user decides
 
-**O. 🎯 ACTIONABLE FINDINGS — copy-paste block (MANDATORY — the LAST section of the report)**
+**O. 🎯 COMMENT MATRIX — copy-paste block (MANDATORY — the LAST section of the report)**
 
-> Purpose: every finding becomes actionable in one paste. This is the section the user actually copies from, so it must be self-contained — the reader should never have to scroll back to "Findings".
+> Purpose: turn every finding into one GitHub comment the user can paste in a single move. The MATRIX is the deliverable; the prose above only justifies it.
 
-One entry per finding, in the SAME ORDER as the Findings section (blocking severity first). If a finding is skipped because it needs no code comment (already answered in the PR body, or a pure question), say how many were skipped and why.
+### O.1 Ask the comment language FIRST (blocking, exactly one question)
+
+Before writing a single comment body, ask the user which language the GitHub comments should be in (`AskUserQuestion`): English / Português (pt-BR) / mirror the PR discussion language. Store the answer as `COMMENT_LANG`.
+
+- Never infer it from the PR body, the repository, the ticket or the previous review round.
+- Every comment body — matrix row and post command — is written in `COMMENT_LANG`.
+- Paths, identifiers, commit shas, error messages and code stay verbatim (never translated).
+
+### O.2 The matrix (one row per finding, blocking severity first, SAME order as Findings)
+
+| # | Severity | Blocking | Path | Line | Side | Comment (`COMMENT_LANG`) |
+|---|---|---|---|---|---|---|
+| F-1 | 🔴 CRITICAL | yes | `path/to/file.ext` | 133 | RIGHT | <literal text that will be posted> |
+| F-2 | 🟠 HIGH | yes | `path/to/file.ext` | 211 | RIGHT | <literal text that will be posted> |
+| F-3 | 🟡 MEDIUM | no | `path/to/file.ext` | 88 | RIGHT | <literal text that will be posted> |
+
+Matrix rules:
+
+- **`Path` + `Line` + `Side` are the exact anchor.** Read `Line` from the hunk header (`@@ -old,len +new,len @@`) or from the file at the PR head commit. Never guess, never round to the nearest "obvious" line.
+- **`Side`** = `RIGHT` for the new side (added or context lines inside a hunk), `LEFT` only for deleted lines.
+- **`Blocking`** = `yes` for CRITICAL/HIGH, `no` for MEDIUM/LOW.
+- **`Comment`** is the literal posted text — no IDs, no severity labels, no rule citations, no markdown tables inside it.
+
+### O.3 Tone and length (applies to EVERY row)
+
+| Severity | Tone | Length | Must contain |
+|---|---|---|---|
+| 🔴 CRITICAL / 🟠 HIGH | friendly, simple, never alarmist | max 3 sentences | thank the author → what breaks and **why it blocks approval** → concrete suggested fix |
+| 🟡 MEDIUM / LOW | friendly, simple, collaborative | max 3 sentences | thank the author → what could improve → concrete suggested fix + explicit "this is only a suggestion, feel free to ignore it" |
+
+Universal tone rules:
+
+1. **Friendly and polite, always.** Thank the author for the change or the catch. No irony, no "you must", no rule numbers, no severity jargon in the body.
+2. **Always suggest something concrete.** A comment without a proposed change is noise — say what to change, even in the non-blocking ones.
+3. **Simple language.** Consequence first, mechanism second. If a sentence needs a second read, rewrite it.
+4. **Max 3 sentences, in `COMMENT_LANG`.** If it does not fit in three, the finding is not understood well enough yet — go back to the analysis instead of padding the comment.
+5. **Blocking is explicit for CRITICAL/HIGH** ("this is why I cannot approve yet"), **and explicitly waived for MEDIUM/LOW** ("just a suggestion, ignore if you prefer").
+
+### O.4 Per-finding detail + post command
 
 Canonical entry — five fields, nothing else:
 
 | Field | Rule |
 |---|---|
 | **Finding + category** | `#F-<n> · <severity> · <category>` — the ID and category MUST match the Findings section verbatim. |
-| **Where** | `path/to/file.ext:LINE` — the exact line the comment will attach to. |
+| **Where** | `path/to/file.ext:LINE` (`side`) — the exact line the comment will attach to. |
 | **Explanation** | 1–3 lines for the USER (Portuguese in chat). Why it is a problem, in plain language. |
-| **GitHub comment (EN)** | MAX 2 sentences, simple English, no jargon. This is the literal posted text: state the consequence, not the rule number. |
+| **GitHub comment (`COMMENT_LANG`)** | The literal posted text from the matrix row. Max 3 sentences per §O.3. |
 | **Post command** | The `gh api` command below, filled in. |
 
 ```bash
@@ -752,7 +790,7 @@ Canonical entry — five fields, nothing else:
 # -F line=N is a TYPED (integer) field; -f is for strings. Swapping them sends a
 # string and GitHub rejects the request.
 gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
-  -f body='<the 2-sentence English comment>' \
+  -f body='<the max-3-sentence comment in COMMENT_LANG>' \
   -f path='<path/to/file.ext>' \
   -F line=<LINE> -f side='RIGHT' \
   -f commit_id="$(gh pr view <PR_NUMBER> --repo <OWNER>/<REPO> --json headRefOid -q .headRefOid)"
@@ -763,8 +801,8 @@ HARD RULES for the post command:
 1. **The line MUST appear in the PR diff.** GitHub accepts a comment only on a line inside a hunk (an added line, or a context line within a hunk). A line outside every hunk returns `422 Validation Failed`. When the finding is about code that is NOT in the diff, pin the comment to the nearest in-diff line and say so in the body, or post it as a PR-level comment instead.
 2. **`side` must match where the line lives.** `RIGHT` for the new side, `LEFT` only for deleted lines. The wrong side highlights the wrong line, or fails with 422.
 3. **Never guess the line number.** Read it from the hunk header (`@@ -old,len +new,len @@`) or from the file at the PR head commit. A comment pinned to a guessed line teaches the author to distrust the tool.
-4. **Two sentences maximum.** If it does not fit in two, the finding is not understood well enough yet — go back to the analysis.
-5. **No single quotes inside `-f body='...'`.** An apostrophe in English prose ("doesn't", "won't") breaks the shell string. Use the quote-safe form below when the comment needs one.
+4. **Max 3 sentences, in `COMMENT_LANG`, friendly tone** (§O.3). If it does not fit in three, the finding is not understood well enough yet — go back to the analysis.
+5. **No single quotes inside `-f body='...'`.** An apostrophe in prose ("doesn't", "won't", "não") breaks the shell string. Use the quote-safe form below when the comment needs one.
 6. **Multi-line findings** (a whole function rather than one line): add `-F start_line=<FIRST> -f start_side='RIGHT'`. `line`/`side` stay the END of the range.
 7. **Mode B (local worktree) has no PR.** Emit the same five fields, but leave the command in placeholder form with the note "run once a PR exists". NEVER fabricate a PR number.
 8. **Never post automatically.** These commands are generated FOR the user; posting happens only when the user explicitly asks (§5).
@@ -776,11 +814,11 @@ gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
   -f path='<path/to/file.ext>' -F line=<LINE> -f side='RIGHT' \
   -f commit_id="$(gh pr view <PR_NUMBER> --json headRefOid -q .headRefOid)" \
   -F body=@- <<'EOF'
-Since `applyDiscountCode` no longer patches the PaymentIntent server-side, this total is only what the buyer sees.
+Since `applyDiscountCode` no longer patches the PaymentIntent server-side, this total is only what the buyer sees. Recreating the PaymentIntent at confirm time would keep the charge aligned with the total shown.
 EOF
 ```
 
-**Chat delivery:** the five fields per finding — Portuguese for the explanation, English for the GitHub comment body, and the command verbatim. This block IS the deliverable: do not also paste the full report.
+**Chat delivery:** the matrix first (§O.2), then the five fields per finding — Portuguese for the explanation, `COMMENT_LANG` for the GitHub comment body, and the command verbatim. This block IS the deliverable: do not also paste the full report.
 
 ---
 
@@ -831,6 +869,7 @@ fi
   - **Safe fallback WITHOUT binding (rare):** `che output_path` automatically falls back to `$CHE_HOME/outputs/fallback-session/reviews/pr-<ID>/...`; NEVER worktree or `./reports/`.
   - **NEVER use relative path `./reports/` or `$WORKTREE_ROOT/.trae/`. §20 MORATORIUM.**
 
+- **Ask the comment language (§O.1) BEFORE writing the matrix**, then deliver the matrix (§O.2) + per-finding post commands (§O.4).
 - **DO NOT approve or request changes DIRECTLY on GitHub via `gh pr review`** unless user explicitly asks after seeing report. First deliverable = report for user to review in chat.
 - **The §4-O post commands are NOT run by this skill.** They are emitted for the user to paste, one per finding. Posting inline comments on the user's behalf requires an explicit request ("posta os comentários"), and even then only for the findings the user names.
 - If ZERO findings → still write report: "No CRITICAL/HIGH issues found; scope matches; dependencies justified." + list checked items.

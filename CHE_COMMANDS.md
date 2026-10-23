@@ -290,7 +290,7 @@ Agent action: ask confirmation first.
 5. Run the 4-category review framework (Runtime / Security / Deps-blast-radius / Scope deviation).
 6. Structured review report saved to disk: resolve canonical OUTSIDE-WORKTREE path via `che output_path "review" "che-code-review" "pr-<N>" "session" "md"` (NOT inside the Che checkout; NEVER hardcode `.trae/` or `.che-ai/` relative to worktree).
 7. Verdict delivered to chat (Portuguese): 🔴 REQUEST CHANGES / 🟡 APPROVE WITH COMMENTS / 🟢 APPROVE, with numbered blocking issues.
-8. **Actionable findings block (LAST section of the report, §4-O):** one entry per finding — ID + category, location (`path:line`), plain-language explanation, an English comment of MAX 2 sentences ready to post, and the exact `gh api repos/<OWNER>/<REPO>/pulls/<N>/comments` command pinned to that line (`-F line=N -f side='RIGHT' -f commit_id=…`). The commands are emitted for YOU to paste; the skill never posts them on its own.
+8. **Comment matrix (LAST section of the report, §4-O):** ask `COMMENT_LANG` first, then one row per finding — ID, severity, blocking yes/no, `path`, `line`, `side`, and the literal comment — plus the exact `gh api repos/<OWNER>/<REPO>/pulls/<N>/comments` command pinned to that line (`-F line=N -f side='RIGHT' -f commit_id=…`). Comments are friendly, max 3 sentences, in `COMMENT_LANG`, always proposing a concrete fix: MEDIUM/LOW are explicitly non-blocking ("just a suggestion, feel free to ignore"), CRITICAL/HIGH say they block approval and why. The commands are emitted for YOU to paste; the skill never posts them on its own.
 9. If user says "suba essa review oficial": use `gh pr review` with the report as body + request-changes / comment / approve flag.
 **Syntax examples:**
 ```
