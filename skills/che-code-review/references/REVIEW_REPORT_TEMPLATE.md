@@ -87,8 +87,17 @@ User must be able to verify that the review was context-aware (not superficial d
 | R3 docs/decisions.md or docs/adr/*.md (last 5) | |
 | R4 graphify-out/GRAPH_REPORT.md | (N/A or path) |
 | R5 Package README.md / docs/<area>.md (affected areas) | `packages/platform/README.md`, `docs/platform.md` |
-| R6 Local project review skill (if exists) | `.claude/skills/flockr-review/SKILL.md` read fully; 9 checklist categories absorbed |
+| R6 Local project review skill (MANDATORY glob — never "if exists") | `<glob output: path1, path2>` read fully; `<n>` checklist checks mapped to Categories (see R6 mapping table) |
+| §1.5.6 Pattern mining | `<n>` artefact types · exemplars: `<file:line>`, `<file:line>` |
 | Cross-file pipeline reads (MANDATORY if diff matches keywords): <br> — Webhook route allowlist <br> — ALL PSP/Connect charge methods in the package | `app/api/webhooks/stripe/route.ts:7-16` (allowlist read) <br> `StripeClient.ts:285-313` (createPaymentIntent) + `RefundService.ts:~450` (createRefund) read |
+
+### R6 mapping table (every project-checklist check → Category)
+
+> A check with no Category is a GAP IN THIS SKILL. Route it to Category 9 and add one `SKILL GAP: <check> — no Category owns it` line below. Never write "none found" without showing the glob output.
+
+| Project check (source:line) | Category | Applied? |
+|---|---|---|
+| `<checklist file:line — check name>` | `<Category N or 9.x>` | `<APPLIED → F-n / NO_MATCH>` |
 
 ---
 
@@ -106,6 +115,18 @@ User must be able to verify that the review was context-aware (not superficial d
 | **Hard floor** | `<n>` invariants in force (never overridable) |
 
 If nothing was found: write `no contradictions detected` explicitly. Never leave the block out.
+
+---
+
+## Rule accounting (one row per source file — never per rule)
+
+> Every rule whose `scope` matches a changed path AND whose `effective_severity` is CRITICAL or HIGH must be APPLIED (with its finding) or NO_MATCH. Anything else is OUT_OF_SCOPE(path). A rule in none of the three means the review is incomplete.
+
+| Source file | Rules | APPLIED | NO_MATCH | OUT_OF_SCOPE |
+|---|---|---|---|---|
+| `<architecture.md>` | `<3>` | `<2 — F-3>` | `<1>` | `<0>` |
+
+**Stated limitation:** accounting does not create depth — a path-scoped rule that does not match the diff still cannot see the defect. Depth comes from Category 9.
 
 ---
 
@@ -239,6 +260,7 @@ User should trust we actually ran the full process:
 | 4. Scope deviation / **UI demo 5-pass scan** (fake latency + random fail + discarded idempotencyKey + toast no API call + demo data imports) / test naming rules / 4.8 route-level test gaps | ✅ Yes — ACs mapped to changed files | RefundBookingAction.tsx 5-pass demo check applied; test behavioral naming rules validated |
 | **🟢 7. Testing Gaps & Regression Lock (G7.1 HIGH src 20+ln no test / G7.2 HIGH API+UI new without integ or Playwright / G7.3 MEDIUM planning reference in test title or comment / G7.4 LOW skip without TODO)** | ✅ Yes — diff matched dirty src vs test files | 42 src lines added in `RefundService.ts` + 2 tests written (`refundFlow.api.test.ts` + `RefundBookingAction.spec.ts`) · titles and comments checked for self-containment (no @ac/@ticket/@task) |
 | **🟣 8. UI Selector Contract Hygiene & data-testid 3-part (G8.1 HIGH interactive no data-testid fragile / G8.2 HIGH test selector XPath/nth/css-class / G8.3 MEDIUM non-standard regex / G8.4 LOW map-loop no unique suffix)** | ✅ Yes — every interactive component checked | Kent C. Dodds Testing Library priority order enforced; 5 new data-testids created (`refund__action-btn__confirm`, `refund__status-toast__success` etc); XPath/nth-child not used once; 0 duplicates in ticket line-item map |
+| **🟠 9. Repository convention conformance (9.1 constants/config placement · 9.2 existing-pattern reuse · 9.3 copy/localisation · 9.4 semantic markup · 9.5 stale identifiers)** | ✅ Yes / N/A | R6 checklist mapped · exemplars compared per §1.5.6 |
 | Non-goals (style / formatting / naming / coverage %) | ⚠️ Skipped intentionally — that's CI/lint job | |
 
 ---
@@ -282,11 +304,11 @@ After fixes: re-run a short follow-up review, then OK to move to /che-ship or me
 **Post command:**
 
 ```bash
-gh api repos/Flockr-platform/Lumos/pulls/489/comments \
+gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
   -f body='Since `applyDiscountCode` no longer patches the PaymentIntent server-side, this total is only what the buyer sees and `stripe.confirmPayment` will charge more than shown. That is why this blocks approval — recreating the PaymentIntent at confirm time would keep the charge aligned with the total.' \
   -f path='packages/platform/components/payment-stripe/stripe-checkout-page.tsx' \
   -F line=133 -f side='RIGHT' \
-  -f commit_id="$(gh pr view 489 --repo Flockr-platform/Lumos --json headRefOid -q .headRefOid)"
+  -f commit_id="$(gh pr view <PR_NUMBER> --repo <OWNER>/<REPO> --json headRefOid -q .headRefOid)"
 ```
 
 ### #F-2 · 🟠 HIGH · Security / PII
@@ -300,11 +322,11 @@ gh api repos/Flockr-platform/Lumos/pulls/489/comments \
 **Post command:**
 
 ```bash
-gh api repos/Flockr-platform/Lumos/pulls/489/comments \
+gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
   -f body='Thanks for wiring the notification flow — the raw customer email is going into an info log here, and the repo already ships `hashPII()` for correlation. This is why I cannot approve yet: swapping in the hash keeps notification logging consistent with the rest of the codebase.' \
   -f path='packages/notification/src/email-service.ts' \
   -F line=211 -f side='RIGHT' \
-  -f commit_id="$(gh pr view 489 --repo Flockr-platform/Lumos --json headRefOid -q .headRefOid)"
+  -f commit_id="$(gh pr view <PR_NUMBER> --repo <OWNER>/<REPO> --json headRefOid -q .headRefOid)"
 ```
 
 ### #F-3 · 🟡 MEDIUM · Design Quality

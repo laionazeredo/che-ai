@@ -1,6 +1,6 @@
 ---
 name: "che-code-review"
-description: "High-impact code review with TWO MODES: (A) GitHub PR URL as before, or (B) LOCAL WORKTREE MODE when user passes --worktree <path> WITHOUT a GitHub PR URL — reviews files currently in the modification/staging area (git status + git diff). Resolves project rules deterministically via `che review rules` (layered precedence, path scoping, explicit conflict reporting) before reviewing. Focuses ONLY on blocking issues: runtime regressions, security/PII leaks, unjustified dependencies, and scope deviations. Invoke when /che-review is called or user asks for code review."
+description: "High-impact code review with TWO MODES: (A) GitHub PR URL as before, or (B) LOCAL WORKTREE MODE when user passes --worktree <path> WITHOUT a GitHub PR URL — reviews files currently in the modification/staging area (git status + git diff). Resolves project rules deterministically via `che review rules` (layered precedence, path scoping, explicit conflict reporting) before reviewing. Focuses on blocking issues: runtime regressions, security/PII leaks, unjustified dependencies, scope deviations, and repository-convention conformance (duplication, constants/config placement, localisation, semantic markup). Invoke when /che-review is called or user asks for code review."
 ---
 
 # Che — Code Review (High Impact Focused)
@@ -212,7 +212,7 @@ che review rules \
 | `machine` | eslint / biome / tsconfig / ruff / CI workflows | 2 | Already enforced by tooling — never re-flag as a review finding. |
 | `project-memory` | `project_profile.md`, `architecture.md`, `product_context.md`, `<domain>/conventions.md` | 3 | Derived memory. Layer 1 always wins; a divergence is `drift`. |
 
-Two authorities are NOT files, so the resolver cannot see them: the **Approved SPEC / ticket** (authority over scope, Category 4) and the **Che global defaults** (`engineering-contracts` §1-21 + Categories 0-8, the baseline). They sit above and below this table respectively and are never overridden by it.
+Two authorities are NOT files, so the resolver cannot see them: the **Approved SPEC / ticket** (authority over scope, Category 4) and the **Che global defaults** (`engineering-contracts` §1-21 + Categories 0-9, the baseline). They sit above and below this table respectively and are never overridden by it.
 
 ### 1.5.2 Apply the resolved set (tighten-only)
 
@@ -223,6 +223,9 @@ Two authorities are NOT files, so the resolver cannot see them: the **Approved S
 3. **`params`** — `min_severity` sets what may be reported, `blocking` decides the verdict, `ignore_paths` are excluded, `risk_paths` force the deep read in §1.5.4.
 4. **`machine` sources** — listed for completeness only. If a tool already catches it, it is not a review finding.
 5. **`ignored`** — read the reasons. A rule that is path-scoped out, below `min_severity`, or over budget must never be quoted later as if it applied.
+6. **Rule accounting (MANDATORY).** Every rule whose `scope` matches at least one changed path AND whose `effective_severity` is CRITICAL or HIGH must appear in the report in one of two states: APPLIED (with the finding it produced) or NO_MATCH (checked, no violation in this diff). Rules scoped out by path are OUT_OF_SCOPE(path). A rule in none of the three means the review is incomplete — the reader cannot tell "checked and clean" from "forgotten". Gate on `effective_severity`, never `severity`: a conflict already capped it.
+
+   Output shape (never 70 per-rule lines): one row per **source file**, e.g. `architecture.md — 3 rules · 2 APPLIED (F-3) · 1 NO_MATCH`. Limitation to state in the report: accounting does not create depth on its own. A rule scoped to `packages/*/lib/env*.ts` does not match a `process.env` read in `server/domain/booking-fee.ts`. Depth comes from Category 9; accounting only stops the silence.
 
 ### 1.5.3 Context reads (NOT rule authority — read for rationale)
 
@@ -235,7 +238,9 @@ For each file below in `<WORKTREE_ROOT>`, read it if it exists, as **context** f
 | R3 | `docs/decisions.md` or `docs/adr/*.md` (5 most recent) | Decisions with RATIONALE — why the layering is what it is. |
 | R4 | `graphify-out/GRAPH_REPORT.md` | Community hubs and file paths for the diff area. |
 | R5 | `<package>/README.md` and `docs/<area>.md` for every affected package | Package-level context (payment flow, scanner, db). |
-| R6 | Local review skill: `.claude/skills/*/SKILL.md`, `.agents/skills/*/SKILL.md` matching review/audit | The project's own checklist. Absorb its checks into Categories 0-8 — the resolver does not parse skills. If it names specific files to read, READ THEM NOW. |
+| R6 | Local review skill — MANDATORY glob, never "if exists": `.claude/skills/*/SKILL.md`, `.agents/skills/*/SKILL.md`, `.cursor/rules/*`, `docs/review*.md`, plus the review section of `CONTRIBUTING.md` | The project's own checklist. It outranks the generic defaults (same layer as `repo-explicit`, §1.5.1). Run the glob FIRST and record the exact paths found. Read every match in full. Absorb its checks into Categories 0-9 — the resolver does not parse skills. If it names specific files to read, READ THEM NOW. |
+
+**R6 mapping table (fill BEFORE §2).** For every check in the project checklist, write `check → Category`. A check with no Category is a GAP IN THIS SKILL, not a licence to skip: route it to Category 9 and add one `SKILL GAP: <check> — no Category owns it` line to the report. Never mark R6 as "none found" without showing the glob output.
 
 **All R1-R6:** `Glob` first, then `Read` each that exists. `AGENTS.md`/`CLAUDE.md` are deliberately NOT here — their rules arrive through the resolver (§1.5.0); reading them again adds prose, not authority.
 
@@ -257,10 +262,21 @@ Before entering §2 Review Framework — answer these SILENTLY. If ANY is NO, go
 [ ] hard_floor acknowledged as non-overridable
 [ ] every conflict and drift entry read; §1.6 applied to each
 [ ] ignored reasons read (no path-scoped / below-floor rule will be quoted later)
-[ ] context reads R1-R6 done for every file that existed
+[ ] context reads R1-R6 done for every file that existed; R6 glob output recorded (never "none found" without it)
 [ ] diff touches webhooks? YES → route-level allowlist file ALREADY READ
 [ ] diff touches PSP/Connect charges/refunds/transfers? YES → ALL psp calls in the package ALREADY READ
 ```
+
+### 1.5.6 PATTERN MINING (inductive — runs for BOTH modes, before Category 9)
+
+The resolver returns *declared* rules. A repository's conventions are also *observed*: what existing files of the same kind actually do. No rule can answer "do the sibling pages use a shared header component?" — mine it:
+
+1. Classify each added file by artefact type (route page, panel/section, hook, service, repository, router procedure, migration, test, email template, i18n catalogue).
+2. Pick 2–3 existing exemplars of the same type — nearest sibling first, then same folder, then same package.
+3. Diff the new file against them on: imports, folder location, component composition, state ownership, error handling, copy source (catalogue vs literal), markup semantics.
+4. Report each deviation as a Category 9 finding, naming the exemplar `file:line`.
+
+Precedence: observed convention contradicting a declared rule → the declared rule wins, reported once as drift. Observed convention with no declared rule → still binding.
 
 ---
 
@@ -279,11 +295,11 @@ Before entering §2 Review Framework — answer these SILENTLY. If ANY is NO, go
 
 ---
 
-## 2. Review framework — 5 categories ONLY
+## 2. Review framework — Categories 0–9 (closed list)
 
-We only look at these 5. Anything else is out-of-scope for this reviewer role.
+We only look at these ten. Anything else is out-of-scope for this reviewer role.
 
-> **Simplicity Bias lens (engineering-contracts §1 — the touchstone):** while applying the 5 categories, also weigh the solution against the bias. Flag **premature completeness** (edge-case/error/validation handling no current AC demands), **irreversibility** (hard to change or undo), and **blind spots** (no observability at a seam the diff touches) — MEDIUM by default, HIGH when they cause real fragility. A complete-but-fragile or complete-but-invisible solution is not better than a smaller reversible one.
+> **Simplicity Bias lens (engineering-contracts §1 — the touchstone):** while applying the ten categories, also weigh the solution against the bias. Flag **premature completeness** (edge-case/error/validation handling no current AC demands), **irreversibility** (hard to change or undo), and **blind spots** (no observability at a seam the diff touches) — MEDIUM by default, HIGH when they cause real fragility. A complete-but-fragile or complete-but-invisible solution is not better than a smaller reversible one.
 
 ---
 
@@ -401,6 +417,7 @@ Checks:
      - **LOW/NO FLAG** only if (a) assertCan called BEFORE gating with row orgId (not cookie), OR (b) whoami revalidated membership, OR (c) all access through buyer fallback path.
 9. **MANDATORY — authzService.assertCan 4th arg authzCache threading (HIGH if missing in router-callable service paths)**. If diff contains `.assertCan(userId, permission, resource)`: check signature — accepts `cache?: AuthzCache` 4th optional param? Does router ctx expose `ctx.authzCache`? Trace params router → service. HIGH if router-reachable services call assertCan WITHOUT passing cache (issues fresh isPlatformAdmin DB query per call under default db-caching rule).
 10. **Server action / route handler auth ordering (CRITICAL if after writes)**. Authz checks MUST run BEFORE any DB write or side effect. CRITICAL if reversed.
+11. **Value-affecting mutation privilege review (HIGH).** For each NEW or MODIFIED mutation that changes money, pricing, payout, fees, tax or access, answer three questions in the report: (a) which roles/principals pass the guard? (b) is there a narrower role that should own this change — does the repo already encode one (a scope-gated action list, a money-only permission)? (c) is the change attributable — does the write record WHO made it? A broad role (editor/contributor) changing a money value with no recorded author is HIGH: an unreviewable financial change. A deliberate product decision to allow it must be stated in the PR body, otherwise it blocks.
 
 ---
 
@@ -410,7 +427,7 @@ Checks:
 1. **Router layering — NO business logic + NO direct repository instantiation inside procedures (HIGH/MEDIUM)**.
    - **First (mandatory)**: List ALL NEW/MODIFIED procedures in router file.
    - **For EACH procedure (HIGH if violating)**:
-     - (a) Body line count (excluding declaration) `> 50 lines` → suspect Router→Service→Repository violation.
+     - (a) **Logic the service should own (HIGH):** error mapping, input/output schema declaration, branching on domain states, arithmetic, or any multi-step orchestration inside the procedure body. Line count is a weak proxy: a 35-line error-mapping block is a violation, and a 60-line declaration-only procedure is not.
      - (b) Repository instantiation INSIDE router file: `new OrderRepository(...)`, or repository imports and direct `.findById(...)` calls WITHOUT passing through Service. **HIGH severity violation** (architecture.md: "Routers must not own data access").
      - (c) Inline arithmetic/window/refund-gate: `15_552_000_000` (ms constants), `if (eventStartAt <= Date.now())`. AND corresponding Service exists with same gates → **HIGH drift risk**.
      - (d) If only inline calculations (no direct repo instantiation) and no equivalent service → **MEDIUM**.
@@ -484,7 +501,7 @@ How:
 
 ---
 
-### Category 5: 🟡 Design Quality / Ousterhout RED FLAGS (engineering-contracts Appendix D D.1) — HIGH if RF01-RF04, MEDIUM if RF05-RF13
+### Category 5: 🟡 Design Quality / Ousterhout RED FLAGS (engineering-contracts Appendix D D.1) — HIGH if RF01-RF04 or a drifted duplicate (RF05), MEDIUM if RF05-RF13
 
 Appendix D canonical source → `skills/engineering-contracts/SKILL.md`. Never flag patterns explicitly requested in ticket scope (downgrade to NIT waivable ONLY if scope explicitly asked for abstraction shape).
 
@@ -506,8 +523,13 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md`. Never f
 4. **RF04 — Temporal Decomposition (HIGH if business concept split by PHASE instead of ENTITY)**.
    - Trigger (file structure): If scope "process refund" → diff creates `RefundStep1Validate.ts`, `RefundStep2StripeCall.ts`, `RefundStep3UpdateDB.ts`, `RefundStep4EmitEvent.ts` with NO `RefundService.ts` / `Refund aggregate` owning concept + invariants. Grouped by WHEN they run instead of WHAT concept → HIGH. Correct: one module owns concept and invariants, exposes method orchestrating steps internally.
 
-5. **RF05 — Repetition / Near-Duplicate Logic (MEDIUM if 2+ blocks, NIT if just formatting)**.
-   - Scan for 2+ blocks with `≥ 12 identical token sequences` in different files (not test fixtures). MEDIUM unless scope explicitly says "ship fast with duplication, DRY in follow-up" (documented in PR body).
+5. **RF05 — Repetition / Near-Duplicate Logic (MEDIUM; HIGH when the copies have ALREADY DRIFTED).**
+   - Procedure — never rely on the diff alone; the existing copy usually lives in a file the diff never touches:
+     1. Enumerate every top-level `function` / `const` / `export` / component added or changed.
+     2. For each, grep the package for the same name, then for a distinctive line of its body (a literal, a helper call, a class list). Repeat across shared packages — an app-local copy of a helper a shared package exports is HIGH.
+     3. For each added component, find siblings with the same or near-identical filename in other domains and count differing lines relative to file size; also check whether a shared folder already exists for that role.
+     4. Also look for duplicated JSX blocks / card bodies / field groups across files.
+   - Report every copy as `file:line`, the differing-line count for components, and whether the copies already differ. A drifted duplicate is a latent bug → HIGH. Name the concrete target location for the shared version.
 
 6. **RF06 — Over-generic `<T>` with exactly 1 concrete caller (MEDIUM)**.
    - Trigger: Diff adds `class Foo<T>` / `function bar<T>()` / `interface X<T, U, V>` with 3+ generic params, AND EXACTLY 1 concrete instantiation in repo. If scope mentions "reused in epic Y" → downgrade to LOW waivable.
@@ -538,7 +560,7 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md`. Never f
 3. **L6.3 🟡 MEDIUM — Missing structured correlation fields.** Logs as free-form string `"User did X"` without context. Missing: `traceId`, `spanId`, `correlationId`, `orgId`, `userId`, idempotency key, structured `operation` or `event` fields.
 4. **L6.4 🟡 MEDIUM — Script / bash / CI workflow without expressive logging.** New shell script (>30 lines) without echo in IO steps or `set -x` flood ALONE without semantic messages. Or echo without prefixed `[INFO]` / `[WARN]` / `[ERROR]` levels.
 5. **L6.5 🟡 MEDIUM — Flood / loop log / verbose hot path.** Inside loop N > 100, each iteration logs info; or hot path (<1ms) has 3+ logger calls; or full JSON stringify of large arrays without truncation. Rule 20.7 "No Flood Volume".
-6. **L6.6 🟡 MEDIUM — Did not follow repo existing logger wiring.** Repo has `@flockr/logger`, `@/server/logger.ts`, `OTEL provider`, `pino`, etc. — but diff writes raw `console.log`. Repo convention not followed (§20.4).
+6. **L6.6 🟡 MEDIUM — Did not follow repo existing logger wiring.** Repo has a shared logger package (`@<org>/logger`), `@/server/logger.ts`, `OTEL provider`, `pino`, etc. — but diff writes raw `console.log`. Repo convention not followed (§20.4).
 7. **L6.7 🔵 LOW — Empty catch block logging without context.** `catch(e) { console.log("it failed") }` without structured error, message, stack, or request ID. Better: `logger.error({ err, op: "refund.create" })`.
 
 **Default severity:**
@@ -546,7 +568,7 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md`. Never f
 - L6.2 / L6.5 = HIGH if failure of bad level;
 - Others → MEDIUM default;
 
-**MANDATORY Coverage table row:** "Coverage of Review" must include "✓ Yes — 8 categories" for Category 6.
+**MANDATORY Coverage table row:** "Coverage of Review" must include "✓ Yes — 10 categories" for Category 6.
 
 ---
 
@@ -589,7 +611,7 @@ Appendix D canonical source → `skills/engineering-contracts/SKILL.md`. Never f
    - **Fix:** state the blocking reason above the skip (ticket optional). OR remove skip and make test pass.
 
 **Severity defaults for ship-gate threshold (§0.9.2 auto-fix rule ≤ 2 HIGH):**
-- G7.1 + G7.2 = HIGH (BLOCKING if total HIGH ≥ 3 with other Category 0-8 HIGHs; if ≤ 2, auto-fix triggers).
+- G7.1 + G7.2 = HIGH (BLOCKING if total HIGH ≥ 3 with other Category 0-9 HIGHs; if ≤ 2, auto-fix triggers).
 - G7.3 = MEDIUM.
 - G7.4 = LOW.
 
@@ -664,14 +686,61 @@ Anti-patterns (flag G8.3):
 
 ---
 
+### Category 9: 🟠 Repository convention conformance (MEDIUM; HIGH where stated)
+
+Convention defects do not break at runtime, so Categories 0–8 have no home for them. They are still blocking-grade in a repository that encodes conventions. Authority = the resolver's `rules[]` (§1.5.0) or the exemplars mined in §1.5.6. Never invent a convention: cite either `rule.source:line` or `exemplar file:line`.
+
+**9.1 Constants, config and typed boundaries (MEDIUM; HIGH if duplicated or a typed module exists).**
+- A new top-level constant holding a limit, default, key, option list, lookup map, regex, duration or magic number belongs where the repo keeps constants for that domain — find the existing folder first. Inline in a component/hook/service/router is a finding.
+- If the repo declares a typed env/config module (a file parsing `process.env` against a schema), any new `process.env.X` read OUTSIDE it is a finding — even when the variable is also declared there. Declaration and usage are two different checks.
+- Lax parsing of a config value (a numeric parse that accepts "25abc" as 25, or a float where an integer is required) is a finding; cross-ref Category 1 boundary conditions.
+- A constant that duplicates one already exported (same value, other name, other file) is HIGH: the two will drift.
+
+**9.2 Existing-pattern reuse (HIGH).**
+- Before accepting a new helper, hook, component, type or test setup, ask whether the repo already solves it; name the existing file. New code that re-solves an existing pattern differently is HIGH — two implementations of one concept diverge silently.
+- Includes a new per-domain copy of something that belongs in a shared folder the repo already has.
+
+**9.3 User-facing copy and localisation (MEDIUM; HIGH when the app declares >1 locale).**
+- If the repo has an i18n catalogue (`messages/`, `locales/`, `i18n/`, or a `t()`/`useTranslations` helper in use), every NEW user-facing string must come from it. A literal in JSX, an email template or a toast is a finding.
+- Name the affected surfaces and which locale(s) would render the wrong language.
+
+**9.4 Semantic markup (MEDIUM; HIGH for interactive elements).**
+- Landmarks for page structure (`header`/`nav`/`main`/`aside`/`footer`); `nav` needs an `aria-label` when a page has more than one.
+- Lists as `ul`/`ol` + `li`; tabular data as `table`; term/value pairs as `dl`.
+- Anything clickable is `button type="button"` (action) or `a`/`Link` (navigation) — never a `div`/`span` with `onClick` (HIGH).
+- Form controls have a real `label htmlFor`; an inactive control uses `disabled`/`aria-disabled`, not a no-op handler.
+- Report `file:line`, the current element, and the element to use instead.
+
+**9.5 Stale identifiers in comments and docs (MEDIUM).**
+- Every file path, migration name, symbol or env var mentioned in a comment/docstring the diff adds or modifies must exist — resolve it (`ls`, `grep`). A reference to a renamed or regenerated artefact sends the next reader to a file that is not there.
+- Distinct from Category 4.9 (comments depending on *planning* artefacts); both may apply.
+
+---
+
+### Self-check gate (end of §2 — before writing the report)
+
+Assert every line:
+
+```
+[ ] R6 glob ran; every path recorded; every checklist check mapped to a Category
+[ ] every added top-level symbol was grepped for an existing copy
+[ ] every added component was compared against 2–3 exemplars
+[ ] every rule with effective_severity >= HIGH whose scope matches a changed path is accounted
+[ ] every new user-facing string comes from the catalogue (if one exists)
+[ ] every identifier mentioned in a new comment resolves to a real file/symbol
+[ ] every value-affecting mutation answered the three privilege questions
+```
+
+---
+
 ## 3. NON-goals (we explicitly skip these — DO NOT waste tokens / time)
 
 - ❌ Biome / formatting / indentation issues. (Lint CI job.)
 - ❌ Naming nitpicks: `myVar` vs `my_variable`. **EXCEPTION:** naming of test-suite `describe()` / `it()` / `test()` titles (Category 4.7 behavioral check).
 - ❌ Test coverage% alone (check if tests MISS for CRITICAL code, but don't demand lines).
-- ❌ Documentation README unless actively misleading about security/usage.
+- ❌ Documentation README unless actively misleading about security/usage. (Stale identifiers inside code comments are in scope — Category 9.5.)
 - ❌ TODO/FIXME comments (unless for auth/security debt).
-- ❌ General refactors not risking correctness.
+- ❌ Refactors with NO convention violation and no correctness risk. A duplicated component, a mislocated constant or a hardcoded user-facing string IS a convention violation — do not file it under this non-goal.
 
 ---
 
@@ -705,11 +774,13 @@ Follow template: `references/REVIEW_REPORT_TEMPLATE.md`
 - `Unresolved conflicts`: one line per `kind: unresolved` — both citations + "capped at MEDIUM".
 - If there were no conflicts: say `no contradictions detected` explicitly (never omit the block).
 
+**3.6 Rule accounting** (MANDATORY — one row per source file, never per rule): APPLIED / NO_MATCH / OUT_OF_SCOPE, per §1.5.2 item 6. Template: `## Rule accounting`.
+
 **4. Findings section:**
 
 For each finding (both modes identical from here):
 - Severity: 🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / LOW WARN NON-BLOCKING
-- Category: Pipeline Integrity / Runtime / Security / Architecture / Scope / Design Quality (Ousterhout)
+- Category: Pipeline Integrity / Runtime / Security / Architecture / Scope / Design Quality (Ousterhout) / Repository convention
 - File:line
 - Snippet (3 lines before + 3 lines after, from patch)
 - Why this is a problem (evidence-based — never "I don't like it")
@@ -718,7 +789,7 @@ For each finding (both modes identical from here):
 - Optional: suggest code change snippet ONLY if obvious. NEVER rewrite whole file.
 
 **N-1. Coverage of Review TABLE** (MANDATORY — user trusts audit):
-- 7 mandatory rows: §1.5 Rule Resolution → Category 0 Pipeline Integrity → Category 1 Runtime → Category 2 Security+PII+Authz audit → Category 3 Architecture/Repo boundary → Category 4 Scope deviation / Demo UI / Test naming → Category 5 Design Quality / Ousterhout RF01-RF13
+- 8 mandatory rows: §1.5 Rule Resolution → Category 0 Pipeline Integrity → Category 1 Runtime → Category 2 Security+PII+Authz audit → Category 3 Architecture/Repo boundary → Category 4 Scope deviation / Demo UI / Test naming → Category 5 Design Quality / Ousterhout RF01-RF13 → Category 9 Repository convention conformance
 - Non-goals (style/format/coverage%) → Skipped intentionally note.
 
 **N. Final verdict section (template):**
