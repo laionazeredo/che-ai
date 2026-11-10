@@ -389,6 +389,21 @@ Minimum rows: `ceil(B_COUNT / 3)` assertions per SPEC.
 
 ---
 
+## 🗣️ PLAIN-LANGUAGE GATE (Non-negotiable)
+
+> Full body (two layers, jargon rules, visual escalation, reader test) lives ONLY in `engineering-contracts` SKILL §23. Only the che process/gate here.
+
+**Gate before delivering ANY generated document** (task envelope, manual test plan, review report, QA / compliance / scope-check report):
+
+1. **5-line header present** — What this is / Why it matters / I need from you / Read next / Confidence.
+2. **Narrative vs contract separated** — plain words explain, literals stay literal. A simplified sentence may never replace an HTTP code, an exact UI string or a count.
+3. **Every acronym expanded at first use in that document** — the reader lost context 30 minutes ago.
+4. **Visual before prose** — flow ≥3 steps → diagram or numbered list; comparison ≥3 items → table; 3 consecutive prose lines = violation.
+
+**Exempt:** SPEC `§0 EXECUTIVE SUMMARY` (superset) and PR body (rule 4 above). Missing header or a literal translated into prose = the document is not delivered.
+
+---
+
 ## 🔴 GITHUB INTEGRATION / SHIP RULES (Non-negotiable) + gh-stack MULTI-PR
 
 ### A) Ship → Standard Commits
