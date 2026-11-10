@@ -351,6 +351,25 @@ COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
         "requires_bound_worktree": False,
         "output": "prose",
     },
+    # --- spec validation / traceability / as-built -------------------------------
+    "spec validate": {
+        "summary": "Run the structural V-checks on a SPEC. Exit 1 when a check fails; never rewrites the file.",
+        "mutates": False,
+        "requires_bound_worktree": False,
+        "output": "json",
+    },
+    "spec coverage": {
+        "summary": "Report which B-ID/AB-ID anchors no test file mentions. Exit 1 when any is missing.",
+        "mutates": False,
+        "requires_bound_worktree": False,
+        "output": "json",
+    },
+    "spec merge": {
+        "summary": "Fold an Approved SPEC's behaviours into the project's as-built spec. Dry-run unless --no-dry-run --confirm.",
+        "mutates": True,
+        "requires_bound_worktree": False,
+        "output": "json",
+    },
     # --- review rule resolution -------------------------------------------------
     "review rules": {
         "summary": "Resolve the project rules that apply to a diff, with precedence and conflicts.",

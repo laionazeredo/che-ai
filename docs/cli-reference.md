@@ -18,6 +18,8 @@
 5. [Task Graph Engine](#5-task-graph-engine)
 6. [RAG (Hybrid Search)](#6-rag-hybrid-search)
 6.5. [Project Knowledge](#65-project-knowledge)
+6.6. [Review Rule Resolution](#66-review-rule-resolution)
+6.7. [SPEC Validation, Traceability and As-Built](#67-spec-validation-traceability-and-as-built)
 7. [Portability: Export / Import](#7-portability-export--import)
 8. [Safe Eject / Uninstall](#8-safe-eject--uninstall)
 9. [Low-level Plumbing](#9-low-level-plumbing)
@@ -792,6 +794,45 @@ MEDIUM instead of picking one. Review parameters come from the `review:` block i
 
 `--changed` defaults to the worktree's uncommitted paths (`git diff HEAD` + untracked). An empty
 result means "review the whole repository".
+
+---
+
+## 6.7 SPEC Validation, Traceability and As-Built
+
+Three commands that turn the SPEC gates from prose into something a human, an agent and CI can all run.
+
+| Command | Question it answers | Exit |
+|---|---|---|
+| `che spec validate <spec> [--tier …] [--json]` | Does this draft satisfy the structural V-checks? | `0` pass · `1` fail |
+| `che spec coverage <spec> [--worktree <path>] [--json]` | Which B-ID / AB-ID anchors does no test mention? | `0` covered · `1` missing |
+| `che spec merge <spec> --project <slug> [--domain <d>] [--no-dry-run --confirm]` | What does the system do today, after folding this change in? | `0` ok |
+
+```bash
+che spec validate ~/.che-workspaces/acme/worktrees/main/specs/checkout/20261110-120000-spec.md --json
+che spec coverage ~/.che-workspaces/acme/worktrees/main/specs/checkout/20261110-120000-spec.md --worktree ~/code/acme
+che spec merge  ~/.che-workspaces/acme/worktrees/main/specs/checkout/20261110-120000-spec.md --project acme --domain engineering
+```
+
+**Tiering scales the gate.** `spec_tier` in the frontmatter wins; otherwise it is inferred from
+`risk_level` and `estimated_files_max`.
+
+| Tier | Inferred when | Gates that apply |
+|---|---|---|
+| `lite` | risk `low` and ≤ 5 files | frontmatter, blast radius, B/AB ratio, test layer, simplicity, readiness, summary |
+| `standard` | default | plus UI selector contract, F0 tracer, horizontal-plan detector |
+| `full` | risk `high` or ≥ 10 files | plus §4.6 reversibility, §4.7 assertions, §4.8 DRY, §4.9 orthogonality |
+
+`validate` never rewrites the file it reads. It implements the checks that are purely structural
+(frontmatter keys, row counts, ratios, regexes, section presence); the semantic ones — is this
+anti-behaviour actually dangerous, is that DONE criterion truthful — stay with the agent.
+
+`coverage` is the executable half of the `§5 VERIFICATION MATRIX`: it scans test files in the
+worktree and reports every anchor no test names. The matrix says *Planned/Written*; this says
+*mentioned by a test at all*, which is the question nobody can answer by eye after ten commits.
+
+`merge` writes `<project>/<domain>/spec.md` — the durable "what the system does today" document.
+It appends a delta block (`ADDED` / `MODIFIED`) and never deletes a behaviour it already knew:
+removals must be declared explicitly. Dry-run is the default.
 
 ---
 
