@@ -390,6 +390,27 @@ che decision_append "$WORKTREE_ROOT" "ALL_SHIP_GATES_PASSED" "gates=[0.9.1,0.9.2
 
 **Post-gates blacklist reminder:** All reports above were written EXCLUSIVELY in `$CHE_WORKSPACE_SHARED/report/${RELATED_ID}/YYYYMMDD-HHMMSS-*.{md,log,json}` (centralised helper built all paths). §0.8 blacklist stage 1-2 already ran and will continue to run in §2.2 before each commit to ensure NONE of these reports or decision artifacts accidentally enter user diff.
 
+### 0.9.7 POST-GATE KNOWLEDGE FOLD (as-built spec + retrospective)
+
+Two writes that turn this session into durable memory. Both are cheap, both are idempotent, neither blocks the PR.
+
+1. **As-built spec.** When the session used an Approved SPEC, fold its behaviours into the project's living spec:
+
+   ```bash
+   che spec merge "$SESSION_SPEC_PATH" --project "$PROJECT_SLUG" --domain "$EFFECTIVE_DOMAIN" --json
+   ```
+
+   Dry-run first, show the delta (`added` / `modified`), then re-run with `--no-dry-run --confirm`.
+   The result is `<project>/<domain>/spec.md` — the durable answer to "what does the system do today?",
+   the question a SPEC (one change) can never answer. Removals are never inferred: a behaviour disappears
+   only when a later SPEC declares it.
+
+2. **Retrospective.** Ask exactly one question: **"What surprised us in this session — something the
+   SPEC, the plan or the review did not anticipate?"**
+   - No answer → append `RETRO none` via `che decision_append` and continue.
+   - An answer → propose a `che knowledge apply` op (dry-run) against the domain's `conventions.md`,
+     gated on keep / alter / revert. A surprise that does not become a convention gets re-learned next quarter.
+
 ---
 
 ## 1. STEP 1 — Git Housekeeping (inside WORKTREE_ROOT)

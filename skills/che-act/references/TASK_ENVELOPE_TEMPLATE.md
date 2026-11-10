@@ -28,6 +28,15 @@
 - ...
 - ...
 
+## Dependency map (what this task consumes from earlier tasks)
+
+| Consumes | From task | Contract (signature / file:line) | Verified by |
+|---|---|---|---|
+| `exampleHelper(input)` | T1 | `src/utils/helper.ts:42` | Dev Q2 answer |
+
+Empty table + `Depends on tasks: -` means the task is genuinely independent. A dependency that exists
+but is not listed here is how two tasks silently disagree about a contract.
+
 ## Vertical Slices (SPEC §4.5 — executed one at a time)
 
 | Slice | Behaviour delivered | Files / layers touched | DONE criterion |
@@ -114,7 +123,7 @@ If you think you need a NEW dependency / NEW class: list why reuse is not viable
 **Q1. What is the established architectural pattern here?**
 A:
 
-**Q2. Where is similar code I can REUSE? (List 2+ specific symbols or "none found" + justification)**
+**Q2. Where is similar code I can REUSE? (List 2+ specific symbols, each with `path:line`, or "none found" + justification)**
 A:
 
 **Q3. What are the lint / build / test commands for this area?**

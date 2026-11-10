@@ -37,6 +37,9 @@ On completion this skill **returns to the caller** two values printed in the las
 
 Fail if any step fails. Stop before proceeding with user.
 
+0. **Constitution check:** read `~/.che-workspaces/<project-slug>/constitution.md` when it exists
+   (`che project init` writes it). It is project-local and narrows the generic defaults; it never
+   overrides the hard floor (security/PII, storage boundary, worktree binding).
 1. **Binding check:** Read `$CHE_REGISTRY_PATH`, find LAST entry with the effective session id (`"${CHE_SESSION_ID:-${HARNESS_SESSION_ID:-${SESSION_ID:-}}}"`) + `STATUS=BOUND`. If missing AND user did not provide `--worktree` → ASK for absolute worktree, perform full §19 binding (Level1 append + Level2 write + FRIENDLY_NAME prompt).
 2. **Paths:**
    ```bash
@@ -191,6 +194,8 @@ domain: engineering                  # accepted values: engineering | product | 
                                       # if != engineering → SM §0.3 auto-loads domains/<domain>/profile.md + playbook.md
                                       # if != engineering → ship §0.9.5 executes mandatory playbook gates
 risk_level: low|medium|high           # NEW SbE. default = low. If medium/high → mandatory §4.4 Mermaid trigger.
+spec_tier: lite|standard|full         # Gate depth. Declared value wins; otherwise inferred from risk_level + estimated_files_max.
+                                      # lite = low risk + <=5 files · standard = default · full = high risk or >=10 files.
 source_merge_order: [user_prompt, prd_file, linear_ticket, implementer_hints]   # NEW CANONICAL SbE. DO NOT reorder without EXPLICIT_OVERRIDE + decision log.
 status: Draft
 # Readiness gate (che-interrogate §1.6) — MANDATORY, filled BEFORE the draft exists:
@@ -245,6 +250,8 @@ Header: `## §1 WHY (Problem Statement)`
   - Goal: <outcome in 1 line> — reached via the simplest option (Simplicity Bias, engineering-contracts §1)
   - Success metric: <curl / behavioural assertion>
   - Non-goals (deferred by design): <what this SPEC deliberately does NOT build in this iteration, and why it is safe to defer>
+  - Alternatives considered: <1–2 options rejected and the one-line reason — cheapest insurance against solving the wrong problem>
+  - Kill criterion: <the observation that means abandon, not iterate — a number and a deadline, not a feeling>
 - **SIMPLICITY BIAS (mandatory — engineering-contracts §1):** the Goal bullet MUST name the simplest option chosen; the Non-goals bullet MUST list what is deliberately deferred. A missing deferral line = V23 FAIL.
 
 ### §2 SCOPE — Blast Radius (3 lists, each ≤ 10 items)
@@ -476,7 +483,13 @@ Header: `## §7 IMPLEMENTATION HINTS (Optional — reference existing code only)
 
 ## §4 VALIDATION PASS (auto-run on draft — NEW SbE rules V9..V15)
 
-Reject draft and loop back to §2 source if ANY check fails. Run in order.
+> **EXECUTABLE GATE (source of truth):** `che spec validate <draft> --json` implements every check
+> below that is purely structural and exits `1` on failure. The list here is the rationale; the CLI is
+> the gate, and it is the only form CI can run. Semantic checks — is this AB actually dangerous, is
+> that DONE criterion truthful — stay with you: no regex answers them.
+>
+> The tier decides how much applies: `lite` skips V12/V16/V17/V19-V22, `standard` adds V12/V16/V17,
+> `full` adds V19-V22. Reject the draft and loop back to §2 when ANY applicable check fails.
 
 ### Legacy baseline checks (V1-V8)
 1. **V1** YAML frontmatter all REQUIRED keys present; parseable as YAML.
@@ -539,9 +552,9 @@ Reject draft and loop back to §2 source if ANY check fails. Run in order.
     - Header `§4.9` table exists with ≥ 3 rows.
     - Each row column 4 = either `OK` or starts with `COUPLING_RISK:` followed by non-empty mitigation.
 
-22. **V23 Simplicity Bias declaration (engineering-contracts §1):** §1 WHY MUST contain a non-empty `Non-goals (deferred by design)` bullet AND a Goal bullet naming the smallest-first / most-reversible option. Missing → REJECT: "§1 WHY has no explicit deferral. State what is deliberately NOT built in this iteration and why it is safe to defer (Simplicity Bias, engineering-contracts §1)."
+22. **V23 Simplicity Bias declaration (engineering-contracts §1):** §1 WHY MUST contain a non-empty `Non-goals (deferred by design)` bullet AND a Goal bullet naming the smallest-first / most-reversible option. At `standard` and `full` tiers it MUST also contain `Alternatives considered` (≥1 rejected option with a reason) and `Kill criterion` (the observation that means abandon). Missing → REJECT: "§1 WHY has no explicit deferral. State what is deliberately NOT built in this iteration and why it is safe to defer (Simplicity Bias, engineering-contracts §1)."
 
-23. **V24 Readiness gate recorded (che-interrogate §1.6):** frontmatter MUST contain all three keys — `readiness` ∈ `{passed, assumptions, blocked}`, a non-empty `readiness_report` absolute path, and `open_assumptions` (array, possibly empty). If `readiness: blocked` → REJECT unconditionally (no draft may exist). If the report path does not exist on disk → REJECT. Missing keys → REJECT: "Readiness gate (che-interrogate §1.6) not recorded. Run the intake gate before drafting — thin tickets, logical gaps and contradictory tickets must be caught on the raw input, not after the draft."
+23. **V24 Readiness gate recorded (che-interrogate §1.6):** frontmatter MUST contain all three keys — `readiness` ∈ `{passed, assumptions, blocked}`, a non-empty `readiness_report` absolute path, and `open_assumptions` (array, possibly empty). If `readiness: blocked` → REJECT unconditionally (no draft may exist). The portable validator checks presence; the local `/che-spec` run also checks that the report exists on disk. Missing keys → REJECT: "Readiness gate (che-interrogate §1.6) not recorded. Run the intake gate before drafting — thin tickets, logical gaps and contradictory tickets must be caught on the raw input, not after the draft."
 
 24. **V25 Executive summary present and faithful (§0):** the draft MUST contain the header `## §0 EXECUTIVE SUMMARY`, positioned BEFORE `## §1 WHY`. Then:
     a. **Line cap:** count non-empty lines from the §0 header to the last row before `## §1` — if `> 15` → REJECT: "§0 EXECUTIVE SUMMARY has $N lines (cap 15). Move detail into §1/§2; the summary is a projection, not a second spec."
@@ -558,7 +571,9 @@ This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bila
 
 ## §5 APPROVAL LOOP (1 main pass, 1 edit pass MAX — KISS)
 
-0. **Surface the readiness result FIRST:** if `open_assumptions` is non-empty, list every assumption
+0. **Run the executable gate FIRST:** `che spec validate <draft-path> --json`. If it exits `1`, fix the
+   structural failures and re-run — do not show a draft the gate rejects. Then surface the readiness result.
+1. **Surface the readiness result FIRST:** if `open_assumptions` is non-empty, list every assumption
    verbatim above the summary, with the note "these were assumed, not confirmed — reply B to correct any".
    If `readiness: passed`, print one line: `Readiness: READY (report: <path>)`.
 1. **Show ONLY the §0 EXECUTIVE SUMMARY** (+ readiness assumptions + open questions), with this legend:
