@@ -170,6 +170,27 @@ ERROR_CATALOG: Dict[str, ErrorSpec] = dict(
             "Slugs are lowercase, digits and dashes: ^[a-z0-9][a-z0-9-]*$, at most 63 characters.",
         ),
         _spec(
+            "MISSING_SPEC_ARGUMENT",
+            "arguments",
+            EXIT_USAGE,
+            "spec: {detail}",
+            "Name the worktree explicitly, or set worktree_root in the SPEC frontmatter.",
+        ),
+        _spec(
+            "INVALID_SPEC_TIER",
+            "arguments",
+            EXIT_USAGE,
+            "spec tier must be lite, standard or full, got {tier!r}.",
+            "Omit --tier to let the SPEC's risk_level and estimated_files_max decide.",
+        ),
+        _spec(
+            "SPEC_HAS_NO_BEHAVIOURS",
+            "arguments",
+            EXIT_USAGE,
+            "the SPEC has no B-ID rows under ### §4.2 — nothing to merge.",
+            "Write at least one positive behaviour before consolidating the as-built spec.",
+        ),
+        _spec(
             "INVALID_DOMAIN",
             "arguments",
             EXIT_USAGE,

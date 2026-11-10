@@ -499,6 +499,48 @@ def build_parser():
     sk_list.add_argument("--project", default=None, help="Project slug. Default: resolved from the bound worktree.")
     sk_list.add_argument("--repo", default=None, help="Repository checkout. Default: the current directory.")
 
+    # SPEC VALIDATION / TRACEABILITY / AS-BUILT ================================
+    parser_spec = subparsers.add_parser(
+        "spec",
+        help="Validate a SPEC structurally, trace B-IDs to tests, and consolidate the as-built spec.",
+    )
+    spec_subs = parser_spec.add_subparsers(dest="spec_cmd", required=True)
+
+    sp_validate = spec_subs.add_parser(
+        "validate",
+        help="Run the structural V-checks on a SPEC. Exit 1 when a check fails.",
+    )
+    sp_validate.add_argument("path", help="Absolute path to the SPEC markdown file.")
+    sp_validate.add_argument(
+        "--tier",
+        choices=["lite", "standard", "full"],
+        default=None,
+        help="Override the tier inferred from risk_level and estimated_files_max.",
+    )
+    sp_validate.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+
+    sp_coverage = spec_subs.add_parser(
+        "coverage",
+        help="Report which B-ID/AB-ID anchors no test file mentions. Exit 1 when any is missing.",
+    )
+    sp_coverage.add_argument("path", help="Absolute path to the SPEC markdown file.")
+    sp_coverage.add_argument("--worktree", default=None, help="Checkout to scan. Default: the SPEC's worktree_root.")
+    sp_coverage.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+
+    sp_merge = spec_subs.add_parser(
+        "merge",
+        help="Fold an Approved SPEC's behaviours into the project's as-built spec. Dry-run by default.",
+    )
+    sp_merge.add_argument("path", help="Absolute path to the SPEC markdown file.")
+    sp_merge.add_argument("--project", required=True, help="Project slug that owns the as-built spec.")
+    sp_merge.add_argument("--domain", default="engineering", help="Canonical domain folder. Default: engineering.")
+    sp_merge.add_argument("--dry-run", action="store_true", default=True, help="Default: only show, DO NOT write.")
+    sp_merge.add_argument(
+        "--no-dry-run", dest="dry_run", action="store_false", help="Effectively write. Requires --confirm as well."
+    )
+    sp_merge.add_argument("--confirm", dest="confirmed", action="store_true", default=False, help="Safety gate.")
+    sp_merge.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+
     # WORKTREE MGMT SUBCOMMANDS (the only thing that binds a filesystem path) ====
     parser_wt = subparsers.add_parser("worktree", help="Bind a checkout to a project (~/<project>/worktrees/<name>/).")
     wt_subs = parser_wt.add_subparsers(dest="wt_cmd", required=True)
@@ -1286,6 +1328,65 @@ def main(argv=None):
             for step in remediation_steps(report):
                 print(f"  fix: {step}")
         sys.exit(exit_code(report))
+
+    if args.command == "spec":
+        from che_core.spec import coverage, merge_as_built, validate_spec
+
+        if args.spec_cmd == "validate":
+            res = validate_spec(args.path, tier=args.tier)
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                print(
+                    f"{'PASS' if res['ok'] else 'FAIL'} · tier={res['tier']} · "
+                    f"B={res['counts']['b']} AB={res['counts']['ab']} · {res['path']}"
+                )
+                for entry in res["checks"]:
+                    if entry["status"] != "skip":
+                        suffix = f" — {entry['detail']}" if entry["detail"] else ""
+                        print(f"  {entry['id']:<4} {entry['status']}{suffix}")
+            if not res["ok"]:
+                sys.exit(1)
+            return
+
+        if args.spec_cmd == "coverage":
+            res = coverage(args.path, worktree=args.worktree)
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                for row in res["rows"]:
+                    where = ", ".join(row["files"]) if row["files"] else "no test mentions it"
+                    print(f"{row['anchor']:<6} {row['status']:<8} {where}")
+                summary = res["summary"]
+                print(
+                    f"{summary['covered']}/{summary['total']} anchors covered · "
+                    f"{res['scanned_files']} test files scanned"
+                )
+            if not res["ok"]:
+                sys.exit(1)
+            return
+
+        if args.spec_cmd == "merge":
+            if not args.dry_run and not args.confirmed:
+                fail("REFUSED_WITHOUT_CONFIRM")
+            res = merge_as_built(args.path, args.project, domain=args.domain, dry_run=args.dry_run)
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                verb = "dry-run" if res["dry_run"] else "merged"
+                print(
+                    f"{verb}: +{len(res['added'])} added, ~{len(res['modified'])} modified "
+                    f"→ {res['target']} ({res['total_behaviours']} behaviours)"
+                )
+                if res["added"]:
+                    print(f"  added: {', '.join(res['added'])}")
+                if res["modified"]:
+                    print(f"  modified: {', '.join(res['modified'])}")
+                print(f"  {res['note']}")
+            return
+
+        parser.error(f"Unknown spec subcommand: {args.spec_cmd}")
+        return
 
     if args.command == "worktree":
         from che_core.worktrees import add_worktree, list_worktrees, remove_worktree, show_worktree

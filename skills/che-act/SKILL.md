@@ -217,9 +217,12 @@ Execution logic (in order — STOP at first match):
 Runs **immediately after §0.3, before §0.5**. Reuses pre-existing hard rule from CLAUDE.md: "If `graphify-out/GRAPH_REPORT.md` exists, read first. Then read relevant area doc docs/platform.md, docs/scanner.md, docs/packages.md, docs/decisions.md, docs/overview.md."
 
 Execution logic (no breaking change — adds 2 more reads only):
-1. If `$CHE_HOME/bindings/project_registry.json` exists and has entry for current worktree project → read and inject into context: `product_context` + `architecture` + `roadmap` + `personas` + `integrations_external`.
-2. Always read `docs/packages.md` + `docs/decisions.md` if they exist in bound worktree root (absolute paths). Lower precedence than Approved SPEC, higher than agent "intuition".
-3. If no file exists → **SKIP silently**. Zero output. Zero log. 100% compat with old projects without docs/.
+1. If `~/.che-workspaces/<project-slug>/constitution.md` exists → read it FIRST and inject verbatim.
+   It is the project-local narrowing of the generic rules, written by `che project init`; a conflict
+   with it is a finding, a conflict with the hard floor is not negotiable.
+2. If `$CHE_HOME/bindings/project_registry.json` exists and has entry for current worktree project → read and inject into context: `product_context` + `architecture` + `roadmap` + `personas` + `integrations_external`.
+3. Always read `docs/packages.md` + `docs/decisions.md` if they exist in bound worktree root (absolute paths). Lower precedence than Approved SPEC, higher than agent "intuition".
+4. If no file exists → **SKIP silently**. Zero output. Zero log. 100% compat with old projects without docs/.
 
 ---
 
