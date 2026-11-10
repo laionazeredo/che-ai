@@ -1,6 +1,6 @@
 ---
 name: "engineering-contracts"
-description: "HIGHEST-PRECEDENCE engineering rulebook for ALL tasks (CANONICAL — DO NOT duplicate pure engineering rules anywhere else). Formal precedence 1-18 of KISS/YAGNI/blast-radius over everything else; forces strict typing, Design by Contract, TDD/ATDD, functional-core/imperative-shell, Rust-style Result/Option, observability, conventional commits, Supabase Postgres ENABLE RLS default, agile BDD incremental delivery with SOLID, code-review optimisation (max 2 lines comment block + gh-stack multi-PR reference), agent response verbosity budget (concise by default with optional deep-dive prompts). Invoked FIRST by che-developer before any code. Respected by all che skills. Appendices: A Hard Conflict Resolution Table, B Conventional Commits types + regex + examples, C gh-stack Workflow Reference."
+description: "HIGHEST-PRECEDENCE engineering rulebook for ALL tasks (CANONICAL — DO NOT duplicate pure engineering rules anywhere else). Formal precedence 1-18 of KISS/YAGNI/blast-radius over everything else; forces strict typing, Design by Contract, TDD/ATDD, functional-core/imperative-shell, Rust-style Result/Option, observability, conventional commits, Supabase Postgres ENABLE RLS default, agile BDD incremental delivery with SOLID, code-review optimisation (max 2 lines comment block + gh-stack multi-PR reference), agent response verbosity budget (concise by default with optional deep-dive prompts) and the plain-language communication layer (two layers narrative vs contract, mandatory 5-line document header, acronym expansion, visual-before-prose). Invoked FIRST by che-developer before any code. Respected by all che skills. Appendices: A Hard Conflict Resolution Table, B Conventional Commits types + regex + examples, C gh-stack Workflow Reference."
 ---
 
 # Engineering Contracts (Highest Precedence Rules — CANONICAL)
@@ -695,6 +695,74 @@ try { ... } catch(e) { throw new Error("failed") /* LOST stack and root cause */
 **Canonical Validation:** The `che-scope-checker CHECK 3` gate (updated docs) runs automatically in `/che-ship` and PR reviews, and now explicitly includes:
 - Check item: "Relevance check questions 22.1 applied and answered"
 - Check item: "New public functions/methods/classes have purpose docstring + intricate observations"
+
+---
+
+### 23. 🔴 PLAIN-LANGUAGE COMMUNICATION LAYER — Chat + Every Generated Document (HARD RULE)
+
+> §18 controls **how much** you write. §23 controls **which words** and **which shape**. Both apply to the same output.
+> Lower precedence than Safety §2 and DbC §6 — never trade a literal for a simpler sentence.
+
+#### 23.1 Two layers — never mix them
+
+| Layer | Reader | Content | Vocabulary |
+|---|---|---|---|
+| **N — Narrative** | the human approving or deciding | what it is, why it matters, what I must decide, what changed for the end user | plain words, no internal symbols |
+| **C — Contract** | the machine / the implementer | HTTP codes, exact UI strings, file paths, PRE/POST, B-IDs, counts | exact literals, no synonyms |
+
+- **NEVER translate a literal into prose.** "Returns 409 when the email already exists" ≠ "handles duplicates gracefully".
+- **NEVER add a requirement in plain words** that the contract does not contain (same rule as SPEC §0, che-spec V25d).
+- Plain is about **words**, not about losing values. A plain document is still precise.
+
+#### 23.2 Mandatory 5-line header (generated documents)
+
+Every Che-generated document the user reads mid-flight opens with these 5 lines, before any technical content:
+
+```text
+What this is: <1 sentence, no jargon>
+Why it matters: <1 sentence, end-user or business impact>
+I need from you: <1 decision, or "none">
+Read next: <1 link, or "nothing — informational">
+Confidence: <high|medium|low> — <1 clause on why>
+```
+
+Applies to: TASK ENVELOPE, MANUAL TEST PLAN, REVIEW REPORT, QA report, COMPLIANCE report, SCOPE-CHECK report, BUGFIX session, BATCH report.
+**Exempt — already carry an equivalent front-matter, do not duplicate:** SPEC `§0 EXECUTIVE SUMMARY` (superset, che-spec V25) and PR BODY (che-ship §A-4.2).
+
+#### 23.3 One plain sentence above every technical section (the lede)
+
+- 1 sentence a non-engineer understands → then the table / bullets / code.
+- Example: `### §3 CONTRACTS` → "Three rules the code must never break: who may call it, what it always returns, what stays true meanwhile." → then the PRE/POST table.
+- The lede never replaces the table. It sits above it.
+
+#### 23.4 Jargon rules
+
+1. **Expand every acronym at first use in the document** — `RLS (Row-Level Security — who can read which rows)`. Never assume the reader remembers last week's session.
+2. **Prefer the common word**: `remove` > `deprecate`, `login` > `authentication flow`, `slow` > `suboptimal latency`.
+3. **No internal codes in the narrative layer**: `F0..FN`, `V25`, `G-VS-1`, `B-3`, `T4` live in the contract layer only.
+4. **Glossary first**: if the project has `glossary.md` (che-knowledge), use its term and its one-line definition.
+5. **No synonym roulette**: one concept = one word for the whole document.
+
+#### 23.5 Visual before prose (escalation order)
+
+Use the first shape that fits — never a paragraph when a shape fits:
+
+1. **Flow with ≥3 steps** → Mermaid diagram or numbered list.
+2. **Comparison of ≥3 items** → table.
+3. **Before / after** → 2-column table.
+4. **Everything else** → bullets, ≤2 lines each.
+5. Prose exists only to connect shapes. **3 consecutive lines of prose with no bullet or shape = violation.**
+
+#### 23.6 Reader test before sending (blocking)
+
+The reader is juggling 5 contexts and lost the thread 30 minutes ago. Before sending, answer:
+
+- [ ] Can they tell **what this is** and **what to do** in 20 seconds?
+- [ ] Any acronym not expanded? Any literal translated into prose? Any 3-line prose block?
+- [ ] Any requirement in the narrative that the contract does not contain?
+- [ ] Documents only: does the 5-line header exist?
+
+Any "no" → fix before sending. This is the delivery condition, not optional polish.
 
 ---
 

@@ -224,7 +224,8 @@ Header: `## §0 EXECUTIVE SUMMARY (read this first)`
 > source of truth; this block is a **projection** of them. If they ever disagree, the sections win and the
 > summary is regenerated — it never introduces a new requirement.
 > **Cap: 15 lines total** (table rows included). Readable in 60 seconds. No internal symbols, no file paths
-> beyond the count, no jargon the requester would not use.
+> beyond the count, no jargon the requester would not use. Every acronym expanded at first use
+> (engineering-contracts §23.4).
 
 | Field | Content |
 |---|---|
@@ -236,6 +237,7 @@ Header: `## §0 EXECUTIVE SUMMARY (read this first)`
 | Main risk | 1 sentence + rollback in 1 clause |
 | How we'll know it worked | 1–2 outcomes with literal values (HTTP code, UI text, row count) — the §4 B-IDs that matter most |
 | Shape of the work | `<n> vertical slices (F0..F<n-1>) · <m> PR(s) · ~<k> files` |
+| Confidence | `high \| medium \| low` — 1 clause on why (e.g. "high — mirrors an existing endpoint"; "low — assumption on legacy data unverified") |
 
 ### §1 WHY — Problem Statement (max 5 bullets)
 Header: `## §1 WHY (Problem Statement)`
@@ -548,6 +550,11 @@ Reject draft and loop back to §2 source if ANY check fails. Run in order.
     b. **Decisions row:** the `Decisions needed from you` row MUST be non-empty — either literal `none` or ≥ 1 readiness id. Empty → REJECT.
     c. **Non-goals parity:** every item in §1 `Non-goals (deferred by design)` MUST appear (semantically) in the `Out of scope` row, and the row MUST NOT list an out-of-scope item that §1 does not defer. Divergence → REJECT: "§0 Out of scope diverges from §1 Non-goals. Regenerate §0 from §1 — it is derived, never authoritative."
     d. **No new requirement:** if §0 names a behaviour absent from §4 B-IDs or a constraint absent from §3, REJECT and regenerate.
+
+25. **V26 Plain-language §0 (engineering-contracts §23):** run on the §0 block only.
+    a. **Confidence row:** the `Confidence` row MUST exist and start with `high`, `medium` or `low` followed by a non-empty clause. Missing → REJECT: "§0 has no Confidence row. State high/medium/low and one clause on why (§23.2)."
+    b. **Acronym expansion:** every occurrence of `RLS`, `JWT`, `DbC`, `SbE`, `PII`, `SDK`, `ORM` inside §0 MUST be followed by ` (` with its plain meaning. A bare occurrence → REJECT: "§0 uses `<TERM>` without expansion. Write `<TERM> (<plain meaning>)` (§23.4)."
+    c. **No internal codes in narrative rows:** in `What changes`, `Why now`, `In scope`, `Out of scope`, `Main risk` and `Decisions needed from you` there MUST be no `F<digit>`, `B-<digit>`, `V<digit>`, `G-<` or `T<digit>` token. Structural rows (`Shape of the work`, `How we'll know it worked`) are exempt — they carry slice ids and literals by design.
 
 ### Bilateral cross-ref scope-checker CHECK2 (ONDA2 next block)
 When this VALIDATION PASS runs GREEN (all pass), che also prints a 1-line footer:

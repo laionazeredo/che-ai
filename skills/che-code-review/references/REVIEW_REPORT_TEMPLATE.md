@@ -8,6 +8,16 @@
 
 # 🔍 Code Review Report — PR #<PR_NUMBER>
 
+## Header (plain language — engineering-contracts §23)
+
+| Field | Content |
+|---|---|
+| What this is | `<1 sentence, no jargon — e.g. "A check of PR #123, which adds refunds for event creators.">` |
+| Why it matters | `<1 sentence — what breaks for the user if this merges as is>` |
+| I need from you | `<1 decision, e.g. "approve the 2 blocking fixes" or "none">` |
+| Read next | `<link to the Findings section, or "nothing — informational">` |
+| Confidence | `<high \| medium \| low> — <1 clause on why>` |
+
 - **PR:** `owner/repo#<N>` — `<PR title>`
 - **URL:** `<link>`
 - **Base:** `<BASE_BRANCH>` → **Head:** `<HEAD_BRANCH>`
