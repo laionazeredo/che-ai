@@ -15,6 +15,16 @@
 - **Branch / PR:** `<branch name> | (if applicable: PR URL)`
 - **Requires access to:** staging environment / local dev / test user credentials / DB seed — specify
 
+## Header (plain language — engineering-contracts §23)
+
+| Field | Content |
+|---|---|
+| What this is | `<1 sentence, no jargon>` |
+| Why it matters | `<1 sentence — what breaks for the user if this is not verified>` |
+| I need from you | `<who runs it + how long, or "none">` |
+| Read next | `<1 link, or "nothing — informational">` |
+| Confidence | `<high \| medium \| low> — <1 clause on why>` |
+
 ---
 
 ## 0. Environment Setup — Preconditions

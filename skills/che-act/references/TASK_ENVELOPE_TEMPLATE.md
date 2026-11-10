@@ -4,6 +4,16 @@
 
 ---
 
+## Header (plain language — fill BEFORE any technical section, engineering-contracts §23)
+
+| Field | Content |
+|---|---|
+| What this is | `<1 sentence, no jargon>` |
+| Why it matters | `<1 sentence — end-user or business impact>` |
+| I need from you | `<1 decision, or "none">` |
+| Read next | `<1 link, or "nothing — informational">` |
+| Confidence | `<high \| medium \| low> — <1 clause on why>` |
+
 ## Metadata
 
 | Field | Value |
