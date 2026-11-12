@@ -20,6 +20,7 @@
 6.5. [Project Knowledge](#65-project-knowledge)
 6.6. [Review Rule Resolution](#66-review-rule-resolution)
 6.7. [SPEC Validation, Traceability and As-Built](#67-spec-validation-traceability-and-as-built)
+6.8. [Test Freeze](#68-test-freeze)
 7. [Portability: Export / Import](#7-portability-export--import)
 8. [Safe Eject / Uninstall](#8-safe-eject--uninstall)
 9. [Low-level Plumbing](#9-low-level-plumbing)
@@ -185,6 +186,7 @@ pip uninstall che-ai
 | `update`       | (alias: `self-update`, `upgrade`) — flags: `--check`, `--che-home`, `--remote`, `--json` | All | Terminal CLI |
 | `pixel`        | `check`, `paths`, `diff`, `crop`                                    | Worktree | Terminal CLI |
 | `designer`     | `bootstrap`, `init`, `validate`, `tokens`, `stock`, `ingest`, `ir`  | Worktree | Terminal CLI |
+| `test-lock`    | `record`, `verify`, `authorize` — see §6.8                          | Worktree | Terminal CLI |
 | plumbing       | `compute_paths`, `ensure_dirs`, `output_path`, `write_file_atomic`, `assert_outside_worktree`, `registry_append`, `registry_lookup`, `decision_append` | Any | Terminal CLI |
 
 ### 2.1 Help Discovery
@@ -833,6 +835,41 @@ worktree and reports every anchor no test names. The matrix says *Planned/Writte
 `merge` writes `<project>/<domain>/spec.md` — the durable "what the system does today" document.
 It appends a delta block (`ADDED` / `MODIFIED`) and never deletes a behaviour it already knew:
 removals must be declared explicitly. Dry-run is the default.
+
+---
+
+## 6.8 Test Freeze
+
+A green suite proves the tests pass, not that they still say what they said when the behaviour was
+agreed. An agent that cannot make an assertion true can make the assertion weaker, and coverage, QA
+and the scope checker all stay green through that edit. `test-lock` closes the hole with one
+primitive: after a slice ships its tests, record their sha256; from then on any change is **drift**.
+
+| Command | Question it answers | Exit |
+|---|---|---|
+| `che test-lock record <worktree> --related-id <id> --files <path…> [--json]` | Which tests did this slice freeze, and at which hash? | `0` locked |
+| `che test-lock verify <worktree> --related-id <id> [--json]` | Has any locked test changed or disappeared since? | `0` ok / unlocked · `1` drift or missing |
+| `che test-lock authorize <worktree> --related-id <id> --file <path> --reason "<user's words>"` | The user allowed this one change — what was it, exactly? | `0` re-locked |
+
+```bash
+che test-lock record  ~/code/acme --related-id t3-refund --files src/__tests__/refund.test.ts
+che test-lock verify  ~/code/acme --related-id t3-refund
+che test-lock authorize ~/code/acme --related-id t3-refund \
+  --file src/__tests__/refund.test.ts --reason "the API now returns 422, not 409"
+```
+
+**Opt-in, never a default.** A task that locked nothing verifies as `unlocked`, which is a pass:
+the mode is chosen per task, and a worktree with no manifest is not in it.
+
+**A lock cannot be laundered.** `record` refuses to move a lock whose hash changed
+(`TEST_LOCK_DRIFT`) — only `authorize` moves one, and it keeps `{old_sha256, new_sha256, reason, at}`
+beside the new hash and appends `TEST_LOCK_AUTHORISED` to `decisions.log.jsonl`. The manifest lives
+in the worktree's durable area (`<project>/worktrees/<name>/test-lock/<related-id>.json`), never in
+the repository, so it cannot be committed by accident.
+
+**What it is not.** Not a test runner (that is `che-qa`), not a coverage check (that is
+`che spec coverage`), and not a gate on its own — `che-act`, `che-developer` and `che-scope-checker`
+decide when to call it.
 
 ---
 
