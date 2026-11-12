@@ -13,7 +13,7 @@ The agent MUST recognise these and react immediately.
 > **Conceptual difference:** Commands = UX entry point (slash `/che-X`) ↔ Skills = content/executor of work.
 > DO NOT turn ALL commands into skills. The separation below is intentional (KISS).
 
-### Category A — 36 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
+### Category A — 37 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
 | Command | Skill / module | Why separate wrapper? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
@@ -30,7 +30,8 @@ The agent MUST recognise these and react immediately.
 | `/che-simplify [target] [--goals=...]` | `che-simplify` | Plan reduction under fixed goals: classifies essential vs accidental complexity, proposes the smallest plan that still meets the goals, with a decision trail. Target = task-graph / gh-stack / spec / worktree. |
 | `/che-refactor <worktree> --scope=...` | `che-refactor` | Behaviour-preserving refactoring (Fowler). Precondition: green test safety net (missing coverage → characterization tests first). Never runs inside /che-ship. |
 | `/che-explain` | `che-explain` | Input preflight (gh auth for PR / MCP for ticket / worktree for branch) → DIDACTIC explanation with Mermaid diagrams + attention points. Default = simple and short; `--deep` = technical depth (3 diagrams, walkthrough, design decisions, contracts, edge cases, how to test). DIFFERENT from /che-review (blocking verdict) and /che-spec (formal plan). |
-| `/che-manual-test` | `che-manual-test-executor` | Worktree preflight + §19 session binding + finds manual_test_plan.md via --task-id or --plan-path → mandatory setup approval GATE → executes steps via Playwright MCP + screenshot evidence + final 8-section report. DIFFERENT from /che-qa (QA = only automated build/lint/test commands; Manual = step-by-step browser with evidence). |
+| `/che-manual-test` | `che-manual-test-executor` | Worktree preflight + §19 session binding + resolves the plan + **`che manual-plan validate` gate** + capability probe (browser / terminal / video) → executes each AC's executable contract via **Chrome DevTools MCP** (UI) and the **terminal** (HTTP/API) + screenshot/video/console/network evidence + final report. DIFFERENT from /che-qa (QA = only automated build/lint/test commands). |
+| `/che-manual-plan [--worktree ...] [--path ...]` | `che-manual-plan` | `che manual-plan sync` scaffolds the plan (or migrates a legacy prose one) → fills each AC's executable contract from the SPEC / ticket / diff → `che manual-plan validate` is the gate. Idempotent: updates if it exists, creates if it does not. Feeds /che-manual-test (executes) and /che-manual-verification (renders for a layperson). |
 | `/che-manual-verification [target] [--worktree ...] [--lane auto\|local\|preview\|remote]` | `che-manual-verification` | Reads the session context (ticket + SPEC + diff + PR + existing manual_test_plan) → WRITES a plain-language guide a non-technical person can execute: what was implemented/changed/fixed, numbered steps for local or PR-preview verification, the route to a deployed environment when neither is possible, and the evidence to capture (logs, screenshots, video). DOES NOT execute the steps (that is /che-manual-test) and gives no verdict (that is /che-review). |
 | `/che-pr-comments` | `che-pr-comments` | Preflight `gh auth` + PR URL → skill downloads comments + classification + triage. |
 | `/che-ci-fix` | `che-ci-fixer` | Preflight `gh auth` + worktree → skill classifies R1-R9 + applies minimal fix. |
@@ -332,26 +333,48 @@ Agent action: ask confirmation first.
 
 ## `/che-manual-test <--worktree /abs/path> [--task-id <slug> OR --plan-path <abs/path/to/manual_test_plan.md>]`
 
-**What it does:** Executes step-by-step the Scrum Master's `manual_test_plan.md` via **Playwright MCP** (real browser: navigate/click/fill/submit + screenshot evidence) and HTTP driver for API calls. DIFFERENT from `/che-qa` (QA = only automated build/lint/test commands without browser). This che Opens browser, step-by-step with plan, records evidence (PNG, visible_text, console_log) per step, and delivers final 8-section report with global verdict. Safety: DOES NOT touch prod URLs without 2 confirmations, mandatory setup approval gate BEFORE any shell setup command.
+**What it does:** Executes a **validated** manual test plan step-by-step. UI steps run on the **Chrome DevTools MCP** (navigate, snapshot, click, fill, press, wait) and HTTP/API steps run in the **terminal** — so the API lane works with or without a browser. Records evidence per acceptance criterion (screenshots, optional `.mp4` video via `screencast_start`/`screencast_stop`, console log, network log, API responses) and delivers a report with a verdict per AC. DIFFERENT from `/che-qa` (automated build/lint/test only). Safety: never touches production without two confirmations, mandatory setup approval gate, and a **capability probe** so a missing tool degrades the run instead of crashing it.
 
-**When to invoke:** Scrum Master has finished the `manual_test_plan.md` (all plan ACs written, environment ready) and you want the AGENT TO EXECUTE the manual tests (open browser, click, fill forms, take prints) instead of you manually. If you only want automated build/lint/test → use `/che-qa`.
+**When to invoke:** `/che-manual-plan` has produced a plan whose `che manual-plan validate` exits 0, and you want the AGENT to execute it instead of a human. If the plan is still prose, run `/che-manual-plan` first — this command refuses to guess.
 
 **Agent action:**
 1. Invoke `che-manual-test-executor` skill IMMEDIATELY.
 2. Preflight #1: confirm worktree path + validate §19 session binding (mismatch = block question).
-3. Preflight #2: resolve manual_test_plan.md path → (a) `--plan-path` given → use; (b) default (no flag): `eval "$(che compute_paths $WORKTREE_ROOT $SESSION_ID)" && echo "$CHE_WORKSPACE_SHARED/manual_test_plan.md"`; (c) no binding created → AskUserQuestion which option.
-4. Preflight #3: plan parse (§0 Setup env, AC-N steps with GWT, Smoke S1..S5, HUMAN_ONLY items §3).
-5. **MANDATORY setup approval GATE (before any shell setup command):** ask user (A=Execute setup, B=Skip app already running, C=Cancel).
-6. Create evidence dir: `$CHE_SESSION_DIR/manual_test_evidence/` (OUTSIDE worktree) with subdirs AC-1, AC-2, ... + `execution.log`.
-7. **AC Execution Loop:** For each AC-N → step pattern classification → Playwright/HTTP driver. Step by step with evidence each. THEN final assertion → verdict ✅/⚠️/❌/⏭️ → close playwright session isolation.
-8. **Smoke S1..S5:** S1=build, S2=lint via commands; S3=Login scenario Playwright; S4=top-level 3 pages Nav; S5=log grep CRITICAL/ERROR.
-9. Build final 8-section report according to references/MANUAL_TEST_EXECUTION_REPORT.md → save to `$CHE_SESSION_DIR/reports/MANUAL_TEST_EXECUTION_REPORT.md` (OUTSIDE worktree, `che assert_outside_worktree`).
-10. Deliver condensed summary in chat §18 contracts (≤500w, 4 sections: status + ACs pass/fail counts + key failures ≤3 bullets + report/evidence/plan links + 1 deep-dive offer).
+3. Preflight #2: resolve the plan → `--plan-path` given → use it; else `che manual-plan sync "$WORKTREE_ROOT"` prints the newest plan; nothing printed → AskUserQuestion.
+4. **Preflight #3 — the gate:** `che manual-plan validate "$PLAN_PATH"` must exit 0. On failure, stop and offer `/che-manual-plan`.
+5. **Preflight #4 — capability probe** (before any setup command): browser (`list_pages`), terminal HTTP, video. Record `CAPABILITIES` in the report; a missing capability marks the affected ACs `BLOCKED`, never `PASS`.
+6. **MANDATORY setup approval GATE:** ask user (A=Execute setup, B=Skip app already running, C=Cancel).
+7. **AC Execution Loop:** each contract step in order → `goto`/`click`/`fill`/`press`/`wait`/`assert` via CDP, `api` via the terminal, `manual` as `HUMAN_REQUIRED`. A locator is resolved from a **fresh** `take_snapshot` (never a cached `uid`, never a CSS path). Verdict ✅/⚠️/❌/⏭️ per AC; one page per AC (`new_page` / `close_page`).
+8. **Smoke S1..S4:** build · login · three top-level pages · console errors + server log tail.
+9. Build the report per `references/MANUAL_TEST_EXECUTION_REPORT.md` → save via `che output_path "qa" "manual-test-execution-report" "<task-id>" "session" "md"` (OUTSIDE the worktree).
+10. Deliver condensed summary in chat (§18 contracts, ≤400w, 4 sections: status + AC counts + failing steps ≤3 bullets + report/evidence/plan links + 1 deep-dive offer).
 
 **Syntax examples:**
 ```
 /che-manual-test --worktree /abs/path/to/worktree --task-id feat-PROJ-123-Process-a-refund
 /che-manual-test --worktree /abs/path --plan-path /abs/che-ws-shared/some-other/manual_test_plan.md
+```
+
+---
+
+## `/che-manual-plan [--worktree /abs/path] [--path <plan.md>] [--slug <feature-slug>]`
+
+**What it does:** Creates or updates the manual test plan in the **executable-contract format**. `che manual-plan sync` scaffolds a new plan or inserts the missing contract skeletons into an existing one (idempotent, never rewrites prose); the skill fills each acceptance criterion's block from the SPEC / ticket / diff; `che manual-plan validate` is the gate. A legacy prose plan is migrated in place by the same command.
+**When to invoke:** After `/che-act` (which already produces the plan) when you need to add or fix contracts; before `/che-manual-test` (which refuses a plan that fails the gate); or when you want the plan to become the single source for the human guide, the executor and the PR body.
+
+**Agent action:**
+1. Invoke `che-manual-plan` skill IMMEDIATELY.
+2. Preflight: worktree confirmed; source of truth = existing plan · Approved SPEC · ticket · diff (never invent an AC).
+3. `che manual-plan sync "$WORKTREE_ROOT" --slug "<slug>"` → take the printed path as `PLAN_PATH`.
+4. Fill every `TODO`: `driver` · `lane` · `base_url` · `evidence` · `severity` · steps. Locators are accessibility-first (`role`+`name`, `label`, `text`); CSS/XPath are rejected. Assertions are literal text.
+5. `che manual-plan validate "$PLAN_PATH"` must exit 0 (max two fix rounds; never weaken a check to silence it).
+6. Report: status · coverage per driver · what a human must still do · next command.
+
+**Syntax examples:**
+```
+/che-manual-plan --worktree /abs/path/to/worktree
+/che-manual-plan --worktree /abs/path --path /abs/ws/manual_test_plan.md
+/che-manual-plan --worktree /abs/path --slug feat-refunds
 ```
 
 ---
@@ -458,7 +481,8 @@ Agent action: ask confirmation first.
 | `/che-fix` | `che-debugger-bugfix` (scientific debug loop, different from features) |
 | `/che-review` | `che-code-review` (HIGH / CRITICAL + scope only) |
 | `/che-explain` | `che-explain` (didactic explainer for PR / ticket / branch — Mermaid diagrams, default simple and `--deep` technical, NO verdict) |
-| `/che-manual-test` | `che-manual-test-executor` (Playwright MCP + HTTP driver, manual_test_plan.md steps with screenshot evidence + 8-section report. MANDATORY setup approval gate. Boundary vs che-qa: QA = automated build/lint/test; Manual = real browser/interactive.) |
+| `/che-manual-test` | `che-manual-test-executor` (Chrome DevTools MCP for UI + terminal for HTTP/API, contract-driven steps with screenshot/video/console/network evidence + report. Gate: `che manual-plan validate`. MANDATORY setup approval gate + capability probe.) |
+| `/che-manual-plan` | `che-manual-plan` (creates or updates `manual_test_plan.md` in the executable-contract format via `che manual-plan sync`; `che manual-plan validate` is the gate. Feeds /che-manual-test and /che-manual-verification.) |
 | `/che-manual-verification` | `che-manual-verification` (writes a plain-language verification guide for a non-technical person: what changed, local/preview/deployed steps, evidence checklist. WRITES only — never executes, never a verdict.) |
 | `/che-pr-comments` | `che-pr-comments` (triage, implementation plan, reply drafts) |
 | `/che-ci-fix` | `che-ci-fixer` (classify CI failure + minimal fix) |

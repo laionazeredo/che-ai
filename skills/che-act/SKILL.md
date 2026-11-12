@@ -157,7 +157,7 @@ MERGE_AUDIT_PATH_Tn="$(che output_path "merge_audit" "merge-audit" "batch-${BATC
 | `task_graph.md` | `$TASK_GRAPH_PATH` (preflight §0.2.1 variable) → `$CHE_WORKSPACE_SHARED/tasks/<slug>/YYYYMMDD-HHMMSS-task-graph.md` (timestamp prefix ordered; multiple revisions = multiple files). | After scope capture | Full task list, deps, status, DONE criteria. Durable: shared across sessions on same worktree. |
 | `task_envelope_<id>.md` | `che output_path "task" "task-envelope" "T${TASK_ID}-${RELATED_ID}" "workspace" "md"` → `$CHE_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope.md` (one envelope per task, nested by task id). | One per task before Dev handoff | Formal contract per task. Blast radius + DONE criteria explicit. |
 | `decisions.log.jsonl` | `$CHE_DECISIONS_PATH` (official contract path, already runs outside assert) → `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` (single shared worktree file, append via `che decision_append` only). | Append during execution (atomic, official helper) | Trade-off / non-obvious decision rationale. Multi-session durable. |
-| `manual_test_plan.md` | `$MANUAL_TEST_PLAN_PATH` (preflight §0.2.1 variable) → `$CHE_WORKSPACE_SHARED/qa/<slug>/YYYYMMDD-HHMMSS-manual-test-plan.md` | After all tasks DONE | Step-by-step manual verification plan. Durable (reusable in future sessions on same worktree). |
+| `manual_test_plan.md` | Path printed by `che manual-plan sync "$WORKTREE_ROOT"` (never hardcoded) | After all tasks DONE | Step-by-step verification plan. Each AC carries an executable contract; `che manual-plan validate` must exit 0 before handoff. Durable (reusable in future sessions on same worktree). |
 | `final_summary.md` | `$FINAL_SUMMARY_PATH` (preflight §0.2.1 variable) → `$CHE_SESSION_DIR/summary/<slug>/YYYYMMDD-HHMMSS-session-final.md` | Session end | Delivered content, risks, stats for THIS run only. |
 | `gh_stack_plan.md` | `$GH_STACK_PLAN_PATH` (preflight §0.2.1 variable) → `$CHE_WORKSPACE_SHARED/gh_stack/<slug>/YYYYMMDD-HHMMSS-gh-stack-plan.md` (threshold trigger ≥3 tasks or >15 files). | After TASK GRAPH (Phase 1.4) if trigger TRUE | gh-stack hierarchical PR plan. APPROVED status before `/che-ship` consumes. Durable. |
 | `test_spec_smoke.md` | `$TEST_SPEC_SMOKE_PATH` (preflight §0.2.1 variable) → `$CHE_WORKSPACE_SHARED/qa/<slug>/YYYYMMDD-HHMMSS-test-spec-smoke.md` | Phase 1.5 (before ANY task envelope handed to Dev) | 1-page BDD test contract: 3–5 core Given-When-Then behaviors. |
@@ -819,4 +819,5 @@ Print concise English summary:
 - [ ] Per task: ENVELOPE written with blast radius + DONE criteria
 - [ ] Per task: 2-iteration rule enforced
 - [ ] Final: both compliance stages (light + heavy) ran
-- [ ] Final: manual_test_plan.md and final_summary.md exist
+- [ ] Final: manual_test_plan.md exists AND `che manual-plan validate <path>` exits 0 (a prose-only plan is not shippable)
+- [ ] Final: final_summary.md exists
