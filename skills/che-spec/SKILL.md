@@ -212,13 +212,15 @@ bound_agent_lang: en|pt-BR
 flags: LANG_DOCS=en
 approver: ""
 approved_at: ""
-# Auto-calculated SbE counters (VAL09-V10 validation cross-check) — optional, fill at the end of draft:
-b_count: 0                            # NEW: quantity of B-IDs in §4.2 Behavior Table (auto-count)
-ab_count: 0                           # NEW: quantity of AB-IDs in §4.3 Anti-Behavior Table (auto-count)
+# Declared counters. They are CONSUMED downstream (che-plan, che-act, che-scope-checker), so they are
+# not free-form: `che spec validate` recomputes each one from the body and fails on drift (V31).
+b_count: 0                            # quantity of B-IDs in §4.2 Behavior Table
+ab_count: 0                           # quantity of AB-IDs in §4.3 Anti-Behavior Table
 erd_required: false                   # per S05 CHE_RULES §X. true IF AND ONLY IF: (a) creates NEW DB entity; (b) alters FK ON DELETE/UPDATE cardinality; (c) adds ≥3 fields with UNIQUE/UK/CHECK constraints.
 mermaid_required: false               # per S06 CHE_RULES §X. true IF AND ONLY IF: b_count>=8 OR distinct_public_actors>=3 OR risk_level in {medium, high}.
 vertical_slice_required: true         # CANONICAL #0 (CHE_RULES.md). Default true. ONLY false if EXPLICIT_OVERRIDE_HORIZONTAL_PLAN literal appears in §2 SCOPE with 1-line justification + decision.log entry.
-tracer_f0_defined: false              # CANONICAL #0 (CHE_RULES.md F0 rule). Auto-calculated: flips to true when §4.5 VERTICAL SLICES table has 1+ row with ID=F0 · Layers Touched count>=2 · B-IDs >= 1 · DONE != empty. Auto-validated by V16.
+tracer_f0_defined: false              # CANONICAL #0 (CHE_RULES.md F0 rule). Auto-calculated: flips to true when §4.5 VERTICAL SLICES table has 1+ row with ID=F0 · Layers Touched count>=2 · B-IDs >= 1 · DONE != empty. Auto-validated by V16 + V31.
+stateful_entity: false                # INPUT, not derived. true when the change owns a lifecycle: the entity has >=3 states, OR the ticket/diff names a status/state/lifecycle, OR a transition moves money or entitlement. true => §4.4.2 is the STATE MODEL (table + stateDiagram-v2) instead of the flowchart, and V27/V28 apply.
 ---
 ```
 
@@ -285,6 +287,24 @@ Header: `## §4 SPECIFICATION BY EXAMPLE (SbE — Public Behaviours Observable)`
 > At the end of draft §4, ALWAYS ask the user:
 > > "Are there more NEGATIVE (AB-) or POSITIVE (B-) edge cases I should add to the tables? Main gaps: (list 2-3 missing behaviours from the most critical user prompt category)."
 
+#### §4.0 TICKET TRACEABILITY (mandatory when `ticket_ref` != NONE)
+Header: `### §4.0 TICKET TRACEABILITY`
+
+> **Why this exists:** the SPEC invents B-IDs. Without a back-link to the ticket's own acceptance
+> criteria, a missing AC is invisible — the draft looks complete and the increment ships short.
+
+One row per acceptance criterion in the ticket, never one row per B-ID.
+
+| Ticket AC | B-IDs | Status | Why not covered |
+|---|---|---|---|
+| `<AC-1, near-verbatim>` | B-1, B-3 | covered | — |
+| `<AC-2>` | B-4 | partial | the refund branch moves to the companion SPEC |
+| `<AC-3>` | — | not-covered | out of scope this iteration; agreed with the ticket owner |
+
+- `Status` is `covered`, `partial` or `not-covered`. `not-covered` REQUIRES a reason (V29).
+- Every B-ID/AB-ID named here MUST exist in §4.2/§4.3 (V29).
+- `ticket_ref: NONE` → omit the section; V29 skips.
+
 #### §4.1 KEY RULES (R1..RN — max 8)
 Header: `### §4.1 KEY RULES (Non-negotiable invariants 1–8)`
 - MAXIMUM 8 bullets. Derived from sources above, NOT from implementation.
@@ -349,8 +369,54 @@ HARD Mermaid rules (parser crash if violated — V13 validation):
 
 Sub-sections if trigger fires:
 - **§4.4.1 sequenceDiagram** — Actor and message order. Each message = B-ID or AB-ID.
-- **§4.4.2 flowchart TD** — Branches: (a) Happy path solid edge; (b) Sad/Error path dashed edge; (c) Rollback edge `--ROLLBACK-->` red dashed label. Nodes = B-AB-IDs.
+- **§4.4.2 STATE MODEL or flowchart TD** — decided by `stateful_entity`; exactly one of the two.
 - **§4.4.3 erDiagram** (if ERD trigger) — Official Mermaid cardinality: `| = exactly 1; o| = 0 or 1; }o = 0 or N; }| = 1 or N`. Each FK or new field with corresponding B-ID in comment. UK/CHECK/UNIQUE constraints listed explicitly with B-ID number of the behaviour that uses it.
+
+**§4.4.2 decision — the table is the contract, the diagram is the view:**
+
+| `stateful_entity` | §4.4.2 contains | Gate |
+|---|---|---|
+| `true` | STATE MODEL: transition table + its `stateDiagram-v2` rendering | V27 (structure, reachability) · V28 (transitions ↔ B/AB) |
+| `false` | flowchart TD: happy path solid · error path dashed · `--ROLLBACK-->` red dashed | V13 (presence only) |
+
+Why the table first: the agent needs "which transitions are legal", and a decision tree cannot express
+that. The `stateDiagram-v2` block is the human view of the same table — generate it FROM the table,
+never the other way round.
+
+When `stateful_entity: true`, replace §4.4.2 with:
+
+Header: `#### §4.4.2 STATE MODEL`
+
+**Initial:** `<state>`
+**Terminal:** `<state>`, `<state>`
+
+| State | Event | Guard | Next | Legal? | Ref |
+|---|---|---|---|---|---|
+| pending | payment.captured | amount > 0 | paid | yes | B-1 |
+| pending | payment.captured | amount == 0 | pending | no | AB-2 |
+| paid | refund.requested | — | refunded | yes | B-3 |
+| cancelled | * | — | (terminal) | no | AB-4 |
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> paid: payment.captured [amount > 0] (B-1)
+    paid --> refunded: refund.requested (B-3)
+    refunded --> [*]
+    note right of pending
+        FORBIDDEN: payment.captured when amount == 0 (AB-2)
+        FORBIDDEN: any transition out of cancelled (AB-4)
+    end note
+```
+
+Hard rules (V27/V28):
+1. `Legal?` is `yes` or `no`. A `no` row MUST reference an AB-ID — the forbidden transition IS the
+   anti-behaviour, and that is how the diagram generates test cases.
+2. Every state reachable from `Initial` through `yes` rows; every `Terminal` state must exist in the
+   table. An unreachable state is a design bug, not a formatting nit.
+3. A state diagram cannot draw an illegal edge: legal transitions are edges, forbidden ones live in a
+   `note`. Never omit them — an unlisted forbidden transition is the one the agent will implement.
+4. `(terminal)` in `Next` means the transition leaves the machine; it needs no state row of its own.
 
 #### §4.5 VERTICAL SLICES — F0 TRAcer + F1..FN MANDATORY (Non-negotiable unless EXPLICIT_OVERRIDE_HORIZONTAL_PLAN logged)
 Header: `### §4.5 VERTICAL SLICES (F0 Tracer Bullet Mandatory — unless override logged in §2 SCOPE + decision.log)`
@@ -376,6 +442,8 @@ Header: `### §4.5 VERTICAL SLICES (F0 Tracer Bullet Mandatory — unless overri
 Header: `### §4.6 REVERSIBILITY DECLARATIONS (Wrapper Boundaries · Rollback Flags · Forking Road)`
 
 > **CANONICAL #1 (CHE_RULES.md §Principle #1):** Every SPEC with `estimated_files_max ≥ 5` OR with ≥ 1 external dependency listed in §2 External services MUST declare 3 sub-tables below. All declarations are PROJECT-AGNOSTIC: no SDK names are hardcoded; they come ONLY from §2 user input.
+>
+> **Do not trim this to one table.** §4.6.1 feeds `che-scope-checker` CHECK2 (wrapper-leak detection: an SDK import outside its declared wrapper is a blocking finding) and §4.6.3 feeds the `che-plan` envelope. Removing them would silently disable that control.
 
 **§4.6.1 Wrapper Boundary Table (V19a)** — 1 row per unique external dependency declared in §2 External services. NEVER empty if §2 External services list is non-empty.
 | External Dependency Name (import alias / SDK name from §2) | Authoritative Wrapper Path (SINGLE glob / folder — 1 path only, NO commas / semicolons / multiple paths) | Touch-Count if Swapped (estimated # of files touched to replace this dependency with top competitor) |
@@ -449,31 +517,14 @@ AUTOMATIC update of this matrix IN EACH LOOP:
   - DEFAULT: ✅ `[colocated in feature / domain folder — @ticket FLO-123]` (standard rule).
   - EXCEPTION (only if cross-cutting ≥4 domains / pure infra): ⚠️ `[tests/regression/FLO-123--refund-idempotency.test.ts] — EXPLICIT_OVERRIDE_G5_REGRESSION_FOLDER decisions.log entry: auth+billing+notification+db ≥4 domains — 1-line justification`. If test is in tests/regression with ticket ID in filename WITHOUT non-empty Notes entry → scope-checker CHECK2 bilateral marks warning SCOPE_score -2 penalty).
 
-### §6 MANUAL SMOKE TEST PLAN (Staging + Prod HUMAN — ALWAYS MANDATORY)
-Header: `## §6 MANUAL SMOKE TEST PLAN (HUMAN — Staging + Prod)`
+### §6 RETIRED — manual verification moved to `manual_test_plan.md`
 
-> **User requirement VERBATIM: "In addition to e2e tests, we should have a manual test plan ... manual testing should also be thought of from the beginning when going to production."**
-> Minimum 3 STAGING steps + 2 PROD steps.
+The staging/prod smoke steps used to live here as a second, prose-only copy. They are now an
+executable contract authored by `che-manual-plan` into `manual_test_plan.md`
+(`che manual-plan validate` is the gate), and executed by `che-manual-test-executor` or rendered for a
+human by `che-manual-verification`. One artifact, one gate — the SPEC stays a plan.
 
-#### §6.1 STAGING Environment (post-deploy pre-PR merge — 3..8 steps)
-| Step # | Role (Creator|Attendee|Admin|Staff Scanner) | Concrete Manual Action 1-click / 1-screen | Expected Result (literal, public observable — matches corresponding B-ID Then) | Anchor B-ID |
-|---|---|---|---|---|---|
-| S1 | Creator | Login staging; navigate Bookings → BK-123 row → Refund button → modal → Confirm. | (1) Green toast "Refund RF-456 created"; (2) Row status → "Refunded"; (3) Staging email inbox → subject "Your refund is on its way". | B-1 |
-| S2 | ... | ... | ... | B-2 |
-| S3 | Creator | Repeat Step S1 quick DOUBLE CLICK on Confirm button | (1) Only 1 toast; (2) 1 Refunds history entry; (3) Staging Stripe dashboard → 1 refund only. | AB-1 |
-
-#### §6.2 PROD Environment (post deploy live — 2..5 steps MINIMUM NON-DESTRUCTIVE)
-| Step # | Role | SAFE Manual Action (DO NOT touch real production data — use dummy canary event if possible) | Canary Expected Result | Anchor B-ID |
-|---|---|---|---|---|
-| P1 | Admin | Access `/admin/health` → "Refund health check" tab (create if none) → Run canary refund of 0.01 GBP in sandbox connected account CA-TEST-ONLY. | Canary result: Stripe reverse_transfer=true; response 200; DB canary_refund_audit table 1 row. | B-1 |
-| P2 | Admin | View production Logs last 15 min → filter `service=refund` | No ERROR / stacktrace after deploy. | B-4 |
-
-#### §6.3 UI ONLY Extra Steps (if Playwright marked in any B-ID OU risk≥medium)
-→ If false trigger → write: `> ⚠️ Skipped: no behaviour with Playwright layer AND risk=low`.
-→ If true trigger → add cross-browser UI steps table (Chrome/Firefox/Safari iOS 17):
-| Step | Device/Browser | Action | Expected visual UI | Anchor |
-|---|---|---|---|---|
-| UI-1 | Chrome Desktop 128, 125% zoom | 3G throttled. Confirm Refund → loading spinner → toast. | Spinner appears ≥500ms ≤2s. Green toast text match literal. No layout shift. | B-1 loading. |
+The numbering gap is deliberate: §7 keeps its id so existing references stay valid.
 
 ### §7 IMPLEMENTATION HINTS (opt-in, only if re-use exists or gotchas — 2..5 bullets MAX)
 Header: `## §7 IMPLEMENTATION HINTS (Optional — reference existing code only)`
@@ -490,8 +541,10 @@ Header: `## §7 IMPLEMENTATION HINTS (Optional — reference existing code only)
 > the gate, and it is the only form CI can run. Semantic checks — is this AB actually dangerous, is
 > that DONE criterion truthful — stay with you: no regex answers them.
 >
-> The tier decides how much applies: `lite` skips V12/V16/V17/V19-V22, `standard` adds V12/V16/V17,
-> `full` adds V19-V22. Reject the draft and loop back to §2 when ANY applicable check fails.
+> The tier decides how much applies: `lite` skips V12/V16/V17/V19-V22/V29/V30, `standard` adds
+> V12/V16/V17/V29/V30, `full` adds V19-V22. V27/V28 run whenever a state model is present (regardless
+> of tier), and V31 always runs — it is the cheapest check and drift is silent. Reject the draft and
+> loop back to §2 when ANY applicable check fails.
 
 ### Legacy baseline checks (V1-V8)
 1. **V1** YAML frontmatter all REQUIRED keys present; parseable as YAML.
@@ -510,12 +563,12 @@ Header: `## §7 IMPLEMENTATION HINTS (Optional — reference existing code only)
 12. **V12 UI Selector Contract regex validation:** For each B-ID line where "Test Layers" column CONTAINS `Playwright` literal → extract ids from "UI Selector Contract" column. Each data-testid MUST match canonical Category 8 G8.3 REGEX: `^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*(--[a-z0-9][a-z0-9-]*)?$`. If NOT matching → REJECT: "B-XX data-testid=`<id>` outside 3-part convention `<domain>__<component>__<action>[--unique-suffix]`. Expected regex: `^[a-z0-9-]+__[a-z0-9-]+__[a-z0-9-]+(--[a-z0-9-]+)?$`."
 13. **V13 Mermaid diagrams trigger compliance:**
     a. Calculate MERMAID_TRIGGER = `(B_COUNT >= 8) OR (risk_level == "medium") OR (risk_level == "high") OR (mermaid_required == true) OR (distinct_public_actors >= 3)`.
-    b. If MERMAID_TRIGGER == TRUE → validate that draft CONTAINS 2 exact headings: `### §4.4.1 sequenceDiagram` AND `### §4.4.2 flowchart TD`. If ANY missing → REJECT: "Mermaid trigger fired (B=$B_COUNT, risk=$risk_level). §4.4.1 sequenceDiagram and §4.4.2 flowchart TD BOTH mandatory. X missing."
+    b. If MERMAID_TRIGGER == TRUE → validate that draft CONTAINS the heading `### §4.4.1 sequenceDiagram` AND exactly one §4.4.2 form: `### §4.4.2 flowchart TD` when `stateful_entity: false`, or `#### §4.4.2 STATE MODEL` when `stateful_entity: true`. If ANY missing (or both forms present) → REJECT: "Mermaid trigger fired (B=$B_COUNT, risk=$risk_level). §4.4.1 sequenceDiagram and one §4.4.2 form (STATE MODEL when stateful_entity=true, else flowchart TD) are mandatory."
     c. Calculate ERD_TRIGGER = `(erd_required == true) OR (new_DB_entity detected by CREATE TABLE word / new TypeORM Entity() in §2 CAN CREATE) OR (new_fields >= 3 UNIQUE|CHECK|UK words in §2 SCOPE)`.
     d. If ERD_TRIGGER == TRUE → validate that draft CONTAINS exact heading `### §4.4.3 erDiagram`. If missing → REJECT: "ERD trigger fired (new DB entity or FK/cardinality change or ≥3 field constraints). §4.4.3 erDiagram mandatory."
     e. (Anti-crash Mermaid parser) If §4.4 contains mermaid code blocks: validate that NO node contains stadium shapes `[/` or `([` or `\]/` or `)]`. If stadium shape present → WARNING (non-fatal but correction recommended before Approved): "Warning: Mermaid stadium shapes ( [/label/] or ([label]) ) collide with ()/ chars in label text → Mermaid 10.x+ parser crash. Replace with quoted rectangle `ID["label"]`."
-14. **V14 §6 Manual Smoke Plan staging minimum 3 steps and prod minimum 2 steps:** Count §6.1 Staging table lines in Step # column with S-1,S-2,S-3 → if `< 3 steps` → REJECT: "Manual Smoke Plan STAGING (§6.1) has $N steps. MINIMUM 3 mandatory steps." Count §6.2 Prod P-1,P-2 steps → if `< 2 steps` → REJECT: "Manual Smoke Plan PROD (§6.2) has $N steps. MINIMUM 2 NON-DESTRUCTIVE mandatory steps."
-15. **V15 Frontmatter counters match actual tables:** If b_count or ab_count are filled in YAML (≠ 0 or empty) → validate `frontmatter.b_count == real B_COUNT of table §4.2` AND `frontmatter.ab_count == real AB_COUNT of table §4.3`. If diverging → non-fatal WARNING: "Warning: frontmatter.b_count=$front ab_count=$front != real table B=$realB AB=$realAB. Auto-fix before Approved."
+14. **V14 RETIRED.** The staging/prod manual smoke plan moved to `manual_test_plan.md`, where it is an executable contract (`che manual-plan validate`). The SPEC no longer carries it.
+15. **V15 → enforced as V31** (see the counter-drift check below). The counters are consumed downstream, so a drift is a hard failure, not a warning.
 
 16. **V16 Vertical Slice F0 Mandatory (CANONICAL #0):** (runs ONLY if `frontmatter.vertical_slice_required == true`) Parse table under header `### §4.5 VERTICAL SLICES`. Fail conditions → REJECT with structured fix offer:
     a. **Missing table or empty:** Header `### §4.5 VERTICAL SLICES` not found OR table has 0 data rows. Msg: "§4.5 VERTICAL SLICES table missing or empty. CANONICAL #0 requires at minimum 1 row = **F0 Tracer Bullet**. Fix: (A) Auto-insert F0 template now (B) Declare EXPLICIT_OVERRIDE_HORIZONTAL_PLAN in §2 SCOPE with 1-line justification."
@@ -568,6 +621,37 @@ Header: `## §7 IMPLEMENTATION HINTS (Optional — reference existing code only)
     a. **Confidence row:** the `Confidence` row MUST exist and start with `high`, `medium` or `low` followed by a non-empty clause. Missing → REJECT: "§0 has no Confidence row. State high/medium/low and one clause on why (§23.2)."
     b. **Acronym expansion:** every occurrence of `RLS`, `JWT`, `DbC`, `SbE`, `PII`, `SDK`, `ORM` inside §0 MUST be followed by ` (` with its plain meaning. A bare occurrence → REJECT: "§0 uses `<TERM>` without expansion. Write `<TERM> (<plain meaning>)` (§23.4)."
     c. **No internal codes in narrative rows:** in `What changes`, `Why now`, `In scope`, `Out of scope`, `Main risk` and `Decisions needed from you` there MUST be no `F<digit>`, `B-<digit>`, `V<digit>`, `G-<` or `T<digit>` token. Structural rows (`Shape of the work`, `How we'll know it worked`) are exempt — they carry slice ids and literals by design.
+
+26. **V27 State model present, complete and reachable.** Runs whenever the draft carries a
+    `#### §4.4.2 STATE MODEL`; also fails when `stateful_entity: true` and the section is missing.
+    a. `**Initial:** <state>` and `**Terminal:** <state>[, <state>]` lines exist.
+    b. The transition table has ≥1 row of `State | Event | Guard | Next | Legal? | Ref`.
+    c. A `stateDiagram-v2` block exists — the table needs its rendering.
+    d. Every `Initial`/`Terminal` state appears in the table (as a `State` or a `Next`).
+    e. Every state is reachable from `Initial` through `yes` rows.
+    REJECT: "State model incomplete/unreachable: <details>. The table is the contract the agent reads; a state nobody can reach is a design bug."
+
+27. **V28 Transitions are labelled and referenced.** For every row: `Legal?` ∈ {yes,no}; `Event`
+    non-empty; `Ref` names ≥1 B/AB id; every referenced id exists in §4.2/§4.3; a `no` row references
+    an AB-ID. REJECT: "State transition <row>: <problem>. A forbidden transition without an AB-ID is the
+    transition the agent will implement."
+
+28. **V29 Ticket traceability** (standard and above; skipped when `ticket_ref: NONE`). The
+    `### §4.0 TICKET TRACEABILITY` section exists with a table; every row's `Status` ∈
+    {covered,partial,not-covered}; `not-covered` carries a reason; every B/AB named exists in
+    §4.2/§4.3. REJECT: "Ticket traceability <row>: <problem>. The SPEC invents B-IDs; without the
+    back-link a missing AC is invisible."
+
+29. **V30 Every behaviour lands in a slice** (standard and above). The union of B/AB ids named in the
+    §4.5 `B-IDs / AB-IDs Covered` column must cover every B-ID in §4.2 and every AB-ID in §4.3.
+    Duplicates across slices are allowed (F0 tracer plus a later ledger slice); omission is not.
+    REJECT: "Behaviour(s) <ids> never placed in a §4.5 slice — the plan does not implement them."
+
+30. **V31 Declared counters match the body.** Recompute and compare: `b_count` ↔ §4.2 rows,
+    `ab_count` ↔ §4.3 rows, `tracer_f0_defined` ↔ the §4.5 F0 conditions, and `mermaid_required: false`
+    ↔ the diagram trigger. A declared `0` or an absent field is not checked (specs written before the
+    counters existed stay valid). REJECT: "Counter drift: <details>. These fields are consumed by
+    che-plan/che-act/che-scope-checker, so a stale value silently misleads them."
 
 ### Bilateral cross-ref scope-checker CHECK2 (ONDA2 next block)
 When this VALIDATION PASS runs GREEN (all pass), che also prints a 1-line footer:
