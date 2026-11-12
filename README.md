@@ -317,7 +317,8 @@ writes the failing test first, then the minimal fix, then shows you how to verif
 | `/che-review <PR_URL> --ticket <url>` | You want a blocking review: runtime breakage, security/PII, unjustified dependencies, scope deviation. |
 | `/che-pr-comments <PR_URL>` | The PR has many comments; get a triage of what to fix, what to reply, what to resolve silently. |
 | `/che-ci-fix <actions_run_or_pr_url>` | CI is red. Classifies the failure and applies a minimal fix — and stops without touching code when the cause is infrastructure or external. |
-| `/che-manual-test --worktree <path> --task-id <slug>` | You want the manual test plan executed in a real browser with screenshot evidence per step. |
+| `/che-manual-plan --worktree <path>` | You want the manual test plan to be *executable*: scaffolds it (or migrates a legacy prose one), fills each acceptance criterion's contract, and gates it with `che manual-plan validate`. |
+| `/che-manual-test --worktree <path> --task-id <slug>` | You want that validated plan executed by an agent — Chrome DevTools MCP for the UI, the terminal for HTTP/API — with screenshot, video and log evidence per criterion. |
 | `/che-manual-verification <worktree / PR / ticket>` | You need someone else — a PM, support agent, client or new joiner — to verify the increment by hand: plain-language "what changed", numbered steps for local or PR-preview testing, the route to a deployed environment when neither works, and the evidence to capture. Writes the guide; does not run it. |
 
 ***

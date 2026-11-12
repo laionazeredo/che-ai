@@ -541,6 +541,37 @@ def build_parser():
     sp_merge.add_argument("--confirm", dest="confirmed", action="store_true", default=False, help="Safety gate.")
     sp_merge.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
 
+    # MANUAL TEST PLAN CONTRACT ================================================
+    parser_mp = subparsers.add_parser(
+        "manual-plan",
+        help="Scaffold, migrate and validate the executable contracts inside a manual test plan.",
+    )
+    mp_subs = parser_mp.add_subparsers(dest="manual_plan_cmd", required=True)
+
+    mp_sync = mp_subs.add_parser(
+        "sync",
+        help="Create the plan if absent, or insert the missing contract skeletons. Idempotent.",
+    )
+    mp_sync.add_argument("worktree_root", help="Absolute path to the bound worktree.")
+    mp_sync.add_argument(
+        "--path",
+        default=None,
+        help="Explicit plan path. Default: the newest known plan, else a new one under the worktree.",
+    )
+    mp_sync.add_argument("--slug", default="manual-plan", help="Folder slug used when a new plan is created.")
+    mp_sync.add_argument("--session-id", default=None, help="Session id for path resolution.")
+    mp_sync.add_argument(
+        "--dry-run", action="store_true", default=False, help="Report what would change; write nothing."
+    )
+    mp_sync.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+
+    mp_validate = mp_subs.add_parser(
+        "validate",
+        help="Run the MP-checks on a manual test plan. Exit 1 when an AC is not executable.",
+    )
+    mp_validate.add_argument("path", help="Absolute path to the manual test plan.")
+    mp_validate.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+
     # WORKTREE MGMT SUBCOMMANDS (the only thing that binds a filesystem path) ====
     parser_wt = subparsers.add_parser("worktree", help="Bind a checkout to a project (~/<project>/worktrees/<name>/).")
     wt_subs = parser_wt.add_subparsers(dest="wt_cmd", required=True)
@@ -1386,6 +1417,56 @@ def main(argv=None):
             return
 
         parser.error(f"Unknown spec subcommand: {args.spec_cmd}")
+        return
+
+    if args.command == "manual-plan":
+        from che_core.manual_plan import sync_plan, validate_plan
+
+        if args.manual_plan_cmd == "sync":
+            session_id = (
+                args.session_id
+                or os.environ.get("CHE_SESSION_ID")
+                or os.environ.get("HARNESS_SESSION_ID")
+                or "manual-plan"
+            )
+            res = sync_plan(
+                args.worktree_root,
+                session_id,
+                explicit_path=args.path,
+                slug=args.slug,
+                dry_run=args.dry_run,
+            )
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                if res["dry_run"]:
+                    verb = "DRY-RUN"
+                elif res["created"]:
+                    verb = "CREATED"
+                elif res["changed"]:
+                    verb = "UPDATED"
+                else:
+                    verb = "UNCHANGED"
+                print(f"{verb} · {res['acs']} AC(s) · {res['path']}")
+                if res["inserted"]:
+                    print(f"  contract skeleton: {', '.join(res['inserted'])}")
+                print("  next: fill the TODO fields, then `che manual-plan validate <path>`")
+            return
+
+        if args.manual_plan_cmd == "validate":
+            res = validate_plan(args.path)
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                print(f"{'PASS' if res['ok'] else 'FAIL'} · {res['acs']} AC(s) · {res['path']}")
+                for entry in res["checks"]:
+                    suffix = f" — {entry['detail']}" if entry["detail"] else ""
+                    print(f"  {entry['id']:<4} {entry['status']}{suffix}")
+            if not res["ok"]:
+                sys.exit(1)
+            return
+
+        parser.error(f"Unknown manual-plan subcommand: {args.manual_plan_cmd}")
         return
 
     if args.command == "worktree":

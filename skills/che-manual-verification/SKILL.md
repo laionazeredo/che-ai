@@ -70,7 +70,7 @@ GUIDE_PATH="$(che output_path "verification" "che-manual-verification" "<related
 | 2 | PR | `gh pr view <url> --json number,title,body,baseRefName,headRefName,changedFiles,labels,reviewDecision`, `gh pr diff <url> --name-only`, `gh pr checks <url>` | Optional | Preview URL, CI state, linked ticket, review state |
 | 3 | Ticket | Linear / ClickUp / GitHub issue through the matching MCP tool | Optional | Intended behaviour and acceptance criteria |
 | 4 | SPEC | Latest `$CHE_WORKSPACE_SHARED/specs/**/*.md`; fall back to `$CHE_WORKSPACE_SHARED/spec_*.md` | Optional | Behaviours, explicit non-goals, contracts touched |
-| 5 | `manual_test_plan.md` | `$CHE_WORKSPACE_SHARED/manual_test_plan.md` | Optional | Setup commands and AC list — **reuse, never rewrite** |
+| 5 | `manual_test_plan.md` | Path printed by `che manual-plan sync "$WORKTREE_ROOT"` | Optional | Setup commands, AC list and the **executable contract** (driver · lane · evidence) — reuse, never rewrite |
 | 6 | Evidence already produced | `$CHE_WORKSPACE_SHARED/qa/`, `$CHE_SESSION_DIR/qa/` reports and manifests | Optional | What automation already proves, so the human does not repeat it |
 | 7 | Repo conventions | `README`, `package.json` scripts, compose files, `.env.example`, CI workflow | Required | Exact setup commands, ports, seed targets |
 
@@ -90,6 +90,11 @@ Rules for this step:
 | **C · After deploy** | Neither A nor B is possible: private network, mobile store build, third-party approval, production-only data | The real thing, end to end | Destructive tests, unreleased data |
 
 Decision rule: **pick the cheapest lane that can actually observe the expected result.** When the increment touches a third party (email, SMS, webhook, payment), name the sandbox or inbox that makes it observable and prefer the lane where that sandbox exists.
+
+**The contract wins.** When an AC carries an executable contract (`driver` · `lane` · `evidence`), that
+is the lane and the evidence list — render it, do not re-decide it. This table is for ACs without a
+contract, and for explaining *why* the other lanes were discarded. A `manual` driver means the guide is
+the only way to verify it; say so instead of implying an agent will.
 
 The artifact always contains §3 of the template below — even when only one lane applies — so the reader knows why the others were discarded.
 
@@ -135,7 +140,7 @@ The §2 table, the chosen lane, one line of justification, and what the chosen l
 
 1. **Prepare** — commands in order; after each, "you should see …". Common failure + the fix, one line each.
 2. **Start** — servers in order, ports, the log line that means "ready".
-3. **Per behaviour** — numbered steps. **One action per step.** Exact URL, exact button label, exact text to type, the expected visible result, and "it is wrong if you see …". Include the negative case and the edge case the AC names.
+3. **Per behaviour** — numbered steps. **One action per step.** Exact URL, exact button label, exact text to type, the expected visible result, and "it is wrong if you see …". Include the negative case and the edge case the AC names. When the AC has a contract, each contract step becomes exactly one numbered step, and the locator's `name` / `label` is the label the reader must look for on screen.
 4. **API-only behaviour** — method, URL, headers, body, expected status and body, and where the token comes from. Render requests in an `http` fence, not `bash`.
 5. **Evidence per step** — what to capture, and at which frame.
 6. **Stop and clean up** — what was created, how to delete it, how to stop the servers.

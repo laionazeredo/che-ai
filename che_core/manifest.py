@@ -370,6 +370,19 @@ COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
         "requires_bound_worktree": False,
         "output": "json",
     },
+    # --- manual test plan contract ----------------------------------------------
+    "manual-plan sync": {
+        "summary": "Create a manual test plan if absent, or insert the missing executable-contract skeletons.",
+        "mutates": True,
+        "requires_bound_worktree": True,
+        "output": "json",
+    },
+    "manual-plan validate": {
+        "summary": "Validate every acceptance criterion's executable contract. Exit 1 when one is not runnable.",
+        "mutates": False,
+        "requires_bound_worktree": False,
+        "output": "json",
+    },
     # --- review rule resolution -------------------------------------------------
     "review rules": {
         "summary": "Resolve the project rules that apply to a diff, with precedence and conflicts.",
