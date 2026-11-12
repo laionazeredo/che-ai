@@ -383,6 +383,25 @@ COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
         "requires_bound_worktree": False,
         "output": "json",
     },
+    # --- test freeze -------------------------------------------------------------
+    "test-lock record": {
+        "summary": "Lock the test files a slice shipped, refusing to move a lock that already exists.",
+        "mutates": True,
+        "requires_bound_worktree": True,
+        "output": "prose",
+    },
+    "test-lock verify": {
+        "summary": "Compare every locked test against its hash; exit 1 on drift or deletion.",
+        "mutates": False,
+        "requires_bound_worktree": True,
+        "output": "prose",
+    },
+    "test-lock authorize": {
+        "summary": "Re-lock one file after the user authorised the change, keeping both hashes and the reason.",
+        "mutates": True,
+        "requires_bound_worktree": True,
+        "output": "prose",
+    },
     # --- review rule resolution -------------------------------------------------
     "review rules": {
         "summary": "Resolve the project rules that apply to a diff, with precedence and conflicts.",
