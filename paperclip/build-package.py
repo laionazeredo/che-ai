@@ -118,6 +118,7 @@ AGENT_SKILLS = {
         "che-code-review",
         "che-compliance",
         "che-manual-test-executor",
+        "che-manual-verification",
         "che-ship",
         "engineering-contracts",
         "web-performance-expert",

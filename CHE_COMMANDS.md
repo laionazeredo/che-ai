@@ -13,7 +13,7 @@ The agent MUST recognise these and react immediately.
 > **Conceptual difference:** Commands = UX entry point (slash `/che-X`) ↔ Skills = content/executor of work.
 > DO NOT turn ALL commands into skills. The separation below is intentional (KISS).
 
-### Category A — 35 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
+### Category A — 36 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
 | Command | Skill / module | Why separate wrapper? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
@@ -31,6 +31,7 @@ The agent MUST recognise these and react immediately.
 | `/che-refactor <worktree> --scope=...` | `che-refactor` | Behaviour-preserving refactoring (Fowler). Precondition: green test safety net (missing coverage → characterization tests first). Never runs inside /che-ship. |
 | `/che-explain` | `che-explain` | Input preflight (gh auth for PR / MCP for ticket / worktree for branch) → DIDACTIC explanation with Mermaid diagrams + attention points. Default = simple and short; `--deep` = technical depth (3 diagrams, walkthrough, design decisions, contracts, edge cases, how to test). DIFFERENT from /che-review (blocking verdict) and /che-spec (formal plan). |
 | `/che-manual-test` | `che-manual-test-executor` | Worktree preflight + §19 session binding + finds manual_test_plan.md via --task-id or --plan-path → mandatory setup approval GATE → executes steps via Playwright MCP + screenshot evidence + final 8-section report. DIFFERENT from /che-qa (QA = only automated build/lint/test commands; Manual = step-by-step browser with evidence). |
+| `/che-manual-verification [target] [--worktree ...] [--lane auto\|local\|preview\|remote]` | `che-manual-verification` | Reads the session context (ticket + SPEC + diff + PR + existing manual_test_plan) → WRITES a plain-language guide a non-technical person can execute: what was implemented/changed/fixed, numbered steps for local or PR-preview verification, the route to a deployed environment when neither is possible, and the evidence to capture (logs, screenshots, video). DOES NOT execute the steps (that is /che-manual-test) and gives no verdict (that is /che-review). |
 | `/che-pr-comments` | `che-pr-comments` | Preflight `gh auth` + PR URL → skill downloads comments + classification + triage. |
 | `/che-ci-fix` | `che-ci-fixer` | Preflight `gh auth` + worktree → skill classifies R1-R9 + applies minimal fix. |
 | `/che-design` / `/che-figma` | `che-social-ui-designer` | Asks mode (A Social Media / B UI-UX / C Design System) + file save path → skill uses open-pencil MCP to build everything locally. |
@@ -355,6 +356,31 @@ Agent action: ask confirmation first.
 
 ---
 
+## `/che-manual-verification [target] [--worktree /abs/path] [--base origin/main] [--lane auto|local|preview|remote]`
+
+**What it does:** Turns the session context into a **manual verification guide written for a non-technical person**. It answers three questions and nothing else: (1) what was implemented, changed or fixed in this increment — in plain language; (2) a numbered step-by-step to prove it by hand — environment setup, servers, requests, the exact expected result at each step, and the evidence to capture (logs, screenshots, short video); (3) when local or PR-preview testing is impossible, the exact route to a deployed environment (who deploys, how to know it is live, the access request, safe test data, the stop rule and the rollback) and how to verify there.
+**DIFFERENT from `/che-manual-test`** (which EXECUTES an existing `manual_test_plan.md` in a real browser) and from `/che-review` (which issues a blocking verdict). This command only WRITES the guide.
+**When to invoke:** Before asking a PM, support agent, client or new joiner to verify an increment by hand; or when you need the "how do we test this after deploy" path written down.
+
+**Agent action:**
+1. Invoke `che-manual-verification` skill IMMEDIATELY.
+2. Preflight §0: `che` CLI guard + `compute_paths` + `ensure_dirs` + `assert_outside_worktree` (nothing lands inside the worktree).
+3. Collect sources in fixed order: worktree diff vs base · PR (`gh pr view` / `gh pr diff --name-only` / `gh pr checks`) · ticket (MCP) · latest SPEC · `manual_test_plan.md` (reuse its AC wording and setup commands) · existing QA evidence · repository scripts.
+4. Choose the cheapest lane that can observe the expected result: **A local** · **B PR preview** (preview URL from `gh pr checks` or PR comments) · **C after deploy**. Honour `--lane` when given.
+5. Write the nine-section guide: what changed · prerequisites · lane · lane A steps · lane B preview · lane C deployed path · evidence checklist · failure-report template · not-verifiable-by-hand.
+6. Save via `che output_path "verification" "che-manual-verification" "<related_id>" "workspace" "md"` → `$CHE_WORKSPACE_SHARED/verification/<related_id>/` (durable, OUTSIDE the worktree).
+7. Deliver a condensed four-section summary in chat (§18, ≤400 words): status + chosen lane · what changed in ≤3 bullets · first three steps · refs + one offer.
+**Hard rules:** never invent a command, URL, port, env-var name or role (`unknown — ask <role>` instead); never include a secret (names only); never execute the steps; never emit a merge verdict.
+
+**Syntax examples:**
+```
+/che-manual-verification --worktree /abs/path/to/worktree
+/che-manual-verification https://github.com/myorg/myrepo/pull/42 --lane preview
+/che-manual-verification FLO-745 --worktree /abs/path --lane remote
+```
+
+---
+
 ## `/che-pr-comments <PR_URL>`
 
 **What it does:** Scans every comment on a PR, classifies each one (human vs bot; valid actionable vs question vs nit vs outdated vs praise vs discussion). Produces a triage report with 3 outputs: (1) numbered implementation plan for comments we should act on, (2) pre-written ENGLISH polite responses for comments we decline/question, (3) comments we resolve silently. User approves the report → we implement + optionally post replies via gh.
@@ -433,6 +459,7 @@ Agent action: ask confirmation first.
 | `/che-review` | `che-code-review` (HIGH / CRITICAL + scope only) |
 | `/che-explain` | `che-explain` (didactic explainer for PR / ticket / branch — Mermaid diagrams, default simple and `--deep` technical, NO verdict) |
 | `/che-manual-test` | `che-manual-test-executor` (Playwright MCP + HTTP driver, manual_test_plan.md steps with screenshot evidence + 8-section report. MANDATORY setup approval gate. Boundary vs che-qa: QA = automated build/lint/test; Manual = real browser/interactive.) |
+| `/che-manual-verification` | `che-manual-verification` (writes a plain-language verification guide for a non-technical person: what changed, local/preview/deployed steps, evidence checklist. WRITES only — never executes, never a verdict.) |
 | `/che-pr-comments` | `che-pr-comments` (triage, implementation plan, reply drafts) |
 | `/che-ci-fix` | `che-ci-fixer` (classify CI failure + minimal fix) |
 | `/che-design` | `che-social-ui-designer` (3 modes: Social Media / UI-UX / Design System — local open-pencil Figma-equivalent MCP) |

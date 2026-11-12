@@ -318,6 +318,7 @@ writes the failing test first, then the minimal fix, then shows you how to verif
 | `/che-pr-comments <PR_URL>` | The PR has many comments; get a triage of what to fix, what to reply, what to resolve silently. |
 | `/che-ci-fix <actions_run_or_pr_url>` | CI is red. Classifies the failure and applies a minimal fix — and stops without touching code when the cause is infrastructure or external. |
 | `/che-manual-test --worktree <path> --task-id <slug>` | You want the manual test plan executed in a real browser with screenshot evidence per step. |
+| `/che-manual-verification <worktree / PR / ticket>` | You need someone else — a PM, support agent, client or new joiner — to verify the increment by hand: plain-language "what changed", numbered steps for local or PR-preview testing, the route to a deployed environment when neither works, and the evidence to capture. Writes the guide; does not run it. |
 
 ***
 

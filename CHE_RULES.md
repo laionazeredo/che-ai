@@ -800,7 +800,7 @@ Creating a project skill: `~/.che-workspaces/<project-slug>/skills/<skill-name>/
 >
 > Quick view (14 commands total):
 > - 9 **heavy (workflow)** → preflight validation wrapper + `Skill(...)`:
->   `/che-spec` | `/che-act` | `/che-parallel` | `/che-ship` | `/che-fix` | `/che-review` | `/che-explain` | `/che-manual-test` | `/che-pr-comments` | `/che-ci-fix` | `/che-design` | `/che-figma` | `/che-scope-check` | `/che-merge`
+>   `/che-spec` | `/che-act` | `/che-parallel` | `/che-ship` | `/che-fix` | `/che-review` | `/che-explain` | `/che-manual-test` | `/che-manual-verification` | `/che-pr-comments` | `/che-ci-fix` | `/che-design` | `/che-figma` | `/che-scope-check` | `/che-merge`
 > - 5 **light (file operation)**: inline, DOES NOT become a skill (read/write markdown, KISS → do not create 3-line skill):
 >   `/che-status` | `/che-skip` | `/che-decisions` | `/che-summary` | `/che-abort`
 > - Updated count: consult `CHE_COMMANDS.md` §Architecture Commands vs Skills for exact Category A (heavy) + Category B (light).
