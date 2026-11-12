@@ -27,6 +27,7 @@
 | SM created on | `<ISO datetime>` |
 | Depends on tasks | `T1, T3` or `-` |
 | Review mode | `INCREMENTAL \| FINAL` (from TASK GRAPH metadata — overridable mid-run) |
+| Test freeze | `ON \| OFF` (che-act §1.5.3 — ON means this task's test files are locked at each slice commit) |
 | handoff_output: (must exist before dependents run) | `[tasks/T3/dev-handoff-dashboard.md, ...]` or `[]` |
 
 ## Goal / Business Value

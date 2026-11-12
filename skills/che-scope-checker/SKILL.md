@@ -371,6 +371,25 @@ Cross-check procedure:
 | SBE-B3 | `bilateral_erd_cardinalities_constraints_migration_and_typeorm` | 🟡 WARN MISMATCH | ERD `OrderItem → Order }|--|{` (ON DELETE CASCADE expected). Migration `20260415_refund.sql#L80` uses `ON DELETE RESTRICT`. Adjust migration to CASCADE (order without items = deleted without orphans risk). ERD declared UK `uk_refund_payment_id` → found in unique @Index ✅. |
 | SBE-B2-alt | `(0% example — hard block)` | 🔴 BLOCK ZERO COVERAGE | 0/7 B-IDs are verified by any test in this diff — no title or doc comment describes those behaviours. Resolve: write the missing behaviour tests OR justified EXPLICIT_OVERRIDE_BILATERAL_SKIP + decision.log entry. |
 
+### Step 3.6 — 🔒 TEST LOCK INTEGRITY (runs when the task froze its tests)
+
+Run `che test-lock verify <worktree> --related-id <task-id> --json` and read the result:
+
+| Status | Verdict |
+|---|---|
+| `unlocked` | ⚪ N/A — the task did not opt into the freeze; no penalty |
+| `ok` | 🟢 every locked test still matches the hash it was locked at |
+| `drift` / `missing` | 🔴 BLOCK — list each file with its expected and actual hash |
+
+A drifted file is not automatically cheating, but it is a change nobody authorised: report it and
+stop. The remedy belongs to the user — `che test-lock authorize --file <path> --reason "<their
+words>"`. Never re-lock on the user's behalf, and never flag an entry under `authorisations` as a
+finding: an authorised change is exactly what that trail exists to record.
+
+**Bilateral consequence:** in §3.5, a B-ID counts as covered only while its locked test still
+matches its hash. A test edited into a weaker assertion after the lock is `drift` and must not be
+counted as coverage — this is the one finding the coverage percentage cannot see.
+
 ---
 
 ## 4. CHECK 3 — 📘 UPDATED Documentation (AGENTS / README / runbooks / CLAUDE)
