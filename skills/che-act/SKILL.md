@@ -562,9 +562,10 @@ Output: `$TEST_SPEC_SMOKE_PATH` (§0.2.1 preflight variable — ONE file per fea
 1. **Behavior list (BDD Given-When-Then)**: 3–5 core behaviors. Core only.
    - `GIVEN <precondition> WHEN <action/trigger> THEN <observable output/state>`.
 2. **Test split recommendation**: `<X> unit tests (packages/db, <pkg>) + <Y> e2e tests (POST /x, UI flow Y) + <Z> manual smoke (admin finance: refund button)`.
-3. **Specific test files** (enumerate paths). NO wildcards. E.g.:
-   - `packages/platform/src/app/api/refund/route.test.ts` (unit API handler)
-   - `packages/platform/e2e/refund-admin.spec.ts` (e2e Playwright)
+3. **Specific test files** (enumerate paths). NO wildcards. Each line names the anchor it proves,
+   copied from SPEC §4.2/§4.3 — this list is what `che test-lock record` freezes later. E.g.:
+   - `packages/platform/src/app/api/refund/route.test.ts` (unit API handler) — B-1, AB-1
+   - `packages/platform/e2e/refund-admin.spec.ts` (e2e Playwright) — B-2
 4. **Key invariants (DbC post-conditions)**: 2–3 max. E.g.:
    - Successful refund → `ticket.status = CANCELLED + sold_units decremented + Stripe refund_id stored`.
 5. **Explicit out-of-scope tests** — 2–3 bullets of edge cases NOT covered. Confirms YAGNI.
@@ -577,6 +578,23 @@ When `test_spec_smoke.md` written: present ONLY the 5 bullets + file list (≤15
 
 If A → mark session.md: `test_spec_smoke: APPROVED`. Proceed to Phase 0.5 decision.
 If B → iterate once. If after 2 iterations still not approved → GO BACK to Phase 0 Scope Capture / PRD. NO development without APPROVED test_spec_smoke.
+
+### 1.5.3 Test freeze (opt-in per task — asked in the SAME approval turn as REVIEW_MODE §1.2)
+
+> **Why:** a green suite proves the tests pass, not that they still say what they said. An agent that
+> cannot make an assertion true can weaken it, and coverage/QA/scope-checker all stay green through
+> that edit. Freezing the hash closes that hole; it does NOT require writing every test up front.
+
+Ask: `Freeze the tests this task ships? (A) YES — a locked test cannot change later without my
+written authorisation (default) / (B) NO.`
+
+- Persist `TEST_FREEZE: ON|OFF` in `task_graph.md` Metadata + `session.md`, and log
+  `che decision_append "$WORKTREE_ROOT" "TEST_FREEZE_SET" "mode=<ON|OFF> task=<TASK_ID>"`.
+- Unanswered → default `ON`. `OFF` → skip every `che test-lock` call below; nothing else changes.
+- `ON` → the Developer records the lock after each slice commit and verifies it before every later
+  commit (§2.2.1); `che-scope-checker` counts a B-ID as covered only while its locked test matches.
+- The freeze is **per slice, not per feature**: tests are written when their slice is implemented
+  (che-developer §3.2 TDD), never as one speculative suite before F0 exists.
 
 ---
 
@@ -690,7 +708,12 @@ The Developer implements the task **slice by slice** (SPEC §4.5 `F0..FN`). For 
 - The slice's tests go **in the same commit** — never a separate `test:` commit for the same behaviour.
 - Only files inside the TASK ENVELOPE blast radius. **NEVER** `git add .` / `git add -A`.
 - **NEVER** commit planning artifacts (`che-ship` §0.8 blacklist: specs, task graphs, decisions, reports).
-- Order is fixed: tests green → `che-pair` PASS → (INCREMENTAL) user `A` → commit.
+- Order is fixed: tests green → `che-pair` PASS → (INCREMENTAL) user `A` → `che test-lock verify`
+  (when `TEST_FREEZE=ON`; exit 0 required) → commit → `che test-lock record … --files <this slice's
+  test files>`.
+- **Test freeze (`TEST_FREEZE=ON`, §1.5.3):** a locked test is immutable for the rest of the task and
+  every later session. Drift or a deleted test blocks the commit; only the user can authorise a
+  change, and only through `che test-lock authorize --reason "<their words>"`.
 - **Parallel exception (`che-executor-dispatcher`):** slices of different tasks run concurrently, so a
   per-slice commit would race on the git index. There, commit **once per task after the batch MERGE
   AUDIT** passes, and log `SLICE_COMMIT_DEFERRED_PARALLEL`. One commit per task is the floor — never a
