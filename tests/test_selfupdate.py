@@ -26,6 +26,7 @@ from che_core.selfupdate import (
     UPDATE_REINSTALL_FAILED,
     UPDATE_USAGE,
     UpdateRefused,
+    adapter_install_command,
     detect_installed_adapters,
     exit_code,
     find_checkout,
@@ -524,6 +525,62 @@ def test_a_nonzero_adapter_exit_is_recorded_rather_than_raised(tmp_path: Path) -
     )
 
     assert result["failed"] == [{"adapter": "trae", "returncode": 1}]
+
+
+def test_a_windows_manifest_proves_the_adapter_is_installed(tmp_path: Path) -> None:
+    """Hardlinks and junctions are not symlinks, so Windows needs its own evidence of a wiring."""
+    checkout = tmp_path / "che"
+    checkout.mkdir()
+    home = tmp_path / "trae-home"
+    home.mkdir()
+    (home / ".che-windows-links.json").write_text('{"version": 1, "entries": {}}')
+
+    found = detect_installed_adapters(checkout, {"HOME": str(tmp_path), "TRAE_HOME": str(home)})
+
+    assert found == ["trae"]
+
+
+def test_windows_relink_runs_the_powershell_adapter(tmp_path: Path) -> None:
+    checkout = tmp_path / "che"
+    adapter = checkout / "adapters" / "trae"
+    adapter.mkdir(parents=True)
+    (adapter / "install.ps1").write_text("# stub\n")
+
+    command = adapter_install_command(checkout, "trae", platform="windows")
+
+    assert command is not None
+    assert command[:5] == ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]
+    assert command[-1].endswith("install.ps1")
+
+
+def test_posix_relink_runs_the_bash_adapter(tmp_path: Path) -> None:
+    checkout = tmp_path / "che"
+    adapter = checkout / "adapters" / "trae"
+    adapter.mkdir(parents=True)
+    (adapter / "install.ps1").write_text("# stub\n")
+    (adapter / "install.sh").write_text("# stub\n")
+
+    command = adapter_install_command(checkout, "trae", platform="posix")
+
+    assert command == ["bash", str(adapter / "install.sh")]
+
+
+def test_windows_without_a_ps1_falls_back_to_the_bash_adapter(tmp_path: Path) -> None:
+    checkout = tmp_path / "che"
+    adapter = checkout / "adapters" / "claude"
+    adapter.mkdir(parents=True)
+    (adapter / "install.sh").write_text("# stub\n")
+
+    command = adapter_install_command(checkout, "claude", platform="windows")
+
+    assert command == ["bash", str(adapter / "install.sh")]
+
+
+def test_an_adapter_with_no_installer_has_no_command(tmp_path: Path) -> None:
+    checkout = tmp_path / "che"
+    (checkout / "adapters" / "trae").mkdir(parents=True)
+
+    assert adapter_install_command(checkout, "trae", platform="windows") is None
 
 
 # --------------------------------------------------------------------------------------------

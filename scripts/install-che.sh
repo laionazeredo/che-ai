@@ -7,8 +7,8 @@
 # # PLATFORM COMPATIBILITY (fail-fast check below):                          #
 # #   ✅ Linux  (any distro with GNU coreutils + bash ≥ 4.4 + python3 ≥ 3.9) #
 # #   ✅ macOS  (Monterey / 12+, homebrew strongly recommended for pipx/git) #
-# #   ❌ Windows PowerShell / CMD: NOT SUPPORTED natively.                   #
-# #      Use WSL2 (Ubuntu 22.04 LTS recommended) inside Windows instead.    #
+# #   ➜ Windows: use scripts/install-che.ps1 (native PowerShell 5.1+).      #
+# #      WSL2 (Ubuntu 22.04 LTS) remains supported through this installer.   #
 # ###########################################################################
 #
 # SYMLINK-BASED INSTALL (Sep 2026 rebrand): the source-of-truth (SSoT) checkout
@@ -158,9 +158,14 @@ case "${OS_NAME}" in
     ;;
   MINGW*|MSYS*|CYGWIN*)
     cat >&2 <<'WSL_HELP'
-ERROR: Native Windows shells (PowerShell / CMD / Git-Bash) are NOT supported.
+ERROR: this is the POSIX installer, and this shell is a native Windows one.
 
-Che requires a POSIX userland. Install WSL2 and run this script from inside it:
+Use the PowerShell installer instead (same flags, same contract):
+
+    irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 | iex
+    irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 | iex -args '-Apply'
+
+If you prefer a POSIX userland, install WSL2 and run this script from inside it:
 
     wsl --install -d Ubuntu-22.04
     # then inside the Ubuntu shell:
@@ -250,6 +255,7 @@ BLACKLIST_DIRS=( "user_rules" "memory" ".git" "node_modules" )
 BLACKLIST_FILES=( "bindings/registry.jsonl" )
 WHITELIST_ROOT_FILES=(
   README.md
+  AGENTS.md
   CHE_RULES.md
   CHE_COMMANDS.md
   REFERENCE_USER_RULES_MINIFIED.md
@@ -264,9 +270,11 @@ WHITELIST_DIRS=(
   che_core
   commands
   contracts
+  domains
   skills
   hooks
   scripts
+  adapters
   permission
   tests
   docs
@@ -379,20 +387,9 @@ fi
 NEEDS_PNPM_INSTALL=0
 RENDERED_HOOKS_JSON="$(mktemp)"
 CLEANUP_PATHS="${CLEANUP_PATHS} ${RENDERED_HOOKS_JSON}"
-python3 - "${SOURCE}/hooks.json" "$RENDERED_HOOKS_JSON" "$TARGET" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-source_path, output_path, target = map(Path, sys.argv[1:])
-config = json.loads(source_path.read_text())
-for event_hooks in config.get("hooks", {}).values():
-    for hook in event_hooks:
-        command = hook.get("command")
-        if isinstance(command, str):
-            hook["command"] = command.replace("__HARNESS_TARGET__", str(target))
-Path(output_path).write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n")
-PY
+python3 "${SOURCE}/scripts/render_hooks.py" \
+  "${SOURCE}/hooks.json" "$RENDERED_HOOKS_JSON" \
+  --harness "$TARGET" --platform posix >/dev/null
 
 if [ "$IN_PLACE" -eq 1 ]; then
   echo " (in-place: content already at target — item sync skipped)"

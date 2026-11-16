@@ -39,13 +39,37 @@
 
 ### 1.0 Platform Compatibility
 
-The installer and the CLI target **POSIX bash/zsh userlands only**.
+The CLI is pure Python and portable. The installer has one entry point per shell family: `install-che.sh` for POSIX bash/zsh, `install-che.ps1` for native Windows PowerShell.
 
 | OS | Support | Notes |
 | :- | :------ | :---- |
 | **Linux** (any distro, GNU coreutils + bash ≥ 4.4 + python3 ≥ 3.9) | ✅ Fully supported. Primary target. | `apt` / `dnf` / `pacman` / `nix`. |
 | **macOS** (Monterey / 12+, zsh or bash via Homebrew) | ✅ Fully supported. | Use `brew install pipx git python@3.12`. File paths inside `~/.che-ai` are case-insensitive on APFS by default — don't rely on case-only folder names. |
-| **Windows PowerShell / CMD** | ❌ Not supported. | Use **WSL2 with Ubuntu 22.04 LTS** (recommended), then run the installer from inside the WSL Ubuntu shell. Claude Code on Windows supports WSL remotes natively, so the workflow is transparent after setup. |
+| **Windows 10/11** (PowerShell 5.1+, python ≥ 3.9) | ✅ Natively supported. | `scripts/install-che.ps1`. IDE wiring uses symlinks when Developer Mode is enabled, otherwise junctions for directories and hardlinks for files. POSIX Git hooks are not installed. |
+| **WSL2 on Windows** | ✅ Fully supported. | Ubuntu 22.04 LTS; run `install-che.sh` from inside the Linux userland. Prefer this when you need POSIX tooling (Git hooks, `bash`-based skills). |
+
+#### Native Windows walkthrough
+
+1. Install Python 3.9+ (python.org; the `py` launcher is used automatically) and `pipx`:
+   ```powershell
+   py -3 -m pip install --user pipx
+   py -3 -m pipx ensurepath
+   ```
+2. Install or update Che (dry run first, then apply). `Invoke-Expression` takes no arguments, so flags go through a script block:
+   ```powershell
+   irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 | iex
+   $s = irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1
+   & ([scriptblock]::Create($s)) -Apply
+   ```
+   Cloning first gives a real checkout, which `che update` can fast-forward later:
+   ```powershell
+   git clone https://github.com/laionazeredo/che-ai.git "$env:USERPROFILE\.che-ai"
+   cd "$env:USERPROFILE\.che-ai"; .\scripts\install-che.ps1 -Update -Apply
+   ```
+3. Reopen the Trae IDE so it reloads `AGENTS.md`, `skills/`, `commands/` and `hooks.json`.
+4. Roll back the IDE wiring with `%USERPROFILE%\.che-ai\adapters\trae\uninstall.ps1`.
+
+`hooks.json` is rendered per platform: on Windows each hook command names an interpreter explicitly (`py -3 "C:\...\hook.py"`), because Windows cannot execute a `.py` file through its shebang.
 
 #### WSL2 walkthrough for Windows users
 

@@ -177,20 +177,9 @@ HOOKS_CONFIG="$TRAE_HOME/hooks.json"
 RENDERED_HOOKS="$(mktemp)"
 trap 'rm -f "$RENDERED_HOOKS"' EXIT
 
-python3 - "$CHE_REPO/hooks.json" "$RENDERED_HOOKS" "$CHE_REPO" <<'PY'
-import json
-from pathlib import Path
-import sys
-
-source_path, output_path, harness = map(Path, sys.argv[1:])
-config = json.loads(source_path.read_text())
-for event_hooks in config.get("hooks", {}).values():
-    for hook in event_hooks:
-        command = hook.get("command")
-        if isinstance(command, str):
-            hook["command"] = command.replace("__HARNESS_TARGET__", str(harness))
-Path(output_path).write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n")
-PY
+python3 "$CHE_REPO/scripts/render_hooks.py" \
+  "$CHE_REPO/hooks.json" "$RENDERED_HOOKS" \
+  --harness "$CHE_REPO" --platform posix >/dev/null
 
 if [ -f "$HOOKS_CONFIG" ] && cmp -s "$RENDERED_HOOKS" "$HOOKS_CONFIG"; then
   echo "  = hooks.json unchanged"
