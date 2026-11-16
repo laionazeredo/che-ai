@@ -326,6 +326,27 @@ _ADAPTERS: List[Dict[str, Any]] = [
 #: The marker the adapters forward from `scripts/prune-che-symlinks.sh`.
 _PRUNE_MARKER = "CHE_PRUNE_REMOVED="
 
+#: The manifest the native-Windows Trae adapter writes. Hardlinks and junctions are not symlinks,
+#: so the symlink evidence below cannot see a Windows installation on its own.
+_WINDOWS_MANIFEST = ".che-windows-links.json"
+
+
+def adapter_install_command(checkout: Path, name: str, platform: Optional[str] = None) -> Optional[List[str]]:
+    """Command that re-runs one adapter's installer on ``platform`` (``posix`` or ``windows``).
+
+    Windows has no bash guarantee and its adapter links through junctions and hardlinks, so the
+    platform picks the script: ``install.ps1`` through PowerShell on Windows, ``install.sh`` through
+    bash everywhere else. ``None`` means this checkout no longer ships an installer for the adapter.
+    """
+    host = platform or ("windows" if os.name == "nt" else "posix")
+    ps1 = Path(checkout) / "adapters" / name / "install.ps1"
+    sh = Path(checkout) / "adapters" / name / "install.sh"
+    if host == "windows" and ps1.is_file():
+        return ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1)]
+    if sh.is_file():
+        return ["bash", str(sh)]
+    return None
+
 
 def _points_into(entry: Path, checkout: Path) -> bool:
     """Is this symlink one of Che's?
@@ -359,6 +380,9 @@ def detect_installed_adapters(checkout: Path, environ: Optional[Dict[str, str]] 
     for spec in _ADAPTERS:
         home = Path(env.get(spec["home_env"]) or home_root / spec["default_home"])
         if not home.is_dir():
+            continue
+        if (home / _WINDOWS_MANIFEST).is_file():
+            found.append(spec["name"])
             continue
         for collection in spec["collections"]:
             target = home / collection
@@ -401,12 +425,12 @@ def relink_adapters(
     names = detect_installed_adapters(checkout, environ)
     result: Dict[str, Any] = {"adapters": [], "orphans_removed": 0, "failed": []}
     for name in names:
-        script = checkout / "adapters" / name / "install.sh"
-        if not script.is_file():
+        command = adapter_install_command(checkout, name)
+        if command is None:
             continue
         try:
             completed = runner(
-                ["bash", str(script)],
+                command,
                 capture_output=True,
                 text=True,
                 check=False,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -146,21 +147,35 @@ def _manifest_path(trash_dir: Path) -> Path:
     return trash_dir / "eject-manifest.json"
 
 
+def _shell_script_command(script: Path) -> tuple[Path, list[str]]:
+    """Resolve which file to run and how, for one of Che's adapter scripts.
+
+    Windows ships PowerShell rather than bash, so an adapter that provides a ``.ps1`` sibling is run
+    through it. Without one, the POSIX script stands: a Git Bash or WSL user keeps working, and a
+    plain Windows user gets bash's own error rather than a silent no-op.
+    """
+    ps1 = script.with_suffix(".ps1")
+    if os.name == "nt" and ps1.is_file():
+        return ps1, ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1)]
+    return script, ["bash", str(script)]
+
+
 def _run_uninstall_script(script: Path, dry_run: bool) -> tuple[int, str]:
-    if not script.exists():
-        return (0, f"skip: script does not exist {script}")
+    actual, command = _shell_script_command(script)
+    if not actual.exists():
+        return (0, f"skip: script does not exist {actual}")
     if dry_run:
-        return (0, f"[dry-run] would run: bash {script}")
+        return (0, f"[dry-run] would run: {' '.join(command)}")
     try:
         res = subprocess.run(
-            ["bash", str(script)],
+            command,
             capture_output=True,
             text=True,
             timeout=60,
         )
         return (res.returncode, (res.stdout or "") + (res.stderr or ""))
     except Exception as e:
-        return (2, f"error running {script}: {e!r}")
+        return (2, f"error running {actual}: {e!r}")
 
 
 def _remove_client_gitignore_snippets(
