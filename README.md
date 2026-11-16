@@ -45,7 +45,7 @@ The result is a harness that:
 > | :--- | :------ |
 > | **Linux** (any distro, bash/zsh, python3 ≥ 3.9) | ✅ Fully supported (primary target) |
 > | **macOS** (Monterey / 12+, bash/zsh via Homebrew) | ✅ Fully supported |
-> | **Windows (PowerShell / CMD)** | ❌ Native shell NOT supported. Install **WSL2** (Ubuntu 22.04 LTS recommended) and run the installer from inside the WSL Ubuntu shell. See §1.0 in [docs/cli-reference.md](./docs/cli-reference.md) for WSL2 walkthrough. |
+> | **Windows 10/11** (PowerShell 5.1+, python ≥ 3.9) | ✅ Natively supported via `scripts/install-che.ps1`. The Trae surface is wired with symlinks when Developer Mode is on, otherwise junctions (directories) and hardlinks (files). POSIX Git hooks are skipped — use `che review` / `che ship`. WSL2 remains supported and is still the better choice for POSIX tooling. |
 
 ### 1. Quick Install Script (recommended for end users)
 
@@ -56,6 +56,21 @@ curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/in
 
 # To skip the CLI install step (IDE only):
 # curl -fsSL ... | bash -s -- --apply --no-cli
+```
+
+On native Windows (PowerShell 5.1+), the counterpart installer has the same contract — dry run by default, `-Apply` to write:
+
+```powershell
+# Dry run (writes nothing):
+irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 | iex
+
+# Apply. Invoke-Expression takes no arguments, so flags go through a script block:
+$s = irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1
+& ([scriptblock]::Create($s)) -Apply
+
+# Or clone first — a real checkout, which `che update` can fast-forward later:
+git clone https://github.com/laionazeredo/che-ai.git "$env:USERPROFILE\.che-ai"
+cd "$env:USERPROFILE\.che-ai"; .\scripts\install-che.ps1 -Apply
 ```
 
 ### 2. Install the Global CLI (recommended for terminal-first users)
