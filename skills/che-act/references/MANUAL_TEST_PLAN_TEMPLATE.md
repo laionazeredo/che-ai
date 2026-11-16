@@ -2,8 +2,9 @@
 
 > Created by Scrum Master after all tasks are DONE and both Compliance stages passed.
 > Resolve ALL paths via the `che` CLI: `eval "$(che compute_paths WORKTREE_ROOT SESSION_ID)"`. NEVER inside `<WORKTREE_ROOT>/.trae/*`.
-> File location: `$CHE_WORKSPACE_SHARED/manual_test_plan.md` (durable; shared across sessions for same worktree)
-> Purpose: step-by-step human or automated-click verification of every acceptance criterion.
+> File location: printed by `che manual-plan sync "$WORKTREE_ROOT"` (durable, shared across sessions for the same worktree). Never hardcode it.
+> Gate before shipping: `che manual-plan validate <path>` must exit 0. Authoring rules: `che-manual-plan` skill.
+> Purpose: step-by-step human or automated verification of every acceptance criterion — prose for the human, an executable contract for the agent.
 > Language: English (per che rules). User communication about this plan is in Portuguese.
 
 ---
@@ -82,6 +83,45 @@ Format for EACH AC:
    - Expected visible text: `"<exact expected>"`
    - URL changed to `/success`
    - (If email/sms sent: check sandbox / logs)
+
+#### Executable contract (MANDATORY — one per AC)
+
+`che manual-plan sync` inserts this skeleton; fill every `TODO`. The gate rejects anything outside
+this vocabulary.
+
+| Field | Allowed values |
+|---|---|
+| `driver` | `ui` · `api` · `db` · `manual` |
+| `lane` | `local` · `preview` · `remote` |
+| `severity` | `BLOCKER` · `HIGH` · `MEDIUM` · `LOW` |
+| `evidence` | `screenshot` · `video` · `console_log` · `network_log` · `api_response` · `log_file` |
+| `action` | `goto` · `click` · `fill` · `press` · `wait` · `assert` · `api` · `manual` |
+| locator | `role` + `name`, or `label`, or `text` — **CSS/XPath are rejected** |
+
+```yaml
+# --- executable contract (AC-<N>) ---
+id: AC-<N>
+driver: ui
+lane: local
+base_url: http://localhost:3000
+evidence: [screenshot, console_log]
+severity: HIGH
+steps:
+  - action: goto
+    url: /path
+    expect_visible: Exact text
+  - action: click
+    role: button
+    name: Exact button label
+  - action: fill
+    label: Field label
+    value: "value"
+  - action: assert
+    expect_visible: Exact result text
+    expect_api: GET /api/resource 200
+```
+
+Assertions must be literal (`Refunded`, not `works`). One action per step. Never a secret.
 
 #### Automated equivalent (if known)
 - Command: `corepack pnpm test path/to/spec.ts`

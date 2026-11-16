@@ -1,22 +1,24 @@
 ---
-description: "Execute manual_test_plan.md step-by-step via Playwright MCP (real browser interactions + screenshot evidence)."
+description: "Execute a validated manual test plan step-by-step with the Chrome DevTools MCP (UI) and the terminal (HTTP/API), capturing screenshot/video/console/network evidence per acceptance criterion."
 arguments:
   - name: worktree
     description: "Absolute worktree path (REQUIRED). If missing → ASK."
     required: false
   - name: task-id
-    description: "Task slug inside $CHE_WORKSPACE_SHARED/tasks/ (resolved via `che compute_paths`). Looks for manual_test_plan.md there. Use this OR --plan-path."
+    description: "Task slug used to locate the plan and to name the evidence. Use this OR --plan-path."
     required: false
   - name: plan-path
-    description: "Absolute path to manual_test_plan.md file. Use this OR --task-id."
+    description: "Absolute path to manual_test_plan.md. Use this OR --task-id."
     required: false
 ---
 
 IMMEDIATELY invoke **`che-manual-test-executor`** Skill.
 
 Preflight:
+
 1. Worktree path confirmed (ASK if missing).
-2. Resolve manual_test_plan.md: (a) --plan-path given → use; (b) --task-id given → resolve via contract: `<CHE_WORKSPACE_SHARED>/tasks/<task-id>/manual_test_plan.md` (NEVER inside worktree/.trae/); (c) neither → AskUserQuestion.
-3. Parse plan (§0 Setup, AC steps, Smoke S1..S5, HUMAN_ONLY items).
-4.21→4. **MANDATORY setup approval GATE (before any shell setup command)**: AskUserQuestion (A=Run setup / B=Skip app already running / C=Cancel).
-5. Then Skill: execute ACs via Playwright/HTTP driver → evidence per step → build 8-section final report → condensed chat summary.
+2. Resolve the plan: `--plan-path` given → use it; `--task-id` given → resolve via the contract; neither → `che manual-plan sync "$WORKTREE_ROOT"` prints the newest plan (ASK only when it prints nothing).
+3. **Gate first**: `che manual-plan validate "$PLAN_PATH"` must exit 0. On failure, STOP and offer `/che-manual-plan` — a prose-only plan is not executable.
+4. **Capability probe** before any setup command: browser (`list_pages`), terminal HTTP, video. Record `CAPABILITIES`; a missing capability degrades the run instead of crashing it.
+5. **MANDATORY setup approval GATE**: AskUserQuestion (A=Run setup / B=Skip, app already running / C=Cancel).
+6. Then Skill: execute each contract step → evidence per step → verdict per AC (PASS / PARTIAL / FAIL / BLOCKED) → report + condensed chat summary.

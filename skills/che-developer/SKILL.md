@@ -254,13 +254,23 @@ finding is resolved / escalated per the `che-pair` §7 menu).
 After the slice is green AND `che-pair` returns `PASS` AND (in `INCREMENTAL` mode) the SM relays the
 user's `A` approval:
 
-1. `git status --porcelain` — verify ONLY files in the TASK ENVELOPE blast radius are modified.
-2. `git add <explicit paths>` — **NEVER** `git add .` / `git add -A`.
-3. `git commit -m "type(scope): <slice outcome>"` — conventional, English, imperative, ≤72 chars.
-4. Append `che decision_append "$WORKTREE_ROOT" "SLICE_COMMIT" "slice=<F0> sha=<sha> files=<n>"`.
+1. **`che test-lock verify "$WORKTREE_ROOT" --related-id "$TASK_ID"`** — required when the envelope
+   says `TEST_FREEZE=ON`. Exit `0` or STOP: a locked test changed (`drift`) or disappeared (`missing`)
+   is the user's call, never yours. `unlocked` = the task did not opt in; carry on.
+2. `git status --porcelain` — verify ONLY files in the TASK ENVELOPE blast radius are modified.
+3. `git add <explicit paths>` — **NEVER** `git add .` / `git add -A`.
+4. `git commit -m "type(scope): <slice outcome>"` — conventional, English, imperative, ≤72 chars.
+5. **`che test-lock record "$WORKTREE_ROOT" --related-id "$TASK_ID" --files <this slice's test files>`**
+   — when `TEST_FREEZE=ON`. Freezes what this slice shipped; a re-record of a changed file fails by
+   design (`TEST_LOCK_DRIFT`).
+6. Append `che decision_append "$WORKTREE_ROOT" "SLICE_COMMIT" "slice=<F0> sha=<sha> files=<n>"`.
 
 Hard rules:
 - **NEVER** commit before the pair `PASS`; **NEVER** bundle two slices into one commit.
+- **NEVER** run `che test-lock authorize` on your own initiative. A locked test changes only after the
+  user says so in their own words; pass that sentence verbatim as `--reason`.
+- Locking is per slice: the tests you write for this slice are frozen from its commit onwards, for
+  this session and every later one.
 - The slice's tests belong to the same commit as the code they cover.
 - **NEVER** commit planning artifacts (specs, task graph, decisions, reports — `che-ship` §0.8 blacklist).
 - `REVIEW_MODE = FINAL` does NOT relax this contract — it only removes the human gate, not the commit.

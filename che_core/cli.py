@@ -541,6 +541,70 @@ def build_parser():
     sp_merge.add_argument("--confirm", dest="confirmed", action="store_true", default=False, help="Safety gate.")
     sp_merge.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
 
+    # MANUAL TEST PLAN CONTRACT ================================================
+    parser_mp = subparsers.add_parser(
+        "manual-plan",
+        help="Scaffold, migrate and validate the executable contracts inside a manual test plan.",
+    )
+    mp_subs = parser_mp.add_subparsers(dest="manual_plan_cmd", required=True)
+
+    mp_sync = mp_subs.add_parser(
+        "sync",
+        help="Create the plan if absent, or insert the missing contract skeletons. Idempotent.",
+    )
+    mp_sync.add_argument("worktree_root", help="Absolute path to the bound worktree.")
+    mp_sync.add_argument(
+        "--path",
+        default=None,
+        help="Explicit plan path. Default: the newest known plan, else a new one under the worktree.",
+    )
+    mp_sync.add_argument("--slug", default="manual-plan", help="Folder slug used when a new plan is created.")
+    mp_sync.add_argument("--session-id", default=None, help="Session id for path resolution.")
+    mp_sync.add_argument(
+        "--dry-run", action="store_true", default=False, help="Report what would change; write nothing."
+    )
+    mp_sync.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+
+    mp_validate = mp_subs.add_parser(
+        "validate",
+        help="Run the MP-checks on a manual test plan. Exit 1 when an AC is not executable.",
+    )
+    mp_validate.add_argument("path", help="Absolute path to the manual test plan.")
+    mp_validate.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+    # TEST FREEZE (hash the tests a slice locked; detect later weakening) =======
+    parser_tl = subparsers.add_parser(
+        "test-lock",
+        help="Freeze the tests a slice shipped and report any later change as drift.",
+    )
+    tl_subs = parser_tl.add_subparsers(dest="tl_cmd", required=True)
+
+    tl_record = tl_subs.add_parser(
+        "record",
+        help="Lock the test files a slice shipped. Refuses to move an existing lock.",
+    )
+    tl_record.add_argument("worktree_root", help="Absolute path to the bound worktree.")
+    tl_record.add_argument("--related-id", required=True, help="Task or feature slug owning the lock.")
+    tl_record.add_argument("--files", nargs="+", required=True, help="Test files, relative to the worktree.")
+    tl_record.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+
+    tl_verify = tl_subs.add_parser(
+        "verify",
+        help="Compare every locked test against its hash. Exit 1 on drift or deletion.",
+    )
+    tl_verify.add_argument("worktree_root", help="Absolute path to the bound worktree.")
+    tl_verify.add_argument("--related-id", required=True, help="Task or feature slug owning the lock.")
+    tl_verify.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+
+    tl_authorize = tl_subs.add_parser(
+        "authorize",
+        help="Re-lock one file after the user authorised changing it; keeps both hashes and the reason.",
+    )
+    tl_authorize.add_argument("worktree_root", help="Absolute path to the bound worktree.")
+    tl_authorize.add_argument("--related-id", required=True, help="Task or feature slug owning the lock.")
+    tl_authorize.add_argument("--file", required=True, help="Locked test file, relative to the worktree.")
+    tl_authorize.add_argument("--reason", required=True, help="The user's own words for allowing the change.")
+    tl_authorize.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+
     # WORKTREE MGMT SUBCOMMANDS (the only thing that binds a filesystem path) ====
     parser_wt = subparsers.add_parser("worktree", help="Bind a checkout to a project (~/<project>/worktrees/<name>/).")
     wt_subs = parser_wt.add_subparsers(dest="wt_cmd", required=True)
@@ -1386,6 +1450,113 @@ def main(argv=None):
             return
 
         parser.error(f"Unknown spec subcommand: {args.spec_cmd}")
+        return
+
+    if args.command == "manual-plan":
+        from che_core.manual_plan import sync_plan, validate_plan
+
+        if args.manual_plan_cmd == "sync":
+            session_id = (
+                args.session_id
+                or os.environ.get("CHE_SESSION_ID")
+                or os.environ.get("HARNESS_SESSION_ID")
+                or "manual-plan"
+            )
+            res = sync_plan(
+                args.worktree_root,
+                session_id,
+                explicit_path=args.path,
+                slug=args.slug,
+                dry_run=args.dry_run,
+            )
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                if res["dry_run"]:
+                    verb = "DRY-RUN"
+                elif res["created"]:
+                    verb = "CREATED"
+                elif res["changed"]:
+                    verb = "UPDATED"
+                else:
+                    verb = "UNCHANGED"
+                print(f"{verb} · {res['acs']} AC(s) · {res['path']}")
+                if res["inserted"]:
+                    print(f"  contract skeleton: {', '.join(res['inserted'])}")
+                print("  next: fill the TODO fields, then `che manual-plan validate <path>`")
+            return
+
+        if args.manual_plan_cmd == "validate":
+            res = validate_plan(args.path)
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                print(f"{'PASS' if res['ok'] else 'FAIL'} · {res['acs']} AC(s) · {res['path']}")
+                for entry in res["checks"]:
+                    suffix = f" — {entry['detail']}" if entry["detail"] else ""
+                    print(f"  {entry['id']:<4} {entry['status']}{suffix}")
+            if not res["ok"]:
+                sys.exit(1)
+            return
+
+        parser.error(f"Unknown manual-plan subcommand: {args.manual_plan_cmd}")
+    if args.command == "test-lock":
+        from che_core.test_lock import authorize, record, verify
+
+        if args.tl_cmd == "record":
+            res = record(args.worktree_root, args.related_id, args.files)
+        elif args.tl_cmd == "verify":
+            res = verify(args.worktree_root, args.related_id)
+        elif args.tl_cmd == "authorize":
+            res = authorize(args.worktree_root, args.related_id, args.file, args.reason)
+            if res["status"] == "authorised":
+                # The manifest keeps the hashes; decisions.log keeps the event, so one query
+                # answers "what was weakened in this worktree, and on whose word".
+                append_decision(
+                    args.worktree_root,
+                    "TEST_LOCK_AUTHORISED",
+                    json.dumps(
+                        {
+                            "file": res["file"],
+                            "old_sha256": res["old_sha256"],
+                            "new_sha256": res["new_sha256"],
+                            "reason": res["reason"],
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+        else:
+            parser.error(f"Unknown test-lock subcommand: {args.tl_cmd}")
+            return
+
+        if _wants_json(args):
+            _print_json(res)
+        elif args.tl_cmd == "record":
+            print(f"locked {len(res['locked'])} test file(s) for {res['related_id']} ({res['total_locked']} total)")
+            for name in res["locked"]:
+                print(f"  + {name}")
+            for name in res["unchanged"]:
+                print(f"  = {name}")
+        elif args.tl_cmd == "verify":
+            if res["status"] == "unlocked":
+                print(f"unlocked · no test lock for {res['related_id']} (nothing to verify)")
+            elif res["ok"]:
+                print(f"ok · {res['checked']} locked test file(s) unchanged")
+            else:
+                print(f"{res['status'].upper()} · {len(res['drifted'])} changed, {len(res['missing'])} missing")
+                for row in res["drifted"]:
+                    print(f"  ~ {row['file']} (locked {row['expected'][:12]}… now {row['actual'][:12]}…)")
+                for name in res["missing"]:
+                    print(f"  - {name} (deleted)")
+                print("Ask the user before re-locking: che test-lock authorize --file <path> --reason <their words>")
+        else:
+            if res["status"] == "unchanged":
+                print(f"unchanged · {res['file']} still matches its lock")
+            else:
+                print(f"authorised · {res['file']} {res['old_sha256'][:12]}… → {res['new_sha256'][:12]}…")
+
+        if args.tl_cmd == "verify" and not res["ok"]:
+            sys.exit(1)
         return
 
     if args.command == "worktree":

@@ -37,6 +37,15 @@ fi
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${HOOK_DIR}/../.." && pwd)"
 DEPS_CHECK="${REPO_ROOT}/scripts/check-dev-dependencies.sh"
+PY_ENV_LIB="${REPO_ROOT}/scripts/lib/python-env.sh"
+
+# Older installs have no python-env.sh — fall back to the plain interpreter.
+if [[ -f "${PY_ENV_LIB}" ]]; then
+  # shellcheck source=scripts/lib/python-env.sh
+  source "${PY_ENV_LIB}"
+else
+  che_python() { python3 "$@"; }
+fi
 
 if [[ -f "${DEPS_CHECK}" ]]; then
   bash "${DEPS_CHECK}"   # STRICT mode — missing REQUIRED = block push now.
@@ -74,13 +83,13 @@ if command -v ruff >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# 3. Full pytest suite — 39 tests, ~2 s.  Exactly mirrors python-ci step 5.
+# 3. Full pytest suite — mirrors python-ci step 5.
 # ---------------------------------------------------------------------------
 
-info "python3 -m pytest tests/ -q  (exactly python-ci step 5, 39 tests)"
+info "python3 -m pytest tests/ -q  (exactly python-ci step 5, full suite)"
 if command -v pytest >/dev/null 2>&1 || command -v python3 >/dev/null 2>&1; then
-  if ! python3 -m pytest tests/ -q --tb=short 2>&1 | tail -25; then
-    fail "pytest failed (39 expected pass). Fix before push or draft-PR with --no-verify."
+  if ! che_python -m pytest tests/ -q --tb=short 2>&1 | tail -25; then
+    fail "pytest failed (full suite expected green). Fix before push or draft-PR with --no-verify."
     exit 1
   fi
   ok "pytest full suite"

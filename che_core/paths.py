@@ -448,6 +448,7 @@ def output_path(
     ext: str,
     suffix: str = "",
     worktree_root: Optional[str] = None,
+    root: Optional[str] = None,
 ) -> str:
     """Resolve the canonical path for a Che artifact and create its parent directory.
 
@@ -458,6 +459,8 @@ def output_path(
     Preconditions:
       - ``type``, ``slug`` and ``ext`` are non-empty.
       - ``scope`` is either ``"session"`` or ``"workspace"``.
+      - ``root``, when given, is an already-resolved storage root (a CLI caller that
+        holds ``compute_paths`` output and must not depend on the process env).
 
     Returns the absolute target path (parent directory created on disk).
     """
@@ -472,7 +475,9 @@ def output_path(
 
     subfolder = _OUTPUT_SUBFOLDERS.get(type, type)
 
-    if scope == "session":
+    if root:
+        root_dir = root
+    elif scope == "session":
         root_dir = os.environ.get("CHE_SESSION_DIR") or os.environ.get("HARNESS_SESSION_DIR")
         if not root_dir:
             root_dir = str(resolve_che_home() / "outputs" / "fallback-session")

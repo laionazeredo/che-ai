@@ -32,7 +32,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from che_core.diagnostics import fail
 from che_core.paths import write_file_atomic
@@ -63,6 +63,17 @@ _WEASEL_RE = re.compile(r"\b(correctly|as expected|properly|works|ok)\b", re.IGN
 _SEPARATOR_RE = re.compile(r"^:?-{2,}:?$")
 _TEST_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs"}
 _SKIP_DIRS = {"node_modules", ".git", "dist", "build", ".next", "vendor", "__pycache__", ".venv", "venv"}
+
+#: The state model replaces the flowchart when the change touches a stateful entity: a picture of
+#: states and transitions tells the agent which transitions are legal, which is what a decision tree
+#: cannot express. The table is the contract; the `stateDiagram-v2` block is its rendering.
+_STATE_HEADER = "### §4.4.2 STATE MODEL"
+_STATE_STOPS = ("#### §4.4.3", "### §4.5", "## §5")
+_INITIAL_RE = re.compile(r"^\*\*Initial:\*\*\s*`?([^`\s]+)`?", re.MULTILINE)
+_TERMINAL_RE = re.compile(r"^\*\*Terminal:\*\*\s*(.+)$", re.MULTILINE)
+_TRACE_HEADER = "### §4.0 TICKET TRACEABILITY"
+_TRACE_STOPS = ("### §4.1", "### §4.2", "## §5")
+_REF_RE = re.compile(r"\b(?:AB|B)-\d+\b")
 
 
 # --- Parsing -----------------------------------------------------------------
@@ -178,6 +189,173 @@ def _section(lines: List[str], start_marker: str, stop_markers: Tuple[str, ...])
             break
         body.append(line)
     return body
+
+
+# --- State model (V27 / V28) -------------------------------------------------
+
+
+def _state_rows(section: Sequence[str]) -> List[Dict[str, str]]:
+    rows: List[Dict[str, str]] = []
+    for row in _rows_after(list(section), "| State"):
+        if len(row) < 6:
+            continue
+        rows.append(
+            {
+                "state": row[0].strip("`* "),
+                "event": row[1].strip(),
+                "guard": row[2].strip(),
+                "next": row[3].strip("`* "),
+                "legal": row[4].strip("`* ").lower(),
+                "ref": row[5].strip(),
+            }
+        )
+    return rows
+
+
+def _state_model(lines: Sequence[str]) -> Optional[Dict[str, Any]]:
+    """The §4.4.2 state model, or ``None`` when the draft uses the flowchart instead."""
+    if not any(line.strip().startswith(_STATE_HEADER) for line in lines):
+        return None
+    section = _section(list(lines), _STATE_HEADER, _STATE_STOPS)
+    text = "\n".join(section)
+    initial = _INITIAL_RE.search(text)
+    terminal = _TERMINAL_RE.search(text)
+    return {
+        "initial": initial.group(1).strip() if initial else "",
+        "terminals": [item.strip().strip("`* ") for item in terminal.group(1).split(",") if item.strip()]
+        if terminal
+        else [],
+        "rows": _state_rows(section),
+        "has_diagram": "stateDiagram-v2" in text,
+    }
+
+
+def _state_structure_problems(model: Dict[str, Any]) -> List[str]:
+    """V27 — the model exists, is complete, and every state is reachable from the initial one."""
+    rows = model["rows"]
+    problems: List[str] = []
+    if not model["initial"]:
+        problems.append("no `**Initial:** <state>` line")
+    if not model["terminals"]:
+        problems.append("no `**Terminal:** <state>[, <state>]` line")
+    if not rows:
+        return problems + ["no transition table under the header"]
+    if not model["has_diagram"]:
+        problems.append("no ```mermaid stateDiagram-v2 block — the table needs its rendering")
+
+    states = {row["state"] for row in rows}
+    states |= {row["next"] for row in rows if row["next"] and not row["next"].startswith("(")}
+    if model["initial"] and model["initial"] not in states:
+        problems.append(f"initial state {model['initial']!r} never appears in the table")
+    for terminal in model["terminals"]:
+        if terminal not in states:
+            problems.append(f"terminal state {terminal!r} never appears in the table")
+
+    if model["initial"] in states:
+        adjacency: Dict[str, set] = {}
+        for row in rows:
+            if row["legal"] == "yes" and row["next"] in states:
+                adjacency.setdefault(row["state"], set()).add(row["next"])
+        seen = {model["initial"]}
+        frontier = [model["initial"]]
+        while frontier:
+            for nxt in adjacency.get(frontier.pop(), ()):
+                if nxt not in seen:
+                    seen.add(nxt)
+                    frontier.append(nxt)
+        unreachable = sorted(states - seen)
+        if unreachable:
+            problems.append(f"unreachable state(s) from {model['initial']!r}: {', '.join(unreachable)}")
+    return problems
+
+
+def _state_transition_problems(model: Dict[str, Any], b_ids: set, ab_ids: set) -> List[str]:
+    """V28 — every transition is labelled, referenced, and a forbidden one points at an AB-ID."""
+    problems: List[str] = []
+    for index, row in enumerate(model["rows"], start=1):
+        label = f"row {index} ({row['state']})"
+        if row["legal"] not in ("yes", "no"):
+            problems.append(f"{label}: `Legal?` must be yes or no, got {row['legal']!r}")
+        if not row["event"]:
+            problems.append(f"{label}: `Event` is empty")
+        refs = set(_REF_RE.findall(row["ref"]))
+        if not refs:
+            problems.append(f"{label}: `Ref` names no B/AB id")
+        for ref in sorted(refs):
+            if ref not in b_ids and ref not in ab_ids:
+                problems.append(f"{label}: {ref} is not declared in §4.2/§4.3")
+        if row["legal"] == "no" and not any(ref in ab_ids for ref in refs):
+            problems.append(f"{label}: a forbidden transition must reference an AB-ID")
+    return problems
+
+
+# --- Ticket traceability (V29) -----------------------------------------------
+
+
+def _traceability_problems(lines: Sequence[str], frontmatter: Dict[str, Any], b_ids: set, ab_ids: set) -> List[str]:
+    ticket = str(frontmatter.get("ticket_ref", "")).strip()
+    present = any(line.strip().startswith(_TRACE_HEADER) for line in lines)
+    if not present:
+        if ticket and ticket.upper() != "NONE":
+            return [f"ticket_ref={ticket} but no `{_TRACE_HEADER}` section — map every ticket AC to a B-ID"]
+        return []
+    section = _section(list(lines), _TRACE_HEADER, _TRACE_STOPS)
+    rows = _rows_after(section, "| Ticket AC")
+    if not rows:
+        return ["the traceability section has no table rows"]
+    problems: List[str] = []
+    for index, row in enumerate(rows, start=1):
+        if len(row) < 4:
+            problems.append(f"row {index}: needs Ticket AC | B-IDs | Status | Why not covered")
+            continue
+        status = row[2].strip().strip("`* ").lower()
+        reason = row[3].strip()
+        if status not in ("covered", "partial", "not-covered"):
+            problems.append(f"row {index}: Status must be covered | partial | not-covered, got {status!r}")
+        if status == "not-covered" and not reason:
+            problems.append(f"row {index}: not-covered needs a reason")
+        for ref in sorted(set(_REF_RE.findall(row[1]))):
+            if ref not in b_ids and ref not in ab_ids:
+                problems.append(f"row {index}: {ref} is not declared in §4.2/§4.3")
+    return problems
+
+
+# --- Slice coverage (V30) and counter drift (V31) ----------------------------
+
+
+def _slice_coverage_problems(lines: Sequence[str], b_ids: set, ab_ids: set) -> List[str]:
+    covered: set = set()
+    for row in _rows_after(list(lines), "### §4.5"):
+        covered |= set(_REF_RE.findall(_cell(row, 2)))
+    missing = sorted((b_ids | ab_ids) - covered)
+    return [f"behaviour(s) never placed in a §4.5 slice: {', '.join(missing)}"] if missing else []
+
+
+def _counter_problems(frontmatter: Dict[str, Any], b_count: int, ab_count: int, f0_ok: Optional[bool]) -> List[str]:
+    """V31 — a declared counter must match the body it summarises.
+
+    The counters are consumed downstream (``che-plan``, ``che-act``, ``che-scope-checker``), so they
+    cannot be removed; they can be verified. Only under-claims fail: declaring a diagram requirement
+    the trigger does not demand is a judgement call, not drift.
+    """
+    problems: List[str] = []
+    declared_b = str(frontmatter.get("b_count", "")).strip()
+    if declared_b not in ("", "0") and declared_b != str(b_count):
+        problems.append(f"b_count={declared_b} but §4.2 has {b_count} B-ID(s)")
+    declared_ab = str(frontmatter.get("ab_count", "")).strip()
+    if declared_ab not in ("", "0") and declared_ab != str(ab_count):
+        problems.append(f"ab_count={declared_ab} but §4.3 has {ab_count} AB-ID(s)")
+
+    tracer = str(frontmatter.get("tracer_f0_defined", "")).strip().lower()
+    if f0_ok is not None and tracer in ("true", "false") and (tracer == "true") != f0_ok:
+        state = "passes" if f0_ok else "does not pass"
+        problems.append(f"tracer_f0_defined={tracer} but the §4.5 F0 row {state} its conditions")
+
+    mermaid = str(frontmatter.get("mermaid_required", "")).strip().lower()
+    risk = str(frontmatter.get("risk_level", "low")).strip().lower()
+    if mermaid == "false" and (b_count >= 8 or risk in ("medium", "high")):
+        problems.append(f"mermaid_required=false but the diagram trigger fires (B={b_count}, risk={risk})")
+    return problems
 
 
 # --- Tier --------------------------------------------------------------------
@@ -320,12 +498,14 @@ def validate_spec(path: str, tier: Optional[str] = None) -> Dict[str, Any]:
         if re.match(r"^F\d+$", slice_id):
             slices.append((slice_id, row))
 
+    f0_ok: Optional[bool] = None
     if effective_tier == "lite":
         _check(checks, "V16", "skip", "tier=lite")
         _check(checks, "V17", "skip", "tier=lite")
     else:
         f0 = next((row for slice_id, row in slices if slice_id == "F0"), None)
         if f0 is None:
+            f0_ok = False
             _check(checks, "V16", "fail", "no F0 tracer row under ### §4.5")
         else:
             problems = []
@@ -338,6 +518,7 @@ def validate_spec(path: str, tier: Optional[str] = None) -> Dict[str, Any]:
                 problems.append("F0 DONE criterion is empty")
             elif _WEASEL_RE.search(done):
                 problems.append("F0 DONE criterion uses weasel words")
+            f0_ok = not problems
             if problems:
                 _check(checks, "V16", "fail", "; ".join(problems))
             else:
@@ -354,6 +535,49 @@ def validate_spec(path: str, tier: Optional[str] = None) -> Dict[str, Any]:
             _check(checks, "V17", "fail", "three or more consecutive single-layer slices")
         else:
             _check(checks, "V17", "pass")
+
+    b_ids = {b_id for b_id, _row in b_rows}
+    ab_ids = {ab_id for ab_id, _row in ab_rows}
+    # A gate must not retroactively invalidate a decision that was already taken: planning-completeness
+    # checks apply to drafts, while correctness of whatever a SPEC contains applies to all.
+    historical = str(frontmatter.get("status", "")).strip().lower() == "approved"
+
+    # V27 / V28 — the state model, validated whenever the draft carries one.
+    model = _state_model(lines)
+    stateful = str(frontmatter.get("stateful_entity", "")).strip().lower() == "true"
+    if model is None:
+        if stateful:
+            _check(checks, "V27", "fail", "stateful_entity=true but no `### §4.4.2 STATE MODEL` section")
+        else:
+            _check(checks, "V27", "skip", "no state model (flowchart in use)")
+        _check(checks, "V28", "skip", "no state model")
+    else:
+        problems = _state_structure_problems(model)
+        _check(checks, "V27", "fail" if problems else "pass", "; ".join(problems))
+        problems = _state_transition_problems(model, b_ids, ab_ids)
+        _check(checks, "V28", "fail" if problems else "pass", "; ".join(problems))
+
+    # V29 — every ticket AC is mapped to a behaviour, or says why it is not.
+    if effective_tier == "lite":
+        _check(checks, "V29", "skip", "tier=lite")
+    elif historical:
+        _check(checks, "V29", "skip", "Approved SPEC — planning checks are not re-run")
+    else:
+        problems = _traceability_problems(lines, frontmatter, b_ids, ab_ids)
+        _check(checks, "V29", "fail" if problems else "pass", "; ".join(problems))
+
+    # V30 — every behaviour lands in a vertical slice.
+    if effective_tier == "lite":
+        _check(checks, "V30", "skip", "tier=lite")
+    elif historical:
+        _check(checks, "V30", "skip", "Approved SPEC — planning checks are not re-run")
+    else:
+        problems = _slice_coverage_problems(lines, b_ids, ab_ids)
+        _check(checks, "V30", "fail" if problems else "pass", "; ".join(problems))
+
+    # V31 — a declared counter matches the body it summarises (cheap, always on).
+    problems = _counter_problems(frontmatter, b_count, ab_count, f0_ok)
+    _check(checks, "V31", "fail" if problems else "pass", "; ".join(problems))
 
     # V23 — simplicity bias: explicit deferral plus alternatives and a kill switch.
     why = "\n".join(_section(lines, "## §1", ("## §2", "## §3", "## §4", "## §5", "## §6", "## §7")))

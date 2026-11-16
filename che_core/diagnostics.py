@@ -530,6 +530,57 @@ ERROR_CATALOG: Dict[str, ErrorSpec] = dict(
             "Decisions were not recorded. The filesystem store is the fallback.",
             retryable=True,
         ),
+        # ------------------------------------------------------------------ test freeze
+        _spec(
+            "TEST_LOCK_NO_FILES",
+            "test-freeze",
+            EXIT_USAGE,
+            "no test file named to lock.",
+            "Pass --files with the test files this slice shipped; a lock with nothing in it proves nothing.",
+        ),
+        _spec(
+            "TEST_LOCK_INVALID_RELATED_ID",
+            "test-freeze",
+            EXIT_USAGE,
+            "{related_id!r} is not a usable related id.",
+            "Use the task or feature slug: lowercase letters, digits, dashes and underscores.",
+        ),
+        _spec(
+            "TEST_LOCK_REASON_REQUIRED",
+            "test-freeze",
+            EXIT_USAGE,
+            "authorising a test change needs a reason.",
+            "Pass --reason with the user's own words; the old and new hashes are kept beside it.",
+        ),
+        _spec(
+            "TEST_LOCK_FILE_OUTSIDE_WORKTREE",
+            "test-freeze",
+            EXIT_USAGE,
+            "test file {file} is outside the bound worktree {worktree_root}.",
+            "A lock only covers files in this worktree; the scissor check (§19) forbids the rest.",
+        ),
+        _spec(
+            "TEST_LOCK_FILE_MISSING",
+            "test-freeze",
+            EXIT_USAGE,
+            "test file {file} does not exist in the worktree.",
+            "Lock the file after it is written; a deleted test cannot be hashed.",
+        ),
+        _spec(
+            "TEST_LOCK_DRIFT",
+            "test-freeze",
+            EXIT_USAGE,
+            "these test files changed since they were locked: {files}",
+            "A locked test is frozen. If the change is intended, ask the user and re-lock it with "
+            "`che test-lock authorize --reason <their words>`; never overwrite a lock silently.",
+        ),
+        _spec(
+            "TEST_LOCK_NOT_LOCKED",
+            "test-freeze",
+            EXIT_NOT_FOUND,
+            "test file {file} is not locked for {related_id}.",
+            "Only a locked file can be re-locked; record it first with `che test-lock record`.",
+        ),
         # ------------------------------------------------------------------ last resort
         _spec(
             "UNEXPECTED",

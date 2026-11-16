@@ -57,6 +57,18 @@ die()   { printf '%s[check-dev-deps] %sFAIL%s  %s\n'   "${DIM}"  "${RED}" "${RST
 MISSING_REQUIRED=0
 MISSING_OPTIONAL=0
 
+# ---------------------------------------------------------------------------
+# Loader environment — IDE terminals can shadow libsqlite3 (see python-env.sh).
+# ---------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY_ENV_LIB="${SCRIPT_DIR}/lib/python-env.sh"
+if [[ -f "${PY_ENV_LIB}" ]]; then
+  # shellcheck source=scripts/lib/python-env.sh
+  source "${PY_ENV_LIB}"
+else
+  che_python() { python3 "$@"; }
+fi
+
 if (( CHE_DEPS_STRICT == 1 )); then
   inf "Running STRICT check (missing REQUIRED → block commit / push)."
 else
@@ -81,7 +93,7 @@ check_tool() {
   if command -v "${bin}" >/dev/null 2>&1; then
     case "${bin}" in
       python3)
-        version="$(python3 -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null || echo "")"
+        version="$(che_python -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null || echo "")"
         if [[ -n "${version}" ]]; then
           # Also enforce >= 3.9 for REQUIRED because that's pyproject.toml.
           local major minor
@@ -134,7 +146,7 @@ check_tool REQUIRED python3 "python3" $'Install system Python 3.9+:\n  Ubuntu/De
 # via `python3 -m pytest` because that's exactly what the hooks / CI call.
 if command -v python3 >/dev/null 2>&1; then
   PYTEST_VERSION=""
-  if PYTEST_VERSION="$(python3 -m pytest --version 2>/dev/null | head -n 1)"; then
+  if PYTEST_VERSION="$(che_python -m pytest --version 2>/dev/null | head -n 1)"; then
     ok "pytest module (${PYTEST_VERSION})"
   else
     MISSING_REQUIRED=$((MISSING_REQUIRED + 1))
@@ -165,7 +177,7 @@ check_tool REQUIRED ruff "ruff (lint + formatter)" $'Install ONE of:\n  (A) Pipx
 # every other command works without them, and a dev box that never draws a picture would never
 # notice. `pip install -e .` resolves both from pyproject.
 if command -v python3 >/dev/null 2>&1; then
-  MISSING_MODULES="$(python3 - <<'EOF' 2>/dev/null
+  MISSING_MODULES="$(che_python - <<'EOF' 2>/dev/null
 import importlib.util
 print(" ".join(name for name in ("PIL", "numpy") if importlib.util.find_spec(name) is None))
 EOF
@@ -195,6 +207,33 @@ EOF
                 pipx install -e . --force
 
 EOF
+  fi
+fi
+
+# The interpreter's own sqlite3 module: three test modules and the state store need it.
+# An IDE terminal that exports an LD_LIBRARY_PATH with an older libsqlite3 shadows it;
+# the hooks strip that entry, and we name it here so a manual run is not a mystery.
+if command -v python3 >/dev/null 2>&1; then
+  if che_python -c 'import sqlite3' >/dev/null 2>&1; then
+    ok "sqlite3 stdlib module (usable)"
+  else
+    MISSING_REQUIRED=$((MISSING_REQUIRED + 1))
+    miss "sqlite3 stdlib module cannot be imported — 3 test modules fail at collection."
+    cat <<'EOF'
+          The interpreter's libsqlite3 is being shadowed by an older one. Confirm with:
+
+            python3 -c 'import sqlite3'
+
+          Fix the shell that launches your IDE/terminal (remove the offending
+          LD_LIBRARY_PATH entry), or keep using the Git hooks, which ignore it.
+EOF
+  fi
+
+  if declare -F che_sqlite_shadow_entries >/dev/null; then
+    SHADOW_ENTRIES="$(che_sqlite_shadow_entries)"
+    if [[ -n "${SHADOW_ENTRIES}" ]]; then
+      warn "LD_LIBRARY_PATH shadows libsqlite3 (ignored by the hooks): ${SHADOW_ENTRIES}"
+    fi
   fi
 fi
 

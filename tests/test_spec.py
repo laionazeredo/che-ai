@@ -27,7 +27,7 @@ def _spec(
     "| B-2 | given two | when two | Then row count == 2 | [✅Unit] | | 90% | none |",
     ab_rows: str = "| AB-1 | given one | when duplicate | Then DOES NOT create a second row | [✅Integ] | | 99% | none |",
     slices: str = (
-        "| **F0** | tracer | **B-1** | `pages/x` · `app/api/y` | one test per layer "
+        "| **F0** | tracer | **B-1**, B-2, AB-1 | `pages/x` · `app/api/y` | one test per layer "
         "| Creator clicks Save and row 1 shows the new title |"
     ),
     files: int = 8,
@@ -36,6 +36,9 @@ def _spec(
     with_alternatives: bool = True,
     with_kill: bool = True,
     tier: str = "",
+    frontmatter_extra: str = "",
+    s4_head: str = "",
+    s4_extra: str = "",
 ) -> str:
     alternatives = (
         "- Alternatives considered: reuse the existing endpoint (rejected: wrong auth scope)\n"
@@ -61,7 +64,7 @@ readiness: passed
 readiness_report: /tmp/readiness.md
 open_assumptions: []
 estimated_files_max: {files}
-{tier_line}---
+{tier_line}{frontmatter_extra}---
 
 ## §0 EXECUTIVE SUMMARY (read this first)
 
@@ -99,7 +102,7 @@ estimated_files_max: {files}
 
 ## §4 SPECIFICATION BY EXAMPLE
 
-### §4.2 POSITIVE BEHAVIOUR EXAMPLES
+{s4_head}### §4.2 POSITIVE BEHAVIOUR EXAMPLES
 
 | B-ID | Given | When | Then | Test Layers | UI Selector | Confidence | Risk |
 |---|---|---|---|---|---|---|---|
@@ -111,7 +114,7 @@ estimated_files_max: {files}
 |---|---|---|---|---|---|---|---|
 {ab_rows}
 
-{slice_block}## §5 VERIFICATION MATRIX
+{s4_extra}{slice_block}## §5 VERIFICATION MATRIX
 
 | Anchor | Status | Test file |
 |---|---|---|
@@ -243,3 +246,140 @@ def test_project_init_writes_the_constitution_once(tmp_path: Path, monkeypatch: 
 
     second = init_project(str(WORKTREE), slug="acme", domain="engineering")
     assert str(constitution) not in second["files_created"]
+
+
+# --- State model (V27 / V28) -------------------------------------------------
+
+STATE_MODEL = """### §4.4.2 STATE MODEL
+
+**Initial:** `pending`
+**Terminal:** `refunded`
+
+| State | Event | Guard | Next | Legal? | Ref |
+|---|---|---|---|---|---|
+| pending | payment.captured | amount > 0 | paid | yes | B-1 |
+| pending | payment.captured | amount == 0 | pending | no | AB-1 |
+| paid | refund.requested | — | refunded | yes | B-2 |
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> paid: payment.captured (B-1)
+    paid --> refunded: refund.requested (B-2)
+    refunded --> [*]
+```
+
+"""
+
+TRACE = """### §4.0 TICKET TRACEABILITY
+
+| Ticket AC | B-IDs | Status | Why not covered |
+|---|---|---|---|
+| AC-1 save a row | B-1, B-2 | covered | — |
+
+"""
+
+
+def _statuses(report: dict) -> dict:
+    return {entry["id"]: entry["status"] for entry in report["checks"]}
+
+
+def test_a_complete_state_model_passes(tmp_path: Path) -> None:
+    text = _spec(frontmatter_extra="stateful_entity: true\n", s4_extra=STATE_MODEL)
+
+    report = validate_spec(str(_write(tmp_path, text)))
+
+    assert report["ok"] is True, report["failures"]
+    assert _statuses(report)["V27"] == "pass"
+    assert _statuses(report)["V28"] == "pass"
+
+
+def test_stateful_entity_without_a_model_fails_v27(tmp_path: Path) -> None:
+    report = validate_spec(str(_write(tmp_path, _spec(frontmatter_extra="stateful_entity: true\n"))))
+
+    assert any(failure.startswith("V27:") for failure in report["failures"])
+
+
+def test_forbidden_transition_must_reference_an_ab_id(tmp_path: Path) -> None:
+    broken = STATE_MODEL.replace(
+        "| pending | payment.captured | amount == 0 | pending | no | AB-1 |",
+        "| pending | payment.captured | amount == 0 | pending | no | B-1 |",
+    )
+
+    report = validate_spec(str(_write(tmp_path, _spec(s4_extra=broken))))
+
+    assert any("forbidden transition must reference an AB-ID" in failure for failure in report["failures"])
+
+
+def test_unreachable_state_fails_v27(tmp_path: Path) -> None:
+    broken = STATE_MODEL.replace("**Terminal:** `refunded`", "**Terminal:** `refunded`, `cancelled`").replace(
+        "| paid | refund.requested | — | refunded | yes | B-2 |",
+        "| paid | refund.requested | — | refunded | yes | B-2 |\n"
+        "| cancelled | refund.requested | — | cancelled | yes | B-2 |",
+    )
+
+    report = validate_spec(str(_write(tmp_path, _spec(s4_extra=broken))))
+
+    assert any("unreachable state(s)" in failure for failure in report["failures"])
+
+
+def test_a_state_model_needs_its_rendering(tmp_path: Path) -> None:
+    broken = STATE_MODEL.split("```mermaid")[0]
+
+    report = validate_spec(str(_write(tmp_path, _spec(s4_extra=broken))))
+
+    assert any("stateDiagram-v2" in failure for failure in report["failures"])
+
+
+# --- Traceability (V29), slice coverage (V30), counter drift (V31) -----------
+
+
+def test_a_ticket_ref_requires_a_traceability_table(tmp_path: Path) -> None:
+    report = validate_spec(str(_write(tmp_path, _spec(frontmatter_extra="ticket_ref: AT-352\n"))))
+
+    assert any(failure.startswith("V29:") for failure in report["failures"])
+
+
+def test_a_traceability_row_must_be_complete(tmp_path: Path) -> None:
+    broken = TRACE.replace(
+        "| AC-1 save a row | B-1, B-2 | covered | — |", "| AC-1 save a row | B-1, B-9 | covered | — |"
+    )
+
+    report = validate_spec(str(_write(tmp_path, _spec(frontmatter_extra="ticket_ref: AT-352\n", s4_head=broken))))
+
+    assert any("B-9 is not declared" in failure for failure in report["failures"])
+
+
+def test_a_complete_traceability_table_passes(tmp_path: Path) -> None:
+    report = validate_spec(str(_write(tmp_path, _spec(frontmatter_extra="ticket_ref: AT-352\n", s4_head=TRACE))))
+
+    assert _statuses(report)["V29"] == "pass"
+
+
+def test_a_behaviour_missing_from_every_slice_fails_v30(tmp_path: Path) -> None:
+    slices = "| **F0** | tracer | **B-1** | `pages/x` · `app/api/y` | one test | Creator sees the row |"
+
+    report = validate_spec(str(_write(tmp_path, _spec(slices=slices))))
+
+    assert any("never placed in a §4.5 slice" in failure for failure in report["failures"])
+
+
+def test_a_declared_counter_must_match_the_body(tmp_path: Path) -> None:
+    report = validate_spec(str(_write(tmp_path, _spec(frontmatter_extra="b_count: 9\n"))))
+
+    assert any(failure.startswith("V31:") for failure in report["failures"])
+
+
+def test_a_tracer_flag_must_match_the_f0_row(tmp_path: Path) -> None:
+    report = validate_spec(str(_write(tmp_path, _spec(frontmatter_extra="tracer_f0_defined: false\n"))))
+
+    assert any("tracer_f0_defined=false" in failure for failure in report["failures"])
+
+
+def test_an_approved_spec_is_not_re_judged_on_planning_completeness(tmp_path: Path) -> None:
+    text = _spec(frontmatter_extra="status: Approved\nticket_ref: AT-352\n")
+
+    report = validate_spec(str(_write(tmp_path, text)))
+
+    assert _statuses(report)["V29"] == "skip"
+    assert report["ok"] is True, report["failures"]
