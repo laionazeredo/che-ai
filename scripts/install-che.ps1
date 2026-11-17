@@ -106,7 +106,7 @@ try {
         $cwd = (Get-Location).Path
         if (Test-Path -LiteralPath (Join-Path $cwd 'CHE_RULES.md')) {
             $Source = $cwd
-        } elseif (Test-Path -LiteralPath (Join-Path $PSScriptRoot '..' 'CHE_RULES.md')) {
+        } elseif (Test-Path -LiteralPath ([System.IO.Path]::Combine($PSScriptRoot, '..', 'CHE_RULES.md'))) {
             $Source = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
         } else {
             $TempClone = Join-Path ([System.IO.Path]::GetTempPath()) ('che-clone-' + [guid]::NewGuid().ToString('N'))
@@ -214,7 +214,7 @@ try {
     else { throw 'Python 3.9+ not found on PATH (neither "py" nor "python").' }
 
     $renderedHooks = Join-Path ([System.IO.Path]::GetTempPath()) ('che-hooks-' + [guid]::NewGuid().ToString('N') + '.json')
-    $renderer = Join-Path $Source 'scripts' 'render_hooks.py'
+    $renderer = [System.IO.Path]::Combine($Source, 'scripts', 'render_hooks.py')
     & $python.Exe @($python.Args + @($renderer, (Join-Path $Source 'hooks.json'), $renderedHooks, '--harness', $Target, '--platform', 'windows')) | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "render_hooks.py failed with exit code $LASTEXITCODE" }
 
@@ -232,7 +232,7 @@ try {
         if (Test-Path -LiteralPath $renderedHooks) { Remove-Item -LiteralPath $renderedHooks -Force }
     }
 
-    $bindingsReadme = Join-Path $Target 'bindings' 'README.md'
+    $bindingsReadme = [System.IO.Path]::Combine($Target, 'bindings', 'README.md')
     if (-not (Test-Path -LiteralPath $bindingsReadme) -and (Test-Write "write $bindingsReadme")) {
         $text = @(
             'Level 1 - registry.jsonl.',
@@ -283,7 +283,7 @@ try {
     }
 
     if ($Apply) {
-        $traeAdapter = Join-Path $Target 'adapters' 'trae' 'install.ps1'
+        $traeAdapter = [System.IO.Path]::Combine($Target, 'adapters', 'trae', 'install.ps1')
         if (Test-Path -LiteralPath $traeAdapter) {
             Write-Host ''
             Write-Host '==> Wiring the Trae IDE adapter'

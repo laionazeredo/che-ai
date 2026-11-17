@@ -33,7 +33,7 @@
 #>
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Low')]
 param(
-    [string]$CheRepo = (Resolve-Path (Join-Path $PSScriptRoot '..' '..')).Path,
+    [string]$CheRepo = (Resolve-Path ([System.IO.Path]::Combine($PSScriptRoot, '..', '..'))).Path,
     [string]$TraeHome = $(if ($env:TRAE_HOME) { $env:TRAE_HOME } else { Join-Path $env:USERPROFILE '.trae' })
 )
 
@@ -248,7 +248,7 @@ foreach ($collection in $collections) {
 # hooks.json is a rendered copy, never a link: the source is a template holding
 # __HARNESS_TARGET__ and a platform-specific command form.
 $python = Get-PythonInvocation
-$renderer = Join-Path $CheRepo 'scripts' 'render_hooks.py'
+$renderer = [System.IO.Path]::Combine($CheRepo, 'scripts', 'render_hooks.py')
 $rendered = Join-Path ([System.IO.Path]::GetTempPath()) ("che-hooks-" + [guid]::NewGuid().ToString('N') + '.json')
 $hooksConfig = Join-Path $TraeHome 'hooks.json'
 try {
