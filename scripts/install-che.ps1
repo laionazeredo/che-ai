@@ -36,7 +36,7 @@
     when it already holds a Che checkout).
 
 .EXAMPLE
-    irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1"
+    iwr https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1" -UseBasicParsing
     & "$env:TEMP\install-che.ps1" -Apply
 
 .EXAMPLE
@@ -64,7 +64,7 @@ if ([string]::IsNullOrEmpty($PSScriptRoot)) {
     Write-Host 'This installer must run as a FILE, not piped into Invoke-Expression.' -ForegroundColor Yellow
     Write-Host 'Piped execution cannot pass -Apply, and its exit codes would close your session.'
     Write-Host ''
-    Write-Host '  irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1"'
+    Write-Host '  iwr https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1" -UseBasicParsing'
     Write-Host '  & "$env:TEMP\install-che.ps1"            # dry run'
     Write-Host '  & "$env:TEMP\install-che.ps1" -Apply     # apply'
     return

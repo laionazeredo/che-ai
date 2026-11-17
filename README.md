@@ -58,10 +58,10 @@ curl -fsSL https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/in
 # curl -fsSL ... | bash -s -- --apply --no-cli
 ```
 
-On native Windows (PowerShell 5.1+), the counterpart installer has the same contract — dry run by default, `-Apply` to write. Download it to a file first: `Invoke-Expression` cannot pass flags and would close your session on exit.
+On native Windows (PowerShell 5.1+), the counterpart installer has the same contract — dry run by default, `-Apply` to write. Download it to a file first: `Invoke-Expression` cannot pass flags and would close your session on exit, and `Invoke-RestMethod` has no `-OutFile` before PowerShell 6.
 
 ```powershell
-irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1"
+iwr https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1" -UseBasicParsing
 & "$env:TEMP\install-che.ps1"            # dry run (writes nothing)
 & "$env:TEMP\install-che.ps1" -Apply     # apply
 

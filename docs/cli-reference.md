@@ -55,9 +55,9 @@ The CLI is pure Python and portable. The installer has one entry point per shell
    py -3 -m pip install --user pipx
    py -3 -m pipx ensurepath
    ```
-2. Install or update Che. Download the script to a file first: `Invoke-Expression` cannot pass flags and would close your session on exit.
+2. Install or update Che. Download the script to a file first: `Invoke-Expression` cannot pass flags and would close your session on exit, and `Invoke-RestMethod` has no `-OutFile` before PowerShell 6.
    ```powershell
-   irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1"
+   iwr https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1" -UseBasicParsing
    & "$env:TEMP\install-che.ps1"            # dry run
    & "$env:TEMP\install-che.ps1" -Apply     # apply
    ```
