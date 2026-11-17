@@ -55,11 +55,11 @@ The CLI is pure Python and portable. The installer has one entry point per shell
    py -3 -m pip install --user pipx
    py -3 -m pipx ensurepath
    ```
-2. Install or update Che (dry run first, then apply). `Invoke-Expression` takes no arguments, so flags go through a script block:
+2. Install or update Che. Download the script to a file first: `Invoke-Expression` cannot pass flags and would close your session on exit.
    ```powershell
-   irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 | iex
-   $s = irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1
-   & ([scriptblock]::Create($s)) -Apply
+   irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1"
+   & "$env:TEMP\install-che.ps1"            # dry run
+   & "$env:TEMP\install-che.ps1" -Apply     # apply
    ```
    Cloning first gives a real checkout, which `che update` can fast-forward later:
    ```powershell
