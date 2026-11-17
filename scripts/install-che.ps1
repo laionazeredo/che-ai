@@ -36,7 +36,8 @@
     when it already holds a Che checkout).
 
 .EXAMPLE
-    irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 | iex
+    irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1"
+    & "$env:TEMP\install-che.ps1" -Apply
 
 .EXAMPLE
     .\scripts\install-che.ps1 -Apply
@@ -57,14 +58,30 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:Cmdlet = $PSCmdlet
+# Piped execution (irm | iex) has no script scope: $PSScriptRoot is empty and `exit` would close
+# the caller's console. Point at the form that works instead of half-running.
+if ([string]::IsNullOrEmpty($PSScriptRoot)) {
+    Write-Host 'This installer must run as a FILE, not piped into Invoke-Expression.' -ForegroundColor Yellow
+    Write-Host 'Piped execution cannot pass -Apply, and its exit codes would close your session.'
+    Write-Host ''
+    Write-Host '  irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1 -OutFile "$env:TEMP\install-che.ps1"'
+    Write-Host '  & "$env:TEMP\install-che.ps1"            # dry run'
+    Write-Host '  & "$env:TEMP\install-che.ps1" -Apply     # apply'
+    return
+}
+
+$script:CmdletVar = Get-Variable -Name PSCmdlet -ErrorAction SilentlyContinue
+$script:Cmdlet = if ($script:CmdletVar) { $script:CmdletVar.Value } else { $null }
+$script:WhatIfVar = Get-Variable -Name WhatIfPreference -ErrorAction SilentlyContinue
+$script:WhatIf = if ($script:WhatIfVar) { [bool]$script:WhatIfVar.Value } else { $false }
 $script:ApplyRequested = [bool]$Apply
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 
 function Test-Write {
     param([string]$What)
     if (-not $script:ApplyRequested) { return $false }
-    return $script:Cmdlet.ShouldProcess($What)
+    if ($script:Cmdlet) { return $script:Cmdlet.ShouldProcess($What) }
+    return (-not $script:WhatIf)
 }
 
 if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
@@ -241,9 +258,8 @@ try {
     Write-Host ''
 
     if (-not $Apply) {
-        Write-Host 'DRY-RUN. Re-run with -Apply to write.'
-        Write-Host '  $s = irm https://raw.githubusercontent.com/laionazeredo/che-ai/main/scripts/install-che.ps1'
-        Write-Host '  & ([scriptblock]::Create($s)) -Apply'
+        Write-Host 'DRY-RUN. Re-run with -Apply to write:'
+        Write-Host "  & '$PSCommandPath' -Apply"
     }
 
     if ($NoCli) {
@@ -275,7 +291,7 @@ try {
             $policy = @()
             if ([System.IO.Path]::GetFileNameWithoutExtension($psExe) -eq 'powershell') { $policy = @('-ExecutionPolicy', 'Bypass') }
             $adapterArgs = @('-NoProfile') + $policy + @('-File', $traeAdapter, '-CheRepo', $Target)
-            if ($WhatIfPreference) { $adapterArgs += '-WhatIf' }
+            if ($script:WhatIf) { $adapterArgs += '-WhatIf' }
             & $psExe @adapterArgs
             if ($LASTEXITCODE -ne 0) { Write-Host 'WARN: Trae adapter reported a failure.' -ForegroundColor Yellow }
         }
