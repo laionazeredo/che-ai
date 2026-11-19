@@ -58,8 +58,8 @@
 
 - **Full body + Hard Conflict Resolution Table + Appendix B (commit types regex):** `engineering-contracts` SKILL §1–§14 + Appendices A/B.
 - **New rules now added:**
-  - §15 — AGILE BDD DEVELOPMENT / SMALL INCREMENTS (only deliver what's requested; DO NOT anticipate edge/future; easy-to-evolve structure with SOLID; multiple partial PRs via gh-stack)
-  - §16 — CODE REVIEW OPTIMISATION (clean code, not verbose, max 2 lines block comment per file unless really necessary; gh-stack PR hierarchy)
+  - §15 — AGILE BDD DEVELOPMENT / SMALL INCREMENTS (only deliver what's requested; DO NOT anticipate edge/future; easy-to-evolve structure with SOLID; smaller slices in ONE PR by default — gh-stack only on explicit user request)
+  - §16 — CODE REVIEW OPTIMISATION (clean code, not verbose, max 2 lines block comment per file unless really necessary; PR hierarchy only on explicit request)
   - §17 — SUPABASE POSTGRES: ENABLE RLS DEFAULT (every new table has RLS + policies; hard rule)
 
 ---
@@ -80,7 +80,7 @@
 - **Start (specification):** `/che-spec` → SPEC optimised for agent + che (4 sources: existing/ticket URL/PRD Flockr/inline). 7 sections + YAML frontmatter + Approved gate BEFORE scope capture.
 - **Feature/long implementation:** `/che-act` (auto serial vs parallel) OR `/che-parallel` (force parallel-or-bust). SM automatically invokes `/che-spec` in preflight §0.5 if none Approved.
 - **Bug fix:** `/che-fix` (scientific loop; reproduce BEFORE).
-- **Ship:** `/che-ship` (atomic conventional commits, push --no-verify, Draft PR + gh-stack if multiple PRs). **FAIL-CLOSED GATE PREREQUISITE:** `/che-scope-check` with 4 verdicts. Any 🔴 blocks Draft PR opening until resolved.
+- **Ship:** `/che-ship` (atomic conventional commits, push --no-verify, Draft PR — ONE PR by default, gh-stack only on explicit request). **FAIL-CLOSED GATE PREREQUISITE:** `/che-scope-check` with 4 verdicts. Any 🔴 blocks Draft PR opening until resolved.
 - **Review/comments/CI/scope audit/merge conflict:** `/che-review` (BLOCKING runtime/PII/deps/scope), `/che-pr-comments`, `/che-ci-fix`, **`/che-scope-check` (4-checks audit: delivery+tests+docs+env vars from PRD/ticket/task-graph)**, **`/che-merge` (resolve merge conflicts hunk-by-hunk default OURS, ask on ambiguity, 0 min blast-radius)**.
 - **Light operations:** `/che-status`, `/che-skip`, `/che-decisions`, `/che-summary`, `/che-abort` (inline, NOT a skill).
 
@@ -95,7 +95,7 @@
 - Default PR **DRAFT**; never auto-merge; base = repo default branch.
 - NEVER commit `.env*` with real values, secrets, PII.
 - NEVER disable test/job with `continue-on-error` to mask failure without approval.
-- **Hierarchical multi-PR:** use `gh-stack` CLI for links/order in partial PRs.
+- **Hierarchical multi-PR (opt-in):** use `gh-stack` CLI for links/order only when the user explicitly requests a stack; the default is one PR.
 - **Full body + gh-stack workflow:** `CHE_RULES.md` §🔴 GITHUB INTEGRATION / SHIP RULES + Appendix gh-stack
 
 ---
@@ -103,7 +103,7 @@
 ## 🟢 RULE 6: PREFERRED TOOLS (system/cli)
 | System | Tool |
 |---|---|
-| GitHub | `gh` CLI + `gh-stack` for hierarchical multi-PR |
+| GitHub | `gh` CLI (`gh-stack` only when the user explicitly requests a stack) |
 | Linear/Jira/Confluence | GraphQL/REST APIs via env vars (FLOCKR_LINEAR_API_KEY, DO_JIRA_*, DO_CONFLUENCE_*) |
 | Figma | Figma REST API → LAION_FIGMA_PAT |
 | Railway / Vercel | their CLIs; 1st use confirms logged-in account |
