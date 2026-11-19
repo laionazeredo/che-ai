@@ -13,7 +13,7 @@ The agent MUST recognise these and react immediately.
 > **Conceptual difference:** Commands = UX entry point (slash `/che-X`) ↔ Skills = content/executor of work.
 > DO NOT turn ALL commands into skills. The separation below is intentional (KISS).
 
-### Category A — 37 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
+### Category A — 38 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
 | Command | Skill / module | Why separate wrapper? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
@@ -25,6 +25,7 @@ The agent MUST recognise these and react immediately.
 | `/che-act` | `che-act` | Worktree preflight → skill executes §0.5 SPEC GATE (auto-invokes che-spec if none Approved) → scope capture + TASK GRAPH. |
 | `/che-parallel` | `che-act` → `che-executor-dispatcher` | Worktree preflight + force_parallel flag + error if not parallelisable. |
 | `/che-ship` | `che-ship` | Worktree preflight + `gh auth` + no-secret-staged check → skill commits/push/PR. |
+| `/che-yolo` | `che-yolo` | Approved SPEC required → `che-act` (`REVIEW_MODE=FINAL`) → manual plan gate → `che-ship` (5 gates enforced) → `che-manual-test-executor` → PR evidence + `gh pr ready`. Stops on any gate block; never merges. |
 | `/che-fix` | `che-debugger-bugfix` | Worktree preflight + capture 4 required inputs → skill runs scientific debug loop. |
 | `/che-review` | `che-code-review` | Preflight `gh auth` + parseable PR URL → skill pulls diff + metadata + 4-category review. |
 | `/che-simplify [target] [--goals=...]` | `che-simplify` | Plan reduction under fixed goals: classifies essential vs accidental complexity, proposes the smallest plan that still meets the goals, with a decision trail. Target = task-graph / gh-stack / spec / worktree. |
@@ -255,6 +256,27 @@ Agent action: ask confirmation first.
 /che-ship
 /che-ship --ticket PROJ-123 --slug feat-stripe-connect
 /che-ship --draft-pr-title "feat(payments): Stripe Connect onboarding"
+```
+
+---
+
+## `/che-yolo <worktree> <project> [spec] [--qa=minimal|normal|full] [--max-slices=N]`
+
+**What it does:** End-to-end autonomous delivery from an **Approved SPEC**: implements every vertical slice (`che-act` with `REVIEW_MODE=FINAL`, one commit per slice), validates the manual test plan, ships a DRAFT PR through the 5 executable gates, executes the plan, posts the evidence on the PR and marks it ready for review.
+**When to invoke:** The SPEC is Approved and you accept reviewing only at the end. This is the one command that removes the per-slice, per-commit and per-setup approvals.
+**Agent action:**
+1. Invoke `che-yolo` skill.
+2. Preflight: worktree + project confirmed; Approved SPEC (never auto-approved); `gh auth status` OK; not on the default branch.
+3. State what runs unattended and which gates still block.
+4. Run: act → manual plan gate → ship → execute plan → PR comment + `gh pr ready` → report.
+**Hard stops:** SPEC not Approved · structural task-graph violation · red slice twice · invalid plan after one repair · any ship gate 🔴 · setup failure · any AC `FAIL`/`BLOCKED`. On a stop, it reports and calls you.
+**Never:** merge, force-push, rewrite slice commits, skip a gate, commit evidence into the repo, or mark a PR ready on unverified behaviour.
+**Windows:** only `che`, `gh` and `git` are used — no bash-only utilities, no `eval`; paths come from `che output_path`.
+**Syntax examples:**
+```
+/che-yolo /abs/path/to/worktree acme
+/che-yolo /abs/path/to/worktree acme --qa=normal --max-slices=6
+/che-yolo /abs/path/to/worktree acme /abs/specs/20261120-spec.md
 ```
 
 ---
