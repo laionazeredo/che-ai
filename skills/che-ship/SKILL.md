@@ -27,16 +27,24 @@ It runs ONLY after the user says "I believe everything is OK" and is prepared to
 
 If any precondition fails → report exactly which, stop execution, ask user.
 
-### 0.6 gh-stack mode detection (N4 hierarchical PR stack)
+### 0.6 gh-stack mode detection (EXPLICIT OPT-IN ONLY — default is ONE PR)
 
-1. Check if file exists: `$CHE_WORKSPACE_SHARED/gh_stack_plan.md` (`$CHE_WORKSPACE_SHARED` is exported by `che compute_paths`; see §0.7.1 preflight).
+> **Default delivery is a single PR.** A stack is never inferred from scope size, task count or file
+> count. It runs only when the user explicitly asked for it in this session.
+
+1. Locate the plan: newest `$CHE_WORKSPACE_SHARED/gh_stack/**/*gh-stack-plan*.md`, falling back to the
+   legacy `$CHE_WORKSPACE_SHARED/gh_stack_plan.md` (`$CHE_WORKSPACE_SHARED` is exported by
+   `che compute_paths`; see §0.7.1 preflight).
 2. If it exists:
-   - Read it. Validate it has a field `Status: APPROVED` at the top.
-   - Check `gh` extension installed: run `gh extension list 2>/dev/null | grep -i "stack"` silently.
+   - Read it. Validate `Status: APPROVED` at the top **and** `Triggered by: explicit user request`.
+   - Validate the session carries a `GH_STACK_REQUESTED` entry in `$CHE_DECISIONS_PATH`. Missing either
+     marker → the plan is stale or was never requested: set `GH_STACK_MODE=false`, warn once, and take
+     the single-PR path. Never delete the file.
+   - Check `gh` extension installed: run `gh extension list 2>&1` silently and look for "stack".
    - If gh-stack extension NOT installed → offer `gh extension install https://github.com/github/gh-stack` to user; wait for confirmation, install, then continue. If user declines → FALLBACK to single-PR mode (Steps 2–5 normal path).
    - Parse layers table bottom-up (first layer = lowest in the stack, merged first; last layer = top of stack). Extract per layer: `Layer ID`, `Branch Name` (slug like `PROJ-123-l1-refund-pipeline`), `Scope (files)`, `Depends on`.
    - Set boolean: `GH_STACK_MODE=true`. Record `LAYERS[]` array ordered bottom-up.
-3. If file NOT exists OR status ≠ APPROVED → `GH_STACK_MODE=false`. Proceed with standard single-PR path (Steps 2–5 current).
+3. If no file, status ≠ APPROVED, or the explicit-request markers are absent → `GH_STACK_MODE=false`. Proceed with standard single-PR path (Steps 2–5 current).
 
 ### 0.7 WORKTREE SESSION BINDING PREFLIGHT (engineering-contracts §19, NON-NEGOTIABLE)
 

@@ -159,7 +159,7 @@ MERGE_AUDIT_PATH_Tn="$(che output_path "merge_audit" "merge-audit" "batch-${BATC
 | `decisions.log.jsonl` | `$CHE_DECISIONS_PATH` (official contract path, already runs outside assert) → `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` (single shared worktree file, append via `che decision_append` only). | Append during execution (atomic, official helper) | Trade-off / non-obvious decision rationale. Multi-session durable. |
 | `manual_test_plan.md` | Path printed by `che manual-plan sync "$WORKTREE_ROOT"` (never hardcoded) | After all tasks DONE | Step-by-step verification plan. Each AC carries an executable contract; `che manual-plan validate` must exit 0 before handoff. Durable (reusable in future sessions on same worktree). |
 | `final_summary.md` | `$FINAL_SUMMARY_PATH` (preflight §0.2.1 variable) → `$CHE_SESSION_DIR/summary/<slug>/YYYYMMDD-HHMMSS-session-final.md` | Session end | Delivered content, risks, stats for THIS run only. |
-| `gh_stack_plan.md` | `$GH_STACK_PLAN_PATH` (preflight §0.2.1 variable) → `$CHE_WORKSPACE_SHARED/gh_stack/<slug>/YYYYMMDD-HHMMSS-gh-stack-plan.md` (threshold trigger ≥3 tasks or >15 files). | After TASK GRAPH (Phase 1.4) if trigger TRUE | gh-stack hierarchical PR plan. APPROVED status before `/che-ship` consumes. Durable. |
+| `gh_stack_plan.md` | `$GH_STACK_PLAN_PATH` (preflight §0.2.1 variable) → `$CHE_WORKSPACE_SHARED/gh_stack/<slug>/YYYYMMDD-HHMMSS-gh-stack-plan.md` (explicit user request only — no size threshold). | After TASK GRAPH (Phase 1.4) only when the user explicitly asked for a stack | gh-stack hierarchical PR plan. APPROVED status before `/che-ship` consumes. Durable. |
 | `test_spec_smoke.md` | `$TEST_SPEC_SMOKE_PATH` (preflight §0.2.1 variable) → `$CHE_WORKSPACE_SHARED/qa/<slug>/YYYYMMDD-HHMMSS-test-spec-smoke.md` | Phase 1.5 (before ANY task envelope handed to Dev) | 1-page BDD test contract: 3–5 core Given-When-Then behaviors. |
 
 ---
@@ -440,31 +440,31 @@ For EVERY row (T1..TN), run EXACT checks, STOP on first 🔴:
 
 ---
 
-### 1.4 (NEW — N4 request) Plan gh-stack hierarchical partial PRs (threshold-triggered)
+### 1.4 gh-stack hierarchical PRs — EXPLICIT OPT-IN ONLY
 
-> **Purpose (from §15 Agile BDD Incremental — engineering-contracts):**
-> PRs ≤400 diff lines + 15 files = human reviewable. >800 lines = superficial review → risk.
-> Scopes ≥3 tasks OR any task with estimated blast radius >15 files → deliver MULTIPLE partial PRs, ordered bottom-up, linked via gh-stack CLI.
-> gh-stack reference: engineering-contracts Appendix C.
+> **Default delivery is ONE PR.** A stack is never proposed, planned or asked for automatically — not
+> by task count, not by file count, not by diff size. Large scope is handled by smaller slices inside
+> the same PR, never by silently splitting the delivery.
+> `gh-stack` reference: engineering-contracts Appendix C.
 
-**Step A — Evaluate trigger:**
-Compute 2 booleans:
+**Step A — Evaluate trigger (the ONLY trigger is the user's own words):**
+
 ```
 needs_gh_stack =
-  (Total tasks >= 3)
-  OR
-  (Any single task estimated blast radius > 15 files)
-  OR
-  (User explicitly said "I want multiple PRs")
-AND
-  NOT (User explicitly said "single PR please")
+  (User explicitly asked for a stack in THIS session: "gh-stack", "stack of PRs",
+   "multiple PRs", "entregar em várias PRs", "empilhar PRs")
 ```
 
-If `needs_gh_stack = FALSE` → SKIP. Mark in session.md: `gh-stack: NOT NEEDED`. Proceed to 1.5 Serial/Parallel.
+- No size heuristic, no task-count threshold, no file-count threshold. Silence means single PR.
+- `needs_gh_stack = FALSE` → SKIP silently. Do not write `gh_stack_plan.md`, do not ask a question,
+  do not mention stacks in the plan approval. Proceed to 1.5.
+- `needs_gh_stack = TRUE` → record the request, then Step B:
 
-If `needs_gh_stack = TRUE` → Step B.
+```bash
+che decision_append "$WORKTREE_ROOT" "GH_STACK_REQUESTED" "user explicitly requested a stack for <task-id> (N tasks, X est. files)"
+```
 
-**Step B — Build gh_stack_plan.md:**
+**Step B — Build gh_stack_plan.md (only after an explicit request):**
 Group TASK GRAPH tasks into "PR layers" (semantic groups). Bottom = contracts/types/model. Top = UI/routes/integration tests. Write to `$GH_STACK_PLAN_PATH` (§0.2.1 preflight variable — durable area). Use atomic write:
 ```bash
 che write_file_atomic "$GH_STACK_PLAN_PATH" <<'GHSTACK_EOF'
@@ -475,7 +475,7 @@ GHSTACK_EOF
 ```
 # GH STACK PLAN — <task-id>
 Status: DRAFT (awaiting user approval)
-Triggered by: <tasks count> tasks OR <max-task-files> files max single-task estimate
+Triggered by: explicit user request in this session — "<verbatim request>"
 F0 Tracer Coverage: <PR1 CONTAINS complete F0 (all layers) | SPLIT-F0-BLOCKED — reason>
 
 | Order | Base branch | Head branch placeholder | Conventional commit title (PR) | Tasks/ACs covered | Est max files | Est max diff lines | Vertical Slice Ref | Wrapper Boundaries (CAN #1 Reversibility) |

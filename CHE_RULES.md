@@ -109,7 +109,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 > - NEVER anticipate edge cases or a future not explicitly in the current scope.
 > - Focus EXACTLY on the requested behaviour (BDD scenarios).
 > - Deliver the smallest unit of value that validates the requested behaviour.
-> - If scope is large: BREAK into partial deliveries (multiple self-contained PRs) and use **gh-stack CLI** to maintain hierarchy/order between PRs.
+> - If scope is large: BREAK it into smaller slices inside the SAME PR. A multi-PR stack (`gh-stack CLI`) happens **only when the user explicitly asks for one** — never inferred from size.
 > - Code structure: easy to understand, simple to evolve, respects SOLID, **without breaking existing behaviour.**
 > - Code-review optimisation: clean code, not verbose, max 2 lines of block comment per file (except public contract docstrings).
 > - **Full body of these rules + thresholds:** `engineering-contracts` SKILL §15 (Agile BDD Incremental) + §16 (Code Review Optimisation)
@@ -117,7 +117,7 @@ They have HIGHER precedence than any repo-level `AGENTS.md` or `CLAUDE.md` when 
 For ANY feature implementation / bugfix with more than one step:
 1. **SCRUM MASTER (`che-act`):**
    - **Preflight 0.5 (SPEC GATE — replaces legacy PRD)** — Validates if **SPEC Approved** already exists in `$CHE_WORKSPACE_SHARED/` (glob `specs/**/*.md`, falling back to the legacy `spec_*.md` → parse YAML `status: Approved`). If 0 → **automatically invokes interactive `che-spec` skill** (4 input sources: existing / ticket URL / legacy-project PRD .md path / brief description). Captures 2 return lines: `SPEC_PATH=<abs>` + `SPEC_STATUS=Approved|Draft`. Gate: `Approved` → releases §1 scope capture; `Draft` → offers (A) Override without Approved, append `[SPEC-OVERRIDE] <reason>` in `$CHE_WORKSPACE_SHARED/decisions.log.jsonl` or (B) Stop, finish SPEC later via standalone `/che-spec`.
-   - **Understand scope → validate ACs →** (if large) **plan gh-stack multi-PR** → build TASK GRAPH (or approve existing list) → create TASK ENVELOPE per task.
+   - **Understand scope → validate ACs →** build TASK GRAPH (or approve existing list) → create TASK ENVELOPE per task. **Delivery is ONE PR by default;** a gh-stack plan is built only when the user explicitly requests a stack.
 2. **DEVELOPER (`che-developer`):** ONLY called by SM, with formal ENVELOPE.
    - First invokes `engineering-contracts`.
    - Mandatory Repo Onboarding (Q1-Q5: lang/framework/test-stack/graphify-docs-read/Stack Match IDE skills).
@@ -137,7 +137,7 @@ For ANY feature implementation / bugfix with more than one step:
 - If a task is to modify MORE than 10 files (new or edited):
   1. STOP.
   2. Add an entry in `decisions.log.jsonl` justifying EACH file.
-  3. Return to SM who evaluates if it is really necessary or if it should be broken down again (via gh-stack multiple partial PRs).
+  3. Return to SM who evaluates if it is really necessary or if it should be broken down again (smaller slices in the same PR; a multi-PR stack only if the user explicitly asked for one).
 - Additionally: if a task touches a file OUTSIDE the "blast radius" list of the ENVELOPE → mandatory entry in `decisions.log.jsonl` + SM approval BEFORE proceeding.
 
 ---
@@ -426,16 +426,15 @@ For any `/che-ship` command or similar:
 - **DO NOT auto-merge.** Ship stops at DRAFT PR creation.
 - **DO NOT use non-existent labels** in the repo. Only add labels that already exist; do not create new ones.
 
-### D) gh-stack PARTIAL PR HIERARCHY (NEW — mandatory when large scope > 1 PR)
-> **Context:** `gh-stack` (https://github.com/github/gh-stack) = official gh CLI extension that creates links and hierarchy between related PRs, maintaining order and dependencies between sequential branches. Ideal for when the Scrum Master breaks a large scope into multiple self-contained PRs.
+### D) gh-stack PARTIAL PR HIERARCHY (EXPLICIT OPT-IN ONLY — never proposed automatically)
+> **Context:** `gh-stack` (https://github.com/github/gh-stack) = official gh CLI extension that creates links and hierarchy between related PRs, maintaining order and dependencies between sequential branches. Available when the user wants a large scope split into multiple self-contained PRs.
+>
+> **Default:** ONE PR per delivery. Large scope is split into smaller slices inside that PR.
 >
 > **Full body workflow (when-to-use + commands + examples):** `engineering-contracts` SKILL Appendix C — gh-stack Workflow Reference.
 
 **Che gh-stack hard rules:**
-1. **WHEN to use gh-stack (SM decides in TASK GRAPH planning):**
-   - Task Graph has ≥3 tasks that form clearly separable PR units.
-   - OR: User explicitly asked to "deliver in multiple PRs".
-   - OR: A single task has blast radius > 15 files and SM decides to break into 2+ PRs.
+1. **WHEN to use gh-stack:** only when the user explicitly asks for a stack in the current session ("gh-stack", "stack of PRs", "multiple PRs", "entregar em várias PRs"). Task count, file count and diff size are **never** triggers, and the agent never proposes a stack on its own.
 2. **Planning (SM creates file `$CHE_WORKSPACE_SHARED/tasks/<TASK_ID>/gh_stack_plan.md` — OUTSIDE worktree, via `che compute_paths`) BEFORE Dev starts:**
    - Ordered list: `PR #N`, title, base branch, head branch, tasks covered, PR ACs, optional reviewers, stack order (base → top).
    - Structure example: `[PR1 (base main)] contracts types → [PR2 (base PR1 branch)] service layer → [PR3 (base PR2 branch)] API + tests`.
@@ -448,6 +447,7 @@ For any `/che-ship` command or similar:
    - Reviewers read PRs individually (from bottom to top), as each one is small + self-contained.
    - If a middle PR needs a fix: do it in the branch, automatically rebase the top via `gh-stack rebase` (if available).
 5. **When NOT to use gh-stack:**
+   - Default: every delivery, unless the user explicitly requested a stack.
    - Only 1 PR (self-contained).
    - Worktree with very confused history or divergent branches (KISS: single PR is simpler).
    - User explicitly said: "do not use gh-stack, single PR".
@@ -568,7 +568,7 @@ If `LANG_PT_CHECK = DISABLED` legacy exists in session flags → automatically m
 - TASK ENVELOPE per task mandatory.
 - Repo onboarding Q1-Q5 before coding (includes stack match IDE available_skills).
 - Explicit gates per task.
-- If SM detects large scope → gh-stack multi-PR plan (presents plan to the user for approval).
+- Delivery is ONE PR by default. A gh-stack multi-PR plan exists only when the user explicitly requests a stack (then it is presented for approval).
 
 ### Bug Fix (different che): `/che-fix` → Debugger expert
 - **First rule:** REPRODUCE before any deep analysis. If no reproduction → do not code, ask the user for missing context.

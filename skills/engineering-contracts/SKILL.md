@@ -256,12 +256,11 @@ This rule turns "agility" from vague talk into enforceable checkpoints:
 2. **BDD mindset — behaviour over structure.**
    - Deeply understand the expected behaviour (what the SYSTEM should do, for which persona, with which side-effect).
    - Always start from BDD scenarios. Code structure is a consequence of behaviour, not the other way around.
-3. **Small increments = multiple PRs when useful.**
+3. **Small increments = smaller slices inside ONE PR (default).**
    - When scope is large (more than ~15 files, or more than ~6 independent ACs):
-     - **BREAK scope into multiple self-contained PRs.**
-     - **PLAN the hierarchy via `gh-stack` CLI** (Appendix C) to maintain order and links between dependent PRs.
-     - Each PR must have own ACs, own tests, and pass CI individually.
-     - The goal here is **to facilitate code review.** PRs ≤ 400 diff lines + 15 files = human reviewable. >800 lines = superficial review → risk.
+     - **BREAK scope into smaller, self-contained slices inside the same PR** — each with its own ACs and tests.
+     - The goal is **reviewable units:** PRs ≤ 400 diff lines + 15 files = human reviewable. >800 lines = superficial review → risk.
+     - **A multi-PR stack is opt-in only:** `gh-stack` (Appendix C) runs when the user explicitly asks for a stack. Size alone never triggers it, and the agent never proposes one.
 4. **SOLID as guardrails for evolvability (NOT over-abstract).**
    - Single Responsibility: each module/function has 1 reason to change.
    - Open/Closed: open for extension (clear entry point) BUT closed for modification of what already works. DO NOT break existing behaviour.
@@ -332,8 +331,8 @@ Rules enforced on EVERY implementation:
 3. **Code review mindset — write comments as if you're the reviewer.**
    - What questions would a reviewer ask? Answer them in the function name, not in a comment.
    - Ship PR body explains WHAT and WHY, not HOW (how = code).
-4. **gh-stack hierarchy for PR chains (see Appendix C).**
-   - When multiple PRs: che uses gh-stack and each PR body shows "Depends on: #PR" — reviewer knows the correct order.
+4. **gh-stack hierarchy for PR chains (see Appendix C) — opt-in only.**
+   - Default is one PR. When the user explicitly requests a stack, each PR body shows "Depends on: #PR" so the reviewer knows the correct order.
 
 ### 17. 🟠 DATABASE SECURITY BY DEFAULT (Provider-Agnostic Pointer)
 
@@ -841,10 +840,9 @@ chore(deps): bump stripe-sdk 18.4 → 18.5 (patch)
 3. Supports rebasing the whole stack when lower PRs get fixes.
 
 ### C.2 Preconditions to use gh-stack (che-act validates in planning)
-1. Task Graph ≥ 3 tasks OR one task > 15 files blast radius.
+1. **The user explicitly requested a stack in the current session.** This is the only trigger — task count, file count and diff size never activate it.
 2. Tasks can be semantically grouped into "PR layers" (ex: PR1=types/contracts, PR2=service layer + unit tests, PR3=API + e2e tests).
-3. User did NOT explicitly say "single PR please".
-4. Worktree is clean of uncommitted changes OUTSIDE the envelope (standard check).
+3. Worktree is clean of uncommitted changes OUTSIDE the envelope (standard check).
 
 ### C.3 Stack planning (Scrum Master step — gh_stack_plan.md structure)
 ```
