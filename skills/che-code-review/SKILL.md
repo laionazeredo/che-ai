@@ -785,6 +785,7 @@ For each finding (both modes identical from here):
 - Snippet (3 lines before + 3 lines after, from patch)
 - Why this is a problem (evidence-based — never "I don't like it")
 - **Explicit rule citation (MANDATORY when possible)**: quote EXACT `source:line` from the resolver's `rules[]`. E.g.: "violates [architecture.md](file:///.../.claude/rules/architecture.md#L12) 'Router → Service → Repository: Routers must not contain business logic >30 lines'". NEVER cite a rule whose `superseded_by` is set. A rule with `conflicted: true` is cited with BOTH sides and capped at MEDIUM. Category 5: ALWAYS cite `engineering-contracts/SKILL.md` Appendix D D.1 with RF number.
+- **Evidence label (`engineering-contracts` §0 EBC)**: end each finding with `[verified: E<n> <pointer>]`. When the diff alone cannot settle the claim, write `[unknown: <missing> → <check>]` instead of asserting it.
 - Actionable fix — specific lines/what should replace
 - Optional: suggest code change snippet ONLY if obvious. NEVER rewrite whole file.
 

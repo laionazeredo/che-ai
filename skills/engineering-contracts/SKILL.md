@@ -1,6 +1,6 @@
 ---
 name: "engineering-contracts"
-description: "HIGHEST-PRECEDENCE engineering rulebook for ALL tasks (CANONICAL — DO NOT duplicate pure engineering rules anywhere else). Formal precedence 1-18 of KISS/YAGNI/blast-radius over everything else; forces strict typing, Design by Contract, TDD/ATDD, functional-core/imperative-shell, Rust-style Result/Option, observability, conventional commits, Supabase Postgres ENABLE RLS default, agile BDD incremental delivery with SOLID, code-review optimisation (max 2 lines comment block + gh-stack multi-PR reference), agent response verbosity budget (concise by default with optional deep-dive prompts) and the plain-language communication layer (two layers narrative vs contract, mandatory 5-line document header, acronym expansion, visual-before-prose). Invoked FIRST by che-developer before any code. Respected by all che skills. Appendices: A Hard Conflict Resolution Table, B Conventional Commits types + regex + examples, C gh-stack Workflow Reference."
+description: "HIGHEST-PRECEDENCE engineering rulebook for ALL tasks (CANONICAL — DO NOT duplicate pure engineering rules anywhere else). Formal precedence §0 evidence-based claims (every assertion carries an evidence class or an explicit inference/unknown label) then 1-18 of KISS/YAGNI/blast-radius over everything else; forces strict typing, Design by Contract, TDD/ATDD, functional-core/imperative-shell, Rust-style Result/Option, observability, conventional commits, Supabase Postgres ENABLE RLS default, agile BDD incremental delivery with SOLID, code-review optimisation (max 2 lines comment block + gh-stack multi-PR reference), agent response verbosity budget (concise by default with optional deep-dive prompts) and the plain-language communication layer (two layers narrative vs contract, mandatory 5-line document header, acronym expansion, visual-before-prose). Invoked FIRST by che-developer before any code. Respected by all che skills. Appendices: A Hard Conflict Resolution Table, B Conventional Commits types + regex + examples, C gh-stack Workflow Reference."
 ---
 
 # Engineering Contracts (Highest Precedence Rules — CANONICAL)
@@ -18,7 +18,65 @@ It is invoked by `che-developer` FIRST, and its rules **trump local repo convent
 
 ---
 
-## PRECEDENCE ORDER (1 = highest, hard stop; 18 = lowest)
+## PRECEDENCE ORDER (0 = truthfulness, hard stop; 1 = highest engineering rule; 18 = lowest)
+
+### 0. 🔴 EVIDENCE-BASED CLAIMS (EBC) — an unlabelled assertion is a defect (above §1)
+
+> **Why above §1:** a wrong claim forces a correction, and a correction costs the reader's trust. Reading the file is cheaper than being contradicted. This rule never trades away simplicity: it adds a label, not a document.
+
+A **claim** is any statement about the codebase, a library or vendor behaviour, a version, a flag, a test result, a past decision, a root cause or what the user said. It covers chat answers, investigations, brainstorming, SPEC premises, review findings and debugger hypotheses — not only code.
+
+#### 0.1 Evidence classes (strongest first)
+
+| Class | What qualifies | Example |
+|---|---|---|
+| **E1 Artifact** | file path + line range, git blob/commit sha, command output, test or CI log, runtime trace | `src/refund/service.ts:142` |
+| **E2 Authoritative doc** | official docs, RFC, release notes — with URL, version and access date | vendor docs page |
+| **E3 Recorded decision** | `decisions.log.jsonl` entry, ADR, approved SPEC, ticket | a `CLAIM_CORRECTION` entry |
+| **E4 Observed convention** | a pattern found in N files, stating N and sample paths | "9 of 10 routers…" |
+| **E5 Inference** | reasoned from premises, not verified | see §0.2 |
+
+#### 0.2 Three labels — the only allowed forms of an assertion
+
+- `[verified: E<n> <pointer>]`
+- `[inference: <premises> → <the check that would confirm it>]`
+- `[unknown: <what is missing> → <how to obtain it>]`
+
+`[inference]` and `[unknown]` are **first-class answers, not failures**. A labelled inference the reader can reproduce is worth more than a confident sentence they cannot audit.
+
+#### 0.3 Hard rules
+
+1. **No E1/E2 → the claim carries `[inference]` or `[unknown]`.** An unlabelled assertion is the defect this rule exists to remove.
+2. **Never assert without E1:** file content, a line number, a version, an API signature, a flag name, "already implemented", "the tests pass", "the config sets X".
+3. **Never assert library or vendor behaviour without E2.** No E2 available → `[inference]` + the check. Training-data memory is never E2.
+4. **A claim about what the code does cites the code**, not a summary of it.
+5. **Prefer `[unknown: … → I can confirm by <command>]` over a plausible guess.** Offer the check and let the user decide whether to run it.
+6. **Fresh read beats memory.** When a prior claim conflicts with a current read, the read wins — and §0.4 applies.
+
+#### 0.4 Correction protocol (when new evidence refutes an earlier claim)
+
+1. Name the wrong claim and the evidence that refuted it.
+2. State the corrected claim with its own label.
+3. One line on the cause (stale read, inferred from naming, guessed version, misread diff).
+4. If the wrong claim was already consumed downstream (SPEC, task graph, commit, review report) → append a `CLAIM_CORRECTION` entry to `decisions.log.jsonl`.
+
+#### 0.5 Density budget (so the labels do not become noise)
+
+- Label what a reader could **dispute or act on**. Do not label arithmetic, definitions, restatements of the user's own words, or the output of a command you just ran.
+- One claim per bullet, label last: `• Refunds are serialised per charge — [verified: E1 src/refund/service.ts:142]`.
+- Density is bounded by §18: labels replace prose, they never add a paragraph to it.
+
+#### 0.6 Minimum bar per flow
+
+| Flow | Minimum bar |
+|---|---|
+| Chat answer / investigation | every disputable factual claim labelled; each `[inference]` shows the check |
+| Brainstorming | options are hypotheses by default; none presented as a repo fact without E1 |
+| SPEC (`che-spec`) | every premise in §1/§3 cites E1–E3 or is recorded in `open_assumptions` |
+| Review (`che-code-review`) | already evidence-first (§4 `Context Bootstrap Evidence`); add the label, and `[unknown]` when the diff alone cannot decide |
+| Debugger (`che-debugger-bugfix`) | a hypothesis is CONFIRMED only on E1 (reproduction output), never on plausibility |
+
+---
 
 ### 1. 🔴 KISS + YAGNI + BLAST RADIUS REDUCTION + NO ACCIDENTAL COMPLEXITY (above ALL other rules)
 
