@@ -561,6 +561,10 @@ Output: `$TEST_SPEC_SMOKE_PATH` (§0.2.1 preflight variable — ONE file per fea
 
 1. **Behavior list (BDD Given-When-Then)**: 3–5 core behaviors. Core only.
    - `GIVEN <precondition> WHEN <action/trigger> THEN <observable output/state>`.
+   - **Stateful entity (`stateful_entity: true` in the SPEC frontmatter):** the list IS the §4.4.2
+     transition table, one row per line. Every `Legal? = yes` row becomes one positive behaviour,
+     every `Legal? = no` row becomes one negative behaviour. Do not invent behaviours outside the
+     table and do not silently drop a row.
 2. **Test split recommendation**: `<X> unit tests (packages/db, <pkg>) + <Y> e2e tests (POST /x, UI flow Y) + <Z> manual smoke (admin finance: refund button)`.
 3. **Specific test files** (enumerate paths). NO wildcards. Each line names the anchor it proves,
    copied from SPEC §4.2/§4.3 — this list is what `che test-lock record` freezes later. E.g.:
@@ -672,6 +676,9 @@ Output = `$CHE_WORKSPACE_SHARED/tasks/T<id>-<slug>/YYYYMMDD-HHMMSS-task-envelope
 - **Simplicity Bias (engineering-contracts §1)**: envelope MUST name the simplest approach AND carry the SPEC §1 "deferred by design" list forward, so Dev does not implement deferred completeness.
 - **Readiness assumptions (§0.6)**: envelope MUST carry `SESSION_ASSUMPTIONS` verbatim; the Developer must not silently re-decide any of them.
 - **Vertical slices (SPEC §4.5)**: the ordered F0..FN list the Dev executes one at a time; each slice ends with a `che-pair` review (§2.2).
+- **State model (SPEC §4.4.2, when present)**: the subset of states and transitions this task owns,
+  copied verbatim from the table. A task that touches a lifecycle without naming its subset is
+  under-specified — send it back, do not let the Developer infer the machine.
 - **Max files heuristic**: if > 10 files → SM re-evaluate and justify in decision.log.
 
 ### 2.2 Call Developer + PAIR REVIEW + SLICE COMMIT (slice loop)
@@ -748,6 +755,22 @@ Compare Developer's output against TASK ENVELOPE:
 | No scope creep — features not listed in envelope not added? | ▢ |
 | Atomic: task stands alone, no partial / WIP left behind? | ▢ |
 | Each slice landed as exactly ONE commit (or `SLICE_COMMIT_DEFERRED_PARALLEL` logged)? | ▢ |
+| State model (§4.4.2, when present): no state or transition in the diff that the table does not allow? | ▢ |
+
+**State model gate (runs only when the SPEC has `### §4.4.2 STATE MODEL`).** Build the observed set
+from the **code**, never from the table: every state the diff can produce (enum values, status
+literals) and every transition it can perform (`{"from", "event", "to"}`). Write it to
+`$CHE_SESSION_DIR/state/<TASK_ID>-observed.json` (ephemeral, outside the worktree), then run:
+
+`che spec state-model <SPEC> --observed $CHE_SESSION_DIR/state/<TASK_ID>-observed.json --json` → exit 0.
+
+- `impossible_transition`, `unmapped_state`, `forbidden_transition_observed` → 🔴 FAIL the task. The
+  increment reached a state the chart does not allow: fix the code, or go back to the SPEC if the
+  chart was wrong.
+- `uncovered_transition` → informational here — later slices still owe those rows. Phase 7 §3.1.1
+  makes it blocking.
+- Confirm each `Legal? = no` row this task touched has a negative test. The transition table is the
+  test list, not documentation of it.
 
 **If FAIL**: Return task to Developer with clear delta list.
 **If 2 consecutive iterations fail** → PAUSE and ask user.
@@ -776,6 +799,16 @@ When last task marked DONE:
 ### 3.1 Compliance — HEAVY (full sweep)
 
 Call `che-compliance` with `stage: final`. Scans ENTIRE worktree diff.
+
+### 3.1.1 State model completeness — final gate (only when §4.4.2 exists)
+
+Rebuild the observed set from the finished worktree and run:
+
+`che spec state-model <SPEC> --observed $CHE_SESSION_DIR/state/final-observed.json --require-complete --json`
+
+Exit 0 is required. Every legal transition is owed by now, so `uncovered_transition` blocks exactly
+like `impossible_transition` does: a chart the code does not implement is a SPEC that lied, and either
+the code or the table must change before the task graph is marked DONE.
 
 ### 3.2 Generate MANUAL_TEST_PLAN.md
 
@@ -840,7 +873,9 @@ Print concise English summary:
 - [ ] Scope capture: ACs explicit and user-approved
 - [ ] TASK GRAPH: user approved or provided
 - [ ] Per task: ENVELOPE written with blast radius + DONE criteria
+- [ ] Per task with a state model: `che spec state-model … --observed …` exits 0
 - [ ] Per task: 2-iteration rule enforced
 - [ ] Final: both compliance stages (light + heavy) ran
+- [ ] Final: `che spec state-model … --require-complete` exits 0 (when §4.4.2 exists)
 - [ ] Final: manual_test_plan.md exists AND `che manual-plan validate <path>` exits 0 (a prose-only plan is not shippable)
 - [ ] Final: final_summary.md exists

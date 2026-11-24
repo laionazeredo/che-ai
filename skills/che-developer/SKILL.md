@@ -185,6 +185,10 @@ Before production code:
 - For public external layers (API, UI routes): **integration tests** for happy path + main error paths
 - Use the testing framework the repo already uses (Vitest, Jest, pytest, Go test, etc.)
 - If the repo has NO test infrastructure → note and ask SM/user how to proceed
+- **Stateful entity (SPEC §4.4.2):** enumerate the red phase from the transition table, not from the
+  prose. One test per `Legal? = yes` row (the transition happens and the state lands where the table
+  says) and one per `Legal? = no` row (the transition is refused and the state does NOT move). The
+  test title states the observable outcome; the row itself never appears in the title (RULE 7.9).
 
 **MANDATORY (Che RULE 7.9): TEST NAMES AND COMMENTS = SELF-CONTAINED OBSERVABLE BEHAVIOUR. NO INTERNAL IDs.**
 

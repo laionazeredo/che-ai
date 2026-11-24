@@ -403,6 +403,14 @@ ERROR_CATALOG: Dict[str, ErrorSpec] = dict(
             "Fix the JSON at the reported position; a trailing comma is the usual cause.",
         ),
         _spec(
+            "INVALID_OBSERVED_STATE_MODEL",
+            "input",
+            EXIT_USAGE,
+            "observed state model at {path} is unusable: {detail}.",
+            "Expected a JSON object with a `states` list of strings and a `transitions` list of "
+            "objects carrying `from`, `event` and an optional `to`.",
+        ),
+        _spec(
             "TOKENS_MISSING_COLORS",
             "input",
             EXIT_USAGE,

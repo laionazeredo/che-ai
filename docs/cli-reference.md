@@ -825,19 +825,33 @@ result means "review the whole repository".
 
 ## 6.7 SPEC Validation, Traceability and As-Built
 
-Three commands that turn the SPEC gates from prose into something a human, an agent and CI can all run.
+Four commands that turn the SPEC gates from prose into something a human, an agent and CI can all run.
 
 | Command | Question it answers | Exit |
 |---|---|---|
 | `che spec validate <spec> [--tier …] [--json]` | Does this draft satisfy the structural V-checks? | `0` pass · `1` fail |
+| `che spec state-model <spec> [--observed <json>] [--require-complete] [--json]` | Does the increment expose only the states and transitions §4.4.2 allows? | `0` allowed · `1` impossible/unmapped/forbidden |
 | `che spec coverage <spec> [--worktree <path>] [--json]` | Which B-ID / AB-ID anchors does no test mention? | `0` covered · `1` missing |
 | `che spec merge <spec> --project <slug> [--domain <d>] [--no-dry-run --confirm]` | What does the system do today, after folding this change in? | `0` ok |
 
 ```bash
 che spec validate ~/.che-workspaces/acme/worktrees/main/specs/checkout/20261110-120000-spec.md --json
+che spec state-model ~/.che-workspaces/acme/worktrees/main/specs/checkout/20261110-120000-spec.md --observed observed.json
 che spec coverage ~/.che-workspaces/acme/worktrees/main/specs/checkout/20261110-120000-spec.md --worktree ~/code/acme
 che spec merge  ~/.che-workspaces/acme/worktrees/main/specs/checkout/20261110-120000-spec.md --project acme --domain engineering
 ```
+
+**The state-model diff is what stops an increment from inventing a state.** `--observed` takes a JSON
+object listing what the code can actually produce:
+
+```json
+{"states": ["pending", "paid"], "transitions": [{"from": "pending", "event": "payment.captured", "to": "paid"}]}
+```
+
+Every observed state must appear in §4.4.2, and every observed transition must match a `Legal? = yes`
+row (an event of `*` in the table matches any event). A match against a `Legal? = no` row is reported
+as `forbidden_transition_observed`. `--require-complete` additionally reports a legal row nobody
+observed — the gate `che-act` runs at the end of a feature, when every transition is owed.
 
 **Tiering scales the gate.** `spec_tier` in the frontmatter wins; otherwise it is inferred from
 `risk_level` and `estimated_files_max`.
