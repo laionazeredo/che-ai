@@ -35,6 +35,7 @@ Do NOT generate the whole plan at once. Proceed step-by-step, asking for user fe
 
 ### Step 1: Discovery & Intent Capture
 - **Goal**: Define the "Why" and the core vision.
+- **Evidence bar** (`engineering-contracts` §0 EBC): a proposed stack, module or business rule is a hypothesis until it cites E1; label each premise `[verified]`, `[inference: premises → check]` or `[unknown: missing → how to obtain it]`.
 - **Output**: 
   - **Intent Document** (`intent.md`): Vision, Problem Statement, Success Criteria, Constraints, and Non-Goals.
   - Core Personas.

@@ -52,6 +52,10 @@ first level that has an answer:
 contradiction with levels 1–3 is a finding and **must** cite the evidence. If no evidence is found at any
 level, say **"not found"** — never invent a code path, a decision or a convention.
 
+This hierarchy decides **which evidence is stronger**. `engineering-contracts` §0 decides **how the claim is
+labelled**: a level-4-only premise is `[inference]` by definition, and a level-1–3 premise is `[verified]` only
+with its pointer attached.
+
 ---
 
 ## §3 LENSES (FROZEN per mode — no new lens mid-round)

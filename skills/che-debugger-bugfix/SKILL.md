@@ -251,6 +251,7 @@ Every loop iteration appends a section:
 ### Analysis — CONFIRMED or REFUTED?
 - Decision: CONFIRMED / REFUTED
 - Why: <evidence-based rationale>
+- Evidence label (`engineering-contracts` §0 EBC): CONFIRMED requires E1 (reproduction output); plausibility never confirms
 
 ### If CONFIRMED:
 - Root cause (1 sentence): ...

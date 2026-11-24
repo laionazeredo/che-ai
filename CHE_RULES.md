@@ -346,6 +346,21 @@ Minimum rows: `ceil(B_COUNT / 3)` assertions per SPEC.
 
 ---
 
+## 🔴 EVIDENCE GATE (Non-negotiable)
+
+> Full body (evidence classes E1–E5, the three labels, correction protocol, density budget) lives ONLY in `engineering-contracts` §0. Only the che process/gate here.
+
+**Gate before ANY assertion reaches the user or an artifact:**
+
+1. **Chat / investigation / brainstorming** — every disputable factual claim carries `[verified: E<n> <pointer>]`, `[inference: <premises> → <check>]` or `[unknown: <missing> → <how to obtain it>]`. A brainstorm option stays a hypothesis until it cites E1.
+2. **SPEC (`che-spec`)** — every premise carried into §1 and §3 cites E1–E3, or is recorded in `open_assumptions`. An uncited premise is an assumption, never a fact.
+3. **Review (`che-code-review`)** — the §4 `Context Bootstrap Evidence` table stays mandatory; each finding gains its label, and `[unknown]` replaces an assertion the diff alone cannot settle.
+4. **Debugger (`che-debugger-bugfix`)** — a hypothesis is CONFIRMED only on E1 (reproduction output). Plausibility never confirms.
+5. **Correction** — when fresh evidence refutes an earlier claim, follow §0.4 (name the wrong claim, the refuting evidence, the cause) and log `CLAIM_CORRECTION` when the claim was already consumed downstream.
+6. **Escape hatch: none.** If the evidence cannot be obtained, the answer is `[unknown]` plus the exact command that would obtain it. Guessing is never the fallback.
+
+---
+
 ## 🔴 LEAN RESPONSES + DEEP-DIVE GATE (Non-negotiable)
 
 > Full body of this rule (word budget, permitted sections, ≤2 options rule) lives ONLY in `engineering-contracts` SKILL §18. Only the che process/gate here.

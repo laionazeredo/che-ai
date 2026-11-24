@@ -161,6 +161,7 @@ fi
    the failure — do not silently skip. The only escape is the user typing verbatim
    `EXPLICIT_OVERRIDE_READINESS_GATE: <1-line reason ≤120 chars>`, logged via
    `che decision_append "$WORKTREE_ROOT" "READINESS_GATE_OVERRIDE" "<reason>"`.
+6. **Evidence bar (`engineering-contracts` §0 EBC):** every premise carried into §1 or §3 cites E1–E3, or is recorded in `open_assumptions`. An uncited premise is an assumption, never a fact.
 
 ---
 
