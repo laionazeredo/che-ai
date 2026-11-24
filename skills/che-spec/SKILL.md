@@ -418,6 +418,9 @@ Hard rules (V27/V28):
 3. A state diagram cannot draw an illegal edge: legal transitions are edges, forbidden ones live in a
    `note`. Never omit them — an unlisted forbidden transition is the one the agent will implement.
 4. `(terminal)` in `Next` means the transition leaves the machine; it needs no state row of its own.
+5. This table is not decoration: `che spec state-model <spec>` extracts it, and `che-act` diffs the
+   states/transitions the increment actually exposes against it. A state or transition the table does
+   not allow blocks the task (§2.3) and the final gate (§3.1.1) — so write the table the code must obey.
 
 #### §4.5 VERTICAL SLICES — F0 TRAcer + F1..FN MANDATORY (Non-negotiable unless EXPLICIT_OVERRIDE_HORIZONTAL_PLAN logged)
 Header: `### §4.5 VERTICAL SLICES (F0 Tracer Bullet Mandatory — unless override logged in §2 SCOPE + decision.log)`

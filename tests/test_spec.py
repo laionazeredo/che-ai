@@ -8,6 +8,7 @@ never loses a behaviour it already knew.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -15,7 +16,14 @@ from pathlib import Path
 
 import pytest
 
-from che_core.spec import coverage, infer_tier, merge_as_built, parse_frontmatter, validate_spec
+from che_core.spec import (
+    coverage,
+    infer_tier,
+    merge_as_built,
+    parse_frontmatter,
+    state_model,
+    validate_spec,
+)
 from che_core.workspaces import init_project
 
 WORKTREE = Path(__file__).resolve().parents[1]
@@ -329,6 +337,134 @@ def test_a_state_model_needs_its_rendering(tmp_path: Path) -> None:
     report = validate_spec(str(_write(tmp_path, _spec(s4_extra=broken))))
 
     assert any("stateDiagram-v2" in failure for failure in report["failures"])
+
+
+# --- State model extraction + observed diff (che spec state-model) -----------
+
+
+def _observed(tmp_path: Path, payload: dict, name: str = "observed.json") -> Path:
+    path = tmp_path / name
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def _stateful_spec(tmp_path: Path) -> Path:
+    return _write(tmp_path, _spec(frontmatter_extra="stateful_entity: true\n", s4_extra=STATE_MODEL))
+
+
+def test_state_model_extracts_the_contract(tmp_path: Path) -> None:
+    report = state_model(str(_stateful_spec(tmp_path)))
+
+    assert report["ok"] is True
+    assert report["model"]["initial"] == "pending"
+    assert report["model"]["terminals"] == ["refunded"]
+    assert report["model"]["states"] == ["paid", "pending", "refunded"]
+    assert len(report["model"]["transitions"]) == 3
+
+
+def test_a_state_or_transition_outside_the_chart_is_impossible(tmp_path: Path) -> None:
+    observed = _observed(
+        tmp_path,
+        {
+            "states": ["pending", "paid", "expired"],
+            "transitions": [{"from": "paid", "event": "refund.requested", "to": "pending"}],
+        },
+    )
+
+    report = state_model(str(_stateful_spec(tmp_path)), observed_path=str(observed))
+
+    kinds = {problem["kind"] for problem in report["observed"]["problems"]}
+    assert report["ok"] is False
+    assert kinds == {"unmapped_state", "impossible_transition"}
+
+
+def test_observing_a_forbidden_transition_fails(tmp_path: Path) -> None:
+    observed = _observed(
+        tmp_path,
+        {"states": ["pending"], "transitions": [{"from": "pending", "event": "payment.captured", "to": "pending"}]},
+    )
+
+    report = state_model(str(_stateful_spec(tmp_path)), observed_path=str(observed))
+
+    assert report["ok"] is False
+    assert [problem["kind"] for problem in report["observed"]["problems"]] == ["forbidden_transition_observed"]
+
+
+def test_require_complete_reports_a_legal_transition_nobody_exposed(tmp_path: Path) -> None:
+    observed = _observed(
+        tmp_path,
+        {
+            "states": ["pending", "paid"],
+            "transitions": [{"from": "pending", "event": "payment.captured", "to": "paid"}],
+        },
+    )
+
+    partial = state_model(str(_stateful_spec(tmp_path)), observed_path=str(observed))
+    complete = state_model(str(_stateful_spec(tmp_path)), observed_path=str(observed), require_complete=True)
+
+    assert partial["ok"] is True
+    assert complete["ok"] is False
+    assert [problem["kind"] for problem in complete["observed"]["problems"]] == ["uncovered_transition"]
+
+
+def test_cli_state_model_exits_one_on_an_impossible_transition(tmp_path: Path) -> None:
+    observed = _observed(
+        tmp_path,
+        {"states": ["pending"], "transitions": [{"from": "paid", "event": "refund.requested", "to": "pending"}]},
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "che_core.cli",
+            "spec",
+            "state-model",
+            str(_stateful_spec(tmp_path)),
+            "--observed",
+            str(observed),
+        ],
+        cwd=str(WORKTREE),
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(WORKTREE)},
+    )
+
+    assert result.returncode == 1
+    assert "impossible_transition" in result.stdout
+
+
+def test_cli_state_model_rejects_a_malformed_observed_file(tmp_path: Path) -> None:
+    observed = _observed(tmp_path, {"states": "pending", "transitions": []})
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "che_core.cli",
+            "spec",
+            "state-model",
+            str(_stateful_spec(tmp_path)),
+            "--observed",
+            str(observed),
+        ],
+        cwd=str(WORKTREE),
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHONPATH": str(WORKTREE)},
+    )
+
+    assert result.returncode == 2
+    assert "is unusable" in result.stderr
+
+
+@pytest.mark.parametrize("path", ["skills/che-act/SKILL.md", "paperclip/package/skills/che-act/SKILL.md"])
+def test_the_act_gate_calls_the_command(path: str) -> None:
+    """The gate is only real if the skill that runs it names the command — source and package alike."""
+    text = (WORKTREE / path).read_text(encoding="utf-8")
+
+    assert "che spec state-model" in text
+    assert "--require-complete" in text
 
 
 # --- Traceability (V29), slice coverage (V30), counter drift (V31) -----------

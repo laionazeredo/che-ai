@@ -317,7 +317,7 @@ Reasoning per AC:
 | AC-2 qrcode offline | `unit_or_e2e_test_coverage_for_qrcode_offline_scan` | 🟡 PARTIAL | [scanner/scanner.test.ts#L5-L18](file:///…) suite exists, happy path online only. **Missing** offline case + cache fallback. |
 | AC-3 login google | `unit_or_e2e_test_coverage_for_login_google_oauth_redirect` | 🔴 NOT TESTED | `packages/auth/src/google.ts` changed, NO `*.test.*` in `packages/auth/**` touched. Create `google-login.spec.ts` with cases: redirect_uri, state param, token exchange. |
 
-### Step 3.5 — ⚡ CHECK 2 EXTENSION SbE BILATERAL ENFORCEMENT (3 sub-checks) — ONLY RUNS IF `SBE_EXTENSION_ENABLED = true` (§0.4)
+### Step 3.5 — ⚡ CHECK 2 EXTENSION SbE BILATERAL ENFORCEMENT (4 sub-checks) — ONLY RUNS IF `SBE_EXTENSION_ENABLED = true` (§0.4)
 
 > **ONDA2 bilateral verification loop pillar:** Spec §4 Behavior → test verifying that behaviour → Evidence SHA → Updated Spec §5. Scope-checker validates the reverse loop as well (which B-coverage vs reality).
 
@@ -360,6 +360,20 @@ Cross-check procedure:
 3. **Do ERD declared constraints ≥3 really exist?** if ERD lists fields with `UK`/`CHECK`/`UNIQUE` explicitly → grep `ADD CONSTRAINT <name> UNIQUE` or `UNIQUE(col, col2)` or `@Index({ unique: true })` in diff. ≥1 constraint declared in ERD but missing in schema → WARN "UK `uk_order_stripe_pi_unique` exists in ERD but migration has no ADD CONSTRAINT nor unique @Index."
 4. **Severity:** All ERD findings = **🟡 non-blocking WARN** by default (ERD is often "target state" and migration incremental). If ≥3 mismatches + high risk (wrong FK ON DELETE in payments/tickets table) → mark as upgrade: **🔴 BLOCK if 1 of the mismatches is FK cardinality of strong referential integrity (e.g. Order 1:N Ticket but ON DELETE CASCADE in Ticket would delete tickets when deleting Order — GDPR violation).**
 
+**3.5.4 Bilateral 4/4 — SPEC §4.4.2 state model ↔ code states/transitions ↔ tests**
+
+> **Hard gate only applies IF:** the SPEC has `### §4.4.2 STATE MODEL` (frontmatter `stateful_entity: true`). Otherwise → ⚪ N/A marked in summary.
+
+The point of the chart is that no increment invents a state. Three checks, and the first two block unconditionally:
+
+1. **Impossible state.** Enumerate the states and transitions the diff can actually produce (enum values, status literals, transition calls) and hand them to the deterministic diff:
+   `che spec state-model <SPEC> --observed <observed.json> --json` → exit 0 required.
+   `impossible_transition` / `unmapped_state` / `forbidden_transition_observed` = 🔴 BLOCK: the code reaches a state the table forbids, or one the table never mentions.
+2. **Forbidden transition without a test.** Every `Legal? = no` row the diff touches must be proven by a negative test whose title or doc comment states the prohibited outcome. A forbidden row with no test = 🔴 BLOCK — it is the anti-behaviour the chart exists to catch.
+3. **Legal transition without a test.** Every `Legal? = yes` row the diff touches must be proven by a positive test. Missing = 🟡 WARN, upgraded to 🔴 BLOCK when the run is the final gate (`--require-complete`).
+
+**Severity:** unlike the ERD check above, the state model is the contract the code was written against. A mismatch is never "target-state drift" — it is either a bug or a stale SPEC. Say which, and do not soften it.
+
 ---
 
 #### §3.5 Report format — SbE Bilateral Extension (new, RULE 7.9)
@@ -369,6 +383,8 @@ Cross-check procedure:
 | SBE-B1 | `bilateral_behaviour_coverage_for_spec_Behaviors_test_files` | 🟢 FULLY LINKED | 9/10 B-IDs have a test whose title or doc comment verifies the behaviour. Coverage=90%. Files: [refundFlow.api.test.ts](file:///...) + [RefundService.unit.test.ts](file:///...). **+0.5 §7.1 SCOPE_score bonus applied.** |
 | SBE-B2 | `bilateral_mermaid_bid_refs_real_table_behaviour` | 🟡 WARN ORPHAN | Orphan refs: `B-11` exists in §4.4.1 sequenceDiagram but has NO corresponding entry in Behavior Table. Add B-11 to table OR remove from diagram. Missing refs count = 0 (ok, mermaid_required=true). |
 | SBE-B3 | `bilateral_erd_cardinalities_constraints_migration_and_typeorm` | 🟡 WARN MISMATCH | ERD `OrderItem → Order }|--|{` (ON DELETE CASCADE expected). Migration `20260415_refund.sql#L80` uses `ON DELETE RESTRICT`. Adjust migration to CASCADE (order without items = deleted without orphans risk). ERD declared UK `uk_refund_payment_id` → found in unique @Index ✅. |
+| SBE-B4 | `bilateral_state_model_code_transitions_and_tests` | 🔴 BLOCK IMPOSSIBLE | `che spec state-model` exits 1: `refunded --refund.requested--> pending` has no legal row, and §4.4.2 marks `refunded` terminal. The code can leave a terminal state. Fix the transition or amend the chart — a code fix if the table is right, a SPEC change if it is not. |
+| SBE-B5 | `bilateral_state_model_forbidden_transition_has_negative_test` | 🟡 WARN MISSING TEST | §4.4.2 row `pending --payment.captured [amount == 0]--> pending` is `Legal? = no` (AB-2) but no test in the diff states that outcome. Add the negative test, or the anti-behaviour ships unproven. |
 | SBE-B2-alt | `(0% example — hard block)` | 🔴 BLOCK ZERO COVERAGE | 0/7 B-IDs are verified by any test in this diff — no title or doc comment describes those behaviours. Resolve: write the missing behaviour tests OR justified EXPLICIT_OVERRIDE_BILATERAL_SKIP + decision.log entry. |
 
 ### Step 3.6 — 🔒 TEST LOCK INTEGRITY (runs when the task froze its tests)

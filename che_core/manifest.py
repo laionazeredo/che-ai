@@ -364,6 +364,12 @@ COMMAND_SEMANTICS: Dict[str, Dict[str, Any]] = {
         "requires_bound_worktree": False,
         "output": "json",
     },
+    "spec state-model": {
+        "summary": "Extract the §4.4.2 state model and diff it against an observed states/transitions set. Exit 1 on an impossible state or transition.",
+        "mutates": False,
+        "requires_bound_worktree": False,
+        "output": "json",
+    },
     "spec merge": {
         "summary": "Fold an Approved SPEC's behaviours into the project's as-built spec. Dry-run unless --no-dry-run --confirm.",
         "mutates": True,

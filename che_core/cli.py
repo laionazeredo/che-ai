@@ -519,6 +519,25 @@ def build_parser():
     )
     sp_validate.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
 
+    sp_state = spec_subs.add_parser(
+        "state-model",
+        help="Extract the §4.4.2 state model and diff it against the states/transitions the increment exposes.",
+    )
+    sp_state.add_argument("path", help="Absolute path to the SPEC markdown file.")
+    sp_state.add_argument(
+        "--observed",
+        default=None,
+        help="JSON file with the states and transitions the code and tests expose.",
+    )
+    sp_state.add_argument(
+        "--require-complete",
+        dest="require_complete",
+        action="store_true",
+        default=False,
+        help="Also fail on a legal transition the increment never exposes (final gate).",
+    )
+    sp_state.add_argument("--json", dest="json_out", action="store_true", default=False, help="Machine output.")
+
     sp_coverage = spec_subs.add_parser(
         "coverage",
         help="Report which B-ID/AB-ID anchors no test file mentions. Exit 1 when any is missing.",
@@ -1394,7 +1413,7 @@ def main(argv=None):
         sys.exit(exit_code(report))
 
     if args.command == "spec":
-        from che_core.spec import coverage, merge_as_built, validate_spec
+        from che_core.spec import coverage, merge_as_built, state_model, validate_spec
 
         if args.spec_cmd == "validate":
             res = validate_spec(args.path, tier=args.tier)
@@ -1409,6 +1428,30 @@ def main(argv=None):
                     if entry["status"] != "skip":
                         suffix = f" — {entry['detail']}" if entry["detail"] else ""
                         print(f"  {entry['id']:<4} {entry['status']}{suffix}")
+            if not res["ok"]:
+                sys.exit(1)
+            return
+
+        if args.spec_cmd == "state-model":
+            res = state_model(args.path, observed_path=args.observed, require_complete=args.require_complete)
+            if _wants_json(args):
+                _print_json(res)
+            else:
+                model = res["model"]
+                if model is None:
+                    print(f"NO STATE MODEL · {res['path']}")
+                else:
+                    print(
+                        f"{'PASS' if res['ok'] else 'FAIL'} · initial={model['initial']} · "
+                        f"states={len(model['states'])} · transitions={len(model['transitions'])} · {res['path']}"
+                    )
+                for entry in res["checks"]:
+                    if entry["status"] != "skip":
+                        suffix = f" — {entry['detail']}" if entry["detail"] else ""
+                        print(f"  {entry['id']:<4} {entry['status']}{suffix}")
+                if res["observed"]:
+                    for problem in res["observed"]["problems"]:
+                        print(f"  {problem['kind']}: {problem['detail']}")
             if not res["ok"]:
                 sys.exit(1)
             return

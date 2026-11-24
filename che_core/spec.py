@@ -29,6 +29,7 @@ the author wants control, and otherwise inferred from ``risk_level`` and
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -289,6 +290,181 @@ def _state_transition_problems(model: Dict[str, Any], b_ids: set, ab_ids: set) -
     return problems
 
 
+def _stateful(frontmatter: Dict[str, Any]) -> bool:
+    return str(frontmatter.get("stateful_entity", "")).strip().lower() == "true"
+
+
+def _state_checks(
+    checks: List[Dict[str, str]],
+    model: Optional[Dict[str, Any]],
+    stateful: bool,
+    b_ids: set,
+    ab_ids: set,
+) -> None:
+    """V27 / V28 — one implementation, so ``validate`` and ``state-model`` cannot drift apart."""
+    if model is None:
+        if stateful:
+            _check(checks, "V27", "fail", "stateful_entity=true but no `### §4.4.2 STATE MODEL` section")
+        else:
+            _check(checks, "V27", "skip", "no state model (flowchart in use)")
+        _check(checks, "V28", "skip", "no state model")
+        return
+    problems = _state_structure_problems(model)
+    _check(checks, "V27", "fail" if problems else "pass", "; ".join(problems))
+    problems = _state_transition_problems(model, b_ids, ab_ids)
+    _check(checks, "V28", "fail" if problems else "pass", "; ".join(problems))
+
+
+def _model_states(model: Dict[str, Any]) -> List[str]:
+    states = {row["state"] for row in model["rows"]}
+    states |= {row["next"] for row in model["rows"] if row["next"] and not row["next"].startswith("(")}
+    return sorted(states)
+
+
+def _target(value: Any) -> Optional[str]:
+    """`(terminal)` and `[*]` leave the machine; they are not states to compare against."""
+    text = "" if value is None else str(value).strip().strip("`* ")
+    return None if text in ("", "(terminal)", "[*]") else text
+
+
+def _row_matches(row: Dict[str, str], from_state: str, event: str, to_state: Optional[str]) -> bool:
+    spec_event = row["event"].strip()
+    return row["state"] == from_state and spec_event in ("*", event) and _target(row["next"]) == to_state
+
+
+def _observed_problems(model: Dict[str, Any], observed: Dict[str, Any], require_complete: bool) -> List[Dict[str, str]]:
+    """Diff what the increment exposes against what §4.4.2 allows.
+
+    The increment cannot be read by regex, so the caller reports the states and transitions it
+    actually added; this function owns the set arithmetic. A transition with no legal row is the
+    impossible state the state chart exists to prevent, and a `Legal? = no` row that was observed is
+    the anti-behaviour already shipping.
+    """
+    problems: List[Dict[str, str]] = []
+    states = set(_model_states(model))
+    for state in observed["states"]:
+        if state not in states:
+            problems.append({"kind": "unmapped_state", "detail": f"state {state!r} is not in §4.4.2"})
+
+    legal_rows = [row for row in model["rows"] if row["legal"] == "yes"]
+    forbidden_rows = [row for row in model["rows"] if row["legal"] == "no"]
+    matched: set = set()
+    for item in observed["transitions"]:
+        from_state = str(item.get("from", "")).strip()
+        event = str(item.get("event", "")).strip()
+        to_state = _target(item.get("to"))
+        label = f"{from_state} --{event}--> {to_state or '(terminal)'}"
+        if any(_row_matches(row, from_state, event, to_state) for row in forbidden_rows):
+            problems.append({"kind": "forbidden_transition_observed", "detail": f"{label} is a `Legal? = no` row"})
+            continue
+        index = next((i for i, row in enumerate(legal_rows) if _row_matches(row, from_state, event, to_state)), None)
+        if index is None:
+            problems.append({"kind": "impossible_transition", "detail": f"{label} has no legal row in §4.4.2"})
+        else:
+            matched.add(index)
+
+    if require_complete:
+        for index, row in enumerate(legal_rows):
+            if index not in matched:
+                target = _target(row["next"]) or "(terminal)"
+                problems.append(
+                    {
+                        "kind": "uncovered_transition",
+                        "detail": f"legal row {row['state']} --{row['event']}--> {target} was never observed",
+                    }
+                )
+    return problems
+
+
+def _load_observed(path: str) -> Dict[str, Any]:
+    """Shape-check the observed set the increment reports — fail fast at the boundary."""
+    observed_path = Path(path).expanduser()
+    try:
+        raw = json.loads(observed_path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        fail("UNREADABLE_INPUT", path=str(observed_path), detail=str(exc))
+    except json.JSONDecodeError as exc:
+        fail("INVALID_JSON", path=str(observed_path), detail=str(exc))
+
+    if not isinstance(raw, dict):
+        fail("INVALID_OBSERVED_STATE_MODEL", path=str(observed_path), detail="top level must be an object")
+    states = raw.get("states", [])
+    transitions = raw.get("transitions", [])
+    if not isinstance(states, list) or not all(isinstance(state, str) for state in states):
+        fail("INVALID_OBSERVED_STATE_MODEL", path=str(observed_path), detail="`states` must be a list of strings")
+    if not isinstance(transitions, list):
+        fail("INVALID_OBSERVED_STATE_MODEL", path=str(observed_path), detail="`transitions` must be a list")
+    for item in transitions:
+        if not isinstance(item, dict):
+            fail("INVALID_OBSERVED_STATE_MODEL", path=str(observed_path), detail="each transition must be an object")
+        if not str(item.get("from", "")).strip() or not str(item.get("event", "")).strip():
+            fail(
+                "INVALID_OBSERVED_STATE_MODEL",
+                path=str(observed_path),
+                detail="each transition needs a non-empty `from` and `event`",
+            )
+    return {"states": states, "transitions": transitions}
+
+
+def state_model(path: str, observed_path: Optional[str] = None, require_complete: bool = False) -> Dict[str, Any]:
+    """Extract the §4.4.2 state model and diff it against what the increment exposes.
+
+    Preconditions: ``path`` is a readable SPEC; ``observed_path`` (when given) holds a JSON object
+    with ``states`` and ``transitions`` (``from``/``event``/``to``).
+    Postcondition: V27/V28 verdicts plus one problem per observed state or transition §4.4.2 does
+    not allow. ``require_complete`` additionally flags a legal row nobody observed. Never rewrites
+    the SPEC.
+    """
+    spec_path = Path(path).expanduser()
+    try:
+        text = spec_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        fail("UNREADABLE_INPUT", path=str(spec_path), detail=str(exc))
+
+    frontmatter, body = parse_frontmatter(text)
+    lines = body.splitlines()
+    model = _state_model(lines)
+    b_ids = {b_id for b_id, _row in _id_rows(_rows_after(lines, "### §4.2"), _B_ROW_RE)}
+    ab_ids = {ab_id for ab_id, _row in _id_rows(_rows_after(lines, "### §4.3"), _AB_ROW_RE)}
+    checks: List[Dict[str, str]] = []
+    _state_checks(checks, model, _stateful(frontmatter), b_ids, ab_ids)
+
+    problems: List[Dict[str, str]] = []
+    observed: Optional[Dict[str, Any]] = None
+    if observed_path is not None:
+        observed = _load_observed(observed_path)
+        if model is None:
+            problems.append(
+                {"kind": "no_state_model", "detail": "§4.4.2 STATE MODEL is absent — nothing to map against"}
+            )
+        else:
+            problems = _observed_problems(model, observed, require_complete)
+
+    ok = not problems and all(entry["status"] != "fail" for entry in checks)
+    return {
+        "ok": ok,
+        "path": str(spec_path),
+        "stateful_entity": _stateful(frontmatter),
+        "model": {
+            "initial": model["initial"],
+            "terminals": model["terminals"],
+            "states": _model_states(model),
+            "transitions": model["rows"],
+            "has_diagram": model["has_diagram"],
+        }
+        if model
+        else None,
+        "checks": checks,
+        "observed": {
+            "states": len(observed["states"]),
+            "transitions": len(observed["transitions"]),
+            "problems": problems,
+        }
+        if observed
+        else None,
+    }
+
+
 # --- Ticket traceability (V29) -----------------------------------------------
 
 
@@ -543,19 +719,7 @@ def validate_spec(path: str, tier: Optional[str] = None) -> Dict[str, Any]:
     historical = str(frontmatter.get("status", "")).strip().lower() == "approved"
 
     # V27 / V28 — the state model, validated whenever the draft carries one.
-    model = _state_model(lines)
-    stateful = str(frontmatter.get("stateful_entity", "")).strip().lower() == "true"
-    if model is None:
-        if stateful:
-            _check(checks, "V27", "fail", "stateful_entity=true but no `### §4.4.2 STATE MODEL` section")
-        else:
-            _check(checks, "V27", "skip", "no state model (flowchart in use)")
-        _check(checks, "V28", "skip", "no state model")
-    else:
-        problems = _state_structure_problems(model)
-        _check(checks, "V27", "fail" if problems else "pass", "; ".join(problems))
-        problems = _state_transition_problems(model, b_ids, ab_ids)
-        _check(checks, "V28", "fail" if problems else "pass", "; ".join(problems))
+    _state_checks(checks, _state_model(lines), _stateful(frontmatter), b_ids, ab_ids)
 
     # V29 — every ticket AC is mapped to a behaviour, or says why it is not.
     if effective_tier == "lite":
