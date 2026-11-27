@@ -13,6 +13,9 @@ arguments:
   - name: slug
     description: "Short slug for the SPEC folder (used in specs/<slug>/<ts>-spec.md). Ex: api-authn-fail-closed. Optional, derived if missing."
     required: false
+  - name: plan
+    description: "Associate the SPEC to a sprint plan. Optional flag; when present, the Skill asks which sprint (default the most recent open one) and links the task row."
+    required: false
 ---
 
 IMMEDIATELY invoke the **`che-spec`** Skill.
@@ -23,3 +26,4 @@ Preflight:
 3. Verify if the project belongs to the resolved workspace.
 4. create binding (§19 2-LEVEL) before proceeding.
 3. Collect optional `input` type and `slug`; if omitted, Skill resolves interactively during §0 Source Selection.
+4. If `--plan` is present, the Skill runs §6.5 SPRINT PLAN ASSOCIATION after SAVE.

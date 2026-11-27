@@ -213,6 +213,7 @@ bound_agent_lang: en|pt-BR
 flags: LANG_DOCS=en
 approver: ""
 approved_at: ""
+sprint_ref: ""                          # OPTIONAL (--plan). Absolute path to the sprint-plan.md this SPEC is associated with.
 # Declared counters. They are CONSUMED downstream (che-plan, che-act, che-scope-checker), so they are
 # not free-form: `che spec validate` recomputes each one from the body and fails on drift (V31).
 b_count: 0                            # quantity of B-IDs in §4.2 Behavior Table
@@ -718,6 +719,26 @@ This line is parsed by `che-scope-checker` CHECK2 (ONDA2) before performing bila
    # decision_append helper already ensures path outside worktree + atomic append
    che decision_append "$WORKTREE_ROOT" "SPEC" "${slug} ${status} saved. Approver=${approver}"
    ```
+
+---
+
+## §6.5 SPRINT PLAN ASSOCIATION (`--plan`)
+
+Run ONLY when the `--plan` flag was passed (or the user asks to associate). Runs AFTER §6 SAVE.
+
+1. **Locate the target sprint plan.** List `~/.che-workspaces/<project-slug>/sprints/` (canonical:
+   `che_core.project_layout.get_sprints_dir`). Suggest the **most recent open sprint** (latest
+   `status: approved|in-progress`, no `sprint-review.md` yet) as the default. Ask the user to confirm
+   or pick another.
+2. **If the SPEC's ticket already exists** as a row in that sprint plan's task table → link it: set the
+   row's `Session` to the current session and append the SPEC path to `Notes`. Do not duplicate the row.
+3. **If the ticket is NOT in the plan** → ask: "add to sprint plan? (yes/no)". If yes, insert a row
+   (`Ticket`, `Scope`, `Ready?`, `Repos`, `Session`, `Status: in-progress`) into the task table.
+4. **Set `sprint_ref`** in the SPEC frontmatter to the absolute `sprint-plan.md` path, and re-write the
+   SPEC atomically (same path as §6).
+5. **Persist the back-link** into the sprint plan (rewrite `sprint-plan.md` atomically).
+
+The sprint plan remains the single source of truth for the task table; the SPEC only carries `sprint_ref`.
 
 ---
 

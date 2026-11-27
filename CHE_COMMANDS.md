@@ -13,7 +13,7 @@ The agent MUST recognise these and react immediately.
 > **Conceptual difference:** Commands = UX entry point (slash `/che-X`) ↔ Skills = content/executor of work.
 > DO NOT turn ALL commands into skills. The separation below is intentional (KISS).
 
-### Category A — 38 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
+### Category A — 40 "heavy" commands = PREFLIGHT VALIDATION WRAPPER → invoke corresponding Skill / CLI module:
 | Command | Skill / module | Why separate wrapper? |
 |---|---|---|
 | `/che-architect` | `che-architect` | Strategic system design: stack, infra, security, compliance, accessibility, and operations. |
@@ -26,6 +26,8 @@ The agent MUST recognise these and react immediately.
 | `/che-parallel` | `che-act` → `che-executor-dispatcher` | Worktree preflight + force_parallel flag + error if not parallelisable. |
 | `/che-ship` | `che-ship` | Worktree preflight + `gh auth` + no-secret-staged check → skill commits/push/PR. |
 | `/che-yolo` | `che-yolo` | Approved SPEC required → `che-act` (`REVIEW_MODE=FINAL`) → manual plan gate → `che-ship` (5 gates enforced) → `che-manual-test-executor` → PR evidence + `gh pr ready`. Stops on any gate block; never merges. |
+| `/che-sprint-plan [source] [--start] [--end] [--name] [--parallelism] [--add\|--remove]` | `che-sprint-plan` | Project preflight → triage tickets (ready / needs-clarification / blocked) + dependency map → clarify everything unclear → day-by-day plan with parallel waves (≤ parallelism, default 3) → save `sprint-plan.md` under `~/.che-workspaces/<slug>/sprints/<start>_<end>__<name>/`. Supports `--add`/`--remove` mid-sprint. |
+| `/che-sprint-review [sprint]` | `che-sprint-review` | Project preflight → gather per-task terminal status/dates (GitHub `gh api` · Linear/Airtable MCP · else ask) → verify delivery vs plan → write `sprint-review.md` with per-task report + project metrics (throughput, cycle time, plan accuracy, carry-over, blocker rate). |
 | `/che-fix` | `che-debugger-bugfix` | Worktree preflight + capture 4 required inputs → skill runs scientific debug loop. |
 | `/che-review` | `che-code-review` | Preflight `gh auth` + parseable PR URL → skill pulls diff + metadata + 4-category review. |
 | `/che-simplify [target] [--goals=...]` | `che-simplify` | Plan reduction under fixed goals: classifies essential vs accidental complexity, proposes the smallest plan that still meets the goals, with a decision trail. Target = task-graph / gh-stack / spec / worktree. |
