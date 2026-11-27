@@ -162,6 +162,16 @@ def get_roles_dir(project_slug: str) -> Path:
     return get_project_dir(project_slug) / "roles"
 
 
+def get_sprints_dir(project_slug: str) -> Path:
+    """``<project>/sprints`` — one subfolder per sprint plan (see che-sprint-plan skill)."""
+    return get_project_dir(project_slug) / "sprints"
+
+
+def get_sprint_dir(project_slug: str, sprint_id: str) -> Path:
+    """``<project>/sprints/<sprint_id>`` — a single sprint's folder (plan + review)."""
+    return get_sprints_dir(project_slug) / sprint_id
+
+
 def get_domain_dir(project_slug: str, domain: str) -> Path:
     """``<project>/<canonical-domain>`` — canonical handoff documents for a domain."""
     return get_project_dir(project_slug) / normalise_domain(domain)
